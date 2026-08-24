@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Pearl — шкала подсматривания</title>
+<style>
+body{margin:0;font-family:system-ui,Segoe UI,sans-serif;background:#0e0e12;color:#eee;line-height:1.5}
+main{max-width:1100px;margin:0 auto;padding:2rem 1.25rem}
+a{color:#7dffb3}
+h1{font-size:1.5rem;margin:0 0 .4rem}
+.muted{color:#9aa}
+.card{margin:1.75rem 0;padding:1rem 1rem 1.25rem;background:#16161d;border:1px solid #2a2a36;border-radius:14px}
+.card h2{font-size:1.05rem;margin:0 0 .35rem}
+.card img{width:100%;height:auto;border-radius:10px;display:block;background:#000}
+.legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.5rem .75rem;margin:.75rem 0 0;font-size:.92rem}
+.legend span{background:#1e1e28;border-radius:8px;padding:.35rem .55rem}
+.back{display:inline-block;margin-bottom:1rem}
+</style>
+</head>
+<body>
+<main>
+  <a class="back" href="../">← все галереи</a>
+  <h1>Pearl — шкала подсматривания</h1>
+  <p class="muted">Макет экрана раздевалки: вертикальный прогресс 5 шагов справа, наполнение снизу вверх. 2026-08-24.</p>
+
+  <div class="card">
+    <h2>Макет HUD (шаг 3 / 5)</h2>
+    <p class="muted">Чистая шкала на кадре Grok Image 2.0.</p>
+    <a href="./mockup.jpg"><img src="./mockup.jpg" alt="Locker peep mockup with 5-step vertical bar"/></a>
+    <div class="legend">
+      <span>1–2 золото — уже пройдены</span>
+      <span>3 светится — текущий шаг</span>
+      <span>4 кольцо + стрелка — следующий</span>
+      <span>5 замок — ещё не открыт</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Сырой Grok Image 2.0</h2>
+    <p class="muted">Первая генерация: сцена + HUD, шкала ещё с дублями.</p>
+    <a href="./grok-raw.jpg"><img src="./grok-raw.jpg" alt="Raw Grok Image 2.0 locker HUD mockup"/></a>
+  </div>
+</main>
+</body>
+</html>
