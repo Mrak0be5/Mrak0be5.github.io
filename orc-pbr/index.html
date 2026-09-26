@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Orc — PBR</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #e7efe4;
+      --dim: #8ea396;
+      --line: rgba(180, 220, 170, 0.18);
+      --glass: rgba(8, 14, 10, 0.72);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: #070b09; color: var(--ink); font-family: "Segoe UI", sans-serif; }
+    canvas { display: block; width: 100%; height: 100%; }
+    #hud {
+      position: fixed; left: 16px; right: 16px; bottom: 16px;
+      display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+      padding: 12px 14px; border: 1px solid var(--line); border-radius: 16px;
+      background: var(--glass); backdrop-filter: blur(16px);
+    }
+    button, label { font: inherit; color: inherit; }
+    button {
+      border: 1px solid var(--line); background: #142018; color: var(--ink);
+      border-radius: 999px; padding: 8px 14px; cursor: pointer;
+    }
+    button[aria-pressed="true"] { background: #2f6b3a; border-color: transparent; }
+    .slider { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 13px; }
+    input[type="range"] { accent-color: #7dffa2; width: 120px; }
+    #status { margin-right: auto; font-size: 13px; letter-spacing: 0.04em; color: var(--dim); }
+    #err { position: fixed; inset: 0; display: none; place-items: center; padding: 24px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div id="err"></div>
+  <div id="hud">
+    <span id="status">загрузка</span>
+    <button id="play" type="button" aria-pressed="true">Анимация</button>
+    <button id="turn" type="button" aria-pressed="true">Поворот</button>
+    <label class="slider">свет <input id="exposure" type="range" min="0.4" max="2.2" step="0.01" value="1.15" /></label>
+    <label class="slider">металл <input id="env" type="range" min="0" max="2" step="0.01" value="1" /></label>
+  </div>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+    import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+
+    const statusEl = document.getElementById("status");
+    const errEl = document.getElementById("err");
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.prepend(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color("#070b09");
+    scene.fog = new THREE.Fog("#070b09", 8, 18);
+
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environment = env;
+
+    const camera = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 0.05, 80);
+    camera.position.set(2.4, 1.35, 3.2);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.target.set(0, 0.95, 0);
+    controls.maxPolarAngle = Math.PI * 0.49;
+    controls.minDistance = 1.2;
+    controls.maxDistance = 8;
+
+    const key = new THREE.DirectionalLight("#fff4e0", 2.4);
+    key.position.set(3.2, 6.5, 2.4);
+    key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048);
+    key.shadow.camera.near = 0.5;
+    key.shadow.camera.far = 16;
+    key.shadow.camera.left = -3;
+    key.shadow.camera.right = 3;
+    key.shadow.camera.top = 3;
+    key.shadow.camera.bottom = -3;
+    scene.add(key);
+    scene.add(new THREE.DirectionalLight("#9ecbff", 0.55).translateX(-4).translateY(2).translateZ(-2));
+    scene.add(new THREE.HemisphereLight("#d7ffe4", "#1a140c", 0.45));
+
+    const floor = new THREE.Mesh(
+      new THREE.CircleGeometry(4.2, 80),
+      new THREE.MeshStandardMaterial({ color: "#101612", metalness: 0.72, roughness: 0.28, envMapIntensity: 1 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(1.15, 1.2, 80),
+      new THREE.MeshBasicMaterial({ color: "#6dff9a", transparent: true, opacity: 0.35, side: THREE.DoubleSide })
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.004;
+    scene.add(ring);
+
+    const root = new THREE.Group();
+    scene.add(root);
+    const mixerHolder = { mixer: null, playing: true, turning: true };
+    const clock = new THREE.Clock();
+
+    function fit(object) {
+      const box = new THREE.Box3().setFromObject(object);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      object.position.sub(center);
+      object.position.y += size.y / 2;
+      const scale = 1.85 / Math.max(size.y, 0.001);
+      object.scale.setScalar(scale);
+      const fitted = new THREE.Box3().setFromObject(object);
+      controls.target.set(0, fitted.getCenter(new THREE.Vector3()).y, 0);
+      camera.position.set(fitted.getSize(new THREE.Vector3()).y * 1.35, fitted.getSize(new THREE.Vector3()).y * 0.72, fitted.getSize(new THREE.Vector3()).y * 1.7);
+      controls.update();
+    }
+
+    new GLTFLoader().load("model.glb", (gltf) => {
+      const model = gltf.scene;
+      model.traverse((node) => {
+        if (node.isMesh) {
+          node.castShadow = true;
+          node.receiveShadow = true;
+          const mats = Array.isArray(node.material) ? node.material : [node.material];
+          for (const mat of mats) {
+            if (!mat) continue;
+            mat.envMapIntensity = 1;
+            if (mat.map) mat.map.colorSpace = THREE.SRGBColorSpace;
+            mat.needsUpdate = true;
+          }
+        }
+      });
+      root.add(model);
+      fit(model);
+      if (gltf.animations.length) {
+        mixerHolder.mixer = new THREE.AnimationMixer(model);
+        for (const clip of gltf.animations) mixerHolder.mixer.clipAction(clip).play();
+        statusEl.textContent = gltf.animations.map((clip) => clip.name).join(" · ");
+      } else {
+        statusEl.textContent = "без клипа";
+      }
+    }, undefined, (error) => {
+      errEl.style.display = "grid";
+      errEl.textContent = "Не удалось открыть model.glb";
+      statusEl.textContent = "ошибка";
+      console.error(error);
+    });
+
+    document.getElementById("play").addEventListener("click", (event) => {
+      mixerHolder.playing = !mixerHolder.playing;
+      event.currentTarget.setAttribute("aria-pressed", String(mixerHolder.playing));
+      if (mixerHolder.mixer) mixerHolder.mixer.timeScale = mixerHolder.playing ? 1 : 0;
+    });
+    document.getElementById("turn").addEventListener("click", (event) => {
+      mixerHolder.turning = !mixerHolder.turning;
+      event.currentTarget.setAttribute("aria-pressed", String(mixerHolder.turning));
+    });
+    document.getElementById("exposure").addEventListener("input", (event) => {
+      renderer.toneMappingExposure = Number(event.target.value);
+    });
+    document.getElementById("env").addEventListener("input", (event) => {
+      const value = Number(event.target.value);
+      floor.material.envMapIntensity = value;
+      root.traverse((node) => {
+        if (!node.isMesh) return;
+        const mats = Array.isArray(node.material) ? node.material : [node.material];
+        for (const mat of mats) if (mat) mat.envMapIntensity = value;
+      });
+    });
+
+    addEventListener("resize", () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+
+    renderer.setAnimationLoop(() => {
+      const delta = clock.getDelta();
+      if (mixerHolder.mixer && mixerHolder.playing) mixerHolder.mixer.update(delta);
+      if (mixerHolder.turning) root.rotation.y += delta * 0.28;
+      controls.update();
+      renderer.render(scene, camera);
+    });
+  </script>
+</body>
+</html>
