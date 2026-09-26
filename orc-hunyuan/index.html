@@ -122,6 +122,8 @@ const clock = new THREE.Clock();
 let spinning = true;
 let wire = false;
 let mode = "pbr";
+const pbrCamera = { position: new THREE.Vector3(), target: new THREE.Vector3() };
+const rigCamera = { position: new THREE.Vector3(), target: new THREE.Vector3() };
 
 function setStatus(text) { statusEl.textContent = text; }
 
@@ -137,6 +139,21 @@ function fit(object) {
   controls.target.set(0, size.y * 0.42, 0);
   controls.update();
   ground.position.y = 0;
+}
+
+function plant(object) {
+  object.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(object);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  object.position.x -= center.x;
+  object.position.z -= center.z;
+  object.position.y -= box.min.y;
+  const span = Math.max(size.x, size.y, size.z);
+  const dist = span * 1.7;
+  camera.position.set(dist * 0.72, size.y * 0.55, dist);
+  controls.target.set(0, size.y * 0.42, 0);
+  controls.update();
 }
 
 function materials(object) {
@@ -180,6 +197,8 @@ pbrRoot = pbr.scene;
 scene.add(pbrRoot);
 const mats = materials(pbrRoot);
 fit(pbrRoot);
+pbrCamera.position.copy(camera.position);
+pbrCamera.target.copy(controls.target);
 const maps = new Set();
 for (const mat of mats) {
   for (const keyName of ["map", "normalMap", "roughnessMap", "metalnessMap", "aoMap", "emissiveMap"]) {
@@ -199,18 +218,19 @@ async function showRig(clipName) {
     setStatus("Загрузка рига…");
     const rig = await loader.loadAsync(new URL("./rigged.glb", import.meta.url).href);
     rigRoot = rig.scene;
-    rigRoot.visible = false;
     scene.add(rigRoot);
     materials(rigRoot);
-    const box = new THREE.Box3().setFromObject(rigRoot);
-    const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-    rigRoot.position.sub(center);
-    rigRoot.position.y += size.y / 2;
+    // Meshy leaves the armature at 0.01, so the skinned mesh is a couple of centimeters tall.
+    rigRoot.updateMatrixWorld(true);
+    const rigHeight = new THREE.Box3().setFromObject(rigRoot).getSize(new THREE.Vector3()).y;
+    const pbrHeight = new THREE.Box3().setFromObject(pbrRoot).getSize(new THREE.Vector3()).y;
+    if (rigHeight > 0 && pbrHeight > 0) rigRoot.scale.setScalar(pbrHeight / rigHeight);
     mixer = new THREE.AnimationMixer(rigRoot);
     for (const clip of rig.animations) {
       if (clip.name === "Bind") continue;
-      actions[clip.name] = mixer.clipAction(clip);
+      const action = mixer.clipAction(clip);
+      action.setLoop(THREE.LoopRepeat, Infinity);
+      actions[clip.name] = action;
     }
     const skinned = [];
     rigRoot.traverse((child) => { if (child.isSkinnedMesh) skinned.push(child); });
@@ -219,10 +239,22 @@ async function showRig(clipName) {
       skeletonHelper.visible = document.querySelector("#bones").classList.contains("on");
       scene.add(skeletonHelper);
     }
+    plant(rigRoot);
+    rigCamera.position.copy(camera.position);
+    rigCamera.target.copy(controls.target);
   }
+  const entering = mode !== "rig";
   pbrRoot.visible = false;
   rigRoot.visible = true;
   mode = "rig";
+  if (entering) {
+    camera.position.copy(rigCamera.position);
+    controls.target.copy(rigCamera.target);
+  }
+  if (!actions[clipName]) {
+    setStatus("Клип не найден: " + clipName);
+    return;
+  }
   playClip(clipName);
   setStatus(`Риг · ${Math.round(countTris(rigRoot)).toLocaleString("ru-RU")} полигонов · ${clipName}`);
 }
@@ -231,14 +263,20 @@ function showPbr() {
   mode = "pbr";
   if (rigRoot) rigRoot.visible = false;
   pbrRoot.visible = true;
+  camera.position.copy(pbrCamera.position);
+  controls.target.copy(pbrCamera.target);
   if (active) active.stop();
   active = null;
   setStatus(`${pbrTris.toLocaleString("ru-RU")} полигонов · PBR: ${[...maps].join(", ")}`);
 }
 
 clipEl.addEventListener("change", async () => {
-  if (clipEl.value === "pbr") showPbr();
-  else await showRig(clipEl.value);
+  try {
+    if (clipEl.value === "pbr") showPbr();
+    else await showRig(clipEl.value);
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : "Не удалось включить анимацию");
+  }
 });
 document.querySelector("#play").addEventListener("click", (event) => {
   if (!active) return;
