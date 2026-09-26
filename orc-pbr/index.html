@@ -37,10 +37,10 @@
   <div id="err"></div>
   <div id="hud">
     <span id="status">загрузка</span>
-    <button type="button" data-clip="idle" data-file="clips/idle.glb">Покой</button>
-    <button type="button" data-clip="walk" data-file="clips/walk.glb" aria-pressed="true">Походка</button>
-    <button type="button" data-clip="run" data-file="clips/run.glb">Бег</button>
-    <button type="button" data-clip="stomp" data-file="clips/stomp.glb">Топот</button>
+    <button type="button" data-clip="fingers" data-file="clips/fingers.glb" aria-pressed="true">Пальцы</button>
+    <button type="button" data-clip="toes" data-file="clips/toes.glb">Пальцы ног</button>
+    <button type="button" data-clip="digits" data-file="clips/digits.glb">Вместе</button>
+    <button type="button" data-clip="rest" data-file="model.glb">Покой</button>
     <button id="turn" type="button" aria-pressed="true">Поворот</button>
     <label class="slider">свет <input id="exposure" type="range" min="0.4" max="2.2" step="0.01" value="1.15" /></label>
     <label class="slider">металл <input id="env" type="range" min="0" max="2" step="0.01" value="1" /></label>
@@ -216,7 +216,7 @@
       renderer.render(scene, camera);
     });
 
-    loadClip("clips/walk.glb", "Походка");
+    loadClip("clips/fingers.glb", "Пальцы");
   </script>
 </body>
 </html>
