@@ -37,7 +37,10 @@
   <div id="err"></div>
   <div id="hud">
     <span id="status">загрузка</span>
-    <button id="play" type="button" aria-pressed="true">Анимация</button>
+    <button type="button" data-clip="idle" data-file="clips/idle.glb">Покой</button>
+    <button type="button" data-clip="walk" data-file="clips/walk.glb" aria-pressed="true">Походка</button>
+    <button type="button" data-clip="run" data-file="clips/run.glb">Бег</button>
+    <button type="button" data-clip="stomp" data-file="clips/stomp.glb">Топот</button>
     <button id="turn" type="button" aria-pressed="true">Поворот</button>
     <label class="slider">свет <input id="exposure" type="range" min="0.4" max="2.2" step="0.01" value="1.15" /></label>
     <label class="slider">металл <input id="env" type="range" min="0" max="2" step="0.01" value="1" /></label>
@@ -71,10 +74,8 @@
     const scene = new THREE.Scene();
     scene.background = new THREE.Color("#070b09");
     scene.fog = new THREE.Fog("#070b09", 8, 18);
-
     const pmrem = new THREE.PMREMGenerator(renderer);
-    const env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    scene.environment = env;
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
     const camera = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 0.05, 80);
     camera.position.set(2.4, 1.35, 3.2);
@@ -96,7 +97,9 @@
     key.shadow.camera.top = 3;
     key.shadow.camera.bottom = -3;
     scene.add(key);
-    scene.add(new THREE.DirectionalLight("#9ecbff", 0.55).translateX(-4).translateY(2).translateZ(-2));
+    const rim = new THREE.DirectionalLight("#9ecbff", 0.55);
+    rim.position.set(-4, 2, -2);
+    scene.add(rim);
     scene.add(new THREE.HemisphereLight("#d7ffe4", "#1a140c", 0.45));
 
     const floor = new THREE.Mesh(
@@ -116,75 +119,88 @@
 
     const root = new THREE.Group();
     scene.add(root);
-    const mixerHolder = { mixer: null, playing: true, turning: true };
+    const loader = new GLTFLoader();
+    const state = { mixer: null, model: null, turning: true, env: 1 };
     const clock = new THREE.Clock();
 
     function fit(object) {
+      object.position.set(0, 0, 0);
+      object.scale.set(1, 1, 1);
+      object.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(object);
       const size = box.getSize(new THREE.Vector3());
       const center = box.getCenter(new THREE.Vector3());
       object.position.sub(center);
       object.position.y += size.y / 2;
-      const scale = 1.85 / Math.max(size.y, 0.001);
-      object.scale.setScalar(scale);
+      object.scale.setScalar(1.85 / Math.max(size.y, 0.001));
+      object.updateMatrixWorld(true);
       const fitted = new THREE.Box3().setFromObject(object);
       controls.target.set(0, fitted.getCenter(new THREE.Vector3()).y, 0);
-      camera.position.set(fitted.getSize(new THREE.Vector3()).y * 1.35, fitted.getSize(new THREE.Vector3()).y * 0.72, fitted.getSize(new THREE.Vector3()).y * 1.7);
-      controls.update();
     }
 
-    new GLTFLoader().load("model.glb", (gltf) => {
-      const model = gltf.scene;
-      model.traverse((node) => {
-        if (node.isMesh) {
-          node.castShadow = true;
-          node.receiveShadow = true;
-          const mats = Array.isArray(node.material) ? node.material : [node.material];
-          for (const mat of mats) {
-            if (!mat) continue;
-            mat.envMapIntensity = 1;
-            if (mat.map) mat.map.colorSpace = THREE.SRGBColorSpace;
-            mat.needsUpdate = true;
-          }
-        }
-      });
-      root.add(model);
-      fit(model);
-      if (gltf.animations.length) {
-        mixerHolder.mixer = new THREE.AnimationMixer(model);
-        for (const clip of gltf.animations) mixerHolder.mixer.clipAction(clip).play();
-        statusEl.textContent = gltf.animations.map((clip) => clip.name).join(" · ");
-      } else {
-        statusEl.textContent = "без клипа";
-      }
-    }, undefined, (error) => {
-      errEl.style.display = "grid";
-      errEl.textContent = "Не удалось открыть model.glb";
-      statusEl.textContent = "ошибка";
-      console.error(error);
-    });
-
-    document.getElementById("play").addEventListener("click", (event) => {
-      mixerHolder.playing = !mixerHolder.playing;
-      event.currentTarget.setAttribute("aria-pressed", String(mixerHolder.playing));
-      if (mixerHolder.mixer) mixerHolder.mixer.timeScale = mixerHolder.playing ? 1 : 0;
-    });
-    document.getElementById("turn").addEventListener("click", (event) => {
-      mixerHolder.turning = !mixerHolder.turning;
-      event.currentTarget.setAttribute("aria-pressed", String(mixerHolder.turning));
-    });
-    document.getElementById("exposure").addEventListener("input", (event) => {
-      renderer.toneMappingExposure = Number(event.target.value);
-    });
-    document.getElementById("env").addEventListener("input", (event) => {
-      const value = Number(event.target.value);
+    function applyEnv(value) {
+      state.env = value;
       floor.material.envMapIntensity = value;
       root.traverse((node) => {
         if (!node.isMesh) return;
         const mats = Array.isArray(node.material) ? node.material : [node.material];
         for (const mat of mats) if (mat) mat.envMapIntensity = value;
       });
+    }
+
+    function loadClip(file, label) {
+      statusEl.textContent = "загрузка";
+      loader.load(file, (gltf) => {
+        if (state.model) {
+          root.remove(state.model);
+          state.mixer = null;
+        }
+        const model = gltf.scene;
+        model.traverse((node) => {
+          if (!node.isMesh) return;
+          node.castShadow = true;
+          node.receiveShadow = true;
+          const mats = Array.isArray(node.material) ? node.material : [node.material];
+          for (const mat of mats) {
+            if (!mat) continue;
+            mat.envMapIntensity = state.env;
+            if (mat.map) mat.map.colorSpace = THREE.SRGBColorSpace;
+            mat.needsUpdate = true;
+          }
+        });
+        root.add(model);
+        fit(model);
+        state.model = model;
+        if (gltf.animations.length) {
+          state.mixer = new THREE.AnimationMixer(model);
+          for (const clip of gltf.animations) state.mixer.clipAction(clip).play();
+          statusEl.textContent = label + " · " + gltf.animations.map((clip) => clip.name.split("|")[1] || clip.name).join(", ");
+        } else {
+          statusEl.textContent = label + " · без клипа";
+        }
+        errEl.style.display = "none";
+      }, undefined, () => {
+        errEl.style.display = "grid";
+        errEl.textContent = "Не удалось открыть " + file;
+        statusEl.textContent = "ошибка";
+      });
+    }
+
+    for (const button of document.querySelectorAll("[data-file]")) {
+      button.addEventListener("click", () => {
+        for (const other of document.querySelectorAll("[data-file]")) other.setAttribute("aria-pressed", "false");
+        button.setAttribute("aria-pressed", "true");
+        loadClip(button.dataset.file, button.textContent);
+      });
+    }
+    document.getElementById("turn").addEventListener("click", (event) => {
+      state.turning = !state.turning;
+      event.currentTarget.setAttribute("aria-pressed", String(state.turning));
     });
+    document.getElementById("exposure").addEventListener("input", (event) => {
+      renderer.toneMappingExposure = Number(event.target.value);
+    });
+    document.getElementById("env").addEventListener("input", (event) => applyEnv(Number(event.target.value)));
 
     addEventListener("resize", () => {
       camera.aspect = innerWidth / innerHeight;
@@ -194,11 +210,13 @@
 
     renderer.setAnimationLoop(() => {
       const delta = clock.getDelta();
-      if (mixerHolder.mixer && mixerHolder.playing) mixerHolder.mixer.update(delta);
-      if (mixerHolder.turning) root.rotation.y += delta * 0.28;
+      if (state.mixer) state.mixer.update(delta);
+      if (state.turning) root.rotation.y += delta * 0.28;
       controls.update();
       renderer.render(scene, camera);
     });
+
+    loadClip("clips/walk.glb", "Походка");
   </script>
 </body>
 </html>
