@@ -333,7 +333,6 @@ renderer.setAnimationLoop(() => {
   const shown = mode === "rig" ? rigRoot : pbrRoot;
   if (spinning && shown) shown.rotation.y += delta * 0.25;
   if (mixer && mode === "rig") mixer.update(delta);
-  if (skeletonHelper) skeletonHelper.update();
   controls.update();
   renderer.render(scene, camera);
 });
