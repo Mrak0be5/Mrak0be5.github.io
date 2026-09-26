@@ -37,7 +37,12 @@
   <div id="err"></div>
   <div id="hud">
     <span id="status">загрузка</span>
-    <button type="button" data-clip="fingers" data-file="clips/fingers.glb" aria-pressed="true">Пальцы</button>
+    <button type="button" data-clip="punch" data-file="clips/punch.glb" aria-pressed="true">Удар</button>
+    <button type="button" data-clip="kick" data-file="clips/kick.glb">Пинок</button>
+    <button type="button" data-clip="run" data-file="clips/run.glb">Бег</button>
+    <button type="button" data-clip="jump" data-file="clips/jump.glb">Прыжок</button>
+    <button type="button" data-clip="roll" data-file="clips/roll.glb">Кувырок</button>
+    <button type="button" data-clip="fingers" data-file="clips/fingers.glb">Пальцы</button>
     <button type="button" data-clip="toes" data-file="clips/toes.glb">Пальцы ног</button>
     <button type="button" data-clip="digits" data-file="clips/digits.glb">Вместе</button>
     <button type="button" data-clip="rest" data-file="model.glb">Покой</button>
@@ -216,7 +221,7 @@
       renderer.render(scene, camera);
     });
 
-    loadClip("clips/fingers.glb", "Пальцы");
+    loadClip("clips/punch.glb", "Удар");
   </script>
 </body>
 </html>
