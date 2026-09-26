@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Orc — Hunyuan 3D v3.1 Pro</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #09090b; color: #f4f4f5; font-family: "Segoe UI", system-ui, sans-serif; }
+  canvas { display: block; width: 100%; height: 100%; }
+  #hud {
+    position: fixed; top: 16px; left: 16px; width: min(280px, calc(100vw - 32px));
+    background: rgba(12,12,14,.72); border: 1px solid rgba(255,255,255,.08);
+    border-radius: 14px; padding: 14px 14px 12px; backdrop-filter: blur(10px);
+    box-shadow: 0 12px 40px rgba(0,0,0,.35);
+  }
+  h1 { margin: 0 0 2px; font-size: 15px; font-weight: 650; letter-spacing: .01em; }
+  .sub { margin: 0 0 12px; color: #a1a1aa; font-size: 12px; }
+  label { display: flex; justify-content: space-between; gap: 10px; align-items: center; font-size: 12px; color: #d4d4d8; margin: 8px 0; }
+  input[type="range"] { width: 120px; accent-color: #86efac; }
+  select, button {
+    font: inherit; color: inherit; background: #18181b; border: 1px solid #3f3f46;
+    border-radius: 8px; padding: 6px 8px;
+  }
+  select { width: 100%; margin-bottom: 8px; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; }
+  button { cursor: pointer; }
+  button.on { background: #14532d; border-color: #166534; }
+  #status { margin-top: 10px; font-size: 11px; color: #a1a1aa; line-height: 1.4; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="hud">
+  <h1>Orc</h1>
+  <p class="sub">Hunyuan 3D v3.1 Pro · PBR · 1.5M</p>
+  <select id="clip"></select>
+  <div class="row">
+    <button id="play" type="button">Пауза</button>
+    <button id="spin" type="button" class="on">Вращение</button>
+    <button id="wire" type="button">Каркас</button>
+    <button id="bones" type="button">Скелет</button>
+  </div>
+  <label>Экспозиция <input id="exposure" type="range" min="0.4" max="2.2" step="0.01" value="1.05"/></label>
+  <label>IBL <input id="ibl" type="range" min="0" max="2.5" step="0.01" value="1"/></label>
+  <label>Свет <input id="key" type="range" min="0" max="4" step="0.01" value="1.4"/></label>
+  <div id="status">Загрузка модели…</div>
+</div>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+
+const statusEl = document.querySelector("#status");
+const clipEl = document.querySelector("#clip");
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color("#121418");
+const camera = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 0.05, 80);
+camera.position.set(1.6, 1.15, 2.6);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.target.set(0, 0.9, 0);
+
+const key = new THREE.DirectionalLight("#fff4e5", 1.4);
+key.position.set(3.2, 5.5, 2.4);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.camera.near = 0.5;
+key.shadow.camera.far = 16;
+key.shadow.camera.left = -3;
+key.shadow.camera.right = 3;
+key.shadow.camera.top = 3;
+key.shadow.camera.bottom = -3;
+key.shadow.bias = -0.0004;
+scene.add(key);
+scene.add(new THREE.HemisphereLight("#dbe7ff", "#3a2a18", 0.35));
+
+const ground = new THREE.Mesh(
+  new THREE.CircleGeometry(6, 64),
+  new THREE.MeshStandardMaterial({ color: "#1a1c20", roughness: 0.92, metalness: 0.04 })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const pmrem = new THREE.PMREMGenerator(renderer);
+function applyEnv(texture) {
+  const env = pmrem.fromEquirectangular(texture).texture;
+  scene.environment = env;
+  texture.dispose();
+}
+try {
+  const hdr = await new RGBELoader().loadAsync("https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr");
+  applyEnv(hdr);
+} catch {
+  const room = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environment = room;
+}
+
+const loader = new GLTFLoader();
+let pbrRoot, rigRoot, mixer, skeletonHelper, actions = {}, active;
+const clock = new THREE.Clock();
+let spinning = true;
+let wire = false;
+let mode = "pbr";
+
+function setStatus(text) { statusEl.textContent = text; }
+
+function fit(object) {
+  const box = new THREE.Box3().setFromObject(object);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  object.position.sub(center);
+  object.position.y += size.y / 2;
+  const span = Math.max(size.x, size.y, size.z);
+  const dist = span * 1.7;
+  camera.position.set(dist * 0.72, size.y * 0.55, dist);
+  controls.target.set(0, size.y * 0.42, 0);
+  controls.update();
+  ground.position.y = 0;
+}
+
+function materials(object) {
+  const list = [];
+  object.traverse((child) => {
+    if (!child.isMesh) return;
+    child.castShadow = true;
+    child.receiveShadow = true;
+    const mats = Array.isArray(child.material) ? child.material : [child.material];
+    for (const mat of mats) {
+      if (!mat) continue;
+      mat.envMapIntensity = 1;
+      if ("roughness" in mat && mat.roughness === 1 && !mat.roughnessMap) mat.roughness = 0.62;
+      list.push(mat);
+    }
+  });
+  return list;
+}
+
+function playClip(name) {
+  if (!mixer || !actions[name]) return;
+  const next = actions[name];
+  if (active && active !== next) active.fadeOut(0.25);
+  next.reset().fadeIn(0.25).play();
+  active = next;
+}
+
+function countTris(object) {
+  let tris = 0;
+  object.traverse((child) => {
+    if (child.isMesh && child.geometry) {
+      const g = child.geometry;
+      tris += g.index ? g.index.count / 3 : g.attributes.position.count / 3;
+    }
+  });
+  return tris;
+}
+
+const pbr = await loader.loadAsync(new URL("./model.glb", import.meta.url).href);
+pbrRoot = pbr.scene;
+scene.add(pbrRoot);
+const mats = materials(pbrRoot);
+fit(pbrRoot);
+const maps = new Set();
+for (const mat of mats) {
+  for (const keyName of ["map", "normalMap", "roughnessMap", "metalnessMap", "aoMap", "emissiveMap"]) {
+    if (mat[keyName]) maps.add(keyName.replace("Map", ""));
+  }
+}
+const pbrTris = Math.round(countTris(pbrRoot));
+setStatus(`${pbrTris.toLocaleString("ru-RU")} полигонов · PBR: ${[...maps].join(", ")}`);
+clipEl.innerHTML = `<option value="pbr">PBR, без скелета</option>
+  <option value="Idle">Idle</option>
+  <option value="Walk">Walk</option>
+  <option value="Casual walk">Casual walk</option>
+  <option value="Run">Run</option>`;
+
+async function showRig(clipName) {
+  if (!rigRoot) {
+    setStatus("Загрузка рига…");
+    const rig = await loader.loadAsync(new URL("./rigged.glb", import.meta.url).href);
+    rigRoot = rig.scene;
+    rigRoot.visible = false;
+    scene.add(rigRoot);
+    materials(rigRoot);
+    const box = new THREE.Box3().setFromObject(rigRoot);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    rigRoot.position.sub(center);
+    rigRoot.position.y += size.y / 2;
+    mixer = new THREE.AnimationMixer(rigRoot);
+    for (const clip of rig.animations) {
+      if (clip.name === "Bind") continue;
+      actions[clip.name] = mixer.clipAction(clip);
+    }
+    const skinned = [];
+    rigRoot.traverse((child) => { if (child.isSkinnedMesh) skinned.push(child); });
+    if (skinned[0]) {
+      skeletonHelper = new THREE.SkeletonHelper(skinned[0]);
+      skeletonHelper.visible = document.querySelector("#bones").classList.contains("on");
+      scene.add(skeletonHelper);
+    }
+  }
+  pbrRoot.visible = false;
+  rigRoot.visible = true;
+  mode = "rig";
+  playClip(clipName);
+  setStatus(`Риг · ${Math.round(countTris(rigRoot)).toLocaleString("ru-RU")} полигонов · ${clipName}`);
+}
+
+function showPbr() {
+  mode = "pbr";
+  if (rigRoot) rigRoot.visible = false;
+  pbrRoot.visible = true;
+  if (active) active.stop();
+  active = null;
+  setStatus(`${pbrTris.toLocaleString("ru-RU")} полигонов · PBR: ${[...maps].join(", ")}`);
+}
+
+clipEl.addEventListener("change", async () => {
+  if (clipEl.value === "pbr") showPbr();
+  else await showRig(clipEl.value);
+});
+document.querySelector("#play").addEventListener("click", (event) => {
+  if (!active) return;
+  active.paused = !active.paused;
+  event.currentTarget.textContent = active.paused ? "Играть" : "Пауза";
+});
+document.querySelector("#spin").addEventListener("click", (event) => {
+  spinning = !spinning;
+  event.currentTarget.classList.toggle("on", spinning);
+});
+document.querySelector("#wire").addEventListener("click", (event) => {
+  wire = !wire;
+  event.currentTarget.classList.toggle("on", wire);
+  for (const shown of [pbrRoot, rigRoot]) {
+    if (!shown) continue;
+    shown.traverse((child) => {
+      if (!child.isMesh) return;
+      const list = Array.isArray(child.material) ? child.material : [child.material];
+      for (const mat of list) mat.wireframe = wire;
+    });
+  }
+});
+document.querySelector("#bones").addEventListener("click", (event) => {
+  if (!skeletonHelper) return;
+  skeletonHelper.visible = !skeletonHelper.visible;
+  event.currentTarget.classList.toggle("on", skeletonHelper.visible);
+});
+document.querySelector("#exposure").addEventListener("input", (event) => {
+  renderer.toneMappingExposure = Number(event.target.value);
+});
+document.querySelector("#ibl").addEventListener("input", (event) => {
+  const value = Number(event.target.value);
+  for (const shown of [pbrRoot, rigRoot]) {
+    if (!shown) continue;
+    shown.traverse((child) => {
+      if (!child.isMesh) return;
+      const list = Array.isArray(child.material) ? child.material : [child.material];
+      for (const mat of list) mat.envMapIntensity = value;
+    });
+  }
+});
+document.querySelector("#key").addEventListener("input", (event) => {
+  key.intensity = Number(event.target.value);
+});
+
+addEventListener("resize", () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+renderer.setAnimationLoop(() => {
+  const delta = clock.getDelta();
+  const shown = mode === "rig" ? rigRoot : pbrRoot;
+  if (spinning && shown) shown.rotation.y += delta * 0.25;
+  if (mixer && mode === "rig") mixer.update(delta);
+  if (skeletonHelper) skeletonHelper.update();
+  controls.update();
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>
