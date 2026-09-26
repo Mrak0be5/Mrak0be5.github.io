@@ -40,7 +40,7 @@
 <body>
 <div id="hud">
   <h1>Orc</h1>
-  <p class="sub">Hunyuan 3D v3.1 Pro · PBR · 1.5M</p>
+  <p class="sub">Hunyuan 3D v3.1 Pro · PBR · риг Tripo</p>
   <select id="clip"></select>
   <div class="row">
     <button id="play" type="button">Пауза</button>
@@ -208,10 +208,11 @@ for (const mat of mats) {
 const pbrTris = Math.round(countTris(pbrRoot));
 setStatus(`${pbrTris.toLocaleString("ru-RU")} полигонов · PBR: ${[...maps].join(", ")}`);
 clipEl.innerHTML = `<option value="pbr">PBR, без скелета</option>
-  <option value="Idle">Idle</option>
-  <option value="Walk">Walk</option>
-  <option value="Casual walk">Casual walk</option>
-  <option value="Run">Run</option>`;
+  <option value="Hands">Hands</option>
+  <option value="Clap">Clap</option>
+  <option value="Wave">Wave</option>
+  <option value="Look around">Look around</option>
+  <option value="Walk">Walk</option>`;
 
 async function showRig(clipName) {
   if (!rigRoot) {
