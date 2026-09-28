@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+
+  <title>Treasure Chest — Cocos Creator</title>
+  <link rel="icon" href="data:,">
+
+  <!--http://www.html5rocks.com/en/mobile/mobifying/-->
+  <meta name="viewport"
+        content="width=device-width,user-scalable=no,initial-scale=1,minimum-scale=1,maximum-scale=1,minimal-ui=true"/>
+
+  <!--https://developer.apple.com/library/safari/documentation/AppleApplications/Reference/SafariHTMLRef/Articles/MetaTags.html-->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="theme-color" content="#0b0620">
+
+  <!-- force webkit on 360 -->
+  <meta name="renderer" content="webkit"/>
+  <meta name="force-rendering" content="webkit"/>
+  <!-- force edge on IE -->
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"/>
+  <meta name="msapplication-tap-highlight" content="no">
+
+  <!-- force full screen on some browser -->
+  <meta name="full-screen" content="yes"/>
+  <meta name="x5-fullscreen" content="true"/>
+  <meta name="360-fullscreen" content="true"/>
+  <meta name="x5-page-mode" content="app">
+
+  <link rel="stylesheet" type="text/css" href="style.f76d1.css"/>
+  <style>
+    /* loading screen: shown by the HTML itself while the engine and the assets download; Main.ts fills the bar and removes it */
+    body { background: #0b0620; }
+    #loader { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+      background: radial-gradient(130% 85% at 50% 52%, #2e9a5a 0%, #1c6240 38%, #0a2a22 78%); transition: opacity .35s ease; pointer-events: none; }
+    #loader.done { opacity: 0; }
+    #loader b { font: 900 clamp(26px, 7vw, 44px)/1 'Arial Black', 'Segoe UI Black', system-ui, sans-serif; letter-spacing: .06em; color: #f2ffe0;
+      text-shadow: -3px -3px 0 #1a1033, 3px -3px 0 #1a1033, -3px 3px 0 #1a1033, 3px 3px 0 #1a1033, 0 -3px 0 #1a1033, 0 3px 0 #1a1033, -3px 0 0 #1a1033, 3px 0 0 #1a1033, 0 6px 0 #1a1033;
+      animation: ld-bob 1.2s ease-in-out infinite; }
+    #loader .bar { width: min(62vw, 280px); height: 16px; border-radius: 9px; background: #261d45; border: 3px solid #1a1033; box-shadow: 0 3px 0 #1a1033; overflow: hidden; }
+    #loader .bar i { display: block; height: 100%; width: 4%; border-radius: 6px; background: linear-gradient(180deg, #fff 0%, #b8ff7a 30%, #46d35b 100%); transition: width .25s ease; }
+    @keyframes ld-bob { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-6px) } }
+  </style>
+</head>
+<body>
+  <div id="GameDiv" cc_exact_fit_screen="true">
+      <div id="Cocos3dGameContainer">
+        <canvas id="GameCanvas" oncontextmenu="event.preventDefault()" tabindex="99"></canvas>
+      </div>
+    </div>
+  <div id="loader"><b>LOADING</b><div class="bar"><i id="loaderBar"></i></div></div>
+  <script>
+    window.__loaderProgress = function (p) { var b = document.getElementById('loaderBar'); if (b) b.style.width = Math.max(4, Math.min(100, p * 100)).toFixed(1) + '%'; };
+    window.__loaderDone = function () { var l = document.getElementById('loader'); if (!l) return; l.className = 'done'; setTimeout(function () { if (l.parentNode) l.parentNode.removeChild(l); }, 400); };
+  </script>
+  
+
+<!-- Polyfills bundle. -->
+
+<script src="src/polyfills.bundle.5adbf.js" charset="utf-8"> </script>
+
+
+<!-- SystemJS support. -->
+<script src="src/system.bundle.543e6.js" charset="utf-8"> </script>
+
+<!-- Import map -->
+<script src="src/import-map.e01d2.json" type="systemjs-importmap" charset="utf-8"> </script>
+
+<script>
+    System.import('./index.ddc2f.js').catch(function(err) { console.error(err); })
+</script>
+
+</body>
+</html>
