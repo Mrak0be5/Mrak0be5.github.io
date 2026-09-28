@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Рыжая — Tripo PBR</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #f3efe8;
+      --dim: #b3a89a;
+      --line: rgba(232, 196, 150, 0.22);
+      --glass: rgba(12, 9, 8, 0.78);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: #100c0a; color: var(--ink); font-family: "Segoe UI", sans-serif; }
+    canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+    #hud {
+      position: fixed; left: 12px; right: 12px; bottom: 12px;
+      display: flex; flex-direction: column; gap: 8px;
+      padding: 12px; border: 1px solid var(--line); border-radius: 16px;
+      background: var(--glass); backdrop-filter: blur(16px);
+    }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    button, label { font: inherit; color: inherit; }
+    button {
+      border: 1px solid var(--line); background: #241912; color: var(--ink);
+      border-radius: 999px; padding: 8px 12px; cursor: pointer;
+    }
+    button[aria-pressed="true"] { background: #8a4a2a; border-color: transparent; }
+    .slider { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 13px; }
+    input[type="range"] { accent-color: #e7a56a; width: 110px; }
+    #status { font-size: 13px; letter-spacing: 0.02em; color: var(--dim); }
+    #err { position: fixed; inset: 0; display: none; place-items: center; padding: 24px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div id="err"></div>
+  <div id="hud">
+    <div class="row">
+      <span id="status">загрузка</span>
+    </div>
+    <div class="row" id="models">
+      <button type="button" data-model="1e1bf507" data-file="models/1e1bf507.glb" title="1e1bf507-49c5-4f64-a760-9062f214a975" aria-pressed="true">Модель 1</button>
+      <button type="button" data-model="cb3ffb19" data-file="models/cb3ffb19.glb" title="cb3ffb19-8635-48b3-a8eb-32fb7f118f5f">Модель 2</button>
+      <button type="button" data-model="c070cd13" data-file="models/c070cd13.glb" title="c070cd13-e409-4883-8f46-99fdad6bc9f9">Модель 3</button>
+    </div>
+    <div class="row" id="modes">
+      <button type="button" data-mode="pbr" aria-pressed="true">PBR</button>
+      <button type="button" data-mode="clay">Глина</button>
+      <button type="button" data-mode="albedo">Альбедо</button>
+      <button type="button" data-mode="normal">Нормали</button>
+      <button type="button" data-mode="rough">Шероховатость</button>
+      <button type="button" data-mode="metal">Металл</button>
+      <button type="button" data-mode="wire">Сетка</button>
+      <button type="button" id="overlay" aria-pressed="false">Сетка поверх</button>
+      <button type="button" id="turn" aria-pressed="true">Поворот</button>
+      <label class="slider">свет <input id="exposure" type="range" min="0.4" max="2.4" step="0.01" value="1.15" /></label>
+      <label class="slider">отражения <input id="env" type="range" min="0" max="2" step="0.01" value="1" /></label>
+    </div>
+  </div>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+    import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
+    import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+
+    const statusEl = document.getElementById("status");
+    const errEl = document.getElementById("err");
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+    document.body.prepend(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color("#100c0a");
+    scene.fog = new THREE.Fog("#100c0a", 9, 22);
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+    const camera = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 0.02, 80);
+    camera.position.set(1.7, 1.25, 2.6);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 0.8;
+    controls.target.set(0, 0.9, 0);
+    controls.maxPolarAngle = Math.PI * 0.98;
+    controls.minDistance = 0.2;
+    controls.maxDistance = 8;
+
+    const key = new THREE.DirectionalLight("#fff1df", 2.6);
+    key.position.set(2.8, 5.4, 2.2);
+    scene.add(key);
+    const rim = new THREE.DirectionalLight("#ffb089", 0.7);
+    rim.position.set(-3.4, 2.2, -2.4);
+    scene.add(rim);
+    scene.add(new THREE.HemisphereLight("#ffe8d2", "#1a120e", 0.42));
+
+    const floor = new THREE.Mesh(
+      new THREE.CircleGeometry(3.4, 72),
+      new THREE.MeshStandardMaterial({ color: "#1a1410", metalness: 0.55, roughness: 0.38, envMapIntensity: 1 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    scene.add(floor);
+    const grid = new THREE.GridHelper(4, 16, 0x8a5a3a, 0x2a211c);
+    grid.position.y = 0.002;
+    scene.add(grid);
+
+    const root = new THREE.Group();
+    scene.add(root);
+    const draco = new DRACOLoader();
+    draco.setDecoderPath("https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/libs/draco/gltf/");
+    const loader = new GLTFLoader();
+    loader.setDRACOLoader(draco);
+
+    const saved = new WeakMap();
+    const state = { token: 0, mode: "pbr", env: 1, overlay: false, model: null, label: "Модель 1" };
+
+    function snapshot(mat) {
+      if (saved.has(mat)) return;
+      saved.set(mat, {
+        map: mat.map || null,
+        normalMap: mat.normalMap || null,
+        roughnessMap: mat.roughnessMap || null,
+        metalnessMap: mat.metalnessMap || null,
+        color: mat.color.clone(),
+        roughness: mat.roughness,
+        metalness: mat.metalness,
+      });
+    }
+
+    function clearMaps(mat) {
+      mat.map = null;
+      mat.normalMap = null;
+      mat.roughnessMap = null;
+      mat.metalnessMap = null;
+      mat.emissiveMap = null;
+      mat.emissive.set(0, 0, 0);
+      mat.wireframe = false;
+    }
+
+    function showRaw(mat, tex, srgb) {
+      mat.emissiveMap = tex;
+      mat.emissive.set("#ffffff");
+      mat.color.set("#000000");
+      mat.roughness = 1;
+      mat.metalness = 0;
+      mat.envMapIntensity = 0;
+      if (tex) tex.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.LinearSRGBColorSpace;
+    }
+
+    function applyLook() {
+      root.traverse((node) => {
+        if (!node.isMesh || node.userData.overlay) return;
+        const mats = Array.isArray(node.material) ? node.material : [node.material];
+        for (const mat of mats) {
+          if (!mat || !mat.isMeshStandardMaterial) continue;
+          snapshot(mat);
+          const src = saved.get(mat);
+          clearMaps(mat);
+          mat.color.copy(src.color);
+          mat.roughness = src.roughness;
+          mat.metalness = src.metalness;
+          mat.envMapIntensity = state.env;
+          mat.side = THREE.DoubleSide;
+          if (state.mode === "pbr") {
+            mat.map = src.map;
+            mat.normalMap = src.normalMap;
+            mat.roughnessMap = src.roughnessMap;
+            mat.metalnessMap = src.metalnessMap;
+            if (mat.map) mat.map.colorSpace = THREE.SRGBColorSpace;
+          } else if (state.mode === "clay") {
+            mat.color.set("#d7d0c4");
+            mat.roughness = 0.62;
+            mat.metalness = 0;
+          } else if (state.mode === "albedo") {
+            showRaw(mat, src.map, true);
+          } else if (state.mode === "normal") {
+            showRaw(mat, src.normalMap, false);
+          } else if (state.mode === "rough") {
+            showRaw(mat, src.roughnessMap, false);
+          } else if (state.mode === "metal") {
+            showRaw(mat, src.metalnessMap, false);
+          } else if (state.mode === "wire") {
+            mat.color.set("#f2e2cf");
+            mat.roughness = 1;
+            mat.metalness = 0;
+            mat.envMapIntensity = 0;
+            mat.wireframe = true;
+          }
+          mat.needsUpdate = true;
+        }
+      });
+      syncOverlay();
+    }
+
+    function syncOverlay() {
+      root.traverse((node) => {
+        if (!node.isMesh || node.userData.overlay) return;
+        const existing = node.children.filter((child) => child.userData && child.userData.overlay);
+        for (const child of existing) {
+          node.remove(child);
+          child.material.dispose();
+        }
+        if (!state.overlay || state.mode === "wire") return;
+        const wire = new THREE.Mesh(
+          node.geometry,
+          new THREE.MeshBasicMaterial({
+            color: "#ffb27a",
+            wireframe: true,
+            transparent: true,
+            opacity: 0.45,
+            depthTest: true,
+          })
+        );
+        wire.userData.overlay = true;
+        wire.raycast = () => {};
+        node.add(wire);
+      });
+    }
+
+    function disposeModel(object) {
+      object.traverse((node) => {
+        if (!node.isMesh) return;
+        if (!node.userData.overlay) node.geometry.dispose();
+        const mats = Array.isArray(node.material) ? node.material : [node.material];
+        for (const mat of mats) {
+          if (!mat) continue;
+          for (const key of ["map", "normalMap", "roughnessMap", "metalnessMap", "emissiveMap"]) {
+            if (mat[key]) mat[key].dispose();
+          }
+          mat.dispose();
+        }
+      });
+    }
+
+    function fit(object) {
+      object.position.set(0, 0, 0);
+      object.scale.set(1, 1, 1);
+      object.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(object);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      object.position.sub(center);
+      object.position.y += size.y / 2;
+      object.scale.setScalar(1.7 / Math.max(size.y, 0.001));
+      object.updateMatrixWorld(true);
+      const fitted = new THREE.Box3().setFromObject(object);
+      controls.target.set(0, fitted.getCenter(new THREE.Vector3()).y, 0);
+    }
+
+    function countFaces(object) {
+      let faces = 0;
+      object.traverse((node) => {
+        if (!node.isMesh || node.userData.overlay || !node.geometry.index) return;
+        faces += node.geometry.index.count / 3;
+      });
+      return faces;
+    }
+
+    function loadModel(file, label) {
+      const token = ++state.token;
+      state.label = label;
+      statusEl.textContent = label + " · загрузка";
+      loader.load(file, (gltf) => {
+        if (token !== state.token) return;
+        if (state.model) {
+          root.remove(state.model);
+          disposeModel(state.model);
+          state.model = null;
+        }
+        const model = gltf.scene;
+        model.traverse((node) => {
+          if (!node.isMesh) return;
+          const mats = Array.isArray(node.material) ? node.material : [node.material];
+          for (const mat of mats) if (mat) snapshot(mat);
+        });
+        root.add(model);
+        fit(model);
+        state.model = model;
+        applyLook();
+        const faces = Math.round(countFaces(model));
+        statusEl.textContent = label + " · " + faces.toLocaleString("ru-RU") + " тр.";
+        errEl.style.display = "none";
+      }, (event) => {
+        if (token !== state.token || !event.total) return;
+        const pct = Math.round((event.loaded / event.total) * 100);
+        statusEl.textContent = label + " · " + pct + "%";
+      }, () => {
+        if (token !== state.token) return;
+        errEl.style.display = "grid";
+        errEl.textContent = "Не удалось открыть " + file;
+        statusEl.textContent = "ошибка";
+      });
+    }
+
+    for (const button of document.querySelectorAll("[data-file]")) {
+      button.addEventListener("click", () => {
+        for (const other of document.querySelectorAll("[data-file]")) other.setAttribute("aria-pressed", "false");
+        button.setAttribute("aria-pressed", "true");
+        loadModel(button.dataset.file, button.textContent.trim() + " · " + button.dataset.model);
+      });
+    }
+    for (const button of document.querySelectorAll("[data-mode]")) {
+      button.addEventListener("click", () => {
+        for (const other of document.querySelectorAll("[data-mode]")) other.setAttribute("aria-pressed", "false");
+        button.setAttribute("aria-pressed", "true");
+        state.mode = button.dataset.mode;
+        applyLook();
+      });
+    }
+    document.getElementById("overlay").addEventListener("click", (event) => {
+      state.overlay = !state.overlay;
+      event.currentTarget.setAttribute("aria-pressed", state.overlay ? "true" : "false");
+      syncOverlay();
+    });
+    document.getElementById("turn").addEventListener("click", (event) => {
+      controls.autoRotate = !controls.autoRotate;
+      event.currentTarget.setAttribute("aria-pressed", controls.autoRotate ? "true" : "false");
+    });
+    document.getElementById("exposure").addEventListener("input", (event) => {
+      renderer.toneMappingExposure = Number(event.target.value);
+    });
+    document.getElementById("env").addEventListener("input", (event) => {
+      state.env = Number(event.target.value);
+      floor.material.envMapIntensity = state.env;
+      applyLook();
+    });
+
+    addEventListener("resize", () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+
+    const first = document.querySelector("[data-file]");
+    loadModel(first.dataset.file, first.textContent.trim() + " · " + first.dataset.model);
+
+    renderer.setAnimationLoop(() => {
+      controls.update();
+      renderer.render(scene, camera);
+    });
+  </script>
+</body>
+</html>
