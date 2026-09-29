@@ -9,6 +9,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 const MODELS = [
   { id: 'rig', label: 'Риг: исходный', title: 'Орчиха-воительница', sub: 'риг Tripo + 6 анимаций', file: 'models/orc-outfit-anim.glb', bytes: 28996340 },
   { id: 'rigfix', label: 'Риг: исправленный', title: 'Орчиха-воительница', sub: 'копия с исправленными весами', file: 'models/orc-outfit-anim-rigfix.glb', bytes: 28996340 },
+  { id: 'rigfix2', label: 'Риг: + кости', title: 'Орчиха-воительница', sub: 'кости наплечников, повязок и волос', file: 'models/orc-outfit-anim-rigfix2.glb', bytes: 0 },
 ];
 const MODEL = MODELS.find((m) => m.id === new URLSearchParams(location.search).get('m')) || MODELS[0];
 const $ = (s) => document.querySelector(s);
