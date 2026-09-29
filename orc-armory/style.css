@@ -57,7 +57,8 @@ button.ghost { background: transparent; }
 .part:hover { background: rgba(255, 255, 255, .06); border-color: var(--line); }
 .part.sel { border-color: rgba(255, 122, 69, .6); background: rgba(255, 122, 69, .08); }
 .part.hidden .p-main { opacity: .38; }
-.p-main { min-width: 0; }
+.p-main { min-width: 0; overflow: hidden; }
+.p-sub { color: var(--dim2); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .p-name { display: flex; align-items: center; gap: 7px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .p-name .dot { width: 9px; height: 9px; border-radius: 3px; flex: none; }
 .p-name .side { color: var(--dim); font-weight: 400; }

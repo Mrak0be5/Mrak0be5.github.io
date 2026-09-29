@@ -6,7 +6,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-const MODEL = { title: 'Орчиха-воительница', sub: 'комплект из Tripo · юбка v3', file: 'models/orc-outfit-v3.glb', bytes: 14636568 };
+const MODEL = { title: 'Орчиха-воительница', sub: 'комплект из Tripo · юбка v3', file: 'models/orc-outfit-v3.glb', bytes: 14637280 };
 const $ = (s) => document.querySelector(s);
 const fmt = (n) => Math.round(n).toLocaleString('ru-RU');
 const kfmt = (n) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 100000 ? 0 : 1)}k` : `${n}`);
@@ -72,7 +72,7 @@ function describe(name) {
 }
 const parts = [];
 const meshes = [];
-let total = { tris: 0, verts: 0 };
+let total = { tris: 0, verts: 0, quads: 0, lone: 0, polys: 0 };
 const state = { mode: 'pbr', nStrength: 1, useNmap: true, mulLayer: 0, mulStrength: 1, mapKind: 'map', channel: 0, sel: null, solo: null };
 
 // ---------- shading ----------
@@ -265,34 +265,60 @@ function buildModes() {
 }
 
 // ---------- UI: parts ----------
+// GLB meshes are triangulated; Blender writes every quad as two consecutive triangles sharing an edge (lone triangles
+// of a mixed mesh sit in between). Pairing them back gives the modeller's polycount: a quad = 1 polygon.
+function quadTopo(g) {
+  const idx = g.index && g.index.array;
+  const tris = idx ? idx.length / 3 : g.attributes.position.count / 3;
+  if (!idx) return { quads: 0, lone: tris, lines: null };
+  let quads = 0, lone = 0;
+  const seen = new Set(), lines = [];
+  const add = (a, b) => { const k = a < b ? a * 4294967296 + b : b * 4294967296 + a; if (!seen.has(k)) { seen.add(k); lines.push(a, b); } };
+  for (let t = 0; t < tris;) {
+    const A = [idx[t * 3], idx[t * 3 + 1], idx[t * 3 + 2]];
+    const B = t + 1 < tris ? [idx[t * 3 + 3], idx[t * 3 + 4], idx[t * 3 + 5]] : [];
+    const shared = A.filter((v) => B.includes(v));
+    const isQuad = shared.length === 2;
+    for (const T of isQuad ? [A, B] : [A]) for (let i = 0; i < 3; i++) {
+      const a = T[i], b = T[(i + 1) % 3];
+      if (!(isQuad && shared.includes(a) && shared.includes(b))) add(a, b);   // the diagonal is not an edge
+    }
+    if (isQuad) { quads++; t += 2; } else { lone++; t += 1; }
+  }
+  return { quads, lone, lines };
+}
 function partCounts(obj) {
-  let tris = 0, verts = 0;
+  let tris = 0, verts = 0, quads = 0, lone = 0;
   obj.traverse((o) => {
     if (!o.isMesh) return;
     const g = o.geometry;
     verts += g.attributes.position.count;
     tris += (g.index ? g.index.count : g.attributes.position.count) / 3;
+    const q = o.userData.topo || (o.userData.topo = quadTopo(g));
+    quads += q.quads; lone += q.lone;
   });
-  return { tris: Math.round(tris), verts };
+  const x = obj.userData;                                   // exact counts from Blender (glTF node extras), if exported
+  if (Number.isFinite(x.poly_faces)) return { tris: Math.round(tris), verts, quads: x.poly_quads, lone: x.poly_tris, ngons: x.poly_ngons || 0, polys: x.poly_faces, exact: true };
+  return { tris: Math.round(tris), verts, quads, lone, ngons: 0, polys: quads + lone, exact: false };
 }
 function setVisible(p, on) {
   p.visible = on;
   p.obj.visible = on;
 }
 function refreshParts() {
-  let vt = 0, vv = 0;
+  let vp = 0, vq = 0, vl = 0;
   for (const p of parts) {
     const show = state.solo ? p === state.solo : p.visible;
     p.obj.visible = show;
-    if (show) { vt += p.tris; vv += p.verts; }
+    if (show) { vp += p.polys; vq += p.quads; vl += p.lone; }
     p.li.classList.toggle('hidden', !show);
     p.li.classList.toggle('sel', p === state.sel);
     p.li.querySelector('input').checked = show;
     p.li.querySelector('.p-solo').classList.toggle('on', p === state.solo);
   }
   $('#totals').innerHTML =
-    `<div class="stat visible"><small>Видно сейчас, треуг.</small><b>${fmt(vt)}</b><span>${fmt(vv)} верш. · ${Math.round((vt / total.tris) * 100)}%</span></div>` +
-    `<div class="stat"><small>Вся модель, треуг.</small><b>${fmt(total.tris)}</b><span>${fmt(total.verts)} верш.</span></div>`;
+    `<div class="stat visible"><small>Видно сейчас, полигонов</small><b>${fmt(vp)}</b><span>${fmt(vq)} квад. · ${fmt(vl)} треуг. · ${Math.round((vp / total.polys) * 100)}%</span></div>` +
+    `<div class="stat"><small>Вся модель, полигонов</small><b>${fmt(total.polys)}</b><span>${fmt(total.quads)} квад. · ${fmt(total.lone)} треуг.</span></div>`;
   const groups = [...new Set(parts.map((p) => p.group))];
   const gbox = $('#groups');
   gbox.innerHTML = '';
@@ -302,7 +328,7 @@ function refreshParts() {
     const b = document.createElement('button');
     b.className = on ? '' : 'off';
     b.textContent = `${on ? '●' : '○'} ${g}`;
-    b.title = `${on ? 'Скрыть' : 'Показать'}: ${g} (${fmt(ps.reduce((s, p) => s + p.tris, 0))} треуг.)`;
+    b.title = `${on ? 'Скрыть' : 'Показать'}: ${g} (${fmt(ps.reduce((s, p) => s + p.polys, 0))} полигонов)`;
     b.onclick = () => { state.solo = null; for (const p of ps) setVisible(p, !on); refreshParts(); };
     gbox.append(b);
   }
@@ -314,10 +340,11 @@ function buildParts() {
   for (const p of parts) {
     const li = document.createElement('li');
     li.className = 'part';
-    const pct = (p.tris / total.tris) * 100;
+    const pct = (p.polys / total.polys) * 100;
     li.innerHTML = `<span class="tgl"><input type="checkbox" checked title="Показать / скрыть"><i></i></span>
       <div class="p-main"><div class="p-name"><span class="dot" style="background:${p.color}"></span>${p.name}${p.side ? ` <span class="side">${p.side}</span>` : ''}<span class="pct">${pct < 1 ? pct.toFixed(1) : Math.round(pct)}%</span></div>
-      <div class="p-nums"><span><b>${fmt(p.tris)}</b> треуг.</span><span>${fmt(p.verts)} верш.</span></div>
+      <div class="p-nums"><span><b>${fmt(p.polys)}</b> полигонов</span></div>
+      <div class="p-sub">${fmt(p.quads)} квадов · ${fmt(p.lone)} треуг.${p.ngons ? ` · ${fmt(p.ngons)} n-гонов` : ''}</div>
       <div class="p-bar"><i style="width:${Math.max(pct, 0.5).toFixed(1)}%"></i></div></div>
       <button class="p-solo ghost" title="Оставить только эту часть">◎</button>`;
     li.querySelector('input').onchange = (e) => { if (state.solo) { state.solo = null; for (const q of parts) q.visible = q.obj.visible; } setVisible(p, e.target.checked); refreshParts(); };
@@ -335,9 +362,18 @@ function buildParts() {
 // highlight overlays (share the geometry)
 const hlMat = new THREE.MeshBasicMaterial({ color: 0xff7a45, transparent: true, opacity: 0.14, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -1 });
 const hoverMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.12, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -1 });
-const wireMat = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.13, depthWrite: false });
+const wireMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.16, depthWrite: false });
 function overlay(mesh, key, mat) {
-  if (!mesh.userData[key]) { const o = new THREE.Mesh(mesh.geometry, mat); o.raycast = () => {}; o.visible = false; mesh.add(o); mesh.userData[key] = o; }
+  if (!mesh.userData[key]) {
+    let o;
+    if (key === 'wire') {                                   // the quad edges (no diagonals), the real topology
+      const lg = new THREE.BufferGeometry();
+      lg.setAttribute('position', mesh.geometry.attributes.position);
+      lg.setIndex(mesh.userData.topo.lines || []);
+      o = new THREE.LineSegments(lg, mat);
+    } else o = new THREE.Mesh(mesh.geometry, mat);
+    o.raycast = () => {}; o.visible = false; mesh.add(o); mesh.userData[key] = o;
+  }
   return mesh.userData[key];
 }
 function hover(p, on) { for (const m of p.meshes) overlay(m, 'hov', hoverMat).visible = on && p !== state.sel; }
@@ -356,8 +392,10 @@ function updateCard() {
   for (const m of p.meshes) mats.add(m.userData.orig);
   c.hidden = false;
   c.innerHTML = `<h3><span class="dot" style="background:${p.color}"></span>${p.name}${p.side ? ` <span style="color:var(--dim);font-weight:400">${p.side}</span>` : ''}</h3>
-    <div class="kv"><span>Треугольники</span><b>${fmt(p.tris)}</b><span>Вершины</span><b>${fmt(p.verts)}</b>
-    <span>Доля модели</span><b>${((p.tris / total.tris) * 100).toFixed(1)}%</b><span>Материалы / текстуры</span><b>${mats.size} / ${texs.length}</b>
+    <div class="kv"><span>Полигоны (квад = 1)</span><b>${fmt(p.polys)}</b><span>из них квадов</span><b>${fmt(p.quads)}</b>
+    <span>из них треугольников</span><b>${fmt(p.lone)}</b>${p.ngons ? `<span>из них n-гонов</span><b>${fmt(p.ngons)}</b>` : ''}<span>Вершины</span><b>${fmt(p.verts)}</b>
+    <span>Доля модели</span><b>${((p.polys / total.polys) * 100).toFixed(1)}%</b><span>В движке (треуг.)</span><b>${fmt(p.tris)}</b>
+    <span>Материалы / текстуры</span><b>${mats.size} / ${texs.length}</b>
     <span>Узел в GLB</span><b>${p.obj.name}</b></div>
     <div class="row-btns"><button id="c-vis">${p.obj.visible ? 'Скрыть' : 'Показать'}</button><button id="c-solo">${state.solo === p ? 'Показать все' : 'Только она'}</button><button id="c-frame">Вписать</button></div>`;
   $('#c-vis').onclick = () => { state.solo = null; setVisible(p, !p.obj.visible); refreshParts(); };
@@ -520,11 +558,12 @@ async function load() {
   }
   parts.sort((a, b) => (Math.abs(a.top - b.top) > 0.02 ? b.top - a.top : a.obj.name.localeCompare(b.obj.name)));
   parts.forEach((p, i) => { p.color = COLORS[i % COLORS.length]; });
-  total = parts.reduce((s, p) => ({ tris: s.tris + p.tris, verts: s.verts + p.verts }), { tris: 0, verts: 0 });
+  total = parts.reduce((s, p) => ({ tris: s.tris + p.tris, verts: s.verts + p.verts, quads: s.quads + p.quads, lone: s.lone + p.lone, polys: s.polys + p.polys }),
+    { tris: 0, verts: 0, quads: 0, lone: 0, polys: 0 });
   const size = box.getSize(new THREE.Vector3());
   const texCount = texturesOf(parts).length;
   $('#model-sub').textContent = `${MODEL.title} · ${MODEL.sub}`;
-  $('#chips').innerHTML = [[fmt(total.tris), 'треуг.'], [fmt(total.verts), 'верш.'], [parts.length, 'частей'], [texCount, 'текстур'],
+  $('#chips').innerHTML = [[fmt(total.polys), 'полигонов'], [fmt(total.quads), 'квадов'], [fmt(total.verts), 'верш.'], [parts.length, 'частей'], [texCount, 'текстур'],
     [`${(MODEL.bytes / 1048576).toFixed(1)} МБ`, 'GLB'], [`${size.y.toFixed(2)} м`, 'рост']].map(([v, l]) => `<span class="chip"><b>${v}</b> ${l}</span>`).join('');
   buildParts();
   refreshParts();
