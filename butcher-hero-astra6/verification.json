@@ -1,0 +1,93 @@
+{
+  "file": "/mnt/claude-data/krivsunov-bluegin2/multicode-test/reels/butcher-hero-astra6/output/butcher-hero-astra6_en.mp4",
+  "server": "claude-hub-prod",
+  "fps": "30/1",
+  "frames": 888,
+  "duration": 29.6,
+  "dimensions": [
+    1080,
+    1920
+  ],
+  "bytes": 9487535,
+  "codecs": [
+    "h264",
+    "aac"
+  ],
+  "audioMeanDb": -18.6,
+  "audioPeakDb": -0.6,
+  "checks": {
+    "h264": true,
+    "aac": true,
+    "dimensions": true,
+    "frameRate": true,
+    "frameCount": true,
+    "duration": true,
+    "size": true,
+    "audible": true,
+    "noBlackIntervals": true
+  },
+  "blackIntervals": [],
+  "frameChecks": {
+    "inspected": 888,
+    "darkestMean": 38.88714626662121,
+    "maximumDarkFraction": 0,
+    "deterministic": [
+      {
+        "scene": "HOOK & CHEW",
+        "t": 1.4,
+        "sha256": "d4fabb51ac083cee3cded8feda21f1f6827bd6d4f4d1fd12af44093e82c94eed"
+      },
+      {
+        "scene": "GROW",
+        "t": 4.4,
+        "sha256": "16cb2ec1786005c40656110ac16f424e5d9bdb35183d552d23107a620ffcc274"
+      },
+      {
+        "scene": "UNDERDOG",
+        "t": 7.4,
+        "sha256": "c1ee442e747882866256edd0e29c478f9f4a1e6ece032e329061f59533632ca9"
+      },
+      {
+        "scene": "NEW LANDS",
+        "t": 10.3,
+        "sha256": "8e7a038e3fd141a515c1ace5c574329f511d5af964b3de8639d109e7ff253cd9"
+      },
+      {
+        "scene": "ARSENAL",
+        "t": 14.2,
+        "sha256": "142f275f404460a47d1337867d07acb229916df1e0ead371446467a4f0fc0580"
+      },
+      {
+        "scene": "BOSS TOWER",
+        "t": 17.6,
+        "sha256": "07a774a4497b1ec5e8b13114610847b2b81e01089eee1b2669a151a15f6c0d9e"
+      },
+      {
+        "scene": "DINNER",
+        "t": 19.45,
+        "sha256": "53cc9a06ea5c4e0b7907af2c71ff69a9f65079bb1253d7d5537871854653b434"
+      },
+      {
+        "scene": "REMATCH",
+        "t": 20.8,
+        "sha256": "281ca66af125118239b8572778dfce82fdc7b61fce64f54e8258b2f2849dc3d2"
+      },
+      {
+        "scene": "DEITY",
+        "t": 23.2,
+        "sha256": "a549752cccaa4ca49405cf3cf4c33e0ea5e65e42f2e5962261dff710ce13863f"
+      },
+      {
+        "scene": "LOGO",
+        "t": 25.9,
+        "sha256": "1a41452a8b6ac2e8015402af83878ef8dffda0f599d0b6697e8f421635fda83c"
+      },
+      {
+        "scene": "PLAY FREE",
+        "t": 28.6,
+        "sha256": "94949053c7f1da9350fa1df0cd086c3ab7d10768ec17e7059fe679caa78b9727"
+      }
+    ],
+    "renderSeconds": 23.788072715000002
+  }
+}
