@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Butcher Hero — pixel mini-game</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #12080c; overflow: hidden; touch-action: none; }
+  body { display: flex; align-items: center; justify-content: center; }
+  canvas { image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
+</style>
+</head>
+<body>
+<canvas id="screen"></canvas>
+<script>
+"use strict";
+const W = 256, H = 160, COLS = 10, FPS = 16, LAST = 449;
+const STORE = "https://play.google.com/store/apps/details?id=com.multicastgames.butcher";
+
+// Pause points: the story frame shown while waiting, the spot to tap (art pixels), the hint.
+const STEPS = [
+  { f: 4, t: [206, 73], txt: "TAP THE GOBLIN!" },
+  { f: 47, t: [143, 82], txt: "TAP TO EAT!" },
+  { f: 63, t: [140, 76], txt: "EAT! 2/3" },
+  { f: 79, t: [140, 76], txt: "EAT! 3/3" },
+  { f: 150, t: [44, 100], txt: "HOOK THE NEXT ONE!" },
+  { f: 189, t: [108, 80], txt: "TAP TO EAT!" },
+  { f: 205, t: [110, 80], txt: "EAT! 2/2" },
+  { f: 324, t: [96, 94], txt: "DODGE!" },
+];
+for (let i = 0; i < 7; i++) STEPS.push({ f: 345 + 6 * i, t: [194, 48], txt: "ATTACK! " + (i + 1) + "/7" });
+STEPS.push({ f: 389, t: [194, 48], txt: "FINISH HIM!" });
+STEPS.push({ f: 437, t: [160, 90], txt: "OPEN THE CHEST!" });
+const SLOW = [390, 401];
+const RADIUS = 30;
+
+const SFX = { 10: "whoosh", 18: "hit", 56: "chomp", 72: "chomp", 88: "chomp", 97: "charge", 104: "levelup",
+  158: "whoosh", 164: "hit", 198: "chomp", 214: "chomp", 223: "charge", 226: "squish", 229: "squish",
+  232: "weapon", 240: "whoosh", 246: "hit", 251: "hit", 255: "hit", 260: "whoosh", 262: "hit", 269: "hit",
+  277: "hit", 280: "whoosh", 290: "warning", 301: "stomp", 309: "stomp", 317: "stomp", 318: "charge",
+  326: "whoosh", 332: "slam", 348: "hit", 354: "hit", 360: "hit", 366: "hit", 372: "hit", 378: "hit",
+  384: "hit", 390: "whoosh", 396: "crit", 402: "bones", 406: "bones", 426: "whoosh", 434: "stomp", 441: "chest" };
+
+const FONT = {
+  A: "010101111101101", B: "110101110101110", C: "111100100100111", D: "110101101101110",
+  E: "111100110100111", F: "111100110100100", G: "111100101101111", H: "101101111101101",
+  I: "111010010010111", J: "001001001101111", K: "101101110101101", L: "100100100100111",
+  M: "101111111101101", N: "110101101101101", O: "111101101101111", P: "110101110100100",
+  Q: "111101101111001", R: "110101110101101", S: "111100111001111", T: "111010010010010",
+  U: "101101101101111", V: "101101101101010", W: "101101111111101", X: "101101010101101",
+  Y: "101101010010010", Z: "111001010100111", "0": "111101101101111", "1": "010110010010111",
+  "2": "111001111100111", "3": "111001111001111", "4": "101101111001001", "5": "111100111001111",
+  "6": "111100111101111", "7": "111001010010010", "8": "111101111101111", "9": "111101111001111",
+  "!": "010010010000010", "/": "001001010100100", ":": "000010000010000", ".": "000000000000010",
+  "-": "000000111000000", "+": "000010111010000", "?": "111001011000010", " ": "000000000000000",
+};
+const INK = "#24101a", GOLD = "#ffe04a", WHITE = "#ffffff", RED = "#e02030";
+
+const HAND = [
+  "..##.......",
+  ".#ww#......",
+  ".#wg#......",
+  ".#wg###....",
+  ".#wg#wg##..",
+  "##wg#wg#g#.",
+  "#wwwwwwwgg#",
+  "#wwwwwwwwg#",
+  ".#wwwwwwwg#",
+  "..#wwwwwg#.",
+  "...######..",
+];
+
+const screen = document.getElementById("screen");
+const sctx = screen.getContext("2d");
+const buf = document.createElement("canvas");
+buf.width = W; buf.height = H;
+const ctx = buf.getContext("2d");
+const sheet = new Image();
+sheet.src = "sheet.webp";
+
+let frame = STEPS[0].f, step = 0, mode = "load", acc = 0, last = 0, clock = 0;
+let playTo = 0, pendingTap = null, shake = 0, muted = false, audio = null;
+
+function px(x, y, c) { ctx.fillStyle = c; ctx.fillRect(x | 0, y | 0, 1, 1); }
+
+function text(s, x, y, col, k = 1) {
+  const pts = [];
+  [...s].forEach((ch, n) => {
+    const g = FONT[ch] || FONT[" "];
+    for (let j = 0; j < 5; j++) for (let i = 0; i < 3; i++)
+      if (g[j * 3 + i] === "1") for (let dy = 0; dy < k; dy++) for (let dx = 0; dx < k; dx++)
+        pts.push([x + n * 4 * k + i * k + dx, y + j * k + dy]);
+  });
+  const set = new Set(pts.map(p => p[0] + "," + p[1]));
+  ctx.fillStyle = INK;
+  for (const [a, b] of pts) for (const [u, v] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1]])
+    if (!set.has((a + u) + "," + (b + v))) ctx.fillRect(a + u, b + v, 1, 1);
+  ctx.fillStyle = col;
+  for (const [a, b] of pts) ctx.fillRect(a, b, 1, 1);
+}
+const textW = (s, k = 1) => s.length * 4 * k - k;
+const centered = (s, y, col, k = 1) => text(s, Math.round((W - textW(s, k)) / 2), y, col, k);
+
+function drawFrame(f) {
+  const i = Math.max(0, Math.min(461, f));
+  ctx.drawImage(sheet, (i % COLS) * W, Math.floor(i / COLS) * H, W, H, 0, 0, W, H);
+}
+
+function ring(cx, cy, r, col) {
+  for (let a = 0; a < 64; a++) {
+    const t = a / 64 * Math.PI * 2;
+    px(Math.round(cx + Math.cos(t) * r), Math.round(cy + Math.sin(t) * r * 0.7), col);
+  }
+}
+
+function hand(tx, ty, press) {
+  const x0 = tx - 2, y0 = ty + 3 + (press ? 0 : 3);
+  HAND.forEach((row, j) => [...row].forEach((ch, i) => {
+    if (ch === "#") px(x0 + i, y0 + j, INK);
+    else if (ch === "w") px(x0 + i, y0 + j, WHITE);
+    else if (ch === "g") px(x0 + i, y0 + j, "#b8bccb");
+  }));
+}
+
+function hint(s) {
+  const w = textW(s, 1) + 8, x = Math.round((W - w) / 2), y = 122;
+  ctx.fillStyle = "rgba(20,8,12,0.78)";
+  ctx.fillRect(x, y, w, 11);
+  ctx.fillStyle = GOLD;
+  ctx.fillRect(x, y, w, 1); ctx.fillRect(x, y + 10, w, 1);
+  text(s, x + 4, y + 3, GOLD);
+}
+
+function muteIcon() {
+  const x = 243, y = 148, c = muted ? "#8a7a6a" : WHITE;
+  ctx.fillStyle = "rgba(20,8,12,0.6)"; ctx.fillRect(x - 2, y - 2, 13, 10);
+  [[0, 2], [0, 3], [1, 2], [1, 3], [2, 1], [2, 2], [2, 3], [2, 4], [3, 0], [3, 1], [3, 2], [3, 3], [3, 4], [3, 5]]
+    .forEach(([a, b]) => px(x + a, y + b, c));
+  if (muted) [[5, 1], [6, 2], [7, 3], [8, 4], [8, 1], [7, 2], [6, 3], [5, 4]].forEach(([a, b]) => px(x + a, y + b, RED));
+  else [[5, 2], [5, 3], [7, 1], [7, 2], [7, 3], [7, 4]].forEach(([a, b]) => px(x + a, y + b, c));
+}
+
+const BTN = { again: [30, 112, 90, 16, "PLAY AGAIN"], store: [136, 112, 90, 16, "GET THE GAME"] };
+
+function button([x, y, w, h, label], hot) {
+  ctx.fillStyle = INK; ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+  ctx.fillStyle = hot ? "#3fbf5a" : "#e08a1a"; ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = hot ? "#7ae88a" : "#ffc24a"; ctx.fillRect(x, y, w, 2);
+  ctx.fillStyle = hot ? "#1f7a3a" : "#8a4a12"; ctx.fillRect(x, y + h - 2, w, 2);
+  text(label, x + Math.round((w - textW(label)) / 2), y + 5, WHITE);
+}
+
+function render() {
+  if (mode === "load") {
+    ctx.fillStyle = "#12080c"; ctx.fillRect(0, 0, W, H);
+    centered("LOADING...", 76, GOLD);
+    return;
+  }
+  drawFrame(frame);
+  if (mode === "wait") {
+    const s = STEPS[step], t = clock;
+    const pulse = (t * 3) % 1;
+    ring(s.t[0], s.t[1], 4 + pulse * 10, pulse < 0.5 ? GOLD : "#fff2a0");
+    ring(s.t[0], s.t[1], 3, WHITE);
+    const wob = shake > 0 ? Math.round(Math.sin(shake * 40) * 2) : 0;
+    hand(s.t[0] + wob, s.t[1], (t * 2) % 1 < 0.35);
+    hint(s.txt);
+    if (step === 0 && clock < 2.5) { centered("BUTCHER HERO", 30, GOLD, 3); }
+  }
+  if (mode === "end") {
+    ctx.fillStyle = "rgba(10,4,8,0.62)"; ctx.fillRect(0, 0, W, H);
+    centered("VICTORY!", 34, GOLD, 4);
+    centered("GOBLINS: 8   BOSS: SKELETON KING   LV4", 64, WHITE);
+    centered("HOOK. DEVOUR. EVOLVE.", 80, "#fff2a0", 2);
+    button(BTN.again, false);
+    button(BTN.store, true);
+  }
+  muteIcon();
+}
+
+function present() {
+  const s = Math.min(innerWidth / W, innerHeight / H);
+  const k = s >= 1 ? Math.floor(s) || 1 : s;
+  const cw = Math.round(W * (s >= 2 ? Math.floor(s) : s)), ch = Math.round(H * (s >= 2 ? Math.floor(s) : s));
+  if (screen.width !== cw || screen.height !== ch) { screen.width = cw; screen.height = ch; }
+  sctx.imageSmoothingEnabled = false;
+  sctx.drawImage(buf, 0, 0, cw, ch);
+}
+
+function frameDelay(f) { return f >= SLOW[0] && f <= SLOW[1] ? 2 / FPS : 1 / FPS; }
+
+function startPlay(to) {
+  mode = "play"; playTo = to; acc = 0;
+}
+
+function advance() {
+  sfx("go");
+  const nextF = step + 1 < STEPS.length ? STEPS[step + 1].f : LAST;
+  startPlay(nextF);
+}
+
+function arrive() {
+  if (frame >= LAST) { mode = "end"; sfx("win"); return; }
+  step++;
+  mode = "wait"; clock = 0;
+  const s = STEPS[step];
+  if (pendingTap && performance.now() - pendingTap.at < 400 && near(pendingTap, s.t)) { pendingTap = null; advance(); }
+  pendingTap = null;
+}
+
+const near = (p, t) => Math.hypot(p.x - t[0], (p.y - t[1]) * 1.2) < RADIUS;
+
+function tick(now) {
+  const dt = Math.min(0.1, (now - (last || now)) / 1000);
+  last = now; clock += dt; shake = Math.max(0, shake - dt);
+  if (mode === "play") {
+    acc += dt;
+    while (mode === "play" && acc >= frameDelay(frame)) {
+      acc -= frameDelay(frame);
+      frame++;
+      if (SFX[frame]) sfx(SFX[frame]);
+      if (frame >= playTo) { frame = playTo; arrive(); }
+    }
+  }
+  render(); present();
+  requestAnimationFrame(tick);
+}
+
+function toArt(e) {
+  const r = screen.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H, at: performance.now() };
+}
+
+function inside(p, [x, y, w, h]) { return p.x >= x && p.x < x + w && p.y >= y && p.y < y + h; }
+
+screen.addEventListener("pointerdown", e => {
+  e.preventDefault();
+  unlockAudio();
+  const p = toArt(e);
+  if (p.x > 238 && p.y > 144) { muted = !muted; return; }
+  if (mode === "wait") {
+    if (near(p, STEPS[step].t)) advance();
+    else { shake = 0.35; sfx("nope"); }
+  } else if (mode === "play") {
+    pendingTap = p;
+  } else if (mode === "end") {
+    if (inside(p, BTN.again)) { step = 0; frame = STEPS[0].f; mode = "wait"; clock = 0; sfx("go"); }
+    else if (inside(p, BTN.store)) window.open(STORE, "_blank");
+  }
+});
+
+// ---- tiny synth ----
+function unlockAudio() {
+  if (!audio) { try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (err) { audio = null; } }
+  if (audio && audio.state === "suspended") audio.resume();
+}
+function tone(freq, dur, type = "square", vol = 0.12, slideTo = null, delay = 0) {
+  const t0 = audio.currentTime + delay, o = audio.createOscillator(), g = audio.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t0);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
+  g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g).connect(audio.destination); o.start(t0); o.stop(t0 + dur + 0.02);
+}
+function noise(dur, vol = 0.2, freq = 1200, delay = 0, q = 0.8) {
+  const t0 = audio.currentTime + delay, n = Math.floor(audio.sampleRate * dur);
+  const b = audio.createBuffer(1, n, audio.sampleRate), d = b.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+  const s = audio.createBufferSource(), f = audio.createBiquadFilter(), g = audio.createGain();
+  f.type = "bandpass"; f.frequency.value = freq; f.Q.value = q; g.gain.value = vol;
+  s.buffer = b; s.connect(f).connect(g).connect(audio.destination); s.start(t0);
+}
+function sfx(name) {
+  if (!audio || muted) return;
+  switch (name) {
+    case "go": tone(660, 0.06, "square", 0.06); break;
+    case "nope": tone(140, 0.12, "square", 0.08, 90); break;
+    case "whoosh": noise(0.25, 0.25, 900, 0, 0.6); break;
+    case "hit": noise(0.12, 0.35, 1800); tone(180, 0.14, "square", 0.12, 60); break;
+    case "chomp": tone(220, 0.07, "square", 0.14, 90); noise(0.1, 0.3, 700, 0.03); tone(120, 0.08, "square", 0.1, 60, 0.08); break;
+    case "squish": noise(0.18, 0.3, 500); tone(90, 0.15, "sawtooth", 0.08, 50); break;
+    case "charge": tone(200, 0.45, "sawtooth", 0.06, 900); break;
+    case "levelup": [523, 659, 784, 1047].forEach((fq, i) => tone(fq, 0.14, "square", 0.08, null, i * 0.09)); break;
+    case "weapon": [392, 523, 659, 784, 1047, 1319].forEach((fq, i) => tone(fq, 0.12, "square", 0.08, null, i * 0.07)); noise(0.4, 0.2, 3000, 0.1); break;
+    case "warning": [0, 1, 2, 3].forEach(i => tone(i % 2 ? 330 : 440, 0.2, "square", 0.08, null, i * 0.22)); break;
+    case "stomp": tone(70, 0.3, "sine", 0.4, 35); noise(0.2, 0.25, 200); break;
+    case "slam": tone(60, 0.6, "sine", 0.5, 25); noise(0.5, 0.4, 250, 0, 0.5); break;
+    case "crit": tone(1200, 0.08, "square", 0.1); tone(80, 0.5, "sine", 0.5, 30, 0.05); noise(0.4, 0.45, 1500, 0.05); break;
+    case "bones": for (let i = 0; i < 6; i++) noise(0.04, 0.25, 2500 + i * 300, i * 0.06, 4); break;
+    case "chest": [784, 988, 1175, 1568, 1976].forEach((fq, i) => tone(fq, 0.18, "triangle", 0.1, null, i * 0.08)); break;
+    case "win": [523, 659, 784, 659, 784, 1047].forEach((fq, i) => tone(fq, 0.16, "square", 0.07, null, i * 0.12)); break;
+  }
+}
+
+sheet.onload = () => { mode = "wait"; clock = 0; };
+sheet.onerror = () => { mode = "load"; };
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>
