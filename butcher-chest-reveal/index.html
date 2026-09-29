@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Butcher hero — 3D открытие сундуков (Unity)</title>
+  <meta property="og:title" content="Butcher hero — 3D открытие сундуков (Unity)">
+  <meta property="og:image" content="poster.jpg">
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(ellipse at 50% 20%, #3a1c5c 0%, #140a24 55%, #07040d 100%); color: #eee6ff;
+      display: flex; flex-direction: column; align-items: center; padding: 24px 16px 40px;
+    }
+    h1 { margin: 0 0 6px; font-size: clamp(20px, 4.5vw, 32px); text-align: center; letter-spacing: .5px; }
+    p.sub { margin: 0 0 20px; opacity: .75; text-align: center; max-width: 640px; line-height: 1.45; font-size: 15px; }
+    .frame {
+      width: min(92vw, calc((100vh - 170px) * 9 / 16), 540px); aspect-ratio: 9 / 16; border-radius: 22px; overflow: hidden;
+      border: 3px solid #1a1033; box-shadow: 0 0 0 2px #ffd35a55, 0 18px 60px #000a, 0 0 80px #ffb81c33; background: #000;
+    }
+    video { width: 100%; height: 100%; display: block; object-fit: cover; }
+    ul { max-width: 640px; margin: 22px 0 0; padding-left: 20px; line-height: 1.55; font-size: 14px; opacity: .8; }
+    a { color: #ffd35a; }
+  </style>
+</head>
+<body>
+  <h1>Butcher hero — 3D открытие сундуков</h1>
+  <p class="sub">Unity 6 · Built-in RP · toon-шейдер с контурами · процедурные 3D-сундуки · синтезированный звук. Запись сделана в редакторе покадрово (1080×1920, 60 FPS).</p>
+  <div class="frame">
+    <video src="chest-reveal.mp4" poster="poster.jpg" controls playsinline preload="metadata"></video>
+  </div>
+  <ul>
+    <li>Knightly: Common → Uncommon → Rare, заряд, взрыв, карточка предмета</li>
+    <li>Royal (сундук-череп): апгрейд до Legendary, отдельный показ легендарки</li>
+    <li>Пачка из 5 armor-сундуков через «OPEN ALL» → итоговая сетка → Collect</li>
+  </ul>
+</body>
+</html>
