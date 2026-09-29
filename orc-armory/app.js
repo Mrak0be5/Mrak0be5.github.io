@@ -6,7 +6,11 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-const MODEL = { title: 'Орчиха-воительница', sub: 'комплект из Tripo · PBR · риг + 6 анимаций', file: 'models/orc-outfit-anim.glb', bytes: 28996340 };
+const MODELS = [
+  { id: 'rig', label: 'Риг: исходный', title: 'Орчиха-воительница', sub: 'риг Tripo + 6 анимаций', file: 'models/orc-outfit-anim.glb', bytes: 28996340 },
+  { id: 'rigfix', label: 'Риг: исправленный', title: 'Орчиха-воительница', sub: 'копия с исправленными весами', file: 'models/orc-outfit-anim-rigfix.glb', bytes: 28996340 },
+];
+const MODEL = MODELS.find((m) => m.id === new URLSearchParams(location.search).get('m')) || MODELS[0];
 const $ = (s) => document.querySelector(s);
 const fmt = (n) => Math.round(n).toLocaleString('ru-RU');
 const kfmt = (n) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 100000 ? 0 : 1)}k` : `${n}`);
@@ -578,8 +582,17 @@ async function load() {
   const size = box.getSize(new THREE.Vector3());
   const texCount = texturesOf(parts).length;
   $('#model-sub').textContent = `${MODEL.title} · ${MODEL.sub}`;
+  const sw = $('#model-switch');
+  sw.innerHTML = '';
+  for (const m of MODELS) {
+    const b = document.createElement('button');
+    b.textContent = m.label;
+    b.classList.toggle('on', m === MODEL);
+    b.onclick = () => { if (m !== MODEL) location.search = `?m=${m.id}`; };
+    sw.append(b);
+  }
   $('#chips').innerHTML = [[fmt(total.polys), 'полигонов'], [fmt(total.quads), 'квадов'], [fmt(total.verts), 'верш.'], [parts.length, 'частей'], [texCount, 'текстур'],
-    [`${(MODEL.bytes / 1048576).toFixed(1)} МБ`, 'GLB'], [`${size.y.toFixed(2)} м`, 'рост']].map(([v, l]) => `<span class="chip"><b>${v}</b> ${l}</span>`).join('');
+    [`${(buf.byteLength / 1048576).toFixed(1)} МБ`, 'GLB'], [`${size.y.toFixed(2)} м`, 'рост']].map(([v, l]) => `<span class="chip"><b>${v}</b> ${l}</span>`).join('');
   buildParts();
   refreshParts();
   buildTextures();

@@ -169,3 +169,11 @@ input[type=range]::-moz-range-thumb { width: 10px; height: 10px; border-radius: 
 .anim-ctl { display: grid; grid-template-columns: 38px 1fr; gap: 10px; align-items: center; margin: 10px 0 2px; }
 .anim-ctl button { padding: 5px 0; text-align: center; font-size: 12px; }
 #anim-sec[hidden] { display: none; }
+
+#model-switch { flex: none; }
+#model-switch button { font-size: 12px; padding: 5px 10px; }
+
+#topbar { flex-wrap: wrap; justify-content: center; row-gap: 8px; }
+.brand > div { min-width: 0; }
+.brand small { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#chips { justify-content: center; }
