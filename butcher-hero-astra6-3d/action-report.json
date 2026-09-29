@@ -1,0 +1,13 @@
+{
+  "render_seconds": 108.86407399177551,
+  "resolution": [
+    1080,
+    1350
+  ],
+  "samples": 36,
+  "bones": 17,
+  "keyed_frames": 49,
+  "objects": 803,
+  "image": "/mnt/claude-data/krivsunov-bluegin2/multicode-test/reels/butcher-hero-astra6-3d/output/hero-action.png",
+  "engine": "Cycles CPU on claude-hub-prod"
+}
