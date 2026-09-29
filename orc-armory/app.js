@@ -6,7 +6,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-const MODEL = { title: 'Орчиха-воительница', sub: 'комплект из Tripo · юбка v3', file: 'models/orc-outfit-v3.glb', bytes: 14637280 };
+const MODEL = { title: 'Орчиха-воительница', sub: 'комплект из Tripo · юбка v3 · PBR-карты', file: 'models/orc-outfit-v3-pbr.glb', bytes: 22291992 };
 const $ = (s) => document.querySelector(s);
 const fmt = (n) => Math.round(n).toLocaleString('ru-RU');
 const kfmt = (n) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 100000 ? 0 : 1)}k` : `${n}`);
