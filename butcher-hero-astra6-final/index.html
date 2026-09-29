@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#10131f">
+  <meta name="description" content="Butcher Hero: ChatGPT Astra 6 on the left, Opus 5.5 on the right. Watch both English reels.">
+  <meta property="og:title" content="Butcher Hero — Astra 6 &amp; Opus 5.5">
+  <meta property="og:description" content="ChatGPT Astra 6: the new 3D reel. Opus 5.5: the original. Watch them side by side.">
+  <meta property="og:type" content="video.other">
+  <meta property="og:image" content="https://mrak0be5.github.io/butcher-hero-astra6-final/poster.jpg">
+  <title>Butcher Hero — Astra 6 &amp; Opus 5.5</title>
+  <style>
+    :root{color-scheme:dark;--bg:#10131f;--panel:#1a2033;--ink:#f4efdf;--muted:#a4a8ba;--line:#35394c;--yellow:#fee223;--pink:#ff83a9}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);font-family:Arial,Helvetica,sans-serif;-webkit-font-smoothing:antialiased}
+    a{color:inherit;text-decoration:none}
+    a:focus-visible,video:focus-visible{outline:3px solid var(--yellow);outline-offset:6px}
+    .shell{width:min(1150px,calc(100% - 64px));margin:auto}
+    header{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:24px 0;border-bottom:1px solid var(--line)}
+    .brand{display:flex;align-items:center;gap:12px;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+    .mark{display:grid;place-items:center;width:32px;height:32px;background:var(--yellow);color:var(--bg);font-size:14px;letter-spacing:-.05em;transform:rotate(-6deg);border-radius:3px}
+    .home{color:var(--muted);font-size:12px;transition:color .15s}
+    .home:hover{color:var(--ink)}
+    main{display:grid;grid-template-columns:minmax(310px,1fr) minmax(300px,415px);gap:82px;align-items:center;padding:39px 0 45px}
+    .eyebrow{display:flex;align-items:center;gap:9px;font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--pink)}
+    .eyebrow::before{content:"";width:6px;height:6px;background:var(--pink);border-radius:50%}
+    h1{font-family:Impact,"Arial Narrow",Arial,sans-serif;font-size:clamp(70px,8vw,108px);font-weight:900;line-height:.87;letter-spacing:-.025em;text-transform:uppercase;margin:27px 0 24px}
+    h1 span{display:block;color:var(--yellow)}
+    .tagline{font-family:Impact,"Arial Narrow",Arial,sans-serif;font-size:24px;text-transform:uppercase;letter-spacing:.025em;margin:0 0 20px}
+    .description{max-width:335px;color:var(--muted);font-size:15px;line-height:1.65;margin:0 0 27px}
+    .details{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 30px}
+    .detail{padding:8px 9px;border:1px solid var(--line);font-size:10px;line-height:1.1;font-weight:700;letter-spacing:.025em;color:#c5c9d7}
+    .detail:first-child{background:#382333;border-color:#694251;color:#ffc3d6}
+    .actions{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+    .download{display:inline-flex;align-items:center;gap:11px;min-height:47px;padding:14px 18px;background:var(--yellow);color:var(--bg);font-size:12px;font-weight:800;border-radius:4px;transition:background .15s,transform .15s}
+    .download:hover{background:#fff2a2;transform:translateY(-2px)}
+    .download svg{width:15px;height:15px}
+    .source{font-size:12px;color:var(--muted);padding:12px 0;border-bottom:1px solid #575c76;transition:color .15s,border-color .15s}
+    .source:hover{color:var(--ink);border-color:var(--pink)}
+    .secondary{margin-top:21px;font-size:11px;color:#8f96ac}
+    .secondary a{padding-bottom:3px;border-bottom:1px solid #41485d}
+    .secondary a:hover{color:var(--pink)}
+    .film{margin:0;min-width:0}
+    .player{overflow:hidden;aspect-ratio:9/16;border:1px solid #595069;border-radius:12px;background:#05070d;box-shadow:0 20px 65px #0005}
+    video{display:block;width:100%;height:100%;object-fit:contain;background:#05070d}
+    figcaption{display:flex;justify-content:space-between;gap:15px;font-size:10px;letter-spacing:.055em;color:#a6a9bd;margin-top:17px;text-transform:uppercase}
+    figcaption span:first-child{color:#e1d9e8}
+    footer{border-top:1px solid var(--line);padding:21px 0 27px;display:flex;justify-content:space-between;gap:20px;color:#7c849b;font-size:11px;line-height:1.5}
+    footer span:last-child{text-align:right}
+    @media(min-width:1000px) and (max-height:920px){.shell{max-width:1030px}main{grid-template-columns:1fr 340px;gap:94px;padding:30px 0 36px}header{padding:22px 0}}
+    @media(max-width:780px){.shell{width:min(510px,calc(100% - 32px))}header{padding:18px 0}main{display:flex;flex-direction:column;gap:32px;padding:25px 0 35px}.film{order:0;width:min(355px,100%)}.intro{order:1;text-align:center;width:100%}.eyebrow{justify-content:center}h1{font-size:79px;line-height:.88;margin:22px 0 19px}h1 span{display:inline}h1 span::before{content:" "}.tagline{font-size:20px;margin-bottom:12px}.description{margin:0 auto 20px;font-size:14px;max-width:320px}.details{justify-content:center;margin-bottom:23px}.actions{justify-content:center;gap:19px}.secondary{margin-top:19px}figcaption{font-size:9px}footer{font-size:10px}}
+    @media(max-width:370px){h1{font-size:69px}.details{gap:5px}.detail{font-size:9px;padding:7px 8px}.home{font-size:11px}.brand{font-size:10px;gap:8px}.actions{gap:15px}}
+    @media(prefers-reduced-motion:reduce){*{transition:none!important}.download:hover{transform:none}}
+    /* Comparison is the main experience: independent native controls, no autoplay. */
+    .shell{max-width:1060px}
+    main{display:block;padding:30px 0 38px}
+    .intro{display:flex;align-items:flex-end;justify-content:space-between;gap:28px}
+    .intro-copy{min-width:0}
+    h1{font-size:58px;line-height:.92;margin:16px 0 14px}
+    h1 span{display:inline}
+    .tagline{font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;letter-spacing:.045em;color:var(--muted);margin:0}
+    .actions{justify-content:flex-end;gap:18px;margin-bottom:2px}
+    .comparison{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;max-width:830px;margin:28px auto 0}
+    .film{width:auto;margin:0}
+    .film figcaption{margin:0 0 12px;display:block;color:var(--ink);font-size:13px;font-weight:800;letter-spacing:0;text-transform:none}
+    .film figcaption small{display:block;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:6px}
+    .film:first-child figcaption{color:var(--yellow)}
+    .film:last-child figcaption{color:var(--pink)}
+    .secondary{text-align:center;margin:23px 0 0}
+    @media(min-width:1000px) and (max-height:920px){main{display:block;padding:24px 0 30px}.comparison{max-width:700px;margin-top:24px}h1{font-size:48px}.intro{align-items:center}}
+    @media(max-width:780px){main{display:block;padding:22px 0 30px}.intro{display:block;text-align:center}.intro-copy{margin:0 auto}.eyebrow{justify-content:center}h1{font-size:57px;margin:16px 0 13px}.tagline{font-size:11px}.actions{justify-content:center;margin-top:20px}.comparison{grid-template-columns:1fr;max-width:355px;margin-top:27px;gap:30px}.film{width:100%}.film figcaption{text-align:left;font-size:14px}.secondary{margin-top:24px}}
+    @media(max-width:370px){h1{font-size:50px}.actions{gap:14px}.download{padding:13px 14px}.source{font-size:11px}}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <a class="brand" href="../" aria-label="Back to the gallery"><span class="mark" aria-hidden="true">BH</span> The reel comparison</a>
+      <a class="home" href="../">← All projects</a>
+    </header>
+    <main>
+      <section class="intro" aria-labelledby="title">
+        <div class="intro-copy">
+          <div class="eyebrow">Two takes · One enormous appetite</div>
+          <h1 id="title">Butcher <span>Hero</span></h1>
+          <p class="tagline">Hook. Chew. Become unstoppable.</p>
+        </div>
+        <div class="actions">
+          <a class="download" href="../videos/butcher-hero-astra6-final_en.mp4" download>
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M10 2v11m-4-4 4 4 4-4M3 14v4h14v-4"/></svg>
+            Download Astra 6 video
+          </a>
+          <a class="source" href="butcher-hero-astra6-final-source.zip" download>Get the source ↗</a>
+        </div>
+      </section>
+      <div class="comparison" aria-label="Side-by-side reel comparison">
+      <figure class="film">
+        <figcaption>ChatGPT Astra 6 · New 3D<small>English · 29.6 sec · 1080 × 1920 · 30 fps</small></figcaption>
+        <div class="player">
+          <video controls playsinline preload="metadata" poster="poster.jpg" aria-label="Butcher Hero, the complete English 3D reel by Astra 6">
+            <source src="../videos/butcher-hero-astra6-final_en.mp4" type="video/mp4">
+            Your browser cannot play this video. <a href="../videos/butcher-hero-astra6-final_en.mp4">Download the MP4.</a>
+          </video>
+        </div>
+      </figure>
+      <figure class="film">
+        <figcaption>Opus 5.5 · Original<small>English · 29.6 sec · 1080 × 1920 · 30 fps</small></figcaption>
+        <div class="player">
+          <video controls playsinline preload="metadata" aria-label="Butcher Hero, the original English reel by Opus 5.5">
+            <source src="https://mrak0be5.github.io/butcher-hero-reel/butcher-hero-reel_en.mp4" type="video/mp4">
+            Your browser cannot play this video. <a href="https://mrak0be5.github.io/butcher-hero-reel/butcher-hero-reel_en.mp4">Open the original MP4.</a>
+          </video>
+        </div>
+      </figure>
+      </div>
+      <p class="secondary">Play either reel with its own controls.<br><br><a href="storyboard.png">View the Astra 6 storyboard</a> &nbsp;·&nbsp; <a href="butcher-hero-astra6.glb" download>Download the 3D model (.glb)</a></p>
+    </main>
+    <footer><span>Butcher Hero · Astra 6 / Opus 5.5</span><span>Sound on · Enjoy the feast.</span></footer>
+  </div>
+</body>
+</html>

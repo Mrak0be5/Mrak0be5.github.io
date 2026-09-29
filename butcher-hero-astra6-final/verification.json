@@ -1,0 +1,98 @@
+{
+  "file": "butcher-hero-astra6-final_en.mp4",
+  "server": "claude-hub-prod",
+  "bytes": 11140472,
+  "width": 1080,
+  "height": 1920,
+  "frames": 888,
+  "fps": "30/1",
+  "duration": 29.6,
+  "audioMeanDb": -18.8,
+  "audioPeakDb": -0.7,
+  "checks": {
+    "h264": true,
+    "aac": true,
+    "dimensions": true,
+    "fps": true,
+    "frames": true,
+    "duration": true,
+    "under60MB": true,
+    "audible": true,
+    "noBlackFrames": true
+  },
+  "black": [],
+  "frameChecks": {
+    "sourceFramesInspected": 888,
+    "darkestMean": 32.867283950617285,
+    "maximumDarkFraction": 0.09259259259259259,
+    "deterministic": [
+      {
+        "scene": "HOOK & CHEW",
+        "t": 1.4,
+        "perturbTime": 17.6,
+        "sha256": "82fdf90e4d8eaa968a4c052eed55a5c041ce5c15a41fb5a0f5bc5cd2ef397706"
+      },
+      {
+        "scene": "GROW",
+        "t": 4.4,
+        "perturbTime": 19.45,
+        "sha256": "076335304af12340f3bf69db658ba185d3d8e5581a572d5ae2973b25e30ff99a"
+      },
+      {
+        "scene": "UNDERDOG",
+        "t": 7.4,
+        "perturbTime": 20.8,
+        "sha256": "cea142c9d275a8083164d0f0568418e9c3e649d172ff5802f93e5b823522dbf6"
+      },
+      {
+        "scene": "LANDS",
+        "t": 10.3,
+        "perturbTime": 23.2,
+        "sha256": "ade045c9148b4d4bf9143489f0df152e0d527e9a657fc2bdcbaf6dccd287d640"
+      },
+      {
+        "scene": "ARSENAL",
+        "t": 14.2,
+        "perturbTime": 25.9,
+        "sha256": "ed3e9dc6977f5c3295c63a4787e3c51f1b4909bc344f4dafbc74b0a432fbbe70"
+      },
+      {
+        "scene": "BOSS TOWER",
+        "t": 17.6,
+        "perturbTime": 28.6,
+        "sha256": "e4b2212800a77c20e5f904bb4d0395d25bfa13d875b7d1d73ed41005ef83879f"
+      },
+      {
+        "scene": "DINNER",
+        "t": 19.45,
+        "perturbTime": 1.4,
+        "sha256": "959f447ddb898ccb2c6d11da5c0c9d26a9679bedb1aa1a38538309f3627ceb5f"
+      },
+      {
+        "scene": "REMATCH",
+        "t": 20.8,
+        "perturbTime": 4.4,
+        "sha256": "67618d105ef15d4304be234f33cd4b13bb7d4c55fb1c2fbfe9088e9b3ea92ab6"
+      },
+      {
+        "scene": "DEITY",
+        "t": 23.2,
+        "perturbTime": 7.4,
+        "sha256": "cf4e4a95af154f6e648dc535ca9a02ab6b75ab59f807e5b6ca70900c7d1b0131"
+      },
+      {
+        "scene": "LOGO",
+        "t": 25.9,
+        "perturbTime": 10.3,
+        "sha256": "305a63f0d6d195bf8acebd58ff120885ac236b45f0dee36fd9e1fd35edfa2f2e"
+      },
+      {
+        "scene": "PLAY FREE",
+        "t": 28.6,
+        "perturbTime": 14.2,
+        "sha256": "a19ba9399c90d20baecf2e67c069b324008a8347991209eede90c0d4918e8440"
+      }
+    ],
+    "renderSeconds": 276.408017613
+  }
+}
