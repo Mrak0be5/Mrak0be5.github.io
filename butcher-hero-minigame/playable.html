@@ -126,19 +126,21 @@ function makeSprite(rows, pal, outline = INK) {
   }
   return { w: sw, h: sh, d };
 }
+// o: scale | sx+sy (squash & stretch), flip, flash (+dither), fade, rect [x, y, w, h] = draw only that part of the sprite
 function blit(s, x, y, o = {}) {
-  const sc = o.scale || 1, flip = o.flip, flash = o.flash;
-  const tw = Math.round(s.w * sc), th = Math.round(s.h * sc);
+  const sc = o.scale || 1, kx = o.sx || sc, ky = o.sy || sc, flip = o.flip, flash = o.flash;
+  const [rx, ry, rw, rh] = o.rect || [0, 0, s.w, s.h];
+  const tw = Math.round(rw * kx), th = Math.round(rh * ky);
   x = Math.round(x); y = Math.round(y);
   for (let ty = 0; ty < th; ty++) {
     const yy = y + ty;
     if (yy < 0 || yy >= H) continue;
-    const sy = Math.min(s.h - 1, (ty / sc) | 0);
+    const sy = ry + Math.min(rh - 1, (ty / ky) | 0);
     for (let tx = 0; tx < tw; tx++) {
       const xx = x + tx;
       if (xx < 0 || xx >= W) continue;
-      let sx = Math.min(s.w - 1, (tx / sc) | 0);
-      if (flip) sx = s.w - 1 - sx;
+      let sx = Math.min(rw - 1, (tx / kx) | 0);
+      sx = flip ? rx + rw - 1 - sx : rx + sx;
       const c = s.d[sy * s.w + sx];
       if (!c) continue;
       pix[yy * W + xx] = flash && c !== INK && (!o.dither || (xx + yy) % 2 === 0) ? flash : (o.fade ? mix(pix[yy * W + xx], c, o.fade) : c);
@@ -147,8 +149,42 @@ function blit(s, x, y, o = {}) {
 }
 // feet-anchored draw: (x, y) is the bottom centre
 function blitFeet(s, x, y, o = {}) {
-  const sc = o.scale || 1;
-  blit(s, x - s.w * sc / 2, y - s.h * sc + 1, o);
+  const sc = o.scale || 1, kx = o.sx || sc, ky = o.sy || sc, r = o.rect || [0, 0, s.w, s.h];
+  blit(s, x - r[2] * kx / 2, y - r[3] * ky + 1, o);
+}
+
+// ---- screen post effects ----
+// pixel zoom about a screen point (z = 2 keeps pixels square)
+function zoomView(cx, cy, z) {
+  if (z <= 1.001) return;
+  const src = pix.slice();
+  for (let y = 0; y < H; y++) {
+    const sy = Math.floor(cy + (y - cy) / z);
+    for (let x = 0; x < W; x++) {
+      const sx = Math.floor(cx + (x - cx) / z);
+      pix[y * W + x] = sx >= 0 && sx < W && sy >= 0 && sy < H ? src[sy * W + sx] : INK;
+    }
+  }
+}
+// darkness with dithered light pools: lights = [{x, y, r}] in screen pixels
+function lightPass(lights, ambient, tintCol) {
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    let best = 0;
+    for (const L of lights) {
+      const d = Math.hypot(x - L.x, (y - L.y) * 1.25) / L.r;
+      if (d < 1) best = Math.max(best, 1 - d * d);
+    }
+    const lit = ambient + (1 - ambient) * best;
+    const q = Math.min(3, Math.floor(lit * 3 + BAYER[y & 3][x & 3] / 16));   // 4 dithered light bands
+    if (q < 3) pix[y * W + x] = mix(pix[y * W + x], tintCol, (3 - q) * 0.2);
+  }
+}
+function vignette(col, strength, width = 0.35) {
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const dx = Math.abs(x - W / 2) / (W / 2), dy = Math.abs(y - H / 2) / (H / 2), d = Math.max(dx, dy);
+    const k = (d - (1 - width)) / width;
+    if (k > 0 && BAYER[y & 3][x & 3] / 16 < k * strength * 1.4) pix[y * W + x] = mix(pix[y * W + x], col, 0.5 * k * strength + 0.15);
+  }
 }
 
 // ---- layers: pixels collected per object, outlined when drawn ----
@@ -247,7 +283,7 @@ function sawDisc(L, cx, cy, spin, r = 5) {
 const FONT = {
   A: "010101111101101", B: "110101110101110", C: "111100100100111", D: "110101101101110",
   E: "111100110100111", F: "111100110100100", G: "111100101101111", H: "101101111101101",
-  I: "111010010010111", J: "001001001101111", K: "101101110101101", L: "100100100100111", "=": "000111000111000",
+  I: "111010010010111", J: "001001001101111", K: "101101110101101", L: "100100100100111", "=": "000111000111000", "&": "010101010101011",
   M: "101111111101101", N: "110101101101101", O: "111101101101111", P: "110101110100100",
   Q: "111101101111001", R: "110101110101101", S: "011100010001110", T: "111010010010010",
   U: "101101101101111", V: "101101101101010", W: "101101111111101", X: "101101010101101",
@@ -340,6 +376,18 @@ function butcherRows(mouth, legs) {
 const SPR = {};
 SPR.butcher = {};
 for (const m of ["idle", "open", "bite"]) for (let l = 0; l < 3; l++) SPR.butcher[m + l] = makeSprite(butcherRows(m, l), BUTCHER_PAL);
+// seen from behind (walking up the screen): hair, the mask strap, the neck, the back of the shirt
+const BUTCHER_BACK_HEAD = [
+  ".........gGGgGGg..........", ".......gGGGGgGGGGg........", "......gGGgGGGGGgGGg.......",
+  "......GGGgGGGGgGGGg.......", "......gGGGGgGGGGGGg.......", "......GGgGGGgGGGgGg.......",
+  "......gGGgGGGGGgGGg.......", "......mMMMMMMMMMMMm.......", "......kkkkkkkkkkkkk.......",
+  "......kskkkkkkkkksk.......", ".......kkkkkkkkkkk........", "........skkkkkkks.........",
+];
+function butcherBackRows(legs) {
+  return BUTCHER_BACK_HEAD.concat(BUTCHER_TOP.slice(12).map(r => r.replace(/b/g, "r").replace(/q(?=r)/g, "r").replace(/m/g, "k"))).concat(LEGS[legs]);
+}
+SPR.butcherBack = {};
+for (let l = 0; l < 3; l++) SPR.butcherBack["idle" + l] = makeSprite(butcherBackRows(l), Object.assign({ s: SKIN.s }, BUTCHER_PAL));
 const BUTCHER_BELLY_UP = 15;  // belly is this many (unscaled) pixels above the feet
 
 const GOB_ROWS = [
@@ -350,7 +398,7 @@ const GOB_LEGS = [["..gg...dd....", "..dd...dd...."], ["...gg.dd.....", "...dd.d
 const PALS = {
   goblin: { G: hx("#c2c448"), g: hx("#8e9228"), d: hx("#5c5e1a"), y: hx("#fff27a"), c: hx("#6a3a18"), C: hx("#9c5c2a"), w: METAL[1], W: METAL[0], h: HANDLE },
   brute: { G: hx("#d08a58"), g: hx("#a25a34"), d: hx("#6a3018"), y: hx("#ffea60"), c: hx("#3a2a2a"), C: hx("#5a4a4a"), w: METAL[1], W: METAL[0], h: HANDLE },
-  ice: { G: hx("#d8ecff"), g: hx("#96b8e0"), d: hx("#58789e"), y: hx("#ff5a5a"), c: hx("#3a4a7a"), C: hx("#5a6aa0"), w: hx("#bff6ff"), W: WHITE, h: hx("#3a4a7a") },
+  ice: { G: hx("#8fb8ec"), g: hx("#5a82c4"), d: hx("#34508e"), y: hx("#ff5a5a"), c: hx("#22306a"), C: hx("#3e4e8e"), w: hx("#bff6ff"), W: WHITE, h: hx("#22306a") },
 };
 for (const k of ["goblin", "brute", "ice"]) {
   SPR[k] = [0, 1].map(l => makeSprite(GOB_ROWS.concat(GOB_LEGS[l]), PALS[k]));
@@ -365,7 +413,7 @@ SPR.yeti = [
   makeSprite(YETI_TOP.concat(["...wWWw..wWWw...", "...wWWw..wWWw...", "..nnnn....nnnn.."]), YETI_PAL),
   makeSprite(YETI_TOP.concat(["...wWWw..wWWw...", "..nnnn...wWWw...", "..........nnnn.."]), YETI_PAL),
 ];
-const LIZ_PAL = { G: hx("#7ad04a"), g: hx("#3e8a2a"), d: hx("#285a1e"), y: hx("#ffe04a"), L: hx("#e8d870"), s: hx("#8a5a2a"), S: METAL[1], K: hx("#e02050") };
+const LIZ_PAL = { G: hx("#f0904a"), g: hx("#c05a2a"), d: hx("#7a2e1a"), y: hx("#fff27a"), L: hx("#ffe08a"), s: hx("#6a3a1a"), S: METAL[1], K: hx("#e02050") };
 const LIZ_TOP = [
   "....GGG.....S", "...GGyGg....S", "...GGGGgK...s", "....gGGg....s", "..GGGGGgg..Gs",
   ".GgGLLLgGgGGs", ".G.gLLLg....s", "...gLLLg.....", "...gGGGg....d", "..gg...gg..dd",
@@ -452,6 +500,8 @@ const DARK_PAL = Object.assign({}, BUTCHER_PAL, {
 });
 SPR.dark = {};
 for (const m of ["idle", "open", "bite"]) for (let l = 0; l < 3; l++) SPR.dark[m + l] = makeSprite(butcherRows(m, l), DARK_PAL);
+SPR.darkBack = {};
+for (let l = 0; l < 3; l++) SPR.darkBack["idle" + l] = makeSprite(butcherBackRows(l), Object.assign({ s: hx("#6a5080") }, DARK_PAL, { k: hx("#9a80b0") }));
 const TOMB = makeSprite(["..gggg..", ".gGGGGg.", "gGGKGGGg", "gGKKKGGg", "gGGKGGGg", "gGGKGGGg", "gGGGGGGg", "gGGGGGGg", "dddddddd"],
   { G: hx("#a8a8b8"), g: hx("#6a6a7a"), K: hx("#3a3a4a"), d: hx("#3a2a2a") });
 const CANDLE = makeSprite([".y.", ".Y.", ".w.", ".w.", "www"], { y: hx("#ffe04a"), Y: hx("#ff8a2a"), w: hx("#e8e0d0") });
@@ -512,7 +562,7 @@ function makeArena(biomeKey, seed) {
     const v = n1(x, y) * 0.72 + n2(x, y) * 0.28 + (BAYER[y % 4][x % 4] / 16 - 0.47) * 0.07;
     d[y * AW + x] = G[clamp(Math.floor((v - 0.12) * 5), 0, 3)];
   }
-  const A = { w: AW, h: AH, d, biome: biomeKey, base: null };
+  const A = { w: AW, h: AH, d, biome: biomeKey, base: null, props: [] };
   const P = (x, y, c) => { x |= 0; y |= 0; if (x >= 0 && x < AW && y >= 0 && y < AH) d[y * AW + x] = c; };
   const crack = hx(B.crack);
   for (let k = 0; k < (B.crackGlow ? 11 : 7); k++) {
@@ -600,6 +650,7 @@ function makeArena(biomeKey, seed) {
     stampLayer(d, L);
   }
   A.base = d.slice();
+  A.props = decals.filter(dc => dc.kind === "prop").map(dc => ({ x: dc.x, y: dc.y, spr: dc.spr, ph: r() * 6 }));
   return A;
 }
 function stampLayer(d, L) {
@@ -741,6 +792,7 @@ function newPlayer() {
     w: { cleaver: 1, sword: 0, saw: 0, slam: 0, grenade: 0, aura: 0 },
     p: { meaty: 0, speed: 0, might: 0, magnet: 0, hook: 0, glutton: 0, regen: 0, armor: 0 },
     evo: {}, ang: 0, ang2: -Math.PI / 2, sawT: 1, slamT: 2, grenT: 2, auraT: 0, hookCd: 0, hook: null, regenAcc: 0, pulled: null,
+    dashT: 0, dashCd: 0, dashDir: [1, 0], ghosts: [], squash: 0, dying: 0, stepT: 0, stepSide: 1, facingUp: false,
   };
 }
 const xpNeed = l => Math.round(10 + 7 * l + l * l / 6 + Math.max(0, l - 20) ** 2 / 4);
@@ -774,6 +826,7 @@ function prepChapter(idx) {
     ch: idx, CH, arena: makeArena(CH.key, 1000 + idx * 77), t: 0, phase: "waveA", phaseT: 0,
     enemies: [], piles: [], drops: [], parts: [], pops: [], shots: [], lobs: [], saws: [], rings: [], tele: [], puddles: [], fx: [],
     boss: null, chest: null, banner: null, spawnT: 0.6, hordeT: 22, shake: 0, shakeMag: 0, pendingLevels: 0, chKills: 0,
+    gibs: [], uiParts: [], cine: null, freeze: 0, lvDelay: 0, hurtFx: 0, flashFx: null,
   });
   P.x = AW / 2; P.y = AH / 2 + 30; P.hook = null; P.pulled = null; P.inv = 1.5; P.mouth = "idle";
 }
@@ -790,6 +843,7 @@ function startChapter(idx, fromSnapshot) {
 function setMode(m) { G.mode = m; onMode(m); }
 function playerDied() {
   G.stats.deaths++;
+  P.dying = 0;
   P.hook = null;
   setMode("dead");
   music.stop();
@@ -814,6 +868,48 @@ const orbitRx = () => 30 * P.scale + 3 * cleaverCount() + (P.evo.razor ? 6 : 0);
 const auraR = () => (22 + 4 * P.w.aura) * (P.evo.plague ? 1.5 : 1) * Math.sqrt(P.scale);
 const chMul = () => [1, 1.25, 1.45, 1.85, 2.25, 3.4][G.ch];
 const belly = (s = P.scale) => [P.x, P.y - BUTCHER_BELLY_UP * s];
+
+// dash: a short invulnerable burst with a cooldown (flick on touch, Shift / K on keyboard, the DASH button)
+const DASH_CD = 2.2, DASH_T = 0.2, DASH_SPD = 180;
+function tryDash(dx = 0, dy = 0) {
+  if (G.mode !== "play" || P.dying || P.pulled || P.dashT > 0 || G.cine || (P.hook && P.hook.phase === "eat")) return false;
+  if (P.dashCd > 0) { sfx("nope"); return false; }
+  let l = Math.hypot(dx, dy);
+  if (l < 0.1) { const v = inputVector(); dx = v.x; dy = v.y; l = Math.hypot(dx, dy); }
+  if (l < 0.1) { dx = P.face; dy = 0; l = 1; }
+  P.dashDir = [dx / l, dy / l]; P.dashT = DASH_T; P.dashCd = DASH_CD; P.inv = Math.max(P.inv, DASH_T + 0.1);
+  P.ghosts = []; P.ghostT = 0; P.squash = -0.18;
+  dust(P.x, P.y, 8, PALE); sfx("dash");
+  return true;
+}
+// growth comes in steps (9/8, 5/4, 11/8) so the scaled pixels stay in a regular pattern
+const GROW_STEPS = [[0, 1], [40, 1.125], [120, 1.25], [250, 1.375]];
+const growthFor = n => GROW_STEPS.reduce((s, [k, v]) => (n >= k ? v : s), 1);
+function growFx() {
+  P.squash = 0.45; G.freeze = Math.max(G.freeze, 0.12);
+  G.rings.push({ x: P.x, y: P.y, r: 0, R: 64, t: 0, col: GOLD });
+  popup("YOU GREW!", P.x, P.y - 62 * P.scale, GOLD, 2, 1.5);
+  sfx("levelup"); shake(0.2, 2);
+}
+function stepFx() {
+  const b = G.CH.key, fx = P.x + P.stepSide * 5 * P.scale, fy = P.y + 1;
+  if (b === "snow") { stainArena(fx, fy, hx("#8fa4c4")); stainArena(fx + 1, fy, hx("#a4b8d4")); }
+  else if (b === "jungle") { if (Math.random() < 0.6) G.fx.push({ kind: "splash", x: fx, y: fy, t: 0, life: 0.3 }); }
+  else if (b === "lava") { if (Math.random() < 0.5) sparks(fx, fy - 1, 2, hx("#ff9a2a"), 20, 0.3); }
+  else addPart({ x: fx, y: fy, z: 1, vx: -P.face * rnd(5, 12), vy: rnd(-3, 3), vz: 0, life: 0.35, spark: true,
+    c: b === "desert" ? hx("#f6dca0") : b === "grave" ? hx("#8a8aa0") : hx("#e8c070") });
+}
+function startDying() {
+  P.dying = 1.5; P.hook = null; P.pulled = null; P.dashT = 0;
+  blood(P.x, P.y - 12, 40, 2, 16); bones(P.x, P.y - 8, 3);
+  shake(0.6, 3); sfx("hurt"); sfx("boom"); buzz(300);
+  G.tele = []; G.shots = [];
+}
+function lvFx() {
+  G.fx.push({ kind: "lvring", x: P.x, y: P.y, t: 0, life: 0.45 });
+  G.flashFx = { col: GOLD, t: 0, life: 0.18 };
+  sfx("levelup");
+}
 
 // ---------------------------------------------------------------- helpers
 function popup(s, x, y, col, k = 1, life = 0.8) { if (G.pops.length < 70) G.pops.push({ s, x, y, col, k, t: 0, life }); }
@@ -868,9 +964,9 @@ function lob(x, y, tx, ty, dur, hgt, col, land) { G.lobs.push({ x0: x, y0: y, x:
 
 // ---------------------------------------------------------------- damage
 function hurtPlayer(dmg, from, src = "?") {
-  if (P.inv > 0 || G.god || G.mode !== "play") return;
+  if (P.inv > 0 || G.god || G.mode !== "play" || P.dying || G.cine) return;
   dmg = Math.max(1, Math.round(dmg * chMul() * diffDmg() * (1 - 0.08 * P.p.armor) * (1 - 0.1 * (G.revenge || 0))));
-  P.hp -= dmg; P.inv = 0.7; P.hitT = 0.12;
+  P.hp -= dmg; P.inv = 0.7; P.hitT = 0.12; G.hurtFx = 0.3; G.freeze = Math.max(G.freeze, 0.05); P.squash = -0.15;
   G.stats.dmgTaken += dmg;
   G.stats.hits[src] = (G.stats.hits[src] || 0) + dmg;
   popup("-" + dmg, P.x, P.y - 40 * P.scale, RED, 1);
@@ -881,7 +977,7 @@ function hurtPlayer(dmg, from, src = "?") {
     const a = Math.atan2(P.y - from.y, P.x - from.x);
     P.x += Math.cos(a) * 6; P.y += Math.sin(a) * 6; clampArena(P, 4);
   }
-  if (P.hp <= 0) { P.hp = 0; playerDied(); }
+  if (P.hp <= 0) { P.hp = 0; startDying(); }
 }
 function hurtEnemy(e, dmg, kx = 0, ky = 0, quiet = false) {
   if (e.dead) return;
@@ -910,6 +1006,12 @@ function killEnemy(e, eaten = false) {
   if (P.evo.plague && Math.hypot(e.x - P.x, e.y - P.y) < auraR()) P.hp = Math.min(P.maxHp, P.hp + 1);
   if (eaten) return;
   blood(e.x, e.y - e.h / 2, e.elite ? 12 : 6, e.elite ? 1.3 : 1, e.h / 2);
+  if (G.gibs.length < 40 && (e.elite || Math.random() < 0.45)) {
+    const fr = e.spr[0], h2 = Math.floor(fr.h / 2), sc = e.scale, fl = e.face < 0;
+    G.gibs.push({ spr: fr, rect: [0, 0, fr.w, h2], x: e.x, y: e.y, z: (fr.h - h2) * sc, vx: rnd(-28, 28), vy: rnd(-8, 8), vz: rnd(45, 75), sc, flip: fl, t: 0 });
+    G.gibs.push({ spr: fr, rect: [0, h2, fr.w, fr.h - h2], x: e.x, y: e.y, z: 0, vx: rnd(-10, 10), vy: rnd(-4, 4), vz: rnd(8, 20), sc, flip: fl, t: 0 });
+  }
+  if (e.elite) G.freeze = Math.max(G.freeze, 0.04);
   if (Math.random() < 0.35) bones(e.x, e.y - 3, e.elite ? 3 : 1);
   stainArena(e.x, e.y, BLOOD[3], e.elite ? 3 : 2);
   stainArena(e.x + rnd(-3, 3), e.y + rnd(-2, 2), BLOOD[2], 1);
@@ -930,6 +1032,7 @@ function hitsBoss(x, y, r, key, dmg, cd = 0.35) {
       B.hp -= d; B.dmgTaken = (B.dmgTaken || 0) + d;
       if ((B.flashCd || 0) <= 0) { B.flash = 0.06; B.flashCd = 0.25; }
       dmgPopup(B, x, y - 6, d, crit);
+      if (crit) G.freeze = Math.max(G.freeze, 0.05);
       if (Math.random() < 0.5) sparks(x, y, 3, WHITE, 40);
       sfxThrottled("hit", 0.06);
       if (B.hp <= 0) bossDefeated();
@@ -1007,7 +1110,6 @@ function updatePhase(dt) {
   } else if (G.phase === "waveB" && G.phaseT >= WAVE_B) {
     G.phase = "boss"; G.phaseT = 0;
     spawnBoss(G.CH.boss);
-    banner("WARNING!", RED, 2.6, BOSSES[G.CH.boss].name);
     sfx("warning"); music.play(G.ch, true);
   }
 }
@@ -1083,18 +1185,33 @@ function updatePlayer(dt) {
     const B = P.pulled, dx = B.x - P.x, dy = B.y - P.y, d = Math.hypot(dx, dy);
     if (d < 20 || !G.boss) { P.pulled = null; if (G.boss && d < 20 && B.onPulled) B.onPulled(); }
     else { P.x += dx / d * 170 * dt; P.y += dy / d * 170 * dt; }
+  } else if (P.dashT > 0) {
+    P.dashT -= dt;
+    P.x += P.dashDir[0] * DASH_SPD * dt; P.y += P.dashDir[1] * DASH_SPD * dt;
+    if (Math.abs(P.dashDir[0]) > 0.1) P.face = P.dashDir[0] > 0 ? 1 : -1;
+    P.facingUp = P.dashDir[1] < -0.6;
+    P.ghostT -= dt;
+    if (P.ghostT <= 0) { P.ghostT = 0.035; P.ghosts.push({ x: P.x, y: P.y, t: 0, up: P.facingUp, face: P.face }); }
   } else {
     const v = inputVector();
     const l = Math.hypot(v.x, v.y);
     P.moving = l > 0.15;
+    P.facingUp = P.moving && v.y / l < -0.55;
     if (P.moving) {
       const k = Math.min(1, l);
       P.x += v.x / l * k * moveSpeed() * dt; P.y += v.y / l * k * moveSpeed() * dt;
       if (Math.abs(v.x) > 0.1) P.face = v.x > 0 ? 1 : -1;
       P.walkT += dt * 5;
       G.movedOnce = (G.movedOnce || 0) + dt;
+      P.stepT -= dt;
+      if (P.stepT <= 0) { P.stepT = 0.17; P.stepSide *= -1; stepFx(); }
     }
   }
+  P.dashCd = Math.max(0, P.dashCd - dt);
+  G.idleT = P.moving || P.dashT > 0 ? 0 : (G.idleT || 0) + dt;
+  for (const g of P.ghosts) g.t += dt;
+  P.ghosts = P.ghosts.filter(g => g.t < 0.25);
+  P.squash *= Math.max(0, 1 - dt * 9);
   clampArena(P, 4);
   P.inv = Math.max(0, P.inv - dt);
   P.hitT = Math.max(0, (P.hitT || 0) - dt);
@@ -1118,7 +1235,10 @@ function updatePlayer(dt) {
       if (dd < 6) {
         d.got = true;
         if (d.kind === "heart") { const h = 25; P.hp = Math.min(P.maxHp, P.hp + h); popup("+" + h + " HP", P.x, P.y - 44 * P.scale, GREEN); sfx("heal"); }
-        else { gainXp(d.xp); sfxThrottled("pickup", 0.05); }
+        else {
+          gainXp(d.xp); sfxThrottled("pickup", 0.05);
+          if (G.uiParts.length < 24) G.uiParts.push({ x: P.x - camX, y: P.y - 10 - camY, t: 0 });
+        }
       }
     }
   }
@@ -1216,6 +1336,7 @@ function updateHook(dt) {
     if (H.chomps < 3 && H.t >= ct[H.chomps]) {
       H.chomps++;
       tgt.shrink = [0.72, 0.45, 0.15][H.chomps - 1];
+      P.squash = 0.12;
       sfx("chomp"); buzz(25);
       blood(P.x + H.side * 4 * P.scale, P.y, 5, 0.8, 22 * P.scale);
       if (Math.random() < 0.6) bones(P.x, P.y, 1);
@@ -1227,7 +1348,8 @@ function updateHook(dt) {
       const heal = 6 + 6 * P.p.glutton;
       killEnemy(tgt, true);
       P.devours++; G.stats.devours++;
-      P.scale = Math.min(1.4, P.scale + 0.004);
+      const ns = growthFor(P.devours);
+      if (ns > P.scale + 0.01) { P.scale = ns; growFx(); } else P.squash = 0.22;
       P.hp = Math.min(P.maxHp, P.hp + heal);
       popup("+" + xp + "XP", P.x, P.y - 48 * P.scale, PALE, 1, 0.9);
       popup("+" + heal, P.x + 14, P.y - 38 * P.scale, GREEN, 1, 0.9);
@@ -1456,6 +1578,16 @@ function updateParts(dt) {
   G.parts = G.parts.filter(p => p.life > 0);
   for (const p of G.pops) p.t += dt;
   G.pops = G.pops.filter(p => p.t < p.life);
+  for (const g of G.gibs) {
+    g.t += dt; g.x += g.vx * dt; g.y += g.vy * dt; g.z += g.vz * dt; g.vz -= 230 * dt;
+    if (g.z <= 0) { g.z = 0; if (g.vz < -25) { g.vz = -g.vz * 0.3; g.vx *= 0.5; g.vy *= 0.5; } else { g.vz = 0; g.vx *= 0.8; g.vy *= 0.8; } }
+    if (g.t > 1.1 && !g.stained) { g.stained = true; stainArena(g.x, g.y, BLOOD[3], 2); }
+  }
+  G.gibs = G.gibs.filter(g => g.t < 1.4);
+  for (const u of G.uiParts) u.t += dt;
+  G.uiParts = G.uiParts.filter(u => u.t < 0.45);
+  G.hurtFx = Math.max(0, G.hurtFx - dt);
+  if (G.flashFx) { G.flashFx.t += dt; if (G.flashFx.t > G.flashFx.life) G.flashFx = null; }
   if (G.banner) { G.banner.t += dt; if (G.banner.t > G.banner.life) G.banner = null; }
 }
 
@@ -1508,7 +1640,7 @@ function rewardCards(big) {
   return levelCards(3);
 }
 function applyCard(c) {
-  if (c.kind === "evo") { P.evo[c.key] = true; banner(c.title + "!", GOLD, 2.2, "EVOLUTION"); sfx("weapon"); return; }
+  if (c.kind === "evo") { P.evo[c.key] = true; G.cine = { kind: "evo", t: 0, dur: 1.6, x: P.x, y: P.y - 20, title: c.title + "!", sub: "EVOLUTION" }; sfx("weapon"); return; }
   if (c.kind === "snack") { P.hp = Math.min(P.maxHp, P.hp + 40); return; }
   if (c.kind === "feast") { P.maxHp += 30; P.hp = P.maxHp; return; }
   if (c.kind === "plus2") { P.w[c.key] = Math.min(UPG[c.key].max, P.w[c.key] + 2); return; }
@@ -1539,6 +1671,29 @@ function openChest() {
 function update(dt) {
   if (G.mode !== "play") return;
   G.clock += dt; G.stats.time += dt;
+  // cinematics (boss intro, evolution): the world waits, the entrance and particles keep playing
+  if (G.cine) {
+    const c = G.cine;
+    c.t += dt;
+    G.shake = Math.max(0, G.shake - dt);
+    if (c.kind === "boss" && G.boss && G.boss.entering > 0) updateBoss(dt);
+    updateParts(dt);
+    if (c.t >= c.dur) {
+      G.cine = null;
+      if (G.afterCine) { G.afterCine = null; finishBossReward(); }
+    }
+    return;
+  }
+  // hit-stop: a few frozen frames sell the impact
+  if (G.freeze > 0) { G.freeze -= dt; G.shake = Math.max(0, G.shake - dt); return; }
+  if (P.dying > 0) {
+    P.dying -= dt;
+    G.shake = Math.max(0, G.shake - dt);
+    updateParts(dt);
+    if (P.dying < 1.1 && !P.pooled) { P.pooled = true; stainArena(P.x, P.y + 2, BLOOD[3], 7); stainArena(P.x + 3, P.y, BLOOD[2], 4); }
+    if (P.dying <= 0) { P.dying = 0; playerDied(); }
+    return;
+  }
   G.t += dt;
   G.shake = Math.max(0, G.shake - dt);
   updatePhase(dt);
@@ -1562,14 +1717,18 @@ function update(dt) {
       return;
     }
   }
-  if (G.pendingLevels > 0 && !(P.hook && P.hook.phase !== "fly") && !P.pulled) {
-    G.pendingLevels--;
-    sfx("levelup");
+  if (G.pendingLevels > 0 && !G.lvDelay && !(P.hook && P.hook.phase !== "fly") && !P.pulled && P.dashT <= 0) {
     if (G.opts.auto) {
+      G.pendingLevels--;
       const cs = levelCards(3), c = cs[BOT.choose(cs)];
       applyCard(c);
+      lvFx();
       popup("LV" + P.lvl + " +" + c.title, P.x, P.y - 58 * P.scale, GOLD, 1, 1.4);
-    } else { G.cards = levelCards(3); setMode("levelup"); }
+    } else { G.lvDelay = 0.35; lvFx(); }
+  }
+  if (G.lvDelay > 0) {
+    G.lvDelay -= dt;
+    if (G.lvDelay <= 0) { G.lvDelay = 0; G.pendingLevels--; G.cards = levelCards(3); setMode("levelup"); }
   }
 }
 function chooseCard(i) {
@@ -1578,13 +1737,17 @@ function chooseCard(i) {
   applyCard(c);
   sfx("go");
   if (G.mode === "reward" && G.rewardKind === "boss") {
-    G.stats.bossTimes.push(Math.round(G.bossTime || 0));
-    if (G.ch >= CHAPTERS.length - 1 && !G.endless) { setMode("victory"); music.play(0, false); saveProgress(-1, null); onVictory(); }
-    else setMode("clear");
+    if (G.cine) { G.afterCine = true; setMode("play"); return; }   // show the evolution first
+    finishBossReward();
     return;
   }
   if (G.mode === "reward" && G.rewardKind === "mini") { G.phase = "waveB"; G.phaseT = 0; }
   setMode("play");
+}
+function finishBossReward() {
+  G.stats.bossTimes.push(Math.round(G.bossTime || 0));
+  if (G.ch >= CHAPTERS.length - 1 && !G.endless) { setMode("victory"); music.play(0, false); saveProgress(-1, null); onVictory(); }
+  else setMode("clear");
 }
 function reroll() {
   if (G.rerolls <= 0 || G.mode !== "levelup") return;
@@ -1613,6 +1776,10 @@ function startEndless() {
 // Mini-bosses and bosses: stats, attack patterns, procedural drawing.
 
 const BONES = [hx("#fff8e6"), hx("#d8ccb0"), hx("#a09078"), hx("#5a4e44")];
+const BOSS_SUB = {
+  skeleton: "RULER OF THE AUTUMN DEAD", troll: "HE HATES WARM BLOOD", hydra: "THREE HEADS, ONE APPETITE",
+  dark: "YOUR EVIL TWIN", golem: "A WALKING VOLCANO", ship: "THEY CAME FOR THE MEAT", overlord: "THE PILOT CRAWLS OUT OF THE WRECK",
+};
 const EYE = hx("#ff3a2a"), EYE2 = hx("#ffd8a8");
 const CROWN = makeSprite(["Y.Y.Y", "YYYYY", "yRyRy"], { Y: hx("#ffe04a"), y: hx("#c08a1a"), R: hx("#e02030") });
 const TROLL_PAL = { fur: [hx("#f4f8ff"), hx("#c4d4ea"), hx("#8aa2c4")], belly: [hx("#ffffff"), hx("#e0ecf8"), hx("#b8cce4")],
@@ -1636,6 +1803,7 @@ function spawnBoss(kind) {
   else { B.x = AW / 2; B.y = INSET.t + 2; }
   K.init && K.init(B);
   G.boss = B;
+  if (!K.mini) G.cine = { kind: "boss", t: 0, dur: 2.2, x: B.x, y: B.y - (kind === "ship" ? 40 : 30), title: K.name, sub: BOSS_SUB[kind] || "" };
   return B;
 }
 function bossCircles(B) { return B.K.circles(B); }
@@ -1979,7 +2147,7 @@ const BOSSES = {
   // ============ CHAPTER 1
   chief: {
     name: "GOBLIN CHIEF", mini: true, hp: 520, contact: 12,
-    circles: B => [{ x: B.x, y: B.y - 18, r: 13 }],
+    circles: B => [{ x: B.x, y: B.y - 21, r: 16 }],
     update(B, dt) {
       const a = B.atk;
       if (!a) {
@@ -1997,7 +2165,7 @@ const BOSSES = {
         if (a.t > 1.1) endAttack(B, 2.6);
       }
     },
-    draw(B) { drawMini(B, "brute", 2.3, { after: (sx, sy) => blit(CROWN, sx - 5, sy - SPR.brute[0].h * 2.3 - 4, { scale: 2 }) }); },
+    draw(B) { drawMini(B, "brute", 3, { after: (sx, sy) => blit(CROWN, sx - 5, sy - SPR.brute[0].h * 3 + 1, { scale: 2 }) }); },
   },
   skeleton: {
     name: "SKELETON KING", hp: 2000, contact: 14,
@@ -2042,7 +2210,7 @@ const BOSSES = {
   // ============ CHAPTER 2
   alpha: {
     name: "YETI ALPHA", mini: true, hp: 1500, contact: 14,
-    circles: B => [{ x: B.x, y: B.y - 20, r: 14 }],
+    circles: B => [{ x: B.x, y: B.y - 18, r: 14 }],
     update(B, dt) {
       const a = B.atk;
       if (!a) {
@@ -2065,7 +2233,7 @@ const BOSSES = {
         if (a.t > 1.1) endAttack(B, 2.4);
       }
     },
-    draw(B) { drawMini(B, "yeti", 2.2, { before: (sx, sy) => { if (Math.floor(G.t * 4) % 2) fillEllipseDither(sx, sy - 18, 22, 22, CYAN, 0.12); } }); },
+    draw(B) { drawMini(B, "yeti", 2, { before: (sx, sy) => { if (Math.floor(G.t * 4) % 2) fillEllipseDither(sx, sy - 18, 22, 22, CYAN, 0.12); }, after: (sx, sy) => blit(CROWN, sx - 4, sy - SPR.yeti[0].h * 2 - 2, { scale: 1.6 }) }); },
   },
   troll: {
     name: "FROST TROLL", hp: 5500, contact: 16,
@@ -2117,7 +2285,7 @@ const BOSSES = {
   // ============ CHAPTER 3
   lizking: {
     name: "LIZARD KING", mini: true, hp: 3600, contact: 11,
-    circles: B => [{ x: B.x, y: B.y - 16, r: 13 }],
+    circles: B => [{ x: B.x, y: B.y - 20, r: 15 }],
     update(B, dt) {
       const a = B.atk;
       if (!a) {
@@ -2146,7 +2314,7 @@ const BOSSES = {
         if (a.t > 1.2) endAttack(B, 2.0);
       }
     },
-    draw(B) { drawMini(B, "lizard", 2.4, { after: (sx, sy) => blit(CROWN, sx - 4, sy - 44, { scale: 1.6 }) }); },
+    draw(B) { drawMini(B, "lizard", 3, { after: (sx, sy) => blit(CROWN, sx - 4, sy - SPR.lizard[0].h * 3 - 1, { scale: 1.6 }) }); },
   },
   hydra: {
     name: "SWAMP HYDRA", hp: 11000, contact: 10, fixed: true,
@@ -2210,7 +2378,7 @@ const BOSSES = {
   // ============ CHAPTER 4
   knight: {
     name: "BONE KNIGHT", mini: true, hp: 5200, contact: 14,
-    circles: B => [{ x: B.x, y: B.y - 18, r: 14 }],
+    circles: B => [{ x: B.x, y: B.y - 22, r: 15 }],
     update(B, dt) {
       const a = B.atk;
       if (!a) {
@@ -2242,9 +2410,9 @@ const BOSSES = {
     },
     draw(B) {
       if (B.spin) B.face = Math.floor(G.t * 16) % 2 ? 1 : -1;
-      drawMini(B, "skel", 2.5, { after: (sx, sy) => {
-        blit(CROWN, sx - 4, sy - 40, { scale: 1.6 });
-        if (B.spin) ellipseRing(sx, sy - 14, 30, 18, Math.floor(G.t * 12) % 2 ? WHITE : METAL[1], 2, Math.floor(G.t * 20));
+      drawMini(B, "skel", 3, { after: (sx, sy) => {
+        blit(CROWN, sx - 4, sy - SPR.skel[0].h * 3 - 1, { scale: 1.6 });
+        if (B.spin) ellipseRing(sx, sy - 18, 34, 20, Math.floor(G.t * 12) % 2 ? WHITE : METAL[1], 2, Math.floor(G.t * 20));
       } });
     },
   },
@@ -2404,7 +2572,7 @@ const BOSSES = {
   // ============ CHAPTER 6
   commander: {
     name: "ALIEN COMMANDER", mini: true, hp: 8500, contact: 10,
-    circles: B => [{ x: B.x, y: B.y - 16, r: 13 }],
+    circles: B => [{ x: B.x, y: B.y - 22, r: 14 }],
     update(B, dt) {
       const a = B.atk;
       if (!a) {
@@ -2439,7 +2607,7 @@ const BOSSES = {
         if (a.t > 0.8) endAttack(B, 1.6);
       }
     },
-    draw(B) { drawMini(B, "alien", 2.5, { after: (sx, sy) => { blit(CROWN, sx - 4, sy - 38, { scale: 1.6 }); } }); },
+    draw(B) { drawMini(B, "alien", 3, { after: (sx, sy) => { blit(CROWN, sx - 4, sy - SPR.alien[0].h * 3 - 1, { scale: 1.6 }); } }); },
   },
   ship: {
     name: "MOTHERSHIP", hp: 28000, contact: 0,
@@ -2471,7 +2639,7 @@ const BOSSES = {
           blood(B.x, B.y, 20, 2, 10);
           const O = spawnBoss("overlord");
           O.x = B.x; O.y = B.y + 8; O.tShip = B.t;
-          banner("ALIEN OVERLORD!", RED, 2.6, "THE PILOT CRAWLS OUT OF THE WRECK");
+          if (G.cine) { G.cine.x = O.x; G.cine.y = O.y - 30; G.cine.t = -0.6; }
         }
         return;
       }
@@ -2617,14 +2785,16 @@ function drawWorld() {
   const sm = G.shake > 0 ? G.shakeMag : 0;
   let fx_ = P.x, fy_ = P.y - 14;
   const B = G.boss;
-  if (B && !B.dying) {
+  if (G.cine) { fx_ = G.cine.x; fy_ = G.cine.y; }
+  else if (B && !B.dying) {
     const c = bossCircles(B)[0];
     fx_ += clamp((c.x - P.x) * 0.3, -W / 2 + 70, W / 2 - 70);
     fy_ += clamp((c.y - 10 - P.y) * 0.3, -H / 2 + 60, H / 2 - 70);
   }
   const far = G.camX === undefined || Math.abs(G.camX - fx_) > W * 0.6 || Math.abs(G.camY - fy_) > H * 0.6;
-  G.camX = far ? fx_ : lerp(G.camX, fx_, 0.08);
-  G.camY = far ? fy_ : lerp(G.camY, fy_, 0.08);
+  const ck = G.cine ? 0.18 : 0.08;
+  G.camX = far ? fx_ : lerp(G.camX, fx_, ck);
+  G.camY = far ? fy_ : lerp(G.camY, fy_, ck);
   camX = Math.round(clamp(G.camX - W / 2, 0, AW - W) + (sm ? rnd(-sm, sm) : 0));
   camY = Math.round(clamp(G.camY - H / 2, 0, AH - H) + (sm ? rnd(-sm, sm) : 0));
   const A = G.arena;
@@ -2639,6 +2809,7 @@ function drawWorld() {
     fillEllipseDither(sx, sy, p.r, p.r * 0.6, col, 0.5 + 0.2 * Math.sin(G.t * 8 + p.x), p.life < 1 && (G.t * 8) % 1 < 0.5);
     if (Math.random() < 0.3) put(sx + rnd(-p.r, p.r) * 0.7, sy + rnd(-p.r, p.r) * 0.4, p.col === "lava" ? hx("#ffe060") : hx("#caff9a"));
   }
+  drawAmbient();
   if (P.w.aura) drawAura();
   for (const t of G.tele) drawTele(t);
   for (const r of G.rings) {
@@ -2676,6 +2847,13 @@ function drawWorld() {
   if (G.boss) actors.push({ y: G.boss.K.fixed ? G.boss.y - 30 : G.boss.y, b: true });
   actors.sort((a, b) => a.y - b.y);
   for (const a of actors) { if (a.e) drawEnemy(a.e); else if (a.p) drawPlayer(); else drawBoss(); }
+  for (const g of G.gibs) {
+    const [sx, sy] = worldToScreen(g.x, g.y);
+    if (sx < -20 || sx > W + 20 || sy < -20 || sy > H + 40) continue;
+    if (g.z < 2) { darken(sx - 1, sy + 1); darken(sx, sy + 1); darken(sx + 1, sy + 1); }
+    blitFeet(g.spr, sx, sy - g.z, { scale: g.sc, rect: g.rect, flip: g.flip, fade: g.t > 1.0 ? Math.max(0.05, 1 - (g.t - 1.0) / 0.4) : 0 });
+    if (g.t < 0.6 && g.rect[1] === 0) put(sx, sy - g.z, BLOOD[1]);
+  }
   for (const s of G.saws) { const L = new Layer(), [sx, sy] = worldToScreen(s.x, s.y); sawDisc(L, sx, sy, s.spin, P.evo.boomer ? 6 : 5); L.draw(); }
   for (const l of G.lobs) drawLob(l);
   for (const s of G.shots) drawShot(s);
@@ -2692,6 +2870,69 @@ function drawWorld() {
     text(p.s, sx - textW(p.s, p.k) / 2, sy, p.col, p.k);
   }
   drawWeather();
+  postFx();
+}
+// biome light, hurt and flash overlays, cinematic zoom
+function postFx() {
+  const b = G.CH.key;
+  if (b === "grave") {
+    const [px_, py_] = worldToScreen(P.x, P.y - 14 * P.scale);
+    const lights = [{ x: px_, y: py_, r: 82 + 5 * Math.sin(G.t * 3) }];
+    for (const pr of G.arena.props) if (pr.spr === CANDLE) {
+      const [x, y] = worldToScreen(pr.x, pr.y - 6);
+      if (x > -40 && x < W + 40 && y > -40 && y < H + 40) lights.push({ x, y, r: 26 + 3 * Math.sin(G.t * 9 + pr.ph) });
+    }
+    if (G.boss && !G.boss.dying) { const c = bossCircles(G.boss)[0], [x, y] = worldToScreen(c.x, c.y); lights.push({ x, y, r: 46 }); }
+    if (G.chest) { const [x, y] = worldToScreen(G.chest.x, G.chest.y - 8); lights.push({ x, y, r: 40 }); }
+    lightPass(lights, 0.22, hx("#07050c"));
+    for (let i = 0; i < 3; i++) {
+      const wx = W / 2 + Math.sin(G.t * 0.4 + i * 2.1) * W * 0.4, wy = H / 2 + Math.cos(G.t * 0.33 + i * 1.3) * H * 0.35;
+      const c = i % 2 ? hx("#8affc0") : hx("#c890ff");
+      put(wx, wy, WHITE); put(wx + 1, wy, c); put(wx - 1, wy, c); put(wx, wy - 1, c); put(wx, wy + 1, c);
+    }
+  } else if (b === "lava") vignette(hx("#3a0804"), 0.9, 0.3);
+  if (G.hurtFx > 0) vignette(RED, 0.65 * G.hurtFx / 0.3, 0.22);
+  if (G.flashFx) {
+    const k = 1 - G.flashFx.t / G.flashFx.life;
+    for (let y = 0; y < H; y++) for (let x = (y & 1); x < W; x += 2) pix[y * W + x] = mix(pix[y * W + x], G.flashFx.col, 0.4 * k);
+  }
+  if (G.cine) {
+    const c = G.cine, t = Math.max(0, c.t);
+    const z = t < 0.2 ? 1 + t / 0.2 : t > c.dur - 0.25 ? 1 + Math.max(0, (c.dur - t) / 0.25) : 2;
+    const [cx, cy] = worldToScreen(c.x, c.y);
+    zoomView(clamp(cx, 0, W - 1), clamp(cy, 0, H - 1), z);
+  }
+}
+// living decor: glowing mushrooms, candle flames, crystal glints, lava rocks; biome ambience in view
+function drawAmbient() {
+  for (const pr of G.arena.props) {
+    const [sx, sy] = worldToScreen(pr.x, pr.y);
+    if (sx < -20 || sx > W + 20 || sy < -20 || sy > H + 30) continue;
+    if (pr.spr === MUSH) {
+      const k = 0.5 + 0.5 * Math.sin(G.t * 2 + pr.ph);
+      fillEllipseDither(sx, sy - 4, 7 + k * 3, 5 + k * 2, hx("#fff6a0"), 0.12 + 0.2 * k);
+    } else if (pr.spr === CANDLE) {
+      const f = Math.floor(G.t * 10 + pr.ph * 3) % 3;
+      put(sx, sy - 6 - (f % 2), hx("#ffe04a")); put(sx, sy - 7 - (f === 2 ? 1 : 0), hx("#ff8a2a"));
+      if (f === 1) put(sx - 1, sy - 6, hx("#ffe04a"));
+    } else if (pr.spr === CRYSTAL) {
+      if ((G.t * 0.7 + pr.ph) % 1 < 0.1) for (const [dx, dy] of [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1]]) put(sx + dx, sy - 5 + dy, WHITE);
+    } else if (pr.spr === BASALT) {
+      if (Math.sin(G.t * 3 + pr.ph) > 0.2) { put(sx - 1, sy - 2, hx("#ffc03a")); put(sx + 1, sy - 2, hx("#ffe060")); }
+    }
+  }
+  const b = G.CH.key, slot = Math.floor(G.t * 2), ph = G.t * 2 % 1;
+  const rnd01 = n => ((Math.sin(n * 127.1) * 43758.5453) % 1 + 1) % 1;
+  if (b === "lava") for (let k = 0; k < 7; k++) {
+    const x = rnd01(slot * 13 + k) * W, y = rnd01(slot * 29 + k * 7) * H, r = ph * 3;
+    if (ph < 0.8) ellipseRing(x, y, r + 1, (r + 1) * 0.6, ph < 0.4 ? hx("#ffc03a") : hx("#ff6a1a"), 2);
+  } else if (b === "jungle") for (let k = 0; k < 10; k++) {
+    const x = rnd01(G.t * 9 + k * 3.1) * W, y = rnd01(G.t * 7 + k * 5.3) * H;
+    put(x - 1, y, hx("#bfe8ff")); put(x + 1, y, hx("#bfe8ff")); put(x, y - 1, WHITE);
+  } else if (b === "snow") for (let k = 0; k < 8; k++) {
+    const x = rnd01(slot * 5 + k * 11) * W, y = rnd01(slot * 17 + k * 3) * H;
+    if (Math.floor(G.t * 8 + k) % 3 === 0) put(x, y, WHITE);
+  }
 }
 function drawWreck(f) {
   const [sx, sy] = worldToScreen(f.x, f.y);
@@ -2803,6 +3044,18 @@ function drawShot(s) {
 }
 function drawFx(f) {
   const k = f.t / f.life;
+  if (f.kind === "lvring") {
+    const [sx, sy] = worldToScreen(f.x, f.y), r = 8 + easeOut(k) * 46;
+    ellipseRing(sx, sy - 6, r, r * 0.62, k < 0.3 ? WHITE : GOLD);
+    ellipseRing(sx, sy - 6, r * 0.7, r * 0.43, PALE, 3);
+    for (let i = 0; i < 10; i++) { const a = i * 0.628 + k * 2; put(sx + Math.cos(a) * r * 0.9, sy - 6 + Math.sin(a) * r * 0.55 - k * 14, GOLD); }
+    return;
+  }
+  if (f.kind === "splash") {
+    const [sx, sy] = worldToScreen(f.x, f.y), r = 1 + k * 3;
+    ellipseRing(sx, sy, r, r * 0.5, k < 0.5 ? WHITE : hx("#8ac4f0"), 2);
+    return;
+  }
   if (f.kind === "laserline") {
     const [x1, y1] = worldToScreen(f.x1, f.y1), [x2, y2] = worldToScreen(f.x2, f.y2);
     const n = Math.ceil(Math.hypot(x2 - x1, y2 - y1)), nx = -(y2 - y1) / (n || 1), ny = (x2 - x1) / (n || 1), w = 6 * (1 - k) + 1;
@@ -2867,9 +3120,24 @@ function bloodTrail(cx, cy, rx, ry, a, cols, len = 24) {
       if ((xx - x) ** 2 + ((yy - y) * 1.2) ** 2 <= r * r) put(xx, yy, c);
   }
 }
+function playerSprite(legs, up, mouth = "idle") {
+  const dark = P.skin === "dark";
+  if (up) return (dark ? SPR.darkBack : SPR.butcherBack)["idle" + legs];
+  return (dark ? SPR.dark : SPR.butcher)[mouth + legs];
+}
 function drawPlayer() {
   const s = P.scale;
   const [sx, sy] = worldToScreen(P.x, P.y);
+  for (const g of P.ghosts) {
+    const [gx, gy] = worldToScreen(g.x, g.y);
+    if (g.t < 0.2 && Math.floor(g.t * 30) % 2 === 0) blitFeet(playerSprite(0, g.up), gx, gy, { scale: s, flip: g.face < 0, flash: g.t < 0.08 ? WHITE : CYAN, dither: true });
+  }
+  if (P.dying > 0) {
+    const k = clamp((1.5 - P.dying) / 0.45, 0, 1);
+    shadowEllipse(sx, sy + 1, 13 * s * (1 + 0.4 * k), 3.5 * s);
+    blitFeet(playerSprite(0, false, "open"), sx, sy, { sx: s * (1 + 0.35 * k), sy: s * (1 - 0.5 * k), flip: P.face < 0, flash: Math.floor(P.dying * 12) % 2 ? hx("#ff5a5a") : 0 });
+    return;
+  }
   const bob = P.moving ? Math.round(Math.abs(Math.sin(P.walkT * Math.PI))) : (Math.floor(G.t * 2) % 2);
   shadowEllipse(sx, sy + 1, 13 * s, 3.5 * s);
   const bx = sx, by = sy - BUTCHER_BELLY_UP * s - bob;
@@ -2909,10 +3177,10 @@ function drawPlayer() {
   }
   back.draw();
   const legs = P.moving ? [1, 0, 2, 0][Math.floor(P.walkT * 2) % 4] : 0;
-  const justHit = P.hitT > 0 && G.mode === "play", blink = !justHit && P.inv > 0 && P.inv < 0.6 && Math.floor(P.inv * 20) % 2 && G.mode === "play";
+  const justHit = P.hitT > 0 && G.mode === "play", blink = !justHit && P.dashT <= 0 && P.inv > 0 && P.inv < 0.6 && Math.floor(P.inv * 20) % 2 && G.mode === "play";
   if (!blink) {
-    const dark = P.skin === "dark";
-    blitFeet((dark ? SPR.dark : SPR.butcher)[P.mouth + legs], sx, sy - bob, { scale: s, flip: P.face < 0, flash: justHit ? WHITE : 0 });
+    const dark = P.skin === "dark", q = P.squash;
+    blitFeet(playerSprite(legs, P.facingUp && P.mouth === "idle", P.mouth), sx, sy - bob, { sx: s * (1 + q), sy: s * (1 - q), flip: P.face < 0, flash: justHit ? WHITE : 0 });
     const arms = new Layer();
     drawArm(arms, [bx - 8 * s, by - 6 * s], handL, s, dark ? DARK_SKIN : SKIN);
     drawArm(arms, [bx + 8 * s, by - 6 * s], handR, s, dark ? DARK_SKIN : SKIN);
@@ -3054,6 +3322,16 @@ const BOT = {
     return l > 0.12 ? { x: v.x / l, y: v.y / l } : { x: 0, y: 0 };
   },
   act() {
+    // dash out of a zone that is about to fire, or away from a bullet about to land
+    if (P.dashCd <= 0 && P.dashT <= 0 && !P.pulled && Math.random() < this.skill) {
+      let need = false;
+      for (const t of G.tele) if (t.dmg && t.t / t.dur > 0.72 && teleHitsPlayer(t)) need = true;
+      for (const s of G.shots) {
+        const dx = P.x - s.x, dy = P.y - 8 - s.y, d = Math.hypot(dx, dy);
+        if (d < 16 && (dx * s.vx + dy * s.vy) > 0) need = true;
+      }
+      if (need) { const v = this.inputVector(); tryDash(v.x, v.y); }
+    }
     if (P.hook || P.hookCd > 0 || P.pulled) return;
     let best = null, bs = -1;
     for (const e of G.enemies) {
@@ -3103,7 +3381,17 @@ let UI_RECTS = [];      // {x,y,w,h,id}
 let JOY = null;         // {ox,oy,x,y} while the move stick is held
 let MUTED = false;
 const STORE = "https://play.google.com/store/apps/details?id=com.multicastgames.butcher";
-const HOOK_BTN = () => ({ x: W - 22, y: H - 24, r: 13 });
+const HOOK_BTN = () => portrait() ? { x: W - 24, y: H - 30, r: 16 } : { x: W - 22, y: H - 24, r: 13 };
+const DASH_BTN = () => portrait() ? { x: W - 24, y: H - 72, r: 12 } : { x: W - 54, y: H - 18, r: 10 };
+// 7x7 loadout icons for the HUD
+const MINI_ICON = {
+  cleaver: makeSprite(["WWWW...", "WwwW...", "WwKW...", "WwwWh..", "WWWW.h.", ".....h.", "......h"], { W: METAL[0], w: METAL[1], K: INK, h: HANDLE }, INK),
+  sword: makeSprite(["......W", ".....Wb", "....Wb.", "...Wb..", "gGWb...", ".Gg....", "G.g...."], { W: WHITE, b: hx("#6ab8d8"), G: GOLD, g: hx("#c08a1a") }, INK),
+  saw: makeSprite([".m.m.m.", "mMMMMMm", ".MMKMM.", "mMKKKMm", ".MMKMM.", "mMMMMMm", ".m.m.m."], { M: METAL[1], m: METAL[2], K: INK }, INK),
+  slam: makeSprite(["..YYY..", ".Y...Y.", "Y.OOO.Y", "Y.O.O.Y", "Y.OOO.Y", ".Y...Y.", "..YYY.."], { Y: GOLD, O: hx("#ff9a2a") }, INK),
+  grenade: makeSprite(["...w...", "..rRr..", ".rRRRr.", ".rRpRr.", ".rRRRr.", "..rrr..", "......."], { r: hx("#8a1a2a"), R: hx("#e04a5a"), p: hx("#ff9ac0"), w: WHITE }, INK),
+  aura: makeSprite([".g.g.g.", "gGgGgGg", ".GGGGG.", "gGGGGGg", ".GgGgG.", "g.g.g.g", "......."], { g: hx("#4a8a2a"), G: hx("#b0ff5a") }, INK),
+};
 SPR.icons.armor = makeSprite([".MMMMM.", "MWMMMmM", "MWMMMmM", "MMMMMmM", ".MMMmM.", "..MmM..", "...M..."], { M: METAL[1], W: METAL[0], m: METAL[3] });
 SPR.icons.hookbtn = makeSprite(["...MM...", "..M..M..", "......M.", ".....M..", "M...M...", ".MMM....", "mmmm...."], { M: METAL[0], m: METAL[2] });
 SPR.icons.grenade = makeSprite(["...ww..", "..rRRr.", ".rRRRRr", ".rRpRRr", ".rrRRr.", "..rrr.."], { r: hx("#8a1a2a"), R: hx("#e04a5a"), p: hx("#ff9ac0"), w: WHITE });
@@ -3154,6 +3442,17 @@ function drawIcon(key, cx, cy, scale = 2) {
   blit(s, cx - s.w * scale / 2, cy - s.h * scale / 2, { scale });
 }
 
+function drawCineBars() {
+  const c = G.cine, port = portrait(), t = Math.max(0, c.t), full = port ? 40 : 30;
+  const k = Math.max(0, Math.min(1, t / 0.25, (c.dur - t) / 0.25)), top = Math.round(k * (port ? 26 : 16)), bh = Math.round(k * full);
+  rect(0, 0, W, top, BLACK); rect(0, H - bh, W, bh, BLACK);
+  if (t > 0.3 && t < c.dur - 0.2 && bh >= full - 1) {
+    const kk = fitK(c.title, W - 8, 3), subLines = c.sub ? wrap(c.sub, Math.floor((W - 8) / 4)).length : 0;
+    const blockH = 5 * kk + (subLines ? 3 + subLines * 7 : 0), y = H - bh + Math.round((bh - blockH) / 2);
+    centered(c.title, y, c.kind === "evo" ? GOLD : RED, kk);
+    if (c.sub) cwrap(c.sub, y + 5 * kk + 3, c.kind === "evo" ? WHITE : PALE, 7);
+  }
+}
 // ---------------------------------------------------------------- in-game HUD
 function phaseLabel() {
   if (G.phase === "waveA") return ["MINI-BOSS " + fmt(MINI_AT - G.t), MINI_AT - G.t < 10 ? GOLD : WHITE];
@@ -3164,18 +3463,28 @@ function phaseLabel() {
 }
 function drawHUD() {
   UI_RECTS = [];
+  if (G.cine) { drawCineBars(); return; }
   const port = portrait(), bw = port ? 72 : 62;
   text("LV" + P.lvl, 3, 3, WHITE);
   bar(22, 3, bw, 3, P.xp / P.next, hx("#8af0ff"), hx("#14242e"));
   text("HP", 3, 11, WHITE);
   bar(14, 11, bw + 8, 4, P.hp / P.maxHp, P.hp > P.maxHp * 0.5 ? GREEN : P.hp > P.maxHp * 0.25 ? hx("#ffc23a") : RED);
   if (P.hp < P.maxHp * 0.25 && Math.floor(G.t * 4) % 2) text("!", bw + 25, 10, RED);
+  let wx = 3;
+  for (const w of WEAPONS) {
+    if (!P.w[w]) continue;
+    const ic = MINI_ICON[w], evo = Object.keys(EVOS).some(k => P.evo[k] && EVOS[k].weapon === w);
+    blit(ic, wx, 18);
+    for (let i = 0; i < P.w[w]; i++) put(wx + 1 + i, 27, evo ? (Math.floor(G.t * 4) % 2 ? GOLD : WHITE) : GOLD);
+    wx += ic.w + 2;
+  }
   let lx = 3;
-  if (G.revenge) { text("REVENGE X" + G.revenge, lx, 19, RED); lx += textW("REVENGE X" + G.revenge) + 6; }
-  if (G.hard) { text("HARD", lx, 19, hx("#ff8a8a")); lx += 22; }
-  if (G.endless) text("LOOP " + (G.loop + 1), lx, 19, hx("#ff8a8a"));
+  const sy_ = 30;
+  if (G.revenge) { text("REVENGE X" + G.revenge, lx, sy_, RED); lx += textW("REVENGE X" + G.revenge) + 6; }
+  if (G.hard) { text("HARD", lx, sy_, hx("#ff8a8a")); lx += 22; }
+  if (G.endless) text("LOOP " + (G.loop + 1), lx, sy_, hx("#ff8a8a"));
   const [t, col] = phaseLabel(), chn = (G.ch + 1) + "-" + G.CH.name;
-  if (port) { centered(t, 27, col); centered(chn, 35, DIM); } else { centered(t, 3, col); centered(chn, 11, DIM); }
+  if (port) { centered(t, 40, col); centered(chn, 48, DIM); } else { centered(t, 3, col); centered(chn, 11, DIM); }
   drawPauseBtn(); drawMuteBtn(); drawCtaPill();
   const ks = String(P.kills);
   blit(SPR.icons.skull, W - 11 - textW(ks), 13);
@@ -3195,9 +3504,33 @@ function drawHUD() {
     if (d > (hb.r - 1.5) ** 2) c = ready ? (Math.floor(G.t * 3) % 2 ? GOLD : hx("#e08a1a")) : INK;
     put(hb.x + x, hb.y + y, c);
   }
-  blit(SPR.icons.hookbtn, hb.x - 5, hb.y - 6);
+  blit(SPR.icons.hookbtn, hb.x - 5, hb.y - 6, { scale: port ? 1.25 : 1 });
   text("HOOK", hb.x - 7, hb.y + hb.r + 1 > H - 6 ? hb.y - hb.r - 7 : hb.y + hb.r + 1, ready ? GOLD : DIM);
   uiRect(hb.x - hb.r - 4, hb.y - hb.r - 4, hb.r * 2 + 8, hb.r * 2 + 8, "hook");
+  const db = DASH_BTN(), dready = P.dashCd <= 0;
+  for (let y = -db.r; y <= db.r; y++) for (let x = -db.r; x <= db.r; x++) {
+    const d = x * x + y * y;
+    if (d > db.r * db.r) continue;
+    let c = dready ? hx("#1a4a5a") : hx("#1a2228");
+    if (!dready) { const a = (Math.atan2(x, -y) + Math.PI * 2) % (Math.PI * 2) / (Math.PI * 2); if (a < 1 - P.dashCd / DASH_CD) c = hx("#1a3440"); }
+    if (d > (db.r - 1.5) ** 2) c = dready ? CYAN : INK;
+    put(db.x + x, db.y + y, c);
+  }
+  for (let i = -3; i <= 3; i++) { put(db.x + i - 2, db.y + Math.abs(i) - 1, dready ? WHITE : DIM); put(db.x + i + 2, db.y + Math.abs(i) - 1, dready ? WHITE : DIM); }
+  text("DASH", db.x - 7, port ? db.y - db.r - 7 : db.y + db.r + 1 > H - 6 ? db.y - db.r - 7 : db.y + db.r + 1, dready ? CYAN : DIM);
+  uiRect(db.x - db.r - 3, db.y - db.r - 3, db.r * 2 + 6, db.r * 2 + 6, "dash");
+  if (!JOY && !P.moving && ((G.ch === 0 && G.t < 60) || (G.idleT || 0) > 4) && !G.cine) {
+    const gx = port ? W * 0.3 : W * 0.2, gy = H - (port ? 60 : 38), a = 0.5 + 0.5 * Math.sin(G.clock * 3);
+    ellipseRing(gx, gy, 16, 16, mix(WHITE, BLACK, 0.55 - a * 0.2), 3);
+    ellipseRing(gx, gy, 4, 4, mix(WHITE, BLACK, 0.5));
+    text("DRAG", gx - 7, gy + 20, mix(WHITE, BLACK, 0.45));
+  }
+  for (const u of G.uiParts) {
+    const k = easeIO(Math.min(1, u.t / 0.4)), tx = 22 + bw * clamp(P.xp / P.next, 0, 1), ty = 4;
+    const x = lerp(u.x, tx, k), y = lerp(u.y, ty, k) - Math.sin(k * Math.PI) * 18;
+    put(x, y, k > 0.85 ? WHITE : GOLD); put(x + 1, y, PALE);
+  }
+
   if (JOY) {
     ellipseRing(JOY.ox, JOY.oy, 16, 16, mix(WHITE, BLACK, 0.4), 3);
     const dx = JOY.x - JOY.ox, dy = JOY.y - JOY.oy, d = Math.hypot(dx, dy), k = d > 16 ? 16 / d : 1;
@@ -3529,6 +3862,7 @@ function uiAction(id) {
   if (id === "pause") { if (G.mode === "play") { setMode("pause"); music.pause(true); } return true; }
   if (id === "resume") { setMode("play"); music.pause(false); return true; }
   if (id === "hook") { if (G.mode === "play") hookNearest(); return true; }
+  if (id === "dash") { if (G.mode === "play") tryDash(); return true; }
   if (id.startsWith("card")) { chooseCard(+id.slice(4)); return true; }
   if (id === "reroll") { reroll(); return true; }
   if (id === "next") { nextChapter(); return true; }
@@ -3557,7 +3891,7 @@ screenCv.addEventListener("pointerdown", e => {
   const p = toArt(e);
   const id = hitRect(p);
   if (G.mode !== "play") { uiAction(id); return; }
-  if (id === "hook" || id === "pause" || id === "mute" || id === "store") { uiAction(id); return; }
+  if (id === "hook" || id === "dash" || id === "pause" || id === "mute" || id === "store") { uiAction(id); return; }
   if (!JOY) { JOY = { id: e.pointerId, ox: p.x, oy: p.y, x: p.x, y: p.y, t0: performance.now(), moved: false }; try { screenCv.setPointerCapture(e.pointerId); } catch (err) { } }
   else pointers.set(e.pointerId, { x: p.x, y: p.y, t0: performance.now() });
 });
@@ -3570,9 +3904,11 @@ screenCv.addEventListener("pointermove", e => {
 function endPointer(e) {
   const p = toArt(e);
   if (JOY && e.pointerId === JOY.id) {
-    const quick = performance.now() - JOY.t0 < 260 && !JOY.moved;
+    const dur = performance.now() - JOY.t0, dx = p.x - JOY.ox, dy = p.y - JOY.oy, d = Math.hypot(dx, dy);
+    const quick = dur < 260 && !JOY.moved;
     JOY = null;
     if (quick && G.mode === "play") tapHook(p);
+    else if (dur < 220 && d > 14 && G.mode === "play") tryDash(dx, dy);   // a flick = dash that way
     return;
   }
   const t = pointers.get(e.pointerId);
@@ -3589,6 +3925,7 @@ addEventListener("keydown", e => {
   unlockAudio();
   if (G.mode === "play") {
     if (e.code === "Space" || e.code === "KeyJ") hookNearest();
+    if (e.code === "ShiftLeft" || e.code === "ShiftRight" || e.code === "KeyK") tryDash();
     if (e.code === "KeyP" || e.code === "Escape") uiAction("pause");
   } else if (G.mode === "levelup" || G.mode === "reward") {
     if (["Digit1", "Digit2", "Digit3"].includes(e.code)) chooseCard(+e.code.slice(5) - 1);
@@ -3637,6 +3974,7 @@ sfx = name => {
     case "tick": tone(880, 0.03, "square", 0.03); break;
     case "nope": tone(140, 0.1, "square", 0.05, 90); break;
     case "whoosh": noise(0.22, 0.18, 900, 0, 0.6); break;
+    case "dash": noise(0.16, 0.2, 1600, 0, 0.8); tone(300, 0.12, "triangle", 0.06, 700); break;
     case "slash": noise(0.07, 0.12, 2600, 0, 1.5); break;
     case "hit": noise(0.1, 0.22, 1800); tone(180, 0.12, "square", 0.07, 60); break;
     case "chomp": tone(220, 0.07, "square", 0.12, 90); noise(0.1, 0.25, 700, 0.03); break;
