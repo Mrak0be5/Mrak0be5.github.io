@@ -76,7 +76,11 @@ const buf = document.createElement("canvas");
 buf.width = W; buf.height = H;
 const ctx = buf.getContext("2d");
 const sheet = new Image();
-sheet.src = "sheet.webp";
+// Bitbucket serves .webp as text/plain with nosniff, so load the bytes and label them ourselves.
+fetch("sheet.webp")
+  .then(r => r.arrayBuffer())
+  .then(b => { sheet.src = URL.createObjectURL(new Blob([b], { type: "image/webp" })); })
+  .catch(() => { sheet.src = "sheet.webp"; });
 
 let frame = STEPS[0].f, step = 0, mode = "load", acc = 0, last = 0, clock = 0;
 let playTo = 0, pendingTap = null, shake = 0, muted = false, audio = null;
