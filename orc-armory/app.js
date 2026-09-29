@@ -6,7 +6,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-const MODEL = { title: 'Орчиха-воительница', sub: 'комплект из Tripo · юбка v3 · PBR-карты', file: 'models/orc-outfit-v3-pbr.glb', bytes: 22291992 };
+const MODEL = { title: 'Орчиха-воительница', sub: 'комплект из Tripo · PBR · риг + 6 анимаций', file: 'models/orc-outfit-anim.glb', bytes: 28996340 };
 const $ = (s) => document.querySelector(s);
 const fmt = (n) => Math.round(n).toLocaleString('ru-RU');
 const kfmt = (n) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 100000 ? 0 : 1)}k` : `${n}`);
@@ -77,12 +77,19 @@ const state = { mode: 'pbr', nStrength: 1, useNmap: true, mulLayer: 0, mulStreng
 
 // ---------- shading ----------
 const VS = /* glsl */ `
+#include <common>
+#include <skinning_pars_vertex>
 varying vec3 vN; varying vec3 vPos; varying vec2 vUv;
 void main() {
   vUv = uv;
-  vec4 wp = modelMatrix * vec4(position, 1.0);
+  #include <skinbase_vertex>
+  #include <begin_vertex>
+  #include <beginnormal_vertex>
+  #include <skinnormal_vertex>
+  #include <skinning_vertex>
+  vec4 wp = modelMatrix * vec4(transformed, 1.0);
   vPos = wp.xyz;
-  vN = normalize(mat3(modelMatrix) * normal);
+  vN = normalize(mat3(modelMatrix) * objectNormal);
   gl_Position = projectionMatrix * viewMatrix * wp;
 }`;
 const FS = /* glsl */ `
@@ -362,11 +369,15 @@ function buildParts() {
 // highlight overlays (share the geometry)
 const hlMat = new THREE.MeshBasicMaterial({ color: 0xff7a45, transparent: true, opacity: 0.14, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -1 });
 const hoverMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.12, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -1 });
+const wireSkinMat = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.13, depthWrite: false });
 const wireMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.16, depthWrite: false });
 function overlay(mesh, key, mat) {
   if (!mesh.userData[key]) {
     let o;
-    if (key === 'wire') {                                   // the quad edges (no diagonals), the real topology
+    if (mesh.isSkinnedMesh) {                                // animated: the overlay must be skinned by the same skeleton
+      o = new THREE.SkinnedMesh(mesh.geometry, key === 'wire' ? wireSkinMat : mat);
+      o.bind(mesh.skeleton, mesh.bindMatrix);
+    } else if (key === 'wire') {                            // the quad edges (no diagonals), the real topology
       const lg = new THREE.BufferGeometry();
       lg.setAttribute('position', mesh.geometry.attributes.position);
       lg.setIndex(mesh.userData.topo.lines || []);
@@ -538,7 +549,11 @@ async function load() {
   g.position.set(-c.x, -box.min.y, -c.z);
   root.add(g);
   root.updateMatrixWorld(true);
-  const list = g.children.filter((o) => { let m = false; o.traverse((x) => { if (x.isMesh) m = true; }); return m; });
+  const hasMesh = (o) => { let m = false; o.traverse((x) => { if (x.isMesh) m = true; }); return m; };
+  const hasBone = (o) => { let b = false; o.traverse((x) => { if (x.isBone) b = true; }); return b; };
+  // a rigged model: the parts are the meshes under the armature node
+  const list = g.children.flatMap((o) => (hasBone(o) && !o.isMesh ? o.children.filter((c) => !c.isBone && hasMesh(c)) : [o])).filter(hasMesh);
+  setupAnimations(g, gltf.animations);
   for (const o of list) {
     const d = describe(o.name);
     const p = { obj: o, ...d, label: d.side ? `${d.name} ${d.side}` : d.name, visible: true, meshes: [], ...partCounts(o), top: new THREE.Box3().setFromObject(o).max.y };
@@ -626,7 +641,68 @@ function resize() {
 }
 addEventListener('resize', resize);
 resize();
+// ---------- animation ----------
+const ANIM_LABELS = { idle: 'Стойка', walk: 'Ходьба', run: 'Бег', slash: 'Удар', cheer: 'Победа', rig_test: 'Тест рига' };
+const ANIM_ORDER = ['idle', 'walk', 'run', 'slash', 'cheer', 'rig_test'];
+const anim = { mixer: null, clips: [], action: null, playing: true, speed: 1 };
+const clock = new THREE.Clock();
+function setupAnimations(g, clips) {
+  const sec = $('#anim-sec');
+  if (!clips || !clips.length) { sec.hidden = true; return; }
+  anim.mixer = new THREE.AnimationMixer(g);
+  anim.clips = [...clips].sort((a, b) => (ANIM_ORDER.indexOf(a.name) + 99) % 99 - (ANIM_ORDER.indexOf(b.name) + 99) % 99);
+  const box = $('#anims');
+  box.innerHTML = '';
+  for (const c of anim.clips) {
+    const b = document.createElement('button');
+    b.dataset.clip = c.name;
+    b.innerHTML = `<span>${ANIM_LABELS[c.name] || c.name}</span><small>${c.duration.toFixed(1)} с</small>`;
+    if (c.name === 'rig_test') b.classList.add('test');
+    b.onclick = () => playClip(c.name);
+    box.append(b);
+  }
+  const rest = document.createElement('button');
+  rest.innerHTML = '<span>Поза покоя</span><small>A-поза</small>';
+  rest.onclick = () => playClip(null);
+  box.append(rest);
+  $('#anim-play').onclick = () => { anim.playing = !anim.playing; updAnimUI(); };
+  $('#anim-speed').oninput = (e) => { anim.speed = +e.target.value; $('#anim-speed-out').textContent = `${anim.speed.toFixed(2)}×`; };
+  $('#anim-scrub').oninput = (e) => {
+    if (!anim.action) return;
+    anim.playing = false;
+    anim.action.time = +e.target.value * anim.action.getClip().duration;
+    anim.mixer.update(0);
+    updAnimUI();
+  };
+  sec.hidden = false;
+  playClip(anim.clips.find((c) => c.name === 'idle') ? 'idle' : anim.clips[0].name);
+}
+function playClip(name) {
+  if (anim.action) anim.action.stop();
+  anim.action = null;
+  if (name) {
+    anim.action = anim.mixer.clipAction(anim.clips.find((c) => c.name === name));
+    anim.action.reset().play();
+    anim.playing = true;
+  } else anim.mixer.stopAllAction();
+  anim.mixer.update(0);
+  for (const b of document.querySelectorAll('#anims button')) b.classList.toggle('on', (b.dataset.clip || null) === name);
+  updAnimUI();
+}
+function updAnimUI() {
+  const a = anim.action;
+  $('#anim-play').innerHTML = anim.playing ? '❚❚' : '▶';
+  $('#anim-play').disabled = !a;
+  if (a) {
+    const d = a.getClip().duration, t = a.time % d;
+    $('#anim-scrub').value = d ? t / d : 0;
+    $('#anim-time').textContent = `${t.toFixed(1)} / ${d.toFixed(1)} с`;
+  } else { $('#anim-scrub').value = 0; $('#anim-time').textContent = 'поза покоя'; }
+}
+
 function loop(now) {
+  const dt = clock.getDelta();
+  if (anim.mixer && anim.action && anim.playing) { anim.mixer.update(dt * anim.speed); updAnimUI(); }
   if (tween) {
     const k = Math.min(1, (now - tween.t0) / 450), e = 1 - Math.pow(1 - k, 3);
     camera.position.lerpVectors(tween.p0, tween.p1, e);
@@ -637,5 +713,5 @@ function loop(now) {
   renderer.render(scene, camera);
 }
 renderer.setAnimationLoop(loop);
-window.armory = { state, parts, applyMode, select, frame, refreshParts, setMode: (m) => { state.mode = m; applyMode(); } };
+window.armory = { state, parts, applyMode, select, frame, refreshParts, setMode: (m) => { state.mode = m; applyMode(); }, anim, playClip };
 load().catch((err) => { $('#load-text').textContent = `Ошибка: ${err.message}`; console.error(err); });

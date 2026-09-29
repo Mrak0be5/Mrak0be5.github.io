@@ -40,6 +40,15 @@
     <div id="modes" class="modes"></div>
     <div id="mode-opts" class="opts"></div>
   </section>
+  <section id="anim-sec" hidden>
+    <h2>Анимация <small id="anim-time"></small></h2>
+    <div id="anims" class="anims"></div>
+    <div class="anim-ctl">
+      <button id="anim-play" title="Пауза / играть">❚❚</button>
+      <input type="range" id="anim-scrub" min="0" max="1" step="0.001" value="0" title="Кадр">
+    </div>
+    <label class="slider">Скорость <input type="range" id="anim-speed" min="0.1" max="2" step="0.05" value="1"><output id="anim-speed-out">1.00×</output></label>
+  </section>
   <section>
     <h2>Наложения</h2>
     <label class="switch"><input type="checkbox" id="wire"><i></i>Сетка квадами <span class="kbd">W</span></label>

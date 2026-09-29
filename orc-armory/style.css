@@ -159,3 +159,13 @@ input[type=range]::-moz-range-thumb { width: 10px; height: 10px; border-radius: 
   #topbar { display: none; }
   .card { display: none; }
 }
+
+/* animation */
+.anims { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.anims button { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; padding: 7px 9px; }
+.anims button small { color: var(--dim2); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.anims button.on small { color: rgba(255, 255, 255, .8); }
+.anims button.test { border-style: dashed; border-color: rgba(255, 122, 69, .45); }
+.anim-ctl { display: grid; grid-template-columns: 38px 1fr; gap: 10px; align-items: center; margin: 10px 0 2px; }
+.anim-ctl button { padding: 5px 0; text-align: center; font-size: 12px; }
+#anim-sec[hidden] { display: none; }
