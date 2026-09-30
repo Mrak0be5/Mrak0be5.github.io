@@ -807,6 +807,802 @@ function pineLayer(L, cx, top, h, w, pal, trunk) {
 
 </script>
 <script>
+// ---- butcher.js
+"use strict";
+// Butcher 2.0: the hero built from hand-drawn parts (heads, a torso in four growth sizes, arms in poses, legs, belt gear),
+// composed at whole-pixel offsets every frame. Growth swaps in a bigger drawn torso instead of scaling pixels.
+// Chains are small ropes (verlet) and the belly lags behind on a spring.
+
+const B2_PAL = {
+  G: "#6ac04a", g: "#3a8a3a", d: "#1f5a36",                                   // hair
+  M: "#e4dcdc", m: "#b8acb4", n: "#8a7c8e", x: "#24101a", o: "#5e4e66",       // mask
+  b: "#d0283a",                                                               // mask marks, the glint in the eyes
+  k: "#ffc8a4", S: "#f09c80", s: "#c0685a", z: "#7a3a3a",                     // skin
+  Y: "#fff2a0", R: "#ffa24a", r: "#e8701e", q: "#a8400e", Q: "#5a1e10",       // shirt: hue-shifted to red-brown in shadow
+  A: "#e4dcdc", a: "#b8acb4", p: "#8a7c8e",                                   // apron
+  B: "#d0283a", 9: "#8a1428", 5: "#d0283a", 6: "#8a1428",                     // blood on the shirt / on the apron
+  L: "#8a5a2a", l: "#5e3a1e", C: "#ffe04a", c: "#b07a1a",                     // belt, buckle
+  w: "#b8acb4", W: "#ffffff", h: "#5e3a1e",                                   // steel, handle
+  T: "#2aa092", t: "#1a6a6a", U: "#0e3a40",                                   // trousers
+  N: "#5e3a1e", v: "#2e1a14", u: "#e0c08a",                                   // boots, laces
+  j: "#4a0a1e", J: "#d0283a",                                                 // mouth, tongue
+};
+// the dark skin (unlocked by beating the Dark Butcher): the same drawings in other colours
+const B2_DARK = Object.assign({}, B2_PAL, {
+  G: "#d0283a", g: "#8a1428", d: "#4a0a1e", M: "#5e4e66", m: "#3a2a40", n: "#24101a", o: "#8a7c8e", b: "#ff5a4a",
+  k: "#d08aff", S: "#9a4ad0", s: "#5a1e86", z: "#2a1040",
+  Y: "#d08aff", R: "#9a4ad0", r: "#5a1e86", q: "#2a1040", Q: "#24101a", A: "#8a7c8e", a: "#5e4e66", p: "#3a2a40",
+  T: "#3a2a40", t: "#24101a", U: "#24101a", N: "#24101a", v: "#24101a",
+});
+const padRow = (w, pad, s) => { const r = ".".repeat(pad) + s; if (r.length > w) throw new Error("row too long: " + s); return r + ".".repeat(w - r.length); };
+
+// ---------------------------------------------------------------- heads (18 wide, 15 tall; the last rows are chin and neck)
+const B2_FACE_TOP = [
+  "......dgGGgd......",
+  "....dgGGGGGGgd....",
+  "...dgGGgGGgGGgd...",
+  "..dgGMMMMMMMMGgd..",
+  "..dMMMMMMMMMMMMd..",
+  "..gMMbbMMMMbbMmg..",
+  "...MMxxbMMbxxMm...",
+  "...MxxbxMMxbxxm...",
+  "...MMxxxMMxxxMm...",
+  "...nMMMMooMMMMn...",
+  "....nMMoMMoMMn....",
+  ".....nmMMMMmn.....",
+];
+const B2_HEAD = {
+  front: B2_FACE_TOP.concat(["......kSSSSs......", "......sSzzSs......", ".......sSSs......."]),
+  open: B2_FACE_TOP.concat([".....zWWjjWWz.....", ".....zjjJJjjz.....", ".....sWjjjjWs.....", "......sSSSSs......"]),
+  bite: B2_FACE_TOP.concat([".....zWWWWWWz.....", ".....sSzzzzSs.....", "......sSSSSs......"]),
+  lick: B2_FACE_TOP.concat(["......kSSSSs......", "......sSzzJJ......", ".......sSSsJ......"]),
+  side: [
+    ".......dgGGgd.....",
+    ".....dgGGGGGGgd...",
+    "....dgGGgGGgGGgd..",
+    "...dgGGgMMMMMMMgd.",
+    "...dGGgMMMMMMMMMd.",
+    "...gGgmMMbbMMMbbg.",
+    "...dGsmMMxxbMbxxm.",
+    "...gGsmMxxbxMxbxm.",
+    "...dGGmMMxxxMMxxm.",
+    "....dGnMMMMoMMoMn.",
+    ".....dnMMMoMMMMn..",
+    "......nmMMMMMMn...",
+    ".......skSSSSs....",
+    ".......sSSzzSs....",
+    "........sSSSs.....",
+  ],
+  back: [
+    "......dgGGgd......",
+    "....dgGGGGGGgd....",
+    "...dgGGgGGgGGgd...",
+    "..dgGGGgGGgGGGgd..",
+    "..dGGgGGGGGGgGGd..",
+    "..gGGGGgGGgGGGGg..",
+    "..mmmmmmmmmmmmmm..",
+    "..dGGgGGGGGGgGGd..",
+    "..sdGGGgGGgGGGds..",
+    "...kdgGGGGGGgdk...",
+    "....kSSSSSSSSs....",
+    "....sSSSSSSSSs....",
+    ".....sSSSSSSs.....",
+    "......sSSSSs......",
+    ".......sSSs.......",
+  ],
+};
+// where the red glints sit in each head (for blinking and the frenzy glow) and the mask cracks at low HP
+const B2_EYES = { front: [[6, 7], [11, 7]], open: [[6, 7], [11, 7]], bite: [[6, 7], [11, 7]], lick: [[6, 7], [11, 7]], side: [[10, 7], [14, 7]], back: [] };
+const B2_CRACKS = [
+  [[12, 4], [12, 5], [13, 5], [13, 6], [12, 6]],
+  [[5, 9], [4, 10], [5, 10], [6, 11], [6, 10], [13, 4], [14, 4]],
+];
+
+// ---------------------------------------------------------------- torsos, front view, four growth sizes
+// apron blood uses 5/6, shirt blood B/9, a torn apron x
+const B2_TORSO_FRONT = [
+  // S: 32 wide
+  [padRow(32, 11, "RaRRRrrraq"), padRow(32, 8, "YRRRaRRRrrrarrqq"), padRow(32, 5, "YYYRRRRRaAAAAarrrrrqqq"),
+    padRow(32, 3, "YYYYYRRRRRAAAAAarrrrrrqqqq"), padRow(32, 2, "RYYYYRRRRRRAAAAAarrrrrqqqqqQ"), padRow(32, 1, "RRYYYRRRRRRRAAAAAarrrrrqqqqqqQ"),
+    "RRRRYRRRRRpaAAAAAAapapqqqqqqqqQQ", "RRRRRRRRRRrAAAAAAAAaprrqqqqqqqQQ", "rRRRRRRRRrrA55AAAAAaprqqqqqqqqQQ",
+    "rrRRRRRRrrAA6AAAAAAAapqqqqqq9qQQ", "qrrRRRRrrrAAAAAAAA5AapqqqqqqqQQQ", padRow(32, 1, "qrrrRrrrrAAAAAAAA6aapqqqqqqQQQ"),
+    padRow(32, 2, "qqrrrrrraAAAAAAAAaapqqqqQQQQ"), padRow(32, 3, "Qqqqrrrpaaaaaaaaapppqqqqq"), padRow(32, 5, "QQqqqqqqqqqqqqqqqqqqqQQQ"),
+    padRow(32, 6, "LLLLLLLLcCCcLLLLLLLl"), padRow(32, 6, "llllllllcCccllllllll"), padRow(32, 7, "TTTTTTTttttttUUUUU"),
+    padRow(32, 7, "TTTTTTtttttttUUUUU"), padRow(32, 8, "TTTTtttUUtttUUUU")],
+  // M: 36 wide
+  [padRow(36, 13, "RaRRRrrraq"), padRow(36, 10, "YRRRaRRRrrrarrqq"), padRow(36, 7, "YYYRRRRRaAAAAarrrrrqqq"),
+    padRow(36, 4, "YYYYYRRRRRRAAAAAarrrrrrqqqqQ"), padRow(36, 3, "RYYYYYRRRRRRAAAAAarrrrrrqqqqqQ"), padRow(36, 2, "RRYYYYRRRRRRRAAAAAarrrrrrqqqqqqQ"),
+    padRow(36, 1, "RRRYYRRRRRRpaAAAAAAapaprqqqqqqqqQQ"), "RRRRRYRRRRRRrAAAAAAAAaprrqqqqqqqqqQQ", "RRRRRRRRRRRrrA55AAAAAaprqqqqqqqqqqQQ",
+    "rRRRRRRRRRrrAA6AAAAAAAapqqqqqqq9qqQQ", "rrRRRRRRRrrrAAAAAAAAAAapqqqqqqqqqQQQ", "qrrRRRRRrrrrAAAAAAAA5AapqqqqqqqqqQQQ",
+    padRow(36, 1, "qrrrRRrrrrrAAAAAAAA6aapqqqqqqqQQQQ"), padRow(36, 2, "qqrrrrrrrraAAAAAAAAaapqqqqqQQQQQ"), padRow(36, 4, "QqqqrrrrpaaaaaaaaappqqqqQQQQ"),
+    padRow(36, 6, "QQqqqqqqqqqqqqqqqqqqQQQQ"), padRow(36, 8, "LLLLLLLLcCCcLLLLLLLl"), padRow(36, 8, "llllllllcCccllllllll"),
+    padRow(36, 9, "TTTTTTTttttttUUUUU"), padRow(36, 9, "TTTTTTtttttttUUUUU"), padRow(36, 10, "TTTTtttUUtttUUUU")],
+  // L: 40 wide
+  [padRow(40, 15, "RaRRRrrraq"), padRow(40, 12, "YRRRaRRRrrrarrqq"), padRow(40, 9, "YYYRRRRRaAAAAarrrrrqqq"),
+    padRow(40, 6, "YYYYYRRRRRRAAAAAarrrrrrqqqqQ"), padRow(40, 4, "RYYYYYRRRRRRRAAAAAarrrrrrrqqqqqQ"), padRow(40, 3, "RRYYYYYRRRRRRRAAAAAarrrrrrrqqqqqqQ"),
+    padRow(40, 2, "RRRYYYYRRRRRRRRAAAAAarrrrrrqqqqqqqQQ"), padRow(40, 1, "RRRRYYRRRRRRRpaAAAAAAapaprrqqqqqqqqqQQ"), "RRRRRRYRRRRRRRrAAAAAAAAaprrqqqqqqqqqqqQQ",
+    "RRRRRRRRRRRRRrrA55AAAAAaprqqqqqqqqqqqqQQ", "rRRRRRRRRRRRrrAA6AAAAAAAapqqqqqqqqq9qqQQ", "rrRRRRRRRRRrrrAAAAAAAAAAapqqqqqqqqqqqQQQ",
+    "qrrRRRRRRRrrrrAAAAAAAA5AapqqqqqqqqqqqQQQ", padRow(40, 1, "qrrrRRRRrrrrrAAAAAAAA6aapqqqqqqqqqQQQQ"), padRow(40, 2, "qqrrrrrrrrrraAAAAAAAAaapqqqqqqqQQQQQ"),
+    padRow(40, 4, "QqqqqrrrrrpaaaaaaaaappqqqqqQQQQQ"), padRow(40, 7, "QQQqqqqqqqqqqqqqqqqqqqQQQQ"), padRow(40, 10, "LLLLLLLLcCCcLLLLLLLl"),
+    padRow(40, 10, "llllllllcCccllllllll"), padRow(40, 11, "TTTTTTTttttttUUUUU"), padRow(40, 11, "TTTTTTtttttttUUUUU"), padRow(40, 12, "TTTTtttUUtttUUUU")],
+  // XL: 44 wide - the left strap has snapped, the apron is torn, stretch marks show
+  [padRow(44, 17, "RRRRRrrraq"), padRow(44, 14, "YRRRpRRRrrrarrqq"), padRow(44, 11, "YYYRRRRRpAAAAarrrrrqqq"),
+    padRow(44, 8, "YYYYYRRRRRRAAAAAarrrrrrqqqqQ"), padRow(44, 6, "RYYYYYRRRRRRRAAAAAarrrrrrrqqqqqQ"), padRow(44, 4, "RRYYYYYRRRRRRRRAAAAAarrrrrrrrqqqqqqQ"),
+    padRow(44, 3, "RRRYYYYRRRRRRRRRAAAAAarrrrrrrqqqqqqqQQ"), padRow(44, 2, "RRRRYYYRRRRRRRRRRAAAAAarrrrrrqqqqqqqqqQQ"),
+    padRow(44, 1, "RRRRRYYRRRRRRRRRRAAAAAAapaprqqqqqqqqqqqqQQ"), "RRRRRRRYRRRRRRRRrAAAAAAAAaprrqqqqqqqqqqqqqQQ",
+    "RRRRRRRRRRRRRRRrrA55AAAAAaprqqqqqqqqqQqqqqQQ", "rRRRRRRRRRRRRRrrpA6AAAAAAAapqqqqqqqqQqq9qqQQ", "rrRRRRRRRRRRRrrrxAAAAAAAAAapqqqqqqqqqQqqqQQQ",
+    "qrrRRRRRRRRRrrrrpAAAAAAA5AapqqqqqqqqqqqqqQQQ", padRow(44, 1, "qrrrRRRRRrrrrrrAAAAAAAA6aapqqqqqqqqqqQQQQQ"), padRow(44, 2, "qqrrrrrrrrrrrraAAAAAAAAaapqqqqqqqqQQQQQQ"),
+    padRow(44, 4, "QqqqqqrrrrrrpQaaaaaaaQppqqqqqqQQQQQQ"), padRow(44, 7, "QQQqqqqqqqqqqqqqqqqqqqqqqQQQQQ"), padRow(44, 12, "LLLLLLLLcCCcLLLLLLLl"),
+    padRow(44, 12, "llllllllcCccllllllll"), padRow(44, 13, "TTTTTTTttttttUUUUU"), padRow(44, 13, "TTTTTTtttttttUUUUU"), padRow(44, 14, "TTTTtttUUtttUUUU")],
+];
+// the side (3/4) and back views come from the front drawing: the apron slides toward the belly, or is replaced by the
+// shirt's back with the straps crossing and a bow at the waist
+const APRON_CH = "Aap56x";
+function shirtAt(row, x) {   // shade a shirt pixel by where it sits in its row (light left, dark right)
+  const a = row.search(/[^.]/), b = row.length - 1 - [...row].reverse().join("").search(/[^.]/), k = (x - a) / Math.max(1, b - a);
+  return k < 0.35 ? "R" : k < 0.62 ? "r" : k < 0.9 ? "q" : "Q";
+}
+function torsoBack(rows) {
+  const out = rows.map((row, y) => [...row].map((ch, x) => APRON_CH.includes(ch) ? shirtAt(row, x) : ch === "c" || ch === "C" ? (y === rows.length - 5 ? "L" : "l") : ch));
+  const W_ = rows[0].length, cx = Math.round((W_ - 1) / 2), waist = Math.round((rows.length - 5) * 0.72);
+  const on = (x, y) => out[y] && out[y][x] && out[y][x] !== ".";
+  for (let y = 0; y < waist; y++) {   // the neck straps cross on the back and run down to the waist tie
+    const k = y / waist;
+    for (const sgn of [-1, 1]) { const x = Math.round(cx + sgn * (4 - 8 * k)); if (on(x, y)) out[y][x] = "a"; if (on(x + 1, y) && y % 2) out[y][x + 1] = "p"; }
+  }
+  for (let x = 0; x < W_; x++) { if (on(x, waist)) out[waist][x] = "a"; if (on(x, waist + 1)) out[waist + 1][x] = shirtAt(rows[waist + 1], x) === "R" ? "r" : "q"; }
+  for (const [dx, dy, ch] of [[-3, -1, "A"], [-2, -1, "A"], [2, -1, "A"], [3, -1, "A"], [-3, 0, "a"], [-2, 0, "p"], [-1, 0, "a"], [0, 0, "A"], [1, 0, "a"], [2, 0, "p"], [3, 0, "a"],
+    [-1, 1, "a"], [1, 1, "a"], [-2, 2, "p"], [2, 2, "p"]])
+    if (on(cx + dx, waist + dy)) out[waist + dy][cx + dx] = ch;   // the bow
+  return out.map(r => r.join(""));
+}
+function torsoSide(rows) {
+  const base = rows.map((row, y) => [...row].map((ch, x) => APRON_CH.includes(ch) ? shirtAt(row, x) : ch));
+  rows.forEach((row, y) => [...row].forEach((ch, x) => {
+    const nx = x + 3;
+    if ((APRON_CH.includes(ch) || ch === "c" || ch === "C") && base[y][nx] && base[y][nx] !== ".") base[y][nx] = ch;
+  }));
+  return base.map(r => r.join(""));
+}
+// breathing: the widest belly rows get one pixel wider on each side
+function breathe(rows) {
+  const maxw = Math.max(...rows.map(r => r.replace(/\./g, "").length));
+  return rows.map(r => {
+    if (r.replace(/\./g, "").length < maxw - 2) return r;
+    const a = r.search(/[^.]/), b = r.length - 1 - [...r].reverse().join("").search(/[^.]/), c = [...r];
+    if (a > 0) c[a - 1] = c[a]; if (b < c.length - 1) c[b + 1] = c[b];
+    return c.join("");
+  });
+}
+const pad1 = rows => rows.map(r => "." + r + ".");
+
+// ---------------------------------------------------------------- arms (the right arm; the left one is its mirror)
+// sh: the shoulder pixel that sits on the torso, hand: where a chain or a held victim starts
+const B2_ARM = {
+  chain: { rows: ["qrR.....", "qrRR....", ".qrRq...", ".qrRRq..", "..qYYYq.", "...kSSs.", "...kSSs.", "...kSSSs", "..kkSSSs", "..kSSSSs", "...sSss."], sh: [0, 0], hand: [5, 8] },
+  up: { rows: ["..kSs...", ".kkSSs..", ".kSSSs..", "..sSs...", "..kSs...", ".qYYq...", ".rRRq...", "qrRRq...", "qrRq....", "qrq....."], sh: [0, 9], hand: [2, 1] },
+  throwS: { rows: ["qrRq........", "qrRRYkSSskk.", "qrRRYkSSskSs", ".qqqYsSSskSs", "........sss."], sh: [0, 2], hand: [10, 2] },
+  throwU: { rows: ["........kk", ".......kSs", "......kSSs", ".....kSSs.", "....YYSs..", "...qYYq...", "..qrRq....", ".qrRq.....", "qrRq......", "qrq......."], sh: [0, 9], hand: [8, 1] },
+  throwD: { rows: ["qrq.......", "qrRq......", ".qrRq.....", "..qrRq....", "...qYYq...", "....YYSs..", ".....kSSs.", "......kSSs", ".......kSs", "........kk"], sh: [0, 0], hand: [8, 8] },
+  eat: { rows: [".kSs.....", "kkSSs....", "kSSSs....", ".sSSYq...", "...YYRq..", "....qrRq.", ".....qrRq", "......qrq"], sh: [8, 7], hand: [2, 1] },   // up to the mouth
+  scratch: { rows: ["....qrRq", "...qrRRq", "...qrRq.", "..qYYq..", "..kSs...", ".kSSs...", "kkSSs...", "kSSSs...", ".sSs...."], sh: [6, 0], hand: [1, 6] },
+};
+
+// ---------------------------------------------------------------- legs and belt gear
+const B2_LEG = {
+  L: ["TTTTtt", "TTTttU", "NNNNNv", "NuNuNv", "NNNNvv", "vvvvvv"],
+  R: ["tttUUU", "ttUUUU", "NNNNvv", "NuNuvv", "NNNvvv", "vvvvvv"],
+};
+const B2_GEAR = {
+  hook: ["..ww.", ".w..w", "....w", "...W.", "..w..", ".w...", ".w..w", "..ww."],   // an S meat hook
+  knife: [".h.", ".h.", "lLl", "lLl", "lLl", ".l."],                               // a knife in its sheath
+};
+
+// ---------------------------------------------------------------- build both skins
+function buildButcherSet(palHex) {
+  const pal = {};
+  for (const k in palHex) pal[k] = hx(palHex[k]);
+  const set = { head: {}, torso: { front: [], side: [], back: [] }, breath: { front: [], side: [], back: [] }, arm: {}, leg: {}, gear: {} };
+  for (const k in B2_HEAD) set.head[k] = makeSprite(B2_HEAD[k], pal);
+  B2_TORSO_FRONT.forEach((rows0, i) => {
+    const rows = pad1(rows0), views = { front: rows, side: torsoSide(rows), back: torsoBack(rows) };
+    for (const v in views) { set.torso[v][i] = makeSprite(views[v], pal); set.breath[v][i] = makeSprite(breathe(views[v]), pal); }
+  });
+  for (const k in B2_ARM) set.arm[k] = Object.assign({ spr: makeSprite(B2_ARM[k].rows, pal) }, B2_ARM[k]);
+  for (const k in B2_LEG) set.leg[k] = makeSprite(B2_LEG[k], pal);
+  for (const k in B2_GEAR) set.gear[k] = makeSprite(B2_GEAR[k], pal);
+  return set;
+}
+const B2 = { classic: buildButcherSet(B2_PAL), dark: buildButcherSet(B2_DARK) };
+
+// ---------------------------------------------------------------- chains: small verlet ropes in world space
+const ROPES = new Map();
+function rope(key, a, b, n = 7, slack = 1.07) {
+  // a, b: screen points; the rope lives in world space so the camera does not shake it
+  const ax = a[0] + camX, ay = a[1] + camY, bx = b[0] + camX, by = b[1] + camY;
+  let R = ROPES.get(key);
+  if (!R || R.n !== n) {
+    R = { n, p: [] };
+    for (let i = 0; i < n; i++) { const t = i / (n - 1), x = lerp(ax, bx, t), y = lerp(ay, by, t); R.p.push([x, y, x, y]); }
+    ROPES.set(key, R);
+  }
+  R.used = G.clock;
+  const len = Math.max(1.5, Math.hypot(bx - ax, by - ay) / (n - 1) * slack);   // a little slack: the chain sags and swings
+  for (let i = 1; i < n - 1; i++) {
+    const p = R.p[i], vx = (p[0] - p[2]) * 0.9, vy = (p[1] - p[3]) * 0.9;
+    p[2] = p[0]; p[3] = p[1]; p[0] += vx; p[1] += vy + 0.18;
+  }
+  for (let it = 0; it < 4; it++) {
+    R.p[0][0] = ax; R.p[0][1] = ay; R.p[n - 1][0] = bx; R.p[n - 1][1] = by;
+    for (let i = 0; i < n - 1; i++) {
+      const p = R.p[i], q = R.p[i + 1], dx = q[0] - p[0], dy = q[1] - p[1], d = Math.hypot(dx, dy) || 0.001, k = (d - len) / d * 0.5;
+      if (i > 0) { p[0] += dx * k; p[1] += dy * k; }
+      if (i + 1 < n - 1) { q[0] -= dx * k; q[1] -= dy * k; }
+    }
+  }
+  return R.p.map(p => [p[0] - camX, p[1] - camY]);
+}
+function dropOldRopes() { for (const [k, R] of ROPES) if (G.clock - R.used > 1) ROPES.delete(k); }
+// chain links along a rope: dark and light steel alternating
+function drawRope(L, pts) {
+  let k = 0;
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const [x0, y0] = pts[i], [x1, y1] = pts[i + 1], n = Math.max(1, Math.round(Math.hypot(x1 - x0, y1 - y0)));
+    for (let j = 0; j < n; j++, k++) {
+      const x = x0 + (x1 - x0) * j / n, y = y0 + (y1 - y0) * j / n;
+      if (k % 3 === 2) continue;
+      L.set(x, y, k % 3 ? METAL[3] : METAL[1]);
+      if (k % 3 === 0) L.set(x, y - 1, METAL[0]);
+    }
+  }
+}
+
+// ---------------------------------------------------------------- the belly spring
+function jiggle(J, ax, ay) {
+  // ax, ay: the butcher's acceleration this frame (px/frame^2); the belly lags behind it and wobbles back
+  J.vx += (-J.x * 0.22 - J.vx * 0.2) - ax * 0.9; J.vy += (-J.y * 0.22 - J.vy * 0.2) - ay * 0.9;
+  J.x = clamp(J.x + J.vx, -2.4, 2.4); J.y = clamp(J.y + J.vy, -2.4, 2.4);
+}
+
+// ---------------------------------------------------------------- layout and drawing
+const B2_WALK = { liftL: [0, 0, 0, 0, 1, 2], liftR: [0, 1, 2, 0, 0, 0], bob: [1, 0, 0, 1, 0, 0], swing: [0, 1, 1, 0, -1, -1], sway: [0, -1, -1, 0, 1, 1] };
+// o: { size, view: front|side|back, flipX, walk (frame or -1), breath, head, armL, armR, dyL, dyR, jx, jy (belly spring), z (hop height),
+//      sq (squash in px, negative stretches), flash, dither, skin, eyes: glow|blink|0, crack: 0..2, dirt: 0..2 }
+function layoutButcher2(sx, sy, o) {
+  const S = B2[o.skin || "classic"], view = o.view || "front", size = o.size || 0, side = view === "side";
+  const T = (o.breath ? S.breath : S.torso)[view][size];
+  const wk = o.walk >= 0 ? o.walk : -1, z = Math.round(o.z || 0);
+  const liftL = wk >= 0 ? B2_WALK.liftL[wk] : 0, liftR = wk >= 0 ? B2_WALK.liftR[wk] : 0;
+  // a fat man waddles: the body sways over the foot that carries it
+  const bob = (wk >= 0 ? B2_WALK.bob[wk] : 0) + Math.round(o.sq || 0) - z, sway = wk >= 0 && !side ? B2_WALK.sway[wk] : 0;
+  const jx = Math.round(o.jx || 0), jy = Math.round(o.jy || 0);
+  const tyBase = sy - T.h - 2 + bob, tx = sx - (T.w >> 1) + jx + sway, ty = tyBase + jy;   // the belly's last rows overlap the legs
+  const legY = sy - S.leg.L.h + 2 - z;
+  const hk = o.head || (view === "front" ? "front" : view), Hd = S.head[hk];
+  const hx_ = sx - (Hd.w >> 1) + Math.round(jx / 2) + sway + (side ? 1 : 0), hy_ = tyBase - 12 + Math.round(jy / 2) - (o.breath ? 1 : 0);   // the head wobbles half as much
+  const sw = wk >= 0 ? B2_WALK.swing[wk] : 0;
+  // side view: the near arm (drawing-left) comes over the body, the far one tucks behind the belly
+  const shR = [tx + T.w - 5 - (side ? 3 : 0), ty + 5], shL = [tx + 4 + (side ? 3 : 0), ty + 5];
+  const place = (pose, sh, mirror, dy) => {
+    // sprite pixels sit one in from the outline; a mirrored arm reads its columns from the other side
+    const A = S.arm[pose], w = A.spr.w;
+    const x = mirror ? sh[0] - (w - 2 - A.sh[0]) : sh[0] - A.sh[0] - 1, y = sh[1] - A.sh[1] - 1 + dy;
+    const hand = mirror ? [x + (w - 2 - A.hand[0]), y + 1 + A.hand[1]] : [x + 1 + A.hand[0], y + 1 + A.hand[1]];
+    return { A, x, y, hand, mirror };
+  };
+  const pR = o.armR || "chain", pL = o.armL || "chain";
+  const armR = place(pR, shR, false, (pR === "chain" ? sw : 0) + (o.dyR || 0));
+  const armL = place(pL, shL, true, (pL === "chain" ? -sw : 0) + (o.dyL || 0));
+  return { S, T, tx, ty, legY, liftL, liftR, stepL: side ? liftL : 0, stepR: side ? liftR : 0, sx, sy, Hd, hk, hx: hx_, hy: hy_, armR, armL,
+    handR: armR.hand, handL: armL.hand, view, size, o };
+}
+function drawButcher2(Lt) {
+  const { S, T, o } = Lt, fl = { flash: o.flash || 0, dither: o.dither };
+  const flip = !!o.flipX, sx = Lt.sx, view = Lt.view, back = view === "back", side = view === "side", plain = !o.flash;
+  // mirror an x drawn for a right-facing figure when the butcher faces left (side view)
+  const X = (x, w) => flip ? 2 * sx - x - w + 1 : x;
+  const bl = (spr, x, y, extra = {}) => blit(spr, X(x, spr.w), y, Object.assign({}, fl, extra, { flip: flip !== !!extra.flip }));
+  // in the side view the lifted foot also steps forward
+  bl(S.leg.L, sx - 8 + Lt.stepL, Lt.legY - Lt.liftL);
+  bl(S.leg.R, sx + Lt.stepR, Lt.legY - Lt.liftR);
+  // the knife hangs on the left hip, the S-hook on the right one and swings as he walks
+  const beltY = Lt.ty + T.h - 6, cx = Lt.tx + (T.w >> 1) + (side ? 2 : 0);
+  const hookX = cx + 6 + Math.round(Math.sin(G.t * 7 + (o.walk || 0)) * (o.walk >= 0 ? 1.4 : 0.4) - (o.jx || 0) * 0.6);
+  if (side) bl(S.gear.hook, hookX, beltY);   // far hip: behind the belly
+  if (back || side) drawArm2(Lt.armR, bl);
+  if (back) drawArm2(Lt.armL, bl);
+  bl(T, Lt.tx, Lt.ty);
+  if (!back) {
+    bl(S.gear.knife, cx - 10, beltY);
+    if (!side) bl(S.gear.hook, hookX, beltY);
+  }
+  if (!back && o.dirt && plain) for (const [dx, dy, ch] of B2_DIRT.slice(0, o.dirt === 1 ? 5 : B2_DIRT.length))
+    put(X(Lt.tx + (T.w >> 1) + dx + (side ? 3 : 0), 1), Lt.ty + T.h - 7 + dy, ch === 5 ? hx("#d0283a") : hx("#8a1428"));
+  bl(Lt.Hd, Lt.hx, Lt.hy);
+  // eyes: blink, or glow red in a frenzy; cracks in the mask at low HP
+  if (plain) {
+    for (const [ex, ey] of B2_EYES[Lt.hk] || []) {
+      const px_ = X(Lt.hx + ex + 1, 1), py_ = Lt.hy + ey + 1;
+      if (o.eyes === "blink") put(px_, py_, INK);
+      else if (o.eyes === "glow") { put(px_, py_, WHITE); put(px_ - 1, py_, RED); put(px_ + 1, py_, RED); put(px_, py_ - 1, RED); }
+    }
+    if (o.crack && !back) for (let c = 0; c < o.crack; c++) for (const [cx_, cy_] of B2_CRACKS[c])
+      put(X(Lt.hx + cx_ + 1 + (side ? 3 : 0), 1), Lt.hy + cy_ + 1, c ? INK : hx("#5e4e66"));
+  }
+  if (!back) { drawArm2(Lt.armL, bl); if (!side) drawArm2(Lt.armR, bl); }
+}
+function drawArm2(a, bl) { bl(a.A.spr, a.x, a.y, { flip: a.mirror }); }
+// apron stains that pile up during a chapter: [dx from the centre, dy from the belt, 5 light | 6 dark]
+const B2_DIRT = [[-4, -4, 5], [-3, -4, 5], [-3, -3, 6], [3, -6, 5], [4, -6, 6], [1, -2, 5], [-5, -8, 5], [-5, -7, 6], [2, -9, 5], [5, -3, 6], [-1, -6, 5], [0, -6, 6]];
+// screen positions of the hands for a layout, mirrored for a left-facing side view
+function butcherHands(Lt) {
+  const flip = !!Lt.o.flipX, sx = Lt.sx, X = x => flip ? 2 * sx - x : x;
+  return { handR: [X(Lt.handR[0]), Lt.handR[1]], handL: [X(Lt.handL[0]), Lt.handL[1]] };
+}
+// the butcher lying on his back: the idle figure turned a quarter, cached per size and skin
+const B2_DEAD = new Map();
+function deadButcher(size, skin) {
+  const key = size + skin;
+  if (B2_DEAD.has(key)) return B2_DEAD.get(key);
+  const w = 64, h = 64, saved = [pix, W, H];
+  pix = new Uint32Array(w * h); W = w; H = h;
+  const Lt = layoutButcher2(32, 58, { size, skin, head: "open", armL: "up", armR: "up" });
+  drawButcher2(Lt);
+  const src = pix; [pix, W, H] = saved;
+  // trim, then rotate a quarter turn counter-clockwise (head to the left)
+  let x0 = w, x1 = 0, y0 = h, y1 = 0;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (src[y * w + x]) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  const tw = x1 - x0 + 1, th = y1 - y0 + 1, d = new Uint32Array(tw * th);
+  for (let y = 0; y < th; y++) for (let x = 0; x < tw; x++) d[(tw - 1 - x) * th + y] = src[(y0 + y) * w + x0 + x];
+  const spr = { w: th, h: tw, d };
+  B2_DEAD.set(key, spr);
+  return spr;
+}
+
+</script>
+<script>
+// ---- enemies.js
+"use strict";
+// Enemy art at native size (no scaled pixels): goblins and the small fry 16x16, the brute and the yeti bigger.
+// Each type is put together from parts - body, four walk frames of legs, the far arm, the weapon arm in poses -
+// and gets: 4 walk frames, a wind-up (weapon raised just before it reaches you), a strike, a hurt frame
+// and death frames (knocked back, down on the knees, flat on the ground).
+
+const grid = (w, h) => Array.from({ length: h }, () => Array(w).fill("."));
+function paint(g, part) {   // part: [rows, dx, dy]; "." is transparent
+  if (!part) return g;
+  const [rows, dx, dy] = part;
+  rows.forEach((r, y) => [...r].forEach((c, x) => { if (c !== "." && g[y + dy] && x + dx >= 0 && x + dx < g[0].length) g[y + dy][x + dx] = c; }));
+  return g;
+}
+const shift = (part, bx, by) => part && [part[0], part[1] + bx, part[2] + by];
+const gridRows = g => g.map(r => r.join(""));
+// a quarter turn: ccw puts the head on the left
+function rotRows(rows, ccw) {
+  const h = rows.length, w = Math.max(...rows.map(r => r.length)), out = [];
+  for (let x = 0; x < w; x++) {
+    let s = "";
+    for (let y = 0; y < h; y++) s += ccw ? (rows[y][w - 1 - x] || ".") : (rows[h - 1 - y][x] || ".");
+    out.push(s);
+  }
+  return ccw ? out : out;
+}
+function trimRows(rows) {
+  let y0 = 0, y1 = rows.length - 1;
+  while (y0 < y1 && !/[^.]/.test(rows[y0])) y0++;
+  while (y1 > y0 && !/[^.]/.test(rows[y1])) y1--;
+  rows = rows.slice(y0, y1 + 1);
+  let x0 = Math.min(...rows.map(r => { const i = r.search(/[^.]/); return i < 0 ? 99 : i; }));
+  let x1 = Math.max(...rows.map(r => r.length - 1 - [...r].reverse().join("").search(/[^.]/)));
+  return rows.map(r => r.slice(x0, x1 + 1).padEnd(x1 - x0 + 1, "."));
+}
+
+// A: { w, h, pal, body, far (the arm behind the body), legs[4], bob[4], arm: { idle, wind, strike, hurt }, hurt: [patches],
+//      sink: rows the body drops when it falls to its knees, knees: the legs strip when kneeling }
+function buildEnemy(A) {
+  const pal = {};
+  for (const k in A.pal) pal[k] = hx(A.pal[k]);
+  const frame = (legs, arm, bob = 0, patches = [], sink = 0) => {
+    const g = grid(A.w, A.h), by = bob + sink;
+    paint(g, shift(A.far, 0, by));
+    paint(g, legs);
+    paint(g, shift(A.body, 0, by));
+    for (const p of patches) paint(g, shift(p, 0, by));
+    paint(g, shift(arm, 0, by));
+    return gridRows(g);
+  };
+  const S = rows => makeSprite(rows, pal);
+  const walk = A.legs.map((L, i) => S(frame(L, A.arm.idle, A.bob ? A.bob[i] : 0)));
+  walk.wind = S(frame(A.legs[0], A.arm.wind || A.arm.idle, 0, A.windPatch ? [A.windPatch] : []));
+  walk.strike = S(frame(A.legs[2], A.arm.strike || A.arm.idle, 0, A.strikePatch ? [A.strikePatch] : []));
+  const hurtRows = frame(A.legs[1], A.arm.hurt || A.arm.idle, 0, A.hurt || []);
+  walk.hurt = S(hurtRows);
+  if (A.death) walk.death = A.death.map(r => S(r));
+  else {
+    const kneel = frame(A.knees || A.legs[1], A.arm.hurt || A.arm.idle, 0, A.hurt || [], A.sink || 3);
+    walk.death = [walk.hurt, S(kneel), S(trimRows(rotRows(trimRows(A.lie ? frame(A.legs[1], A.arm.hurt || A.arm.idle, 0, A.hurt || []) : hurtRows), true)))];
+  }
+  if (A.extra) for (const k in A.extra) walk[k] = S(A.extra[k]);
+  return walk;
+}
+
+// ---------------------------------------------------------------- goblin (and its ice and gold cousins)
+const GOB2_PAL = { G: "#c8c848", g: "#8a8a24", d: "#4a4a14", y: "#fff2a0", K: "#24101a", w: "#e4dcdc", r: "#d0283a",
+  T: "#8a5a2a", t: "#5e3a1e", B: "#2e1a14", C: "#f0b030", M: "#e4dcdc", m: "#8a7c8e", W: "#ffffff", h: "#5e3a1e" };
+const GOB2 = {
+  w: 18, h: 18, pal: GOB2_PAL,
+  body: [[
+    ".......gGGGg......",
+    "d....ggGGGGGGg....",
+    "dGd.gGGGGGGGGGg...",
+    ".dGGgGGGGyyGGGGg..",
+    "..dGgGGGGyKGGGGGGg",
+    "...ddGGGGGGGGGGgd.",
+    ".....dGKwKwKwKgd..",
+    "......dgKKKKKd....",
+    "......tTTTTTTt....",
+    ".....tTTTTTTTTt...",
+    ".....tBBBCBBBBt...",
+    "......tTtTtTtt....",
+  ], 0, 2],
+  far: [["dg", "dgG", "dG.", "dd."], 4, 10],
+  legs: [
+    [[".gg...Gg", "gd.....Gg", "d.......Gd", "dd.......dd"], 5, 14],
+    [["..gGGg", "..gdGd", "..dd.Gd", ".ddd.ddd"], 6, 14],
+    [["Gg...gg", ".Gg...dg", "..Gd....d", "..ddd...dd"], 5, 14],
+    [["..gGGg", "..dGdg", ".dg.dd", "ddd.ddd"], 6, 14],
+  ],
+  bob: [0, -1, 0, -1],
+  arm: {
+    // a rusty cleaver: held forward at the belly, raised over the head, chopped down
+    idle: [["gG....mMMm", ".gG..hmMWm", "..gGGhmMrm", "...dd.mmm."], 10, 10],
+    wind: [[".mMMm.", "mMWMm.", "mrMMm.", ".mmh..", "...hG.", "...Gg.", "..gG..", ".gG...", "dg...."], 8, 0],
+    strike: [["gGG.....", ".dgGGh..", "....dhm.", "....mMMm", "....mMWm", "....mrMm", ".....mm."], 10, 10],
+    hurt: [["...Gg", "..gGg", ".gG..", "dg..."], 11, 5],
+  },
+  hurt: [[["KyK", ".y."], 9, 3], [["KKKKK", "KrrrK"], 7, 6]],
+  sink: 3,
+  knees: [["..dgGGGgd.", ".ddd..ddd."], 5, 16],
+};
+SPR.goblin = buildEnemy(GOB2);
+SPR.ice = buildEnemy(Object.assign({}, GOB2, { pal: Object.assign({}, GOB2_PAL, { G: "#8ab8f0", g: "#4a78c8", d: "#2e4a8a", y: "#ff5a4a",
+  T: "#d8ecff", t: "#8ab8f0", n: "#4a78c8", B: "#1a2050", M: "#d8ecff", m: "#8ef0ff", h: "#1a2050" }) }));
+SPR.golden = buildEnemy(Object.assign({}, GOB2, { pal: Object.assign({}, GOB2_PAL, { G: "#ffe04a", g: "#f0b030", d: "#b07a1a", y: "#ffffff",
+  T: "#ffe04a", t: "#b07a1a", n: "#6a4410", B: "#6a4410", M: "#fff2a0", m: "#f0b030", h: "#6a4410" }) }));
+
+// ---------------------------------------------------------------- the brute: a hulking ogre in a horned helmet with a spiked club
+const BRUTE2 = {
+  w: 26, h: 26, pal: { G: "#8a8a24", g: "#4a4a14", d: "#2e1a14", y: "#ff5a4a", K: "#24101a", w: "#e4dcdc",
+    M: "#b8acb4", m: "#5e4e66", W: "#ffffff", R: "#d0283a", r: "#8a1428", L: "#8a5a2a", l: "#5e3a1e", S: "#e4dcdc" },
+  body: [[
+    ".........m......m.........",
+    ".........mM....Mm.........",
+    "..........mMMMMm..........",
+    ".........mMWMMMMm.........",
+    ".........dGGGGGGd.........",
+    "........dGyKGGyKGd........",
+    "........dGGGGgGGGd........",
+    ".......ddGwKKKKwGdd.......",
+    ".....ddGGGgdddddgGGdd.....",
+    "....dGGGGGGGGGGGGGGGGd....",
+    "...dGGGGGGGGGGGGGGGGGGd...",
+    "...dGGgGGGGGGGGGGGGgGGd...",
+    "...dGGggGGGGGGGGGGgggGd...",
+    "....dd.dgGGGGGGGGGgd.dd...",
+    ".......dRRRRRRRRRRRd......",
+    ".......dRrRRrRRrRRrd......",
+    "........drRdrRdrRdd.......",
+  ], 0, 2],
+  far: [["dGd", "dGGd", "dGGd", "dGgd", ".dGd", ".ddd"], 2, 12],
+  legs: [
+    [["..dGGd...dGGd", ".dGGd.....dGGd", "dggd.......dggd", "ddddd.....ddddd"], 6, 19],
+    [["....dGGddGGd", "....dGGddGGd", "...dggd.dggd", "..ddddd.ddddd"], 6, 19],
+    [["..dGGd...dGGd", ".dGGd.....dGGd", "dggd.......dggd", "ddddd.....ddddd"], 6, 19],
+    [["....dGGddGGd", "....dGGddGGd", "....dggddggd", "...dddddddddd"], 6, 19],
+  ],
+  bob: [0, -1, 0, -1],
+  arm: {
+    // the club: a thick log with iron studs, dragged along, raised overhead, smashed down in front
+    idle: [["dGd....", "dGGd...", ".dGGd..", "..dGGd.", "...dhd.", "....hLl.", "....LSLl", "....LLSLl", ".....LSLl", "......Lll"], 17, 10],
+    wind: [["LLl.......", "LSLLl.....", ".LLSLLl...", "...LLLhh..", ".......hd.", ".......dGd", "......dGGd", "......dGd.", ".....dGGd.", ".....dGd.."], 12, 0],
+    strike: [["dGd..........", ".dGGd........", "..dGGGd......", "....dGGhh....", "........LLl..", "........LSLLl", ".........LLSLl", "..........LLLl"], 14, 10],
+    hurt: [["..dGd", ".dGGd", "dGGd.", "dgd.."], 19, 8],
+  },
+  hurt: [[["KyK..KyK"], 10, 5], [["KrrrrK"], 10, 7]],
+  sink: 4,
+  knees: [["...dgGGGGGGgd...", ".dddddd..dddddd."], 5, 24],
+};
+SPR.brute = buildEnemy(BRUTE2);
+
+// ---------------------------------------------------------------- the yeti: white fur, blue face, claws
+const YETI2 = {
+  w: 24, h: 24, pal: { W: "#ffffff", w: "#d8ecff", s: "#8ab8f0", S: "#4a78c8", b: "#2e4a8a", y: "#ff5a4a", K: "#24101a", t: "#ffffff", n: "#1a2050" },
+  body: [[
+    "........wwwwww.........",
+    "......wwWWWWWWww.......",
+    ".....wWWWWWWWWWWw......",
+    ".....wWWssssssWWw......",
+    "....wWWsSyKsyKsWWw.....",
+    "....wWWsssssssssWw.....",
+    "....wWWsKtKtKtKsWw.....",
+    "...wwWWWsKKKKKsWWww....",
+    "..wWWWWWWWWWWWWWWWWw...",
+    ".wWWWWWWWWWWWWWWWWWWw..",
+    ".wWWWWwwWWWWWWWWwwWWw..",
+    ".wWWWwsWWWWWWWWWWswWw..",
+    "..wWWwsWWWWWWWWWWswww..",
+    "...ww.wWWWWWWWWWWw.....",
+    "......wWWWWWWWWWw......",
+    "......wwWWWWWWWww......",
+  ], 0, 2],
+  far: [["wWw", "wWWw", "wWWw", "wWWw", ".www", ".nnn"], 0, 11],
+  legs: [
+    [["...wWWw...wWWw", "..wWWw.....wWWw", "..wWw.......wWw", ".nnnn.......nnnn"], 4, 18],
+    [["....wWWwwWWw", "....wWWwwWWw", "....wWw.wWw.", "...nnnn.nnnn"], 5, 18],
+    [["...wWWw...wWWw", "..wWWw.....wWWw", "..wWw.......wWw", ".nnnn.......nnnn"], 4, 18],
+    [["....wWWwwWWw", "....wWwwwWWw", "....wWw.wWw.", "...nnnn.nnnn"], 5, 18],
+  ],
+  bob: [0, -1, 0, -1],
+  arm: {
+    idle: [["wWw.", "wWWw", "wWWw", "wWWw", ".wWw", ".ttt"], 18, 12],
+    wind: [["t.t.t", "wwwww", "wWWWw", "wWWw.", "wWWw.", "wWWw.", "wWw.."], 17, 2],
+    strike: [["wWWw.....", ".wWWWw...", "..wwWWWww", "......ttt", ".......t."], 16, 11],
+    hurt: [["..wWw", ".wWWw", "wWWw.", "www.."], 18, 7],
+  },
+  windPatch: [["sKKKKKKKs", "sKyyyyyKs"], 7, 6],   // the roar before the charge
+  hurt: [[["yKy..yKy"], 8, 4], [["KKKKKKK", "KbbbbbK"], 8, 6]],
+  sink: 4,
+  knees: [["..wWWWWWWWWw..", ".nnnnn..nnnnn."], 4, 22],
+};
+SPR.yeti = buildEnemy(YETI2);
+
+// ---------------------------------------------------------------- lizardman with a spear, tail out behind
+const LIZ2 = {
+  w: 20, h: 20, pal: { G: "#ffa24a", g: "#e8701e", d: "#a8400e", D: "#5a1e10", L: "#fff2a0", l: "#f0b030", y: "#ffe04a", K: "#24101a", w: "#e4dcdc",
+    M: "#e4dcdc", m: "#8a7c8e", h: "#5e3a1e", R: "#d0283a" },
+  body: [[
+    "........dddd........",
+    "......ddGGGGgd......",
+    ".....dGGGGyKGGgg....",
+    ".....dGGGGGGGGGGGd..",
+    "......dgGGGGgwgwgd..",
+    ".......dggggdddd....",
+    "......dGGGLLLgd.....",
+    ".....dGGgLLLLgd.....",
+    ".....dGgdLLLLgd.....",
+    "..ddgGGgdLLLgd......",
+    "ddggggGggdLLgd......",
+    ".....ddgggggd.......",
+  ], 0, 3],
+  far: [["dgd", "dg.", "dd."], 5, 9],
+  legs: [
+    [["..dgd..dGd", ".dgd....dGd", ".dd......dGd", "ddd.......ddd"], 5, 15],
+    [["...dgdGd", "...dgdGd", "...dddGd", "..ddd.ddd"], 6, 15],
+    [["..dGd..dgd", ".dGd....dgd", ".dGd.....dd", "ddd.......ddd"], 5, 15],
+    [["...dGdgd", "...dGdgd", "...dGddd", "..ddd.ddd"], 6, 15],
+  ],
+  bob: [0, -1, 0, -1],
+  arm: {
+    // the spear stands upright beside it, levelled for the thrust
+    idle: [["...M", "..MW", "...m", "...h", "...h", "..Gh", ".Ggh", "dg.h", "...h", "...h", "...h", "...h"], 13, 1],
+    wind: [["...M.", "..MWm", "...m.", "...h.", "..Gh.", ".Ggh.", "dgGh.", "...h.", "...h.", "...h.", "...h."], 11, 0],
+    strike: [["Ggg........", ".dGghhhhhmMW", "...........", ], 9, 10],
+    hurt: [["..M", ".Mm", "Gh.", "h..", "h.."], 15, 3],
+  },
+  hurt: [[["KyK"], 9, 5], [["dRRRd"], 12, 7]],
+  sink: 3,
+  knees: [["..dgGGGgd", "dddd..dddd"], 4, 18],
+};
+SPR.lizard = buildEnemy(LIZ2);
+
+// ---------------------------------------------------------------- the skeleton: rusty sword, red glints in the sockets
+const SKEL2 = {
+  w: 18, h: 18, pal: { W: "#ffffff", w: "#e4dcdc", d: "#b8acb4", D: "#8a7c8e", K: "#24101a", r: "#ff5a4a", M: "#b8acb4", m: "#5e4e66", h: "#5e3a1e", R: "#a8400e" },
+  body: [[
+    "......dwwwwd......",
+    ".....dwWWWWWw.....",
+    ".....wWKKWKKWd....",
+    ".....wWKrWKrWd....",
+    ".....dwWWKWWwd....",
+    "......dWKWKWd.....",
+    ".......dwwwd......",
+    "......dwWWWwd.....",
+    ".....dW.WwW.Wd....",
+    "......dWwWwWd.....",
+    ".......dW.Wd......",
+    "......dwWWWwd.....",
+  ], 0, 2],
+  far: [["d.", "Dw", "D.", "Dd"], 5, 10],
+  legs: [
+    [["..w....w", ".w......w", ".w.......w", "Dww......Dww"], 5, 14],
+    [["....w.w", "....w.w", "....w..w", "...Dww.Dww"], 5, 14],
+    [["..w....w", ".w......w", ".w.......w", "Dww......Dww"], 5, 14],
+    [["....w.w", "....ww.", "...w..w.", "..Dww.Dww"], 5, 14],
+  ],
+  bob: [0, -1, 0, -1],
+  arm: {
+    idle: [["w.......", ".w......", ".wwh....", "...mMM..", "....mMM.", ".....mRM", "......mM"], 11, 9],
+    wind: [["...M", "..MM", ".MRm", "MMm.", "hm..", "w...", "w...", ".w..", "..w."], 9, 0],
+    strike: [["w.........", ".ww.......", "...whmMMMMRM", "....h......"], 11, 10],
+    hurt: [["..w", ".w.", "w.."], 13, 7],
+  },
+  hurt: [[["KWK", "KKK"], 8, 3], [["KKKK"], 8, 5]],
+  death: [
+    ["..........dwwwwd..", ".........dwWWWWWw.", ".........wWKKWKKW.", ".........wWKKWKKW.", ".........dwWWKWWw.",
+      "..........dWKWKWd.", "......w....dwwwd..", "...dwWWWwd........", "..dW.WwW.Wd.......", "...dWwWwWd........", "....dW.Wd.........",
+      "...dwWWWwd........", "..w.......w.......", ".Dww......Dww....."],
+    ["....dwwwwd........", "...dwWWWWWw.......", "...wWKKWKKW.......", "...dwWKWKWd.w.....", ".w..dWwWwWd..w....", "dwW.w.WWw.wWd.....", "DwwWwDdwWWwDww...."],
+    ["..w.dww..", ".DwWwWKWd", "DwWdwwWwD"],
+  ],
+};
+SPR.skel = buildEnemy(SKEL2);
+
+// ---------------------------------------------------------------- the carnivorous plant: sways, opens wide, spits
+const PLANT2_PAL = { r: "#8a1428", R: "#d0283a", Q: "#ff5a4a", W: "#ffffff", K: "#4a0a1e", w: "#e4dcdc", y: "#ffe04a",
+  g: "#1f5a36", G: "#3a8a3a", L: "#6ac04a", l: "#10281c" };
+const PLANT2_HEAD = {
+  idle: ["...rrrr...", "..rQRRRr..", ".rQWRRRRr.", "rRRRRRWRRr", "rRRRRRRRKr", "rRRRRRRKwK", ".rrRRRRRr.", "...rrrr..."],
+  open: ["...rrrr....", "..rQRRRr...", ".rQWRRKww..", "rRRRRRKKK..", "rRRRRKKKKK.", "rRRRRRKKK..", ".rrRRRKww..", "...rrrr...."],
+  spit: ["..rrrr......", ".rQRRRrr....", "rQWRRRKwwL..", "rRRRRKKKKLL.", "rRRRRRKwwL..", ".rrRRRRr....", "...rrrr....."],
+  hurt: ["...rrrr...", "..rRRRRr..", ".rRKRKRRr.", "rRRRRRRRRr", "rRRRRKKKKr", "rRRRRKwwKr", ".rrRRRRRr.", "...rrrr..."],
+};
+function plantFrame(head, hx_, hy_) {
+  const g = grid(16, 17);
+  paint(g, [["..G.....G.", ".GLG...GLG", "GLLGG.GGLLG", ".lGGGgGGGl.", "..lllllll.."], 2, 12]);   // leaves at the base
+  const stem = hx_ < 0 ? ["..G.", ".G..", ".G..", "..G.", "..G."] : hx_ > 0 ? [".G..", "..G.", "..G.", ".G..", ".G.."] : [".G.", ".G.", "..G", ".G.", ".G."];
+  paint(g, [stem, 6 + Math.round(hx_ / 2), 8 + Math.max(0, hy_ - 1)]);
+  paint(g, [PLANT2_HEAD[head], 3 + hx_, 1 + hy_]);
+  return gridRows(g);
+}
+{
+  const pal = {}; for (const k in PLANT2_PAL) pal[k] = hx(PLANT2_PAL[k]);
+  const S = rows => makeSprite(rows, pal);
+  SPR.plant = [[0, 0], [1, 0], [0, 1], [-1, 0]].map(([x, y]) => S(plantFrame("idle", x, y)));
+  SPR.plant.wind = S(plantFrame("open", -2, 0));
+  SPR.plant.strike = S(plantFrame("spit", 1, 1));
+  SPR.plant.hurt = S(plantFrame("hurt", -1, 1));
+  SPR.plant.death = [SPR.plant.hurt, S(plantFrame("hurt", 2, 4)),
+    S(["......rrrr......", "....rrRRRRrr....", "..G.rRKRKRRr.G..", ".GLGrRRRRRRrGLG.", "GLLGGrrrrrrGGLLG", ".lGGGgGGGGgGGGl.", "..llllllllllll.."])];
+}
+
+// ---------------------------------------------------------------- the bat: four wingbeats
+const BAT2_PAL = { P: "#2a1040", p: "#5a1e86", q: "#9a4ad0", R: "#ff5a4a", w: "#ffffff" };
+{
+  const pal = {}; for (const k in BAT2_PAL) pal[k] = hx(BAT2_PAL[k]);
+  const S = rows => makeSprite(rows, pal);
+  const body = ["..p..p..", "..ppppp.", ".pRqqRp.", "..pqqp..", "...ww..."];
+  const wings = [
+    ["PP..........PP", "PpP........PpP", ".PppP....PppP.", "..PPpp..ppPP..", "..............", "..............", ".............."],
+    ["..............", "PPPP......PPPP", "PpppPP..PPpppP", ".P..PPppPP..P.", "..............", "..............", ".............."],
+    ["..............", "..............", "....PPppPP....", "..PPpp..ppPP..", ".PppP....PppP.", "PpP........PpP", "P............P"],
+    ["..............", "PPPP......PPPP", "PpppPP..PPpppP", ".P..PPppPP..P.", "..............", "..............", ".............."],
+  ];
+  const fr = (w, b, dy = 0) => { const g = grid(14, 8); paint(g, [w, 0, 0 + dy]); paint(g, [b, 3, 1 + dy]); return gridRows(g); };
+  SPR.bat = wings.map(w => S(fr(w, body)));
+  SPR.bat.wind = S(fr(wings[0], ["..p..p..", "..ppppp.", ".pRqqRp.", "..pwwp..", "...PP..."]));
+  SPR.bat.strike = S(fr(wings[2], ["..p..p..", "..ppppp.", ".pRqqRp.", "..wPPw..", "...ww..."], -1));
+  SPR.bat.hurt = S(fr(wings[1], ["..p..p..", "..ppppp.", ".pwqqwp.", "..pPPp..", "........"]));
+  SPR.bat.death = [SPR.bat.hurt, S(["......", "..PP..", ".PppP.", "PpwwpP", ".PppP.", "..pp..", ".p..p."]), S(["..........", ".PPpwwpPP.", "PpppPPpppP"])];
+}
+
+// ---------------------------------------------------------------- the imp: horns, a tail, a fireball in the hand
+const IMP2 = {
+  w: 18, h: 18, pal: { R: "#d0283a", r: "#8a1428", d: "#4a0a1e", Q: "#ff5a4a", y: "#ffe04a", K: "#24101a", w: "#ffffff",
+    o: "#e8701e", O: "#ffa24a", Y: "#fff2a0", h: "#24101a" },
+  body: [[
+    "....d.....d.......",
+    "....Rd...dR.......",
+    ".....RRRRR........",
+    "....RQRRRRR.......",
+    "....RRyKRyK.......",
+    "....RRRRRRRR......",
+    ".....RKwKwR.......",
+    "......rRRr........",
+    ".....rRQRRr.......",
+    "....rRRQRRRr......",
+    "d...rRRRRRr.......",
+    ".d..drRRRr........",
+    "..ddd.rr..........",
+  ], 1, 1],
+  far: [["dr", "dr", "d."], 4, 9],
+  legs: [
+    [["..rr.rR", ".rd...Rr", ".d.....rd", "dd.....dd"], 4, 14],
+    [["...rrR", "...rdR", "...dRr", "..dd.dd"], 4, 14],
+    [["..Rr.rr", ".Rr...dr", ".rd.....d", "dd.....dd"], 4, 14],
+    [["...rrR", "...rRd", "..rd.d", "..dd.dd"], 4, 14],
+  ],
+  bob: [0, -1, 0, -1],
+  arm: {
+    idle: [["rR..", ".rRr", "..oO", "..Oo"], 11, 9],
+    wind: [[".oOo.", "oOYOo", "oYYYo", ".oOo.", "..Rr.", "..rR.", ".rR..", "rR..."], 10, 0],
+    strike: [["rRRRrOo", "...oOYO", "....oO."], 11, 8],
+    hurt: [["..R", ".Rr", "Rr."], 12, 6],
+  },
+  hurt: [[["KyK.K"], 7, 5], [["KKKK", "KQQK"], 7, 7]],
+  sink: 3,
+  knees: [[".rRRRr.", "dd...dd"], 4, 16],
+};
+SPR.imp = buildEnemy(IMP2);
+
+// ---------------------------------------------------------------- the slime: squash on the ground, stretch in the air
+const SLIME2_PAL = { O: "#ffa24a", o: "#e8701e", q: "#a8400e", K: "#24101a", w: "#fff2a0", W: "#ffffff" };
+{
+  const pal = {}; for (const k in SLIME2_PAL) pal[k] = hx(SLIME2_PAL[k]);
+  const S = rows => makeSprite(rows, pal);
+  const round = ["....oooooo....", "..ooOOOOOooo..", ".oOWwOOOOOOoo.", "oOOwOOOOOOOOoo", "oOOOKOOOOKOOoq", "oOOOOOOOOOOOoq", "oOOOOOKKOOOooq", ".oooOOOOOoooq.", "..qqqqqqqqqq.."];
+  const wide = ["......oooooo......", "...oooOOOOOOooo...", ".ooOWwOOOOOOOOOoo.", "oOOOOKOOOOOOKOOOoq", "oOOOOOOOOKKOOOOOoq", ".qqqqqqqqqqqqqqqq."];
+  const tall = ["...oooo...", "..oOOOOo..", ".oOWwOOoo.", ".oOwOOOOo.", "oOOKOOKOoq", "oOOOOOOOoq", "oOOOKKOOoq", "oOOOOOOOoq", ".oOOOOOoq.", "..ooooqq..", "...qqqq..."];
+  const lean = ["...oooooo.....", ".ooOOOOOooo...", "oOWwOOOOOOoo..", "oOwOOOOOOOOoq.", "oOOKOOOOKOOoq.", "oOOOOOOOOOOoqq", ".oOOOOKKOOOooq", "..oooOOOOoooq.", "...qqqqqqqqq.."];
+  SPR.slime = [round, tall, lean, wide].map(S);
+  SPR.slime.wind = S(wide);
+  SPR.slime.strike = S(["....oooooo....", "..ooOOOOOooo..", ".oOWwOOOOOOoo.", "oOOwOOOOOOOOoo", "oOOKOOOOOKOOoq", "oOOOOKKKKOOOoq", "oOOOOKWWKOOooq", ".oooOOOOOoooq.", "..qqqqqqqqqq.."]);
+  SPR.slime.hurt = S(["....oooooo....", "..ooOOOOOooo..", ".oOOOOOOOOOoo.", "oOOKKOOOOKKOoo", "oOOOOOOOOOOOoq", "oOOOOOKKOOOOoq", "oOOOOKOOKOOooq", ".oooOOOOOoooq.", "..qqqqqqqqqq.."]);
+  SPR.slime.death = [SPR.slime.hurt, S(["..........oo.......", "...oo..oooOOoo..o..", ".ooOOooOOOOOOOoooo.", "oOOOOOOOOOOOOOOOOOo", ".qqqqqqqqqqqqqqqqq."]),
+    S(["..o......o..", ".oOoo..ooOo.", "oqqqoooqqqqo"])];
+  const sRound = ["..oooo..", ".oOWOOo.", "oOKOOKOq", "oOOOOOOq", ".qqqqqq."];
+  const sWide = ["...oooo...", ".ooOWOOoo.", "oOOKOOKOOq", ".qqqqqqqq."];
+  const sTall = ["..ooo..", ".oOWOo.", "oOKOKOq", "oOOOOOq", "oOOOOOq", ".oqqqq.", "..qqq.."];
+  SPR.slimelet = [sRound, sTall, sRound, sWide].map(S);
+  SPR.slimelet.wind = S(sWide); SPR.slimelet.strike = S(["..oooo..", ".oOWOOo.", "oOKOOKOq", "oOOKKOOq", ".qqqqqq."]);
+  SPR.slimelet.hurt = S(["..oooo..", ".oOOOOo.", "oKKOKKOq", "oOOOOOOq", ".qqqqqq."]);
+  SPR.slimelet.death = [SPR.slimelet.hurt, S(["...oo.....", ".ooOOoo.o.", "oOOOOOOOOo", ".qqqqqqqq."]), S([".o..o.", "oqooqo"])];
+}
+
+// ---------------------------------------------------------------- the alien: big black eyes, a silver suit, a ray gun
+const ALIEN2 = {
+  w: 16, h: 17, pal: { G: "#6ac04a", g: "#3a8a3a", d: "#1f5a36", K: "#24101a", w: "#ffffff", S: "#e4dcdc", s: "#b8acb4", t: "#8a7c8e", T: "#5e4e66",
+    m: "#ff6ad0", M: "#8ef0ff", C: "#ffffff" },
+  body: [[
+    "....gGGGGg.....",
+    "...gGGGGGGGg...",
+    "..gGGGGGGGGGg..",
+    "..gGKKwGGKKwg..",
+    "..gGKKKGGKKKg..",
+    "...gGGGGGGGg...",
+    "....gGGdGGg....",
+    ".....dgggd.....",
+    "....sSSSSSs....",
+    "...sSSsSSSSt...",
+    "...tSSsSSSSt...",
+    "....tSSSSSt....",
+  ], 0, 1],
+  far: [["ts", "tS", "G."], 2, 9],
+  legs: [
+    [["..sS..Ss", ".tS....Ss", ".TT.....TT"], 4, 13],
+    [["...sSSs", "...tSSt", "..TT.TT"], 4, 13],
+    [["..Ss..sS", ".Ss....tS", ".TT.....TT"], 4, 13],
+    [["...sSSs", "...tSts", "..TT.TT"], 4, 13],
+  ],
+  bob: [0, -1, 0, -1],
+  arm: {
+    idle: [["Ss....", ".sGTTm", "...TT."], 10, 10],
+    wind: [["Ss.....", ".sGTTmM", "...TTMm"], 10, 9],
+    strike: [["Ss......", ".sGTTmCM", "...TT..M"], 9, 9],
+    hurt: [["..S", ".Ss", "Gs."], 11, 7],
+  },
+  hurt: [[["KK..KK", "ww..ww"], 4, 4], [["gKKg"], 6, 7]],
+  sink: 2,
+  knees: [["..sSSSSs.", ".TTT.TTT."], 3, 15],
+};
+SPR.alien = buildEnemy(ALIEN2);
+
+// ---------------------------------------------------------------- the drone: rotors, a blinking eye, it rams you
+const DRONE2_PAL = { c: "#8ef0ff", C: "#ffffff", m: "#5e4e66", M: "#b8acb4", W: "#e4dcdc", y: "#ffe04a", r: "#ff5a4a", K: "#24101a", k: "#3a2a40" };
+{
+  const pal = {}; for (const k in DRONE2_PAL) pal[k] = hx(DRONE2_PAL[k]);
+  const S = rows => makeSprite(rows, pal);
+  const rot = [["cccc.......cccc", ".m.........m.."], [".cc.........cc.", ".m.........m.."], ["..cccc...cccc..", ".m.........m.."], [".cc.........cc.", ".m.........m.."]];
+  const hull = ["..mmmmmmmmmm..", ".mMWWMMMMMMMm.", "mMWMMKKKKMMMMm", "mMMMKcCcKMMMMm", ".mMMKKKKKMMMm.", "..mkkmmmmkkm..", "...y......y..."];
+  const fr = (r, h, eye) => { const g = grid(15, 9); paint(g, [[r[0]], 0, 0]); paint(g, [[r[1]], 0, 1]); paint(g, [h, 0, 2]); if (eye) paint(g, [[eye], 6, 5]); return gridRows(g); };
+  SPR.drone = rot.map((r, i) => S(fr(r, hull, i % 2 ? "cCc" : "Ccc")));
+  SPR.drone.wind = S(fr(rot[0], hull, "rrr"));
+  SPR.drone.strike = S(fr(rot[2], hull, "rCr"));
+  SPR.drone.hurt = S(fr(rot[1], hull, "KrK"));
+  SPR.drone.death = [SPR.drone.hurt, S(["..m.........", ".mmmmmmmmm..", "mMWMKKKKMMm.", "mMMKrKrKMMmm", ".mmkkmmkkm.."]), S(["...m...m....", ".kmmMmmkmm..", "kmMKKKmmMmk."])];
+}
+
+</script>
+<script>
 // ---- game.js
 "use strict";
 // Butcher Hero: Pixel Rampage — the rules. No DOM here: the browser (ui.js) and the balance sim (sim.js) both drive it.
@@ -840,7 +1636,7 @@ const CHAPTERS = [
 
 const ETYPES = {
   goblin: { spr: "goblin", hp: 18, spd: 22, dmg: 8, xp: 1, r: 5 },
-  brute: { spr: "brute", hp: 85, spd: 15, dmg: 14, xp: 5, r: 8, scale: 1.5, elite: true },
+  brute: { spr: "brute", hp: 85, spd: 15, dmg: 14, xp: 5, r: 12, elite: true },
   ice: { spr: "ice", hp: 24, spd: 24, dmg: 8, xp: 1, r: 5 },
   yeti: { spr: "yeti", hp: 110, spd: 17, dmg: 12, xp: 6, r: 8, elite: true, charge: true },
   lizard: { spr: "lizard", hp: 22, spd: 32, dmg: 9, xp: 1, r: 5 },
@@ -849,10 +1645,10 @@ const ETYPES = {
   bat: { spr: "bat", hp: 10, spd: 46, dmg: 6, xp: 1, r: 4, fly: true, anim: 9 },
   imp: { spr: "imp", hp: 30, spd: 24, dmg: 8, xp: 2, r: 5, keep: 62, shoot: { cd: 2.5, spd: 66, dmg: 10, col: "fire" } },
   slime: { spr: "slime", hp: 40, spd: 18, dmg: 10, xp: 1, r: 6, hop: true, split: "slimelet" },
-  slimelet: { spr: "slime", hp: 12, spd: 28, dmg: 6, xp: 0, r: 4, hop: true, scale: 0.6 },
+  slimelet: { spr: "slimelet", hp: 12, spd: 28, dmg: 6, xp: 0, r: 2.4, hop: true },
   alien: { spr: "alien", hp: 36, spd: 21, dmg: 8, xp: 2, r: 5, keep: 56, shoot: { cd: 2.4, spd: 72, dmg: 9, col: "pink" } },
   drone: { spr: "drone", hp: 22, spd: 40, dmg: 7, xp: 1, r: 5, fly: true },
-  golden: { spr: "golden", hp: 60, spd: 58, dmg: 0, xp: 0, r: 6, scale: 1.25, golden: true },
+  golden: { spr: "golden", hp: 60, spd: 58, dmg: 0, xp: 0, r: 7.5, golden: true },
   crate: { spr: "crate", hp: 26, spd: 0, dmg: 0, xp: 0, r: 6, crate: true },
 };
 
@@ -939,7 +1735,7 @@ function prepChapter(idx) {
     ch: idx, CH, arena: makeArena(CH.key, 1000 + idx * 77), t: 0, phase: "waveA", phaseT: 0,
     enemies: [], piles: [], drops: [], parts: [], pops: [], shots: [], lobs: [], saws: [], rings: [], tele: [], puddles: [], fx: [],
     boss: null, chest: null, banner: null, spawnT: 0.6, hordeT: 22, shake: 0, shakeMag: 0, pendingLevels: 0, chKills: 0,
-    gibs: [], uiParts: [], cine: null, freeze: 0, lvDelay: 0, hurtFx: 0, flashFx: null,
+    gibs: [], corpses: [], uiParts: [], cine: null, freeze: 0, lvDelay: 0, hurtFx: 0, flashFx: null,
     goldAt: rnd(30, 95), goldDone: false, frenzyFx: null, teethPop: 0, denExit: 0, denReward: 0,
     streak: 0, streakT: 0, streakPop: 0, streakFx: null, streakTier: 0, hpTrail: P.hp / P.maxHp, hpHold: 0, healFx: 0, heartT: 0, heartFx: 0,
   });
@@ -1261,7 +2057,7 @@ function hurtEnemy(e, dmg, kx = 0, ky = 0, quiet = false) {
   if (crit && R("fang") && !(P.fangT > 0)) { P.hp = Math.min(P.maxHp, P.hp + 1); P.fangT = 0.35; }
   if (e.T.golden) goldenHit(e);
   dmg = Math.round(dmg * (crit ? 2 : 1));
-  e.hp -= dmg; e.flash = 0.09;
+  e.hp -= dmg; e.flash = 0.09; e.hurtT = 0.14;
   if (!e.T.crate && (!e.elite || crit)) { e.x += kx; e.y += ky; }
   if (!quiet || crit) dmgPopup(e, e.x, e.y - e.h - 2, dmg, crit);
   if (Math.random() < 0.4) blood(e.x, e.y - e.h / 2, 2, 0.6, e.h / 2);
@@ -1295,10 +2091,15 @@ function killEnemy(e, eaten = false) {
   else if (sty === "plant") splat(e.x, e.y - 4, 8, [hx("#6ac04a"), hx("#2a7030")], 5);
   else if (sty === "alien") splat(e.x, e.y - e.h / 2, e.elite ? 12 : 6, [hx("#8aff5a"), hx("#3a9a2a")], e.h / 2);
   else blood(e.x, e.y - e.h / 2, e.elite ? 12 : 6, e.elite ? 1.3 : 1, e.h / 2);
-  if (G.gibs.length < 40 && sty !== "skel" && sty !== "slime" && sty !== "bat" && (e.elite || Math.random() < 0.45)) {
-    const fr = e.spr[0], h2 = Math.floor(fr.h / 2), sc = e.scale, fl = e.face < 0;
-    G.gibs.push({ spr: fr, rect: [0, 0, fr.w, h2], x: e.x, y: e.y, z: (fr.h - h2) * sc, vx: rnd(-28, 28), vy: rnd(-8, 8), vz: rnd(45, 75), sc, flip: fl, t: 0 });
-    G.gibs.push({ spr: fr, rect: [0, h2, fr.w, fr.h - h2], x: e.x, y: e.y, z: 0, vx: rnd(-10, 10), vy: rnd(-4, 4), vz: rnd(8, 20), sc, flip: fl, t: 0 });
+  const revive = e.T.revive && !e.revived && Math.random() < e.T.revive;
+  // some get cut in two, the rest fall: knocked back, down on the knees, flat on the ground (see drawCorpse)
+  if (G.gibs.length < 40 && sty !== "skel" && sty !== "slime" && sty !== "bat" && Math.random() < (e.elite ? 0.5 : 0.3)) {
+    const fr = e.spr.hurt || e.spr[0], h2 = Math.floor(fr.h / 2), fl = e.face < 0;
+    G.gibs.push({ spr: fr, rect: [0, 0, fr.w, h2], x: e.x, y: e.y, z: fr.h - h2, vx: rnd(-28, 28), vy: rnd(-8, 8), vz: rnd(45, 75), sc: 1, flip: fl, t: 0 });
+    G.gibs.push({ spr: fr, rect: [0, h2, fr.w, fr.h - h2], x: e.x, y: e.y, z: 0, vx: rnd(-10, 10), vy: rnd(-4, 4), vz: rnd(8, 20), sc: 1, flip: fl, t: 0 });
+  } else if (e.spr.death && !revive) {
+    G.corpses.push({ d: e.spr.death, x: e.x, y: e.y, t: 0, flip: e.face < 0, kx: e.x >= P.x ? 1 : -1 });
+    if (G.corpses.length > 60) G.corpses.shift();
   }
   if (e.elite) {
     G.freeze = Math.max(G.freeze, 0.04);
@@ -1314,7 +2115,7 @@ function killEnemy(e, eaten = false) {
   if (e.xp > 0) G.drops.push({ x: e.x, y: e.y, kind: e.xp >= 5 ? "big" : "meat", xp: Math.max(1, Math.round(e.xp * (1 + G.ch * 0.2))), t: rnd(0, 6) });
   if (Math.random() < (e.elite ? 0.25 : 0.012)) G.drops.push({ x: e.x + 6, y: e.y, kind: "heart", xp: 0, t: 0 });
   if (e.T.split) for (let i = 0; i < 2; i++) spawnEnemy(e.T.split, e.x + (i ? 5 : -5), e.y + rnd(-3, 3));
-  if (e.T.revive && !e.revived && Math.random() < e.T.revive) G.piles.push({ x: e.x, y: e.y, t: 0, type: e.type });
+  if (revive) G.piles.push({ x: e.x, y: e.y, t: 0, type: e.type });
   sfxThrottled("squish", 0.07);
 }
 function hitsBoss(x, y, r, key, dmg, cd = 0.35) {
@@ -1454,7 +2255,7 @@ function updatePhase(dt) {
 function updateEnemies(dt) {
   const list = G.enemies;
   for (const e of list) {
-    e.flash = Math.max(0, e.flash - dt); e.biteT = Math.max(0, e.biteT - dt);
+    e.flash = Math.max(0, e.flash - dt); e.biteT = Math.max(0, e.biteT - dt); e.hurtT = Math.max(0, (e.hurtT || 0) - dt); e.shotT = Math.max(0, (e.shotT || 0) - dt);
     for (const k in e.hitCd) e.hitCd[k] -= dt;
     if (e.spawnT > 0) { e.spawnT -= dt; continue; }
     if (e.T.crate) continue;
@@ -1490,7 +2291,7 @@ function updateEnemies(dt) {
       e.shootCd -= dt;
       if (e.shootCd <= 0 && d < 165) {
         e.shootCd = e.T.shoot.cd * rnd(0.85, 1.2);
-        shoot(e.x, e.y - e.h * 0.6, Math.atan2(dy, dx), e.T.shoot.spd, e.T.shoot.dmg, e.T.shoot.col);
+        shoot(e.x, e.y - e.h * 0.6, Math.atan2(dy, dx), e.T.shoot.spd, e.T.shoot.dmg, e.T.shoot.col); e.shotT = 0.16;
         sfxThrottled("pew", 0.12);
       }
     }
@@ -1962,6 +2763,8 @@ function updateParts(dt) {
     if (g.t > 1.1 && !g.stained) { g.stained = true; stainArena(g.x, g.y, BLOOD[3], 2); }
   }
   G.gibs = G.gibs.filter(g => g.t < 1.4);
+  for (const c of G.corpses) c.t += dt;
+  G.corpses = G.corpses.filter(c => c.t < 1.4);
   for (const u of G.uiParts) u.t += dt;
   G.uiParts = G.uiParts.filter(u => u.t < 0.45);
   G.hurtFx = Math.max(0, G.hurtFx - dt);
@@ -2176,6 +2979,9 @@ const BOSS_RAGE = {
 };
 const EYE = hx("#ff3a2a"), EYE2 = hx("#ffd8a8");
 const CROWN = makeSprite(["Y.Y.Y", "YYYYY", "yRyRy"], { Y: hx("#ffe04a"), y: hx("#c08a1a"), R: hx("#e02030") });
+// the big crown for bosses: drawn at its size instead of scaling the small one
+const CROWN_BIG = makeSprite(["W...Y...Y", "YY.YYY.YY", "YYYYYYYYY", "yRyyByyRy", "yyyyyyyyy"],
+  { Y: hx("#ffe04a"), y: hx("#b07a1a"), R: hx("#d0283a"), B: hx("#4a78c8"), W: WHITE });
 const TROLL_PAL = { fur: [hx("#f4f8ff"), hx("#c4d4ea"), hx("#8aa2c4")], belly: [hx("#ffffff"), hx("#e0ecf8"), hx("#b8cce4")],
   face: [hx("#9ab8f0"), hx("#6a8ad0"), hx("#4a64a8")], dark: [hx("#8aa2c4"), hx("#5a6a8a"), hx("#3a4a6a")], eye: hx("#ffe04a") };
 const GOLEM_PAL = { fur: [hx("#9a8a88"), hx("#5e4e4c"), hx("#3a2e2e")], belly: [hx("#7a6a68"), hx("#4a3a38"), hx("#2a2020")],
@@ -2378,7 +3184,7 @@ function drawSkeletonKing(B, sx, sy) {
   for (const l of layers) l.draw(INK, flash, true);
   armL.draw(INK, flash, true);
   S.draw(INK, flash, true);
-  blit(CROWN, sk[0] - 4, sk[1] - 13 * K, { scale: 1.6 });
+  blit(CROWN_BIG, sk[0] - 5, sk[1] - 13 * K);
   armR.draw(INK, flash, true);
 }
 function drawBruteBoss(B, sx, sy, pal, s = 1) {
@@ -3184,7 +3990,7 @@ function miniFlash(B) {
 }
 const miniHidden = B => B.untouchable && B.blinkT !== undefined && !B.dying && Math.floor(G.t * 20) % 2 === 0;
 const walkPhase = B => (B.walking || B.dashing) ? Math.sin(B.t * 10) : 0;
-function crownOn(cx, top, scale, flash) { blit(CROWN, cx - Math.round(CROWN.w * scale / 2), top, { scale, flash }); }
+function crownOn(cx, top, flash) { blit(CROWN_BIG, cx - (CROWN_BIG.w >> 1), top, { flash }); }
 function drawMiniBoss(B, fn, arg) {
   const [x, y] = worldToScreen(B.x, B.y), sx = Math.round(x), sy = Math.round(y);
   if (miniHidden(B)) { shadowEllipse(sx, sy + 1, 10, 3); return; }
@@ -3356,7 +4162,7 @@ function drawLizking(B, sx, sy) {
   }
   blob(front, hand[0], hand[1], 2.8, 2.6, SALA);
   front.draw(INK, flash, true);
-  crownOn(X(4), sy - 45, 1.6, flash);
+  crownOn(X(4), sy - 45, flash);
 }
 
 // ---------------------------------------------------------------- bone knight: armoured skeleton, skull shield, greatsword
@@ -3419,7 +4225,7 @@ function drawMagma(B, sx, sy) {
     const ph = (B.t * 1.4 + i * 0.37) % 1;
     put(sx - 13 + i * 13, cy + ry - 1 + ph * 7, ph < 0.5 ? MAGMA[1] : MAGMA[2]);
   }
-  crownOn(sx, Math.round(cy - ry - 8), 1.8, flash);
+  crownOn(sx, Math.round(cy - ry - 8), flash);
 }
 
 // ---------------------------------------------------------------- alien commander / overlord: armoured alien with a ray gun
@@ -3471,7 +4277,7 @@ function drawAlienLord(B, sx, sy, o) {
     const mx = hand[0] + 10 * f, my = hand[1];
     for (let k = -3; k <= 3; k++) { put(mx + k, my, WHITE); put(mx, my + k, k % 2 ? hx("#ff6ad0") : WHITE); }
   }
-  if (o.crown) crownOn(X(1), Y(-49) - 4, 1.8, flash);
+  if (o.crown) crownOn(X(1), Y(-49) - 4, flash);
 }
 
 </script>
@@ -3679,7 +4485,7 @@ function spawnChampion() {
   const type = DEN_TYPES[G.ch], a = Math.random() * Math.PI * 2, o = { x: P.x + Math.cos(a) * 100, y: P.y + Math.sin(a) * 70 };
   clampArena(o, 10);
   const e = spawnEnemy(type, o.x, o.y);
-  e.champion = true; e.hp = e.maxHp = ETYPES[type].hp * CH_HP[G.ch] * diffHp() * 14; e.scale *= 1.3; e.r *= 1.3; e.h *= 1.3; e.xp = 10;
+  e.champion = true; e.hp = e.maxHp = ETYPES[type].hp * CH_HP[G.ch] * diffHp() * 14; e.r *= 1.3; e.xp = 10;   // drawn at its own size: gold outline, crown, HP bar
   G.denQueue--; G.denNext = 12;
   dust(e.x, e.y, 10, PALE); popup("CHAMPION!", e.x, e.y - e.h - 8, GOLD, 1, 1.2); sfx("ministing");
 }
@@ -3854,6 +4660,7 @@ function drawWorld() {
     const [sx, sy] = worldToScreen(f.x, f.y);
     fillEllipseDither(sx, sy, f.R, f.R * 0.6, hx("#8a5a2a"), 0.35 * (1 - f.t / f.life), false);
   }
+  for (const c of G.corpses) drawCorpse(c);
   for (const pl of G.piles) {
     const [sx, sy] = worldToScreen(pl.x, pl.y), sh = pl.t > 1.8 ? Math.round(Math.sin(G.t * 40)) : 0;
     blitFeet(SPR.bonepile, sx + sh, sy);
@@ -4166,23 +4973,44 @@ function drawFx(f) {
   }
 }
 const OL_ELITE = hx("#d89a20"), OL_SHOOT = hx("#9a4ad0");
+// which drawing an enemy shows: hurt, wind-up (weapon raised just before it reaches you), strike, hop phase or walk
+function enemyFrame(e) {
+  const S = e.spr, T = e.T;
+  if (!S.hurt) return S[Math.floor(e.walkT) % S.length];
+  if (e.flash > 0 || e.hurtT > 0 || e.stun > 0) return S.hurt;
+  if (T.charge && e.state === "aim") return S.wind;
+  if (e.biteT > 0 || e.shotT > 0 || (T.charge && e.state === "dash")) return S.strike;
+  if (T.hop) { const h = e.hopT; return S[h < 0.38 ? (e.z > 2 ? 1 : 0) : h < 0.46 || h > 0.75 ? 3 : Math.floor(G.t * 4 + e.wob) % 2 ? 2 : 0]; }
+  const d = Math.hypot(P.x - e.x, P.y - e.y);
+  if (T.shoot ? e.shootCd < 0.4 && d < 165 && e.stun <= 0 : e.dmg > 0 && d < e.r + 6 * P.scale + 16) return S.wind;
+  if (!T.spd) return S[Math.floor(G.t * 3 + e.wob) % S.length];   // rooted: it sways
+  return S[Math.floor(e.walkT * 2) % S.length];
+}
+// the fallen: knocked back, down on the knees, flat on the ground; then it flickers out
+function drawCorpse(c) {
+  const [sx, sy] = worldToScreen(c.x + c.kx * 3 * Math.min(1, c.t / 0.16), c.y);
+  if (sx < -30 || sx > W + 30 || sy < -10 || sy > H + 40) return;
+  if (c.t > 1.0 && Math.floor(c.t * 20) % 2) return;
+  const f = Math.min(c.d.length - 1, c.t < 0.07 ? 0 : c.t < 0.16 ? 1 : 2);
+  blitFeet(c.d[f], sx, sy + (f === 2 ? 1 : 0), { flip: c.flip, flash: c.t < 0.035 ? WHITE : 0 });
+}
 function drawEnemy(e) {
+  if (P.hook && P.hook.target === e && (P.hook.phase === "pull" || P.hook.phase === "eat")) return;   // the butcher draws what he holds
   const [sx, sy] = worldToScreen(e.x, e.y);
   if (sx < -30 || sx > W + 30 || sy < -10 || sy > H + 60) return;
-  const sc = e.scale * e.shrink;
-  if (!e.T.fly) shadowEllipse(sx, sy + 1, 5 * sc, 1.6 * sc);
+  const fr = enemyFrame(e), sw = Math.max(3, fr.w * 0.3);
+  if (!e.T.fly) shadowEllipse(sx, sy + 1, sw, Math.max(1.4, sw * 0.32));
   else shadowEllipse(sx, sy + 6, 4, 1.3);
   if (e.state === "aim") drawTele({ shape: "line", x1: e.x, y1: e.y, x2: e.x + e.cdx * 90, y2: e.y + e.cdy * 90, w: 12, t: e.st, dur: 0.75 });
-  const fr = e.spr[Math.floor(e.walkT) % e.spr.length];
   const lift = e.T.fly ? Math.round(Math.sin(G.t * 4 + e.wob) * 2) - 5 : -Math.round(e.z || 0);
-  if (e.T.golden) blitFeet(SACK, sx - e.face * 5, sy - 4 + lift, { flip: e.face < 0 });
-  const hk = e.flash > 0 ? e.flash / 0.09 : 0, bk = e.biteT > 0 ? e.biteT / 0.18 : 0;
+  if (e.T.golden) blitFeet(SACK, sx - e.face * 6, sy - 4 + lift, { flip: e.face < 0 });
   const rise = e.spawnT > 0 ? 1 - e.spawnT / 0.35 : 1;   // climbing out of the ground: the head shows first
-  if (rise < 1) { fillEllipseDither(sx, sy, 7 * sc, 2.5 * sc, hx("#3a2418"), 0.6, false); if (Math.random() < 0.3) put(sx + rnd(-5, 5), sy - rnd(0, 3), PALE); }
+  if (rise < 1) { fillEllipseDither(sx, sy, sw + 2, 2.5, hx("#3a2418"), 0.6, false); if (Math.random() < 0.3) put(sx + rnd(-5, 5), sy - rnd(0, 3), PALE); }
   const ol = e.champion || e.elite ? OL_ELITE : e.T.shoot ? OL_SHOOT : 0;
-  blitFeet(fr, sx + Math.round(bk * 2 * (P.x > e.x ? 1 : -1)), sy + lift, { scale: sc, sx: sc * (1 + 0.3 * hk + 0.25 * bk), sy: sc * (1 - 0.22 * hk), flip: e.face < 0, ol,
-    rect: rise < 1 ? [0, 0, fr.w, Math.max(1, Math.round(fr.h * rise))] : undefined,
-    flash: e.flash > 0 ? WHITE : (e.stun > 0 && Math.floor(G.t * 10) % 2 ? CYAN : 0) });
+  // a hit knocks it back a pixel; a bite lunges two toward the butcher
+  const toP = P.x > e.x ? 1 : -1, kb = fr === e.spr.hurt && e.stun <= 0 ? -toP : e.biteT > 0 ? 2 * toP : 0;
+  blitFeet(fr, sx + kb, sy + lift, { flip: e.face < 0, ol, rect: rise < 1 ? [0, 0, fr.w, Math.max(1, Math.round(fr.h * rise))] : undefined,
+    flash: e.flash > 0.045 ? WHITE : (e.stun > 0 && Math.floor(G.t * 10) % 2 ? CYAN : 0) });
   if (e.champion && !e.grabbed) {
     const w = 22, x0 = Math.round(sx - w / 2), y0 = Math.round(sy - e.h - 5);
     rect(x0 - 1, y0 - 1, w + 2, 4, INK); rect(x0, y0, w, 2, hx("#3a1418")); rect(x0, y0, Math.round(w * e.hp / e.maxHp), 2, GOLD);
@@ -4197,15 +5025,6 @@ function drawEnemy(e) {
   }
   if (e.stun > 0) for (let i = 0; i < 3; i++) put(sx + Math.cos(G.t * 6 + i * 2.1) * 6, sy - e.h - 2 + Math.sin(G.t * 6 + i * 2.1) * 2, GOLD);
 }
-function drawArm(L, root, hand, s, skin = SKIN) {
-  const r = Math.max(1.8, 2.7 * s);
-  for (let i = 0; i <= 8; i++) disc(L, lerp(root[0], hand[0], i / 8), lerp(root[1], hand[1], i / 8), r, skin.S);
-  for (let i = 0; i <= 8; i++) {
-    const x = lerp(root[0], hand[0], i / 8), y = lerp(root[1], hand[1], i / 8);
-    L.set(x, y - r + 0.6, skin.k); L.set(x, y + r - 0.4, skin.s);
-  }
-  disc(L, hand[0], hand[1], Math.max(2.2, 3 * s), skin.k);
-}
 function bloodTrail(cx, cy, rx, ry, a, cols, len = 24) {
   for (let k = 1; k < len; k++) {
     const b = a - k * 0.045, fade = 1 - k / len;
@@ -4215,32 +5034,36 @@ function bloodTrail(cx, cy, rx, ry, a, cols, len = 24) {
       if ((xx - x) ** 2 + ((yy - y) * 1.2) ** 2 <= r * r) put(xx, yy, c);
   }
 }
-function playerSprite(legs, up, mouth = "idle", side = false) {
-  const dark = P.skin === "dark";
-  if (up) return (dark ? SPR.darkBack : SPR.butcherBack)["idle" + legs];
-  if (side && mouth === "idle") return (dark ? SPR.darkSide : SPR.butcherSide)["idle" + legs];
-  return (dark ? SPR.dark : SPR.butcher)[mouth + legs];
-}
+// Butcher 2.0: the drawn torso size that goes with the growth scale (1, 1.125, 1.25, 1.375)
+const b2Size = sc => sc >= 1.36 ? 3 : sc >= 1.24 ? 2 : sc >= 1.12 ? 1 : 0;
 function drawPlayer() {
   const fk = frenzyK(), s = P.scale * (1 + 0.25 * fk);
   const [sx, sy] = worldToScreen(P.x, P.y);
+  const skin = P.skin === "dark" ? "dark" : "classic", size = Math.min(3, b2Size(P.scale) + (P.frenzy > 0 ? 1 : 0));
+  dropOldRopes();
   if (fk > 0) fillEllipseDither(sx, sy, 18 * s, 7 * s, Math.floor(G.t * 8) % 2 ? RED : hx("#ff7a2a"), 0.4, false);
   for (const g of P.ghosts) {
     const [gx, gy] = worldToScreen(g.x, g.y);
-    if (g.t < 0.2 && Math.floor(g.t * 30) % 2 === 0) blitFeet(playerSprite(0, g.up, "idle", g.side), gx, gy, { scale: s, flip: g.face < 0, flash: g.t < 0.08 ? WHITE : P.p.dash ? hx("#ff5a5a") : CYAN, dither: true });
+    if (g.t < 0.2 && Math.floor(g.t * 30) % 2 === 0)
+      drawButcher2(layoutButcher2(gx, gy, { size, skin, view: g.up ? "back" : g.side ? "side" : "front", flipX: g.side && g.face < 0,
+        flash: g.t < 0.08 ? WHITE : P.p.dash ? hx("#ff5a5a") : CYAN, dither: true }));
   }
   if (P.dying > 0) {
-    const k = clamp((1.5 - P.dying) / 0.45, 0, 1);
-    shadowEllipse(sx, sy + 1, 13 * s * (1 + 0.4 * k), 3.5 * s);
-    blitFeet(playerSprite(0, false, "open"), sx, sy, { sx: s * (1 + 0.35 * k), sy: s * (1 - 0.5 * k), flip: P.face < 0, flash: Math.floor(P.dying * 12) % 2 ? hx("#ff5a5a") : 0 });
+    const t = 1.5 - P.dying, fl = Math.floor(P.dying * 12) % 2 ? hx("#ff5a5a") : 0;
+    shadowEllipse(sx, sy + 1, 13 * s * (t > 0.3 ? 1.5 : 1), 3.5 * s);
+    if (t < 0.3) {   // struck: arms flung up, mouth open, the belly shudders
+      drawButcher2(layoutButcher2(sx, sy, { size, skin, head: "open", armL: "up", armR: "up", jx: Math.round(Math.sin(t * 70)), sq: t > 0.2 ? 1 : 0, flash: fl }));
+    } else {   // then down on his back, with one bounce
+      const u = t - 0.3, bounce = u < 0.18 ? Math.round(Math.sin(u / 0.18 * Math.PI) * 3) : 0;
+      blitFeet(deadButcher(size, skin), sx, sy + 3 - bounce, { flip: P.face < 0, flash: u < 0.45 ? fl : 0 });
+    }
     return;
   }
   // belly slam: crouch, jump, land exactly when the slam fires
   const hop = P.w.slam && G.mode === "play" && P.slamT < SLAM_HOP && !P.hook && !P.pulled && P.dashT <= 0 ? 1 - P.slamT / SLAM_HOP : 0;
-  const z = hop ? Math.round(Math.sin(hop * Math.PI) * 9 * s) : 0, hq = hop ? (hop < 0.2 ? 0.14 : -0.1) : 0;
+  const z = hop ? Math.round(Math.sin(hop * Math.PI) * 9 * s) : 0;
   const dance = P.danceT > 0 && !P.moving && !P.hook ? P.danceT : 0;
-  const bob = z + (P.moving ? Math.round(Math.abs(Math.sin(P.walkT * Math.PI))) : dance ? Math.round(Math.abs(Math.sin(dance * 10)) * 4 * s) : 0);
-  const breath = !P.moving && !hop && !P.hook ? Math.sin(G.t * 2.4) * 0.03 : 0;   // idle: the belly rises and falls
+  const H = P.hook, eating = !!H && H.phase === "eat", chewing = !H && P.chewT > 0;
   shadowEllipse(sx, sy + 1, 13 * s * (1 - z / 30), 3.5 * s * (1 - z / 40));
   // hunger: a ring around the feet fills with every meal (starting in front, clockwise); full ring = frenzy
   if (G.mode !== "title") {
@@ -4254,28 +5077,57 @@ function drawPlayer() {
       if (on) put(px_, py_ + 1, INK);   // a dark edge keeps it readable on every ground
     }
   }
-  const bx = sx, by = sy - BUTCHER_BELLY_UP * s - bob;
-  const back = new Layer(), front = new Layer();
-  const handL = [bx - 16 * s, by - s], handR = [bx + 16 * s, by - s];
-  const H = P.hook;
+  // the view: from behind walking up, three-quarter walking sideways, facing us whenever the mouth is busy
+  const mouthBusy = P.mouth !== "idle" || eating || chewing || dance;
+  const view = mouthBusy ? "front" : P.facingUp ? "back" : P.side ? "side" : "front", flipX = view === "side" && P.face < 0;
+  // the belly spring lags behind every start, stop and turn and bounces on impacts and footfalls
+  const J = P.jig || (P.jig = { x: 0, y: 0, vx: 0, vy: 0, px: P.x, py: P.y, mvx: 0, mvy: 0, sq: 0, wf: -1 });
+  const mvx = P.x - J.px, mvy = P.y - J.py;
+  const walk = P.moving && !hop ? Math.floor(P.walkT * 3.2) % 6 : -1;
+  let ax = clamp(mvx - J.mvx, -3, 3), ay = clamp(mvy - J.mvy, -3, 3) + Math.max(0, P.squash - J.sq) * 10;
+  if (walk !== J.wf && (walk === 0 || walk === 3)) ay += 0.6;
+  if (Math.abs(mvx) > 20 || Math.abs(mvy) > 20) ax = ay = 0;   // a teleport (new chapter) is not a push
+  J.px = P.x; J.py = P.y; J.mvx = mvx; J.mvy = mvy; J.sq = P.squash; J.wf = walk;
+  jiggle(J, ax, ay);
+  const idle = !P.moving && !hop && !H && !dance && P.dashT <= 0 && !chewing, idleT = G.idleT || 0;
+  const q = P.squash + (hop ? (hop < 0.2 ? 0.14 : -0.1) : 0);
+  const o = { size, skin, view, flipX, walk, z, jx: J.x, jy: J.y, sq: Math.round(q * 8), armL: "chain", armR: "chain",
+    breath: q > 0.1 || (idle && Math.floor(G.t / 0.9) % 2 === 1),
+    eyes: P.frenzy > 0 ? "glow" : view !== "back" && G.t % 3.3 < 0.12 ? "blink" : 0,
+    crack: P.hp < P.maxHp * 0.25 ? 2 : P.hp < P.maxHp * 0.5 ? 1 : 0, dirt: G.chKills > 350 ? 2 : G.chKills > 120 ? 1 : 0 };
+  if (chewing && P.chewT < 0.14) o.head = "lick";
+  else if (dance || P.mouth === "open") o.head = "open";
+  else if (P.mouth === "bite") o.head = "bite";
+  if (dance) { const a = Math.floor(dance * 6) % 2; o.armL = a ? "up" : "chain"; o.armR = a ? "chain" : "up"; o.z = Math.round(Math.abs(Math.sin(dance * 10)) * 3); }
+  else if (hop) o.armL = o.armR = "up";
+  else if (idle && idleT > 5 && idleT % 7 > 5.8) { o.armR = "scratch"; o.dyR = Math.floor(G.t * 9) % 2; }   // now and then he scratches his belly
+  // the hook arm: a short wind-up, then it points where the chain goes; while eating it lifts the prey to the mouth
+  let hookHand = null;
   if (H) {
     const [hx_, hy_] = worldToScreen(H.x, H.y);
-    const hand = H.side > 0 ? handR : handL;
-    if (H.phase === "eat") { handL[0] = bx + H.side * 6 * s; handL[1] = by + 2 * s; handR[0] = bx + H.side * 14 * s; handR[1] = by - 4 * s; }
-    else {
-      const a = Math.atan2(hy_ - by, hx_ - bx);
-      hand[0] = bx + Math.cos(a) * 18 * s; hand[1] = by + Math.sin(a) * 12 * s;
-      chainLine(front, hand, [hx_, hy_], H.phase === "pull" ? 0 : 2);
-      if (H.phase !== "pull") cleaver(front, hx_, hy_, Math.atan2(hy_ - hand[1], hx_ - hand[0]) + (H.phase === "fly" ? H.t * 14 : 0), 1.3);
-    }
+    const right = eating ? H.side > 0 : (hx_ - sx) * (flipX ? -1 : 1) >= 0;
+    const slope = (hy_ - (sy - 15 * s)) / Math.max(1, Math.abs(hx_ - sx));
+    const pose = eating ? "eat" : H.phase === "fly" && H.t < 0.06 ? "up" : slope < -0.6 ? "throwU" : slope > 0.6 ? "throwD" : "throwS";
+    if (right) o.armR = pose; else o.armL = pose;
+    hookHand = right ? "handR" : "handL";
+  }
+  const Lt = layoutButcher2(sx, sy, o), hands = butcherHands(Lt);
+  const [hA, hB] = [hands.handL, hands.handR].sort((a, b) => a[0] - b[0]);   // the hands on the screen's left and right
+  const bx = sx, by = sy - BUTCHER_BELLY_UP * s - z;
+  const back = new Layer(), front = new Layer();
+  if (H && !eating) {
+    const [hx_, hy_] = worldToScreen(H.x, H.y), hand = hands[hookHand];
+    drawRope(front, rope("hook", hand, [hx_, hy_], 9, H.phase === "pull" ? 1 : 1.05));
+    if (H.phase !== "pull") cleaver(front, hx_, hy_, Math.atan2(hy_ - hand[1], hx_ - hand[0]) + (H.phase === "fly" ? H.t * 14 : 0), 1.3);
   }
   if (P.w.cleaver) {
     const n = cleaverCount(), rx = orbitRx(), ry = rx * 0.62, sz = cleaverSize();
     for (let i = 0; i < n; i++) bloodTrail(bx, by, rx, ry, P.ang + i * Math.PI * 2 / n, BLOOD, P.evo.razor ? 24 : 18);
     for (let i = 0; i < n; i++) {
       const a = P.ang + i * Math.PI * 2 / n, cx = bx + Math.cos(a) * rx, cy = by + Math.sin(a) * ry;
-      const L = Math.sin(a) < 0 ? back : front;
-      chainLine(L, Math.cos(a) < 0 ? handL : handR, [cx - Math.cos(a) * 5, cy - Math.sin(a) * 5], 1);
+      const L = Math.sin(a) < 0 ? back : front, r = Math.cos(a) >= 0;
+      // the chain trails behind the spinning cleaver
+      drawRope(L, rope("cl" + i + (r ? "r" : "l"), r ? hB : hA, [cx - Math.cos(a) * 5, cy - Math.sin(a) * 5], 6, 1.1));
       cleaver(L, cx, cy, Math.atan2((cy - by) * rx / ry, cx - bx) + 0.35, sz);
     }
   }
@@ -4285,31 +5137,33 @@ function drawPlayer() {
       const a = P.ang2 + off;
       bloodTrail(bx, by, rx * 1.22, ry * 1.22, a, TRAIL, 26);
       const hx_ = bx + Math.cos(a) * rx, hy_ = by + Math.sin(a) * ry, ang = Math.atan2((hy_ - by) * rx / ry, hx_ - bx);
-      chainLine(back, [bx + 3 * s, by - 9 * s], [hx_ - Math.cos(ang) * 6, hy_ - Math.sin(ang) * 6], 5);
+      drawRope(back, rope("sw" + off, [bx + 3 * s, by - 9 * s], [hx_ - Math.cos(ang) * 6, hy_ - Math.sin(ang) * 6], 8, 1.08));
       sword(Math.sin(a) < 0 ? back : front, [hx_, hy_], ang, 24 + 2 * P.w.sword);
     }
   }
   back.draw();
-  const legs = P.moving ? [1, 0, 2, 0][Math.floor(P.walkT * 2) % 4] : 0;
   const justHit = P.hitT > 0 && G.mode === "play", blink = !justHit && P.dashT <= 0 && !(P.frenzy > 0) && P.inv > 0 && P.inv < 0.6 && Math.floor(P.inv * 20) % 2 && G.mode === "play";
   if (!blink) {
-    const dark = P.skin === "dark", q = P.squash + hq;
-    const flip = dance ? Math.floor(dance * 6) % 2 === 0 : P.face < 0;
-    blitFeet(playerSprite(legs, P.facingUp && P.mouth === "idle", dance ? "open" : P.mouth, P.side), sx, sy - bob, { sx: s * (1 + q + breath), sy: s * (1 - q - breath * 0.6), flip, flash: justHit ? WHITE : 0 });
-    if (dance) { handL[1] = by - 12 * s; handR[1] = by - 12 * s; handL[0] += 4 * s; handR[0] -= 4 * s; }
-    if (G.CH.key === "snow" && (G.t % 1.8) < 0.7 && !P.dying) {   // breath vapour
-      const k = (G.t % 1.8) / 0.7, mx = sx + (P.side ? P.face * 7 : 0) * s, my = sy - bob - 26 * s - k * 6;
+    o.flash = justHit ? WHITE : 0;
+    drawButcher2(Lt);
+    if (G.CH.key === "snow" && (G.t % 1.8) < 0.7) {   // breath vapour
+      const k = (G.t % 1.8) / 0.7, mx = sx + (view === "side" ? (flipX ? -6 : 6) : 0), my = Lt.hy + 12 - k * 6;
       for (let i = 0; i < 5; i++) if ((i + Math.floor(G.t * 20)) % 3) put(mx + (i - 2) * (1 + k * 2) + P.face * k * 3, my + (i % 2), mix(WHITE, BLACK, k * 0.3));
     }
-    const arms = new Layer();
-    drawArm(arms, [bx - 8 * s, by - 6 * s], handL, s, dark ? DARK_SKIN : SKIN);
-    drawArm(arms, [bx + 8 * s, by - 6 * s], handR, s, dark ? DARK_SKIN : SKIN);
-    arms.draw(INK, justHit ? WHITE : 0);
   }
   front.draw();
   if (H && (H.phase === "pull" || H.phase === "eat")) {
-    const e = H.target, [ex, ey] = worldToScreen(e.x, e.y);
-    blitFeet(e.spr[0], ex, ey, { scale: e.scale * e.shrink, flip: H.side > 0, flash: e.flash > 0 ? WHITE : 0 });
+    const e = H.target, S = e.spr, fl = e.flash > 0 ? WHITE : 0;
+    const fr = !S.hurt ? S[0] : eating || Math.floor(H.t * 14) % 2 ? S.hurt : S.wind;
+    let [ex, ey] = worldToScreen(e.x, e.y);
+    if (eating) {
+      // lifted to the mouth; every chomp bites off the side nearest the face
+      const hand = hands[hookHand], k = Math.min(1, H.t / 0.08), sc = 1;
+      ex = Math.round(lerp(ex, hand[0] + H.side * (fr.w * sc / 2 - 2), k)); ey = Math.round(lerp(ey, hand[1] + 4, k));
+      const cut = Math.round(fr.w * [0, 0.3, 0.55, 0.8][H.chomps || 0]), rw = fr.w - cut, x = ex + H.side * cut * sc / 2;
+      blitFeet(fr, x, ey, { scale: sc, flip: H.side > 0, rect: [0, 0, rw, fr.h], flash: fl });
+      if (cut) for (let i = 0; i < 4; i++) put(x - H.side * rw * sc / 2, ey - 2 - (i * 5 + H.chomps * 3) % Math.max(2, fr.h * sc - 3), BLOOD[i % 2]);
+    } else blitFeet(fr, ex, ey - Math.round(e.z || 0), { flip: H.side > 0, flash: fl });
   }
   if (P.slowT > 0) for (let i = 0; i < 4; i++) put(sx + Math.cos(G.t * 3 + i * 1.6) * 10 * s, sy - 20 * s + Math.sin(G.t * 3 + i * 1.6) * 5, CYAN);
 }
