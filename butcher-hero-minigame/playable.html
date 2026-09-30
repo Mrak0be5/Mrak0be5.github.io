@@ -7,6 +7,7 @@
 <meta name="ad.orientation" content="portrait,landscape">
 <title>Butcher Hero — Pixel Rampage</title>
 <script src="mraid.js"></script>
+<script>window.BH_AD_BUILD = true;</script>
 <style>
   html, body { margin: 0; height: 100%; background: #12080c; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
   body { display: flex; align-items: center; justify-content: center; }
@@ -388,6 +389,20 @@ function butcherBackRows(legs) {
 }
 SPR.butcherBack = {};
 for (let l = 0; l < 3; l++) SPR.butcherBack["idle" + l] = makeSprite(butcherBackRows(l), Object.assign({ s: SKIN.s }, BUTCHER_PAL));
+// three-quarter view while walking sideways (drawn facing right, flipped for left): the mask turns, the strap shows
+const BUTCHER_SIDE_HEAD = [
+  "..........gGGgGGg.........", "........gGGGGgGGGGg.......", "......gGGgGGGGGgGGGg......",
+  "......GGgGMMMMMMMMMMg.....", "......gGGMMMMMMMMMMMMm....", "......GgmMMMbbMMMMbbMm....",
+  "......gGmMMxxxbMMMbxxm....", "......GgmMMxxxxMMMMxxm....", "......gGkMMMxxMMMMMMxm....",
+  "......GgkMMMMMMMMMMMMm....", ".......gkmMMMMxMMxMMm.....", "........kkmMMMMMMMMm......",
+];
+function butcherSideRows(legs) {
+  const body = BUTCHER_TOP.slice(12);
+  body[0] = "....RRRRRRRmmmmmmmmrqq....";
+  return BUTCHER_SIDE_HEAD.concat(body).concat(LEGS[legs]);
+}
+SPR.butcherSide = {};
+for (let l = 0; l < 3; l++) SPR.butcherSide["idle" + l] = makeSprite(butcherSideRows(l), BUTCHER_PAL);
 const BUTCHER_BELLY_UP = 15;  // belly is this many (unscaled) pixels above the feet
 
 const GOB_ROWS = [
@@ -502,6 +517,8 @@ SPR.dark = {};
 for (const m of ["idle", "open", "bite"]) for (let l = 0; l < 3; l++) SPR.dark[m + l] = makeSprite(butcherRows(m, l), DARK_PAL);
 SPR.darkBack = {};
 for (let l = 0; l < 3; l++) SPR.darkBack["idle" + l] = makeSprite(butcherBackRows(l), Object.assign({ s: hx("#6a5080") }, DARK_PAL, { k: hx("#9a80b0") }));
+SPR.darkSide = {};
+for (let l = 0; l < 3; l++) SPR.darkSide["idle" + l] = makeSprite(butcherSideRows(l), Object.assign({}, DARK_PAL, { k: hx("#9a80b0") }));
 const TOMB = makeSprite(["..gggg..", ".gGGGGg.", "gGGKGGGg", "gGKKKGGg", "gGGKGGGg", "gGGKGGGg", "gGGGGGGg", "gGGGGGGg", "dddddddd"],
   { G: hx("#a8a8b8"), g: hx("#6a6a7a"), K: hx("#3a3a4a"), d: hx("#3a2a2a") });
 const CANDLE = makeSprite([".y.", ".Y.", ".w.", ".w.", "www"], { y: hx("#ffe04a"), Y: hx("#ff8a2a"), w: hx("#e8e0d0") });
@@ -753,7 +770,7 @@ const ETYPES = {
 };
 
 const WEAPONS = ["cleaver", "sword", "saw", "slam", "grenade", "aura"];
-const PASSIVES = ["meaty", "speed", "might", "magnet", "hook", "glutton", "regen", "armor"];
+const PASSIVES = ["meaty", "speed", "might", "magnet", "hook", "glutton", "regen", "armor", "dash"];
 const MAX_WEAPONS = 4;
 const UPG = {
   cleaver: { name: "CLEAVERS", max: 6, desc: l => l === 0 ? "CHAINED CLEAVERS SPIN AROUND YOU" : (l === 2 || l === 4 || l === 5 ? "+1 CLEAVER ON A CHAIN" : "+25% CLEAVER DAMAGE") },
@@ -770,6 +787,7 @@ const UPG = {
   glutton: { name: "GLUTTON", max: 5, desc: () => "EATING HEALS +6 AND GIVES +20% XP" },
   regen: { name: "REGEN", max: 5, desc: () => "+0.5 HP EVERY SECOND" },
   armor: { name: "IRON GUT", max: 5, desc: () => "-8% DAMAGE TAKEN" },
+  dash: { name: "BLOODY DASH", max: 3, desc: l => ["YOUR DASH SLICES EVERYONE IN THE WAY", "-35% DASH COOLDOWN, HARDER SLICE", "TWO DASH CHARGES"][l] },
 };
 // evolution: weapon at max level + the partner passive -> offered in boss chests
 const EVOS = {
@@ -790,9 +808,9 @@ function newPlayer() {
     x: AW / 2, y: AH / 2 + 30, hp: 100, maxHp: 100, lvl: 1, xp: 0, next: xpNeed(1), scale: 1, face: 1, walkT: 0, moving: false,
     inv: 0, mouth: "idle", devours: 0, kills: 0,
     w: { cleaver: 1, sword: 0, saw: 0, slam: 0, grenade: 0, aura: 0 },
-    p: { meaty: 0, speed: 0, might: 0, magnet: 0, hook: 0, glutton: 0, regen: 0, armor: 0 },
+    p: { meaty: 0, speed: 0, might: 0, magnet: 0, hook: 0, glutton: 0, regen: 0, armor: 0, dash: 0 },
     evo: {}, ang: 0, ang2: -Math.PI / 2, sawT: 1, slamT: 2, grenT: 2, auraT: 0, hookCd: 0, hook: null, regenAcc: 0, pulled: null,
-    dashT: 0, dashCd: 0, dashDir: [1, 0], ghosts: [], squash: 0, dying: 0, stepT: 0, stepSide: 1, facingUp: false,
+    dashT: 0, dashCd: 0, dashCharges: 1, dashId: 0, dashDir: [1, 0], ghosts: [], squash: 0, dying: 0, stepT: 0, stepSide: 1, facingUp: false,
   };
 }
 const xpNeed = l => Math.round(10 + 7 * l + l * l / 6 + Math.max(0, l - 20) ** 2 / 4);
@@ -814,7 +832,10 @@ function snapshot() {
 function restoreSnapshot(s) {
   const deaths = G.stats.deaths;
   P = newPlayer();
-  for (const k of ["hp", "maxHp", "lvl", "xp", "next", "scale", "w", "p", "evo", "devours", "kills"]) P[k] = JSON.parse(JSON.stringify(s[k]));
+  for (const k of ["hp", "maxHp", "lvl", "xp", "next", "scale", "w", "p", "evo", "devours", "kills"]) {
+    const v = JSON.parse(JSON.stringify(s[k]));
+    P[k] = v && typeof v === "object" ? Object.assign(P[k], v) : v;
+  }
   G.rerolls = s.rerolls;
   G.stats = JSON.parse(JSON.stringify(s.stats));
   G.stats.deaths = deaths;
@@ -870,17 +891,43 @@ const chMul = () => [1, 1.25, 1.45, 1.85, 2.25, 3.4][G.ch];
 const belly = (s = P.scale) => [P.x, P.y - BUTCHER_BELLY_UP * s];
 
 // dash: a short invulnerable burst with a cooldown (flick on touch, Shift / K on keyboard, the DASH button)
+// BLOODY DASH: level 1 slices enemies on the way, 2 = shorter cooldown and a harder slice, 3 = two charges
 const DASH_CD = 2.2, DASH_T = 0.2, DASH_SPD = 180;
+const dashCdMax = () => DASH_CD * (P.p.dash >= 2 ? 0.65 : 1);
+const dashMax = () => P.p.dash >= 3 ? 2 : 1;
+const dashDmg = () => (P.p.dash >= 2 ? 60 : 36) * might() * (1 + 0.6 * G.ch);
 function tryDash(dx = 0, dy = 0) {
   if (G.mode !== "play" || P.dying || P.pulled || P.dashT > 0 || G.cine || (P.hook && P.hook.phase === "eat")) return false;
-  if (P.dashCd > 0) { sfx("nope"); return false; }
+  if (P.dashCharges <= 0) { sfx("nope"); return false; }
   let l = Math.hypot(dx, dy);
   if (l < 0.1) { const v = inputVector(); dx = v.x; dy = v.y; l = Math.hypot(dx, dy); }
   if (l < 0.1) { dx = P.face; dy = 0; l = 1; }
-  P.dashDir = [dx / l, dy / l]; P.dashT = DASH_T; P.dashCd = DASH_CD; P.inv = Math.max(P.inv, DASH_T + 0.1);
+  P.dashDir = [dx / l, dy / l]; P.dashT = DASH_T; P.inv = Math.max(P.inv, DASH_T + 0.1);
+  P.dashCharges--; if (P.dashCd <= 0) P.dashCd = dashCdMax();
+  P.dashId++;
   P.ghosts = []; P.ghostT = 0; P.squash = -0.18;
   dust(P.x, P.y, 8, PALE); sfx("dash");
   return true;
+}
+// the bloody dash cuts through: every enemy (and the boss) on the path is hit once per dash
+function dashSlice() {
+  const R = 11 * P.scale, dmg = dashDmg();
+  let hits = 0;
+  for (const e of G.enemies) {
+    if (e.grabbed || e.dead || e.dashHit === P.dashId) continue;
+    if (Math.hypot(e.x - P.x, (e.y - P.y) * 1.2) < R + e.r) {
+      e.dashHit = P.dashId; hits++;
+      if (hits <= 6) G.fx.push({ kind: "slash", x: e.x, y: e.y - e.h / 2, a: Math.atan2(P.dashDir[1], P.dashDir[0]) + (hits % 2 ? 0.9 : -0.9), t: 0, life: 0.2 });
+      hurtEnemy(e, dmg, -P.dashDir[1] * 10 * (Math.random() < 0.5 ? 1 : -1), P.dashDir[0] * 8);
+      blood(e.x, e.y - e.h / 2, 3, 1, e.h / 2);
+    }
+  }
+  const B = G.boss;
+  if (B && B.dashCut !== P.dashId && hitsBoss(P.x, P.y - 10 * P.scale, R, "dash" + P.dashId, dmg * 1.5, 99)) {
+    B.dashCut = P.dashId; hits++;
+    G.fx.push({ kind: "slash", x: P.x, y: P.y - 12 * P.scale, a: Math.atan2(P.dashDir[1], P.dashDir[0]) + 0.9, t: 0, life: 0.2, big: true });
+  }
+  if (hits) { G.freeze = Math.max(G.freeze, 0.03); sfxThrottled("slash", 0.04); }
 }
 // growth comes in steps (9/8, 5/4, 11/8) so the scaled pixels stay in a regular pattern
 const GROW_STEPS = [[0, 1], [40, 1.125], [120, 1.25], [250, 1.375]];
@@ -912,6 +959,17 @@ function lvFx() {
 }
 
 // ---------------------------------------------------------------- helpers
+// rock / dirt / snow chunks thrown up by slams, in the colours of the biome
+const DEBRIS = { forest: [hx("#a8743a"), hx("#5e3a1a")], snow: [hx("#ffffff"), hx("#9ab0d0")], jungle: [hx("#6a9a3a"), hx("#2e4a1e")],
+  grave: [hx("#a0a0b4"), hx("#50505e")], lava: [hx("#6a5a58"), hx("#221a1a")], desert: [hx("#f6dca0"), hx("#b8905a")] };
+function groundDebris(x, y, R, n) {
+  const [c, c2] = DEBRIS[G.CH.key] || DEBRIS.forest;
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, sp = rnd(0.45, 1) * R * 1.5;
+    addPart({ x: x + Math.cos(a) * R * 0.3, y: y + Math.sin(a) * R * 0.2, z: 1, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.6, vz: rnd(60, 115), life: rnd(0.9, 1.3), chunk: true, c, c2 });
+  }
+  if (G.CH.key === "lava") sparks(x, y, 8, hx("#ff9a2a"), 70);
+}
 function popup(s, x, y, col, k = 1, life = 0.8) { if (G.pops.length < 70) G.pops.push({ s, x, y, col, k, t: 0, life }); }
 function banner(s, col = GOLD, life = 2.2, sub = "") { G.banner = { s, col, t: 0, life, sub }; }
 function shake(t, m = 2) { if (t >= G.shake || m > G.shakeMag) { G.shake = Math.max(G.shake, t); G.shakeMag = Math.max(m, G.shake > 0 ? G.shakeMag : 0); } }
@@ -994,11 +1052,12 @@ function dmgPopup(key, x, y, dmg, crit) {
   if (!G.opts.numbers && !crit) return;
   for (const p of G.pops) if (p.key === key && p.t < 0.3) {
     p.val += dmg; p.s = String(Math.round(p.val)); p.t = Math.min(p.t, 0.12);
-    if (crit) { p.col = GOLD; p.k = 2; }
+    if (crit && !p.crit) { p.col = GOLD; p.k = 2; p.crit = true; p.ct = p.t; p.vx = rnd(-14, 14); p.life = p.t + 0.8; }
     return;
   }
   if (G.pops.length >= 60) return;
-  G.pops.push({ key, val: dmg, s: String(dmg), x: x + rnd(-3, 3), y, col: crit ? GOLD : WHITE, k: crit ? 2 : 1, t: 0, life: 0.55 });
+  G.pops.push({ key, val: dmg, s: String(dmg), x: x + rnd(-3, 3), y, col: crit ? GOLD : WHITE, k: crit ? 2 : 1, t: 0, life: crit ? 0.8 : 0.55,
+    crit, ct: 0, vx: rnd(-14, 14) });
 }
 function killEnemy(e, eaten = false) {
   if (e.dead) return;
@@ -1106,11 +1165,11 @@ function updatePhase(dt) {
     G.phase = "mini"; G.phaseT = 0;
     spawnBoss(G.CH.mini);
     banner("MINI-BOSS!", GOLD, 2.2, BOSSES[G.CH.mini].name);
-    sfx("warning");
+    sfx("ministing");
   } else if (G.phase === "waveB" && G.phaseT >= WAVE_B) {
     G.phase = "boss"; G.phaseT = 0;
     spawnBoss(G.CH.boss);
-    sfx("warning"); music.play(G.ch, true);
+    music.play(G.ch, true);
   }
 }
 function updateEnemies(dt) {
@@ -1190,13 +1249,16 @@ function updatePlayer(dt) {
     P.x += P.dashDir[0] * DASH_SPD * dt; P.y += P.dashDir[1] * DASH_SPD * dt;
     if (Math.abs(P.dashDir[0]) > 0.1) P.face = P.dashDir[0] > 0 ? 1 : -1;
     P.facingUp = P.dashDir[1] < -0.6;
+    P.side = !P.facingUp && Math.abs(P.dashDir[0]) > 0.6;
+    if (P.p.dash) dashSlice();
     P.ghostT -= dt;
-    if (P.ghostT <= 0) { P.ghostT = 0.035; P.ghosts.push({ x: P.x, y: P.y, t: 0, up: P.facingUp, face: P.face }); }
+    if (P.ghostT <= 0) { P.ghostT = 0.035; P.ghosts.push({ x: P.x, y: P.y, t: 0, up: P.facingUp, side: P.side, face: P.face }); }
   } else {
     const v = inputVector();
     const l = Math.hypot(v.x, v.y);
     P.moving = l > 0.15;
     P.facingUp = P.moving && v.y / l < -0.55;
+    P.side = P.moving && !P.facingUp && Math.abs(v.x) / l > 0.6;
     if (P.moving) {
       const k = Math.min(1, l);
       P.x += v.x / l * k * moveSpeed() * dt; P.y += v.y / l * k * moveSpeed() * dt;
@@ -1207,7 +1269,10 @@ function updatePlayer(dt) {
       if (P.stepT <= 0) { P.stepT = 0.17; P.stepSide *= -1; stepFx(); }
     }
   }
-  P.dashCd = Math.max(0, P.dashCd - dt);
+  if (P.dashCharges < dashMax()) {
+    P.dashCd -= dt;
+    if (P.dashCd <= 0) { P.dashCharges++; P.dashCd = P.dashCharges < dashMax() ? dashCdMax() : 0; if (P.p.dash >= 3) sfx("tick"); }
+  } else P.dashCd = 0;
   G.idleT = P.moving || P.dashT > 0 ? 0 : (G.idleT || 0) + dt;
   for (const g of P.ghosts) g.t += dt;
   P.ghosts = P.ghosts.filter(g => g.t < 0.25);
@@ -1492,8 +1557,12 @@ function updateWeapons(dt) {
   for (const r of G.rings) { r.t += dt; r.r = r.R * easeOut(Math.min(1, r.t / 0.3)); }
   G.rings = G.rings.filter(r => r.t < 0.45);
 }
+const SLAM_HOP = 0.28;   // the butcher jumps this long before a belly slam lands
 function slamAt(x, y, R, dmg) {
   G.rings.push({ x, y, r: 0, R, t: 0 });
+  groundDebris(x, y, R, P.evo.quake ? 18 : 12);
+  G.fx.push({ kind: "cracks", x, y, R: R * 0.55, t: 0, life: 1.8, seed: Math.random() * 1000, ground: true });
+  P.squash = 0.32;
   for (const e of G.enemies) {
     const d = Math.hypot(e.x - x, (e.y - y) * 1.4);
     if (d < R && !e.grabbed) { const a = Math.atan2(e.y - y, e.x - x); hurtEnemy(e, dmg, Math.cos(a) * 12, Math.sin(a) * 12); }
@@ -1571,7 +1640,7 @@ function updateParts(dt) {
     if (p.spark) { p.vx *= 0.9; p.vy *= 0.9; continue; }
     p.z += p.vz * dt; p.vz -= 200 * dt;
     if (p.z <= 0) {
-      if (p.bone) { p.z = 0; p.vx *= 0.5; p.vy *= 0.5; p.vz = p.vz < -30 ? -p.vz * 0.3 : 0; }
+      if (p.bone || p.chunk) { p.z = 0; p.vx *= 0.5; p.vy *= 0.5; p.vz = p.vz < -30 ? -p.vz * 0.3 : 0; }
       else { if (p.stain) stainArena(p.x, p.y, Math.random() < 0.5 ? BLOOD[2] : BLOOD[3]); p.life = 0; }
     }
   }
@@ -1640,7 +1709,7 @@ function rewardCards(big) {
   return levelCards(3);
 }
 function applyCard(c) {
-  if (c.kind === "evo") { P.evo[c.key] = true; G.cine = { kind: "evo", t: 0, dur: 1.6, x: P.x, y: P.y - 20, title: c.title + "!", sub: "EVOLUTION" }; sfx("weapon"); return; }
+  if (c.kind === "evo") { P.evo[c.key] = true; G.cine = { kind: "evo", t: 0, dur: 1.6, x: P.x, y: P.y - 20, title: c.title + "!", sub: "EVOLUTION" }; sfx("evo"); return; }
   if (c.kind === "snack") { P.hp = Math.min(P.maxHp, P.hp + 40); return; }
   if (c.kind === "feast") { P.maxHp += 30; P.hp = P.maxHp; return; }
   if (c.kind === "plus2") { P.w[c.key] = Math.min(UPG[c.key].max, P.w[c.key] + 2); return; }
@@ -1746,7 +1815,7 @@ function chooseCard(i) {
 }
 function finishBossReward() {
   G.stats.bossTimes.push(Math.round(G.bossTime || 0));
-  if (G.ch >= CHAPTERS.length - 1 && !G.endless) { setMode("victory"); music.play(0, false); saveProgress(-1, null); onVictory(); }
+  if (G.ch >= CHAPTERS.length - 1 && !G.endless) { setMode("victory"); music.play(0, false); sfx("fanfare"); saveProgress(-1, null); onVictory(); }
   else setMode("clear");
 }
 function reroll() {
@@ -1804,6 +1873,7 @@ function spawnBoss(kind) {
   K.init && K.init(B);
   G.boss = B;
   if (!K.mini) G.cine = { kind: "boss", t: 0, dur: 2.2, x: B.x, y: B.y - (kind === "ship" ? 40 : 30), title: K.name, sub: BOSS_SUB[kind] || "" };
+  if (!K.mini) sfx("bossintro");
   return B;
 }
 function bossCircles(B) { return B.K.circles(B); }
@@ -2129,25 +2199,12 @@ function drawDark(B, sx, sy) {
   arms.draw(INK, flash, true);
   front.draw(INK, flash, true);
 }
-function drawMini(B, sprKey, scale, extra) {
-  const [sx, sy] = worldToScreen(B.x, B.y);
-  const flash = B.flash > 0 || (B.dying && Math.floor(B.deathT * 12) % 2) ? WHITE : 0;
-  const fade = B.untouchable && !B.dying && B.blinkT !== undefined ? 0.35 : 0;
-  shadowEllipse(sx, sy + 1, 7 * scale, 2.2 * scale);
-  const spr = SPR[sprKey][Math.floor(B.t * (B.walking || B.dashing ? 8 : 2)) % 2];
-  const lift = B.z || 0;
-  if (extra && extra.before) extra.before(sx, sy);
-  if (!fade) blitFeet(spr, sx, sy - lift, { scale, flip: B.face < 0, flash, dither: true });
-  else if (Math.floor(G.t * 20) % 2) blitFeet(spr, sx, sy - lift, { scale, flip: B.face < 0, flash: CYAN });
-  if (extra && extra.after) extra.after(sx, sy - lift);
-}
-
 // ---------------------------------------------------------------- the roster
 const BOSSES = {
   // ============ CHAPTER 1
   chief: {
     name: "GOBLIN CHIEF", mini: true, hp: 520, contact: 12,
-    circles: B => [{ x: B.x, y: B.y - 21, r: 16 }],
+    circles: B => [{ x: B.x, y: B.y - 22, r: 17 }],
     update(B, dt) {
       const a = B.atk;
       if (!a) {
@@ -2165,7 +2222,7 @@ const BOSSES = {
         if (a.t > 1.1) endAttack(B, 2.6);
       }
     },
-    draw(B) { drawMini(B, "brute", 3, { after: (sx, sy) => blit(CROWN, sx - 5, sy - SPR.brute[0].h * 3 + 1, { scale: 2 }) }); },
+    draw(B) { drawMiniBoss(B, drawChief); },
   },
   skeleton: {
     name: "SKELETON KING", hp: 2000, contact: 14,
@@ -2210,7 +2267,7 @@ const BOSSES = {
   // ============ CHAPTER 2
   alpha: {
     name: "YETI ALPHA", mini: true, hp: 1500, contact: 14,
-    circles: B => [{ x: B.x, y: B.y - 18, r: 14 }],
+    circles: B => [{ x: B.x, y: B.y - 21, r: 16 }],
     update(B, dt) {
       const a = B.atk;
       if (!a) {
@@ -2233,7 +2290,7 @@ const BOSSES = {
         if (a.t > 1.1) endAttack(B, 2.4);
       }
     },
-    draw(B) { drawMini(B, "yeti", 2, { before: (sx, sy) => { if (Math.floor(G.t * 4) % 2) fillEllipseDither(sx, sy - 18, 22, 22, CYAN, 0.12); }, after: (sx, sy) => blit(CROWN, sx - 4, sy - SPR.yeti[0].h * 2 - 2, { scale: 1.6 }) }); },
+    draw(B) { drawMiniBoss(B, drawAlpha); },
   },
   troll: {
     name: "FROST TROLL", hp: 5500, contact: 16,
@@ -2285,7 +2342,7 @@ const BOSSES = {
   // ============ CHAPTER 3
   lizking: {
     name: "LIZARD KING", mini: true, hp: 3600, contact: 11,
-    circles: B => [{ x: B.x, y: B.y - 20, r: 15 }],
+    circles: B => [{ x: B.x, y: B.y - 22, r: 15 }],
     update(B, dt) {
       const a = B.atk;
       if (!a) {
@@ -2314,7 +2371,7 @@ const BOSSES = {
         if (a.t > 1.2) endAttack(B, 2.0);
       }
     },
-    draw(B) { drawMini(B, "lizard", 3, { after: (sx, sy) => blit(CROWN, sx - 4, sy - SPR.lizard[0].h * 3 - 1, { scale: 1.6 }) }); },
+    draw(B) { drawMiniBoss(B, drawLizking); },
   },
   hydra: {
     name: "SWAMP HYDRA", hp: 11000, contact: 10, fixed: true,
@@ -2378,7 +2435,7 @@ const BOSSES = {
   // ============ CHAPTER 4
   knight: {
     name: "BONE KNIGHT", mini: true, hp: 5200, contact: 14,
-    circles: B => [{ x: B.x, y: B.y - 22, r: 15 }],
+    circles: B => [{ x: B.x, y: B.y - 24, r: 15 }],
     update(B, dt) {
       const a = B.atk;
       if (!a) {
@@ -2408,13 +2465,7 @@ const BOSSES = {
         if (a.t > 1.0) endAttack(B, 2.0);
       }
     },
-    draw(B) {
-      if (B.spin) B.face = Math.floor(G.t * 16) % 2 ? 1 : -1;
-      drawMini(B, "skel", 3, { after: (sx, sy) => {
-        blit(CROWN, sx - 4, sy - SPR.skel[0].h * 3 - 1, { scale: 1.6 });
-        if (B.spin) ellipseRing(sx, sy - 18, 34, 20, Math.floor(G.t * 12) % 2 ? WHITE : METAL[1], 2, Math.floor(G.t * 20));
-      } });
-    },
+    draw(B) { drawMiniBoss(B, drawKnight); },
   },
   dark: {
     name: "DARK BUTCHER", hp: 15000, contact: 12,
@@ -2480,7 +2531,7 @@ const BOSSES = {
   // ============ CHAPTER 5
   magma: {
     name: "MAGMA KING", mini: true, hp: 6200, contact: 14,
-    circles: B => [{ x: B.x, y: B.y - 12 - (B.z || 0), r: 16 }],
+    circles: B => [{ x: B.x, y: B.y - 13 - (B.z || 0), r: 18 }],
     onPhase2(B) { summon(B, "slime", 5, 30); },
     update(B, dt) {
       const a = B.atk;
@@ -2510,11 +2561,7 @@ const BOSSES = {
         if (a.t > 0.8) endAttack(B, 1.8);
       }
     },
-    draw(B) {
-      const [sx, sy] = worldToScreen(B.x, B.y);
-      if (B.z > 4) shadowEllipse(sx, sy + 1, 20, 5);
-      drawMini(B, "slime", 3, { after: (x, y) => blit(CROWN, x - 4, y - 30, { scale: 1.8 }) });
-    },
+    draw(B) { drawMiniBoss(B, drawMagma); },
   },
   golem: {
     name: "LAVA GOLEM", hp: 20000, contact: 18,
@@ -2572,7 +2619,7 @@ const BOSSES = {
   // ============ CHAPTER 6
   commander: {
     name: "ALIEN COMMANDER", mini: true, hp: 8500, contact: 10,
-    circles: B => [{ x: B.x, y: B.y - 22, r: 14 }],
+    circles: B => [{ x: B.x, y: B.y - 25, r: 15 }],
     update(B, dt) {
       const a = B.atk;
       if (!a) {
@@ -2607,7 +2654,7 @@ const BOSSES = {
         if (a.t > 0.8) endAttack(B, 1.6);
       }
     },
-    draw(B) { drawMini(B, "alien", 3, { after: (sx, sy) => { blit(CROWN, sx - 4, sy - SPR.alien[0].h * 3 - 1, { scale: 1.6 }); } }); },
+    draw(B) { drawMiniBoss(B, drawAlienLord, COMMANDER_STYLE); },
   },
   ship: {
     name: "MOTHERSHIP", hp: 28000, contact: 0,
@@ -2686,7 +2733,7 @@ const BOSSES = {
 };
 BOSSES.overlord = {
   name: "ALIEN OVERLORD", hp: 12000, contact: 16,
-  circles: B => [{ x: B.x, y: B.y - 22, r: 15 }],
+  circles: B => [{ x: B.x, y: B.y - 29, r: 18 }],
   enter() {},
   update(B, dt) {
     const a = B.atk;
@@ -2735,24 +2782,8 @@ BOSSES.overlord = {
     }
   },
   draw(B) {
-    const [sx, sy] = worldToScreen(B.x, B.y);
-    const rising = B.entering > 0;
-    drawMini(B, "alien", 3.0, {
-      before: (x, y) => {
-        const C = new Layer(), sway = Math.sin(G.t * 3) * 2;
-        for (let j = 0; j < 22; j++) for (let i = -8 - j * 0.35; i <= 8 + j * 0.35; i++)
-          C.set(x + i + sway * j / 22, y - 32 + j, i < -3 ? hx("#6a2aa0") : i > 4 ? hx("#3e1266") : hx("#9a5ad0"));
-        C.draw(INK, B.flash > 0 ? WHITE : 0, true);
-        if (!rising) for (let k = 0; k < 4; k++) put(x - 3 + k * 2, y + 2 + Math.random() * 3, pick([GOLD, hx("#ff9a2a"), WHITE]));
-      },
-      after: (x, y) => {
-        blit(CROWN, x - 4, y - 46, { scale: 1.8 });
-        const glow = Math.floor(G.t * 8) % 2 ? hx("#ff6ad0") : WHITE;
-        put(x - 5, y - 32, glow); put(x + 4, y - 32, glow);
-        if (rising && Math.floor(G.t * 12) % 2) fillEllipseDither(x, y - 18, 22, 26, WHITE, 0.4);
-      },
-    });
-    void sx; void sy;
+    drawMiniBoss(B, drawAlienLord, OVERLORD_STYLE);
+    if (B.entering > 0 && Math.floor(G.t * 12) % 2) { const [sx, sy] = worldToScreen(B.x, B.y); fillEllipseDither(sx, sy - 26, 24, 32, WHITE, 0.4); }
   },
 };
 function drawBoss() { const B = G.boss; if (B) B.K.draw(B); }
@@ -2761,9 +2792,353 @@ function drawBoss() { const B = G.boss; if (B) B.K.draw(B); }
 function setTimeoutG(delay, fn) { G.fx.push({ kind: "timer", t: 0, life: delay + 0.001, fn, fired: false }); }
 function slamFx(x, y, R) {
   G.rings.push({ x, y, r: 0, R, t: 0, col: RED });
+  groundDebris(x, y, R, 14);
   dust(x, y, 14, PALE);
   G.fx.push({ kind: "cracks", x, y, R, t: 0, life: 8, seed: Math.random() * 1000, ground: true });
   sfx("slam");
+}
+
+</script>
+<script>
+// ---- minis.js
+"use strict";
+// Mini-bosses drawn from shaded shapes (like the big bosses) instead of scaled-up enemy sprites.
+// Every draw function gets the feet position (sx, sy) in whole screen pixels and faces B.face.
+
+const GOB_SKIN = [hx("#d4da60"), hx("#9aa632"), hx("#5e661e")];
+const GOB_BELLY = [hx("#eef090"), hx("#c8ce56"), hx("#94a032")];
+const IRON = [hx("#e2e5ee"), hx("#9aa0b0"), hx("#5a5e6e")];
+const BONEP = [hx("#fff8e6"), hx("#d8ccb0"), hx("#a09078")];
+const FUR = [hx("#b07a40"), hx("#7a4e26"), hx("#4e3016")];
+const GOLDP = [hx("#fff08a"), hx("#ffc83a"), hx("#b07a1a")];
+const WOOD = [hx("#9a6a3a"), hx("#6a3a1a"), hx("#3e2210")];
+const ALPHA_PAL = { fur: [hx("#a8bce0"), hx("#6e84b4"), hx("#465884")], belly: [hx("#dce6f6"), hx("#aebfdf"), hx("#7e92bc")],
+  face: [hx("#4a6ab0"), hx("#2c4a86"), hx("#1a2e5a")], dark: [hx("#5a6e9e"), hx("#3a4a74"), hx("#222c4a")], eye: hx("#ff3a2a") };
+const ICEP = [hx("#f0ffff"), hx("#8ef0ff"), hx("#3aa8e0")];
+const SALA = [hx("#ffb068"), hx("#e0703a"), hx("#9a3e1e")];
+const SALA_BELLY = [hx("#fff2a0"), hx("#ffd86a"), hx("#d8a040")];
+const ROYAL = [hx("#c890f0"), hx("#8a44c8"), hx("#521e86")];
+const MAGMA = [hx("#ffd060"), hx("#ff7a1a"), hx("#b8360e")];
+const CRUST = [hx("#6a5a58"), hx("#3e3232"), hx("#221a1a")];
+const SILVER = [hx("#f0f2f8"), hx("#b0b6c8"), hx("#6e7486")];
+const ALIENSK = [hx("#c0f090"), hx("#80c85a"), hx("#40883a")];
+const BLUESK = [hx("#b0e4ff"), hx("#6ab0e0"), hx("#3a6aa8")];
+const REDCAPE = [hx("#ff6a5a"), hx("#c8283a"), hx("#7a1020")];
+const VIOLET_ARMOR = [hx("#dcb4ff"), hx("#9a5ad0"), hx("#5a2a8a")];
+const MOUTH_IN = hx("#5a1020"), HOT = hx("#fff2a0");
+
+// filled polygon; col may be a function (x, y) -> colour for shading
+function poly(L, pts, col) {
+  let y0 = Infinity, y1 = -Infinity;
+  for (const p of pts) { y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); }
+  for (let y = Math.floor(y0); y <= Math.ceil(y1); y++) {
+    const xs = [];
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length];
+      if ((a[1] <= y && b[1] > y) || (b[1] <= y && a[1] > y)) xs.push(a[0] + (y - a[1]) / (b[1] - a[1]) * (b[0] - a[0]));
+    }
+    xs.sort((p, q) => p - q);
+    for (let k = 0; k + 1 < xs.length; k += 2)
+      for (let x = Math.ceil(xs[k]); x <= Math.floor(xs[k + 1]); x++) L.set(x, y, typeof col === "function" ? col(x, y) : col);
+  }
+}
+// light from the left whichever way the boss faces
+const shadeX = (pal, x0, x1) => x => { const k = (x - Math.min(x0, x1)) / (Math.abs(x1 - x0) || 1); return k < 0.33 ? pal[0] : k < 0.7 ? pal[1] : pal[2]; };
+function miniFlash(B) {
+  if (B.flash > 0 || (B.dying && Math.floor(B.deathT * 12) % 2)) return WHITE;
+  if (B.untouchable && B.blinkT !== undefined && !B.dying) return CYAN;
+  return 0;
+}
+const miniHidden = B => B.untouchable && B.blinkT !== undefined && !B.dying && Math.floor(G.t * 20) % 2 === 0;
+const walkPhase = B => (B.walking || B.dashing) ? Math.sin(B.t * 10) : 0;
+function crownOn(cx, top, scale, flash) { blit(CROWN, cx - Math.round(CROWN.w * scale / 2), top, { scale, flash }); }
+function drawMiniBoss(B, fn, arg) {
+  const [x, y] = worldToScreen(B.x, B.y), sx = Math.round(x), sy = Math.round(y);
+  if (miniHidden(B)) { shadowEllipse(sx, sy + 1, 10, 3); return; }
+  fn(B, sx, sy, arg);
+}
+
+// ---------------------------------------------------------------- goblin chief: horned helmet, fur cape, huge axe
+function drawChief(B, sx, sy) {
+  const f = B.face || 1, a = B.atk || {}, flash = miniFlash(B), st = walkPhase(B), raise = a.raise || 0, lean = B.dashing ? 3 : 0;
+  const X = d => sx + (d + lean) * f;
+  shadowEllipse(sx, sy + 1, 17, 4);
+  const back = new Layer(), L = new Layer(), front = new Layer();
+  poly(back, [[X(-12), sy - 31], [X(8), sy - 31], [X(12), sy - 7], [X(-17), sy - 7]], shadeX(FUR, X(-17), X(12)));
+  for (let i = 0; i < 8; i++) back.set(X(-16 + i * 4), sy - 6 + (i % 2), FUR[2]);
+  back.draw(INK, flash, true);
+  for (const side of [-1, 1]) {
+    const k = side * st * 2;
+    blob(L, X(side * 6), sy - 5 + Math.min(0, k), 4.5, 5.5, GOB_SKIN);
+    blob(L, X(side * 6 + 1), sy - 1 + Math.min(0, k), 5, 2.4, WOOD);
+  }
+  const farHand = raise ? [X(-13), sy - 30 - 16 * raise] : [X(-15), sy - 13 + st];
+  bline(L, [X(-10), sy - 25], farHand, 3.2, GOB_SKIN);
+  blob(L, farHand[0], farHand[1], 3.6, 3.4, GOB_SKIN);
+  blob(L, X(0), sy - 18, 12.5, 11, GOB_SKIN);
+  blob(L, X(2), sy - 16, 7, 6.5, GOB_BELLY);
+  for (let x = -11; x <= 11; x++) { L.set(X(x), sy - 10, WOOD[1]); L.set(X(x), sy - 9, WOOD[2]); }
+  blob(L, X(3), sy - 10, 2.2, 1.8, GOLDP);
+  const hx0 = X(2), hy0 = sy - 32;
+  poly(L, [[X(-5), hy0 - 2], [X(-18), hy0 - 7], [X(-6), hy0 + 3]], GOB_SKIN[1]);
+  poly(L, [[X(9), hy0 - 2], [X(21), hy0 - 6], [X(9), hy0 + 3]], GOB_SKIN[2]);
+  blob(L, hx0, hy0, 9, 7.5, GOB_SKIN);
+  for (let y = -13; y <= -3; y++) for (let x = -10; x <= 10; x++)
+    if ((x / 10) ** 2 + ((y + 3) / 10) ** 2 <= 1) L.set(hx0 + x, hy0 + y, x < -3 ? IRON[0] : x < 4 ? IRON[1] : IRON[2]);
+  for (let x = -10; x <= 10; x++) L.set(hx0 + x, hy0 - 3, IRON[2]);
+  for (const rx of [-6, 0, 6]) L.set(hx0 + rx, hy0 - 7, IRON[2]);
+  bline(L, [hx0 - 8, hy0 - 8], [hx0 - 13, hy0 - 17], 1.5, BONEP);
+  bline(L, [hx0 + 8, hy0 - 8], [hx0 + 13, hy0 - 17], 1.5, BONEP);
+  for (const ex of [-2, 4]) { L.set(hx0 + ex * f, hy0, RED); L.set(hx0 + ex * f, hy0 - 1, INK); L.set(hx0 + (ex + 1) * f, hy0 - 1, INK); }
+  const yell = a.name === "cry" && a.t > 0.3;
+  for (let x = -3; x <= 6; x++) {
+    L.set(hx0 + x * f, hy0 + 4, INK);
+    if (yell) { L.set(hx0 + x * f, hy0 + 5, MOUTH_IN); L.set(hx0 + x * f, hy0 + 6, INK); }
+    if (x % 2 === 0) L.set(hx0 + x * f, hy0 + 3, WHITE);
+  }
+  for (let i = -3; i <= 3; i++) L.set(X(i * 3), sy - 26 + Math.abs(i) * 0.7, GOLDP[1]);
+  L.set(X(0), sy - 24, WHITE); L.set(X(1), sy - 24, WHITE); L.set(X(0), sy - 23, INK);
+  L.draw(INK, flash, true);
+  // the axe arm, in front of the body
+  const hand = raise ? [X(14), sy - 28 - 16 * raise] : B.dashing ? [X(17), sy - 28] : [X(16), sy - 14 - st];
+  bline(front, [X(10), sy - 25], hand, 3.4, GOB_SKIN);
+  blob(front, hand[0], hand[1], 3.8, 3.5, GOB_SKIN);
+  const top = [hand[0] + 5 * f, hand[1] - 24];
+  bline(front, [hand[0] - f, hand[1] + 5], top, 1.3, WOOD);
+  poly(front, [[top[0], top[1] - 6], [top[0] + 10 * f, top[1] - 10], [top[0] + 13 * f, top[1] - 1], [top[0] + 10 * f, top[1] + 7], [top[0], top[1] + 3]], shadeX(IRON, top[0], top[0] + 13 * f));
+  poly(front, [[top[0], top[1] - 3], [top[0] - 6 * f, top[1] - 5], [top[0] - 6 * f, top[1] + 3], [top[0], top[1] + 1]], IRON[2]);
+  for (const [dx, dy] of [[7, -6], [9, -2], [11, 1], [8, 3]]) front.set(top[0] + dx * f, top[1] + dy, BLOOD[1]);
+  front.draw(INK, flash, true);
+}
+
+// ---------------------------------------------------------------- yeti alpha: hunched steel-blue silverback, ice crystals on the back
+function drawAlpha(B, sx, sy) {
+  const f = B.face || 1, a = B.atk || {}, flash = miniFlash(B), st = walkPhase(B), C = ALPHA_PAL;
+  const roar = a.name === "roar" && a.t < 1.0 ? Math.min(1, a.t / 0.3) : 0, lean = B.dashing ? 4 : 0, beat = Math.floor((a.t || 0) * 9) % 2;
+  const X = d => sx + (d + lean) * f;
+  if (Math.floor(G.t * 4) % 2) fillEllipseDither(sx, sy - 16, 26, 20, CYAN, 0.1);
+  shadowEllipse(sx, sy + 1, 20, 4.5);
+  const far = new Layer(), ice = new Layer(), L = new Layer(), near = new Layer();
+  const arm = (Ly, sh, el, fi, big) => {
+    bline(Ly, sh, el, big ? 4.2 : 3.8, C.fur); bline(Ly, el, fi, big ? 3.6 : 3.2, C.fur);
+    blob(Ly, fi[0], fi[1], big ? 5.5 : 5, big ? 5 : 4.5, C.dark);
+    for (const k of [-2, 0, 2]) Ly.set(fi[0] + k, fi[1] + (big ? 3 : 2), C.dark[2]);
+  };
+  // far arm: knuckles on the ice; beats the chest in front of the body while roaring
+  const farArm = B.dashing ? [[X(-6), sy - 28], [X(4), sy - 26], [X(15), sy - 21]]
+    : roar ? [[X(-6), sy - 28], [X(-6), sy - 17], [X(4), sy - 25 + beat * 4]]
+    : [[X(-6), sy - 28], [X(-14), sy - 18], [X(-12 - st * 3), sy - 5]];
+  if (!roar) { arm(far, ...farArm, false); far.draw(INK, flash, true); }
+  const hx0 = X(10), hy0 = sy - 29 - roar * 5;
+  for (const [dx, h, w] of [[-13, 11, 3], [-6, 14, 3.5], [1, 9, 3]]) {
+    const bx = X(dx), by = sy - 34 + Math.abs(dx + 6) * 0.3;
+    poly(ice, [[bx - w, by + 3], [bx - f, by - h], [bx + w, by + 3]], shadeX(ICEP, bx - w, bx + w));
+  }
+  for (const dx of [-4, 0, 4]) poly(ice, [[hx0 + dx - 2, hy0 - 5], [hx0 + dx, hy0 - 13 + Math.abs(dx) * 0.7], [hx0 + dx + 2, hy0 - 5]], ICEP[dx < 0 ? 0 : dx > 0 ? 2 : 1]);
+  ice.draw(INK, flash, true);
+  for (const side of [-1, 1]) {
+    const k = side * st * 2;
+    blob(L, X(side * 7 - 2), sy - 5 + Math.min(0, k), 4.5, 5, C.fur);
+    blob(L, X(side * 7 - 1), sy - 1 + Math.min(0, k), 5, 2.2, C.dark);
+  }
+  blob(L, X(-2), sy - 20, 15, 13, C.fur);
+  blob(L, X(-6), sy - 29, 11, 8, C.fur);
+  blob(L, X(4), sy - 17, 8, 8.5, C.belly);
+  for (const [dx, dy] of [[-15, -18], [-13, -12], [-10, -34], [-3, -36], [-16, -25], [-8, -23], [-11, -16], [-4, -29]]) { L.set(X(dx), sy + dy, C.fur[2]); L.set(X(dx + 1), sy + dy + 1, C.fur[2]); }
+  L.draw(INK, flash, true);
+  if (roar) { arm(near, ...farArm, false); near.draw(INK, flash, true); }
+  const near2 = new Layer(), Hd = new Layer();
+  const nearArm = B.dashing ? [[X(5), sy - 25], [X(15), sy - 24], [X(22), sy - 16]]
+    : roar ? [[X(5), sy - 25], [X(12), sy - 14], [X(9), sy - 21 - (1 - beat) * 4]]
+    : [[X(5), sy - 25], [X(15), sy - 15], [X(14 + st * 3), sy - 5]];
+  arm(near2, ...nearArm, true);
+  near2.draw(INK, flash, true);
+  // the head juts forward over the arms
+  blob(Hd, hx0, hy0, 8.5, 7.5, C.fur);
+  blob(Hd, hx0 + 2 * f, hy0 + 1.5, 6, 5, C.face);
+  for (let x = -3; x <= 8; x++) Hd.set(hx0 + x * f, hy0 - 3, C.fur[x < 2 ? 0 : 1]);
+  for (const ex of [0, 4]) { Hd.set(hx0 + ex * f, hy0 - 1, C.eye); Hd.set(hx0 + (ex + 1) * f, hy0 - 1, C.eye); Hd.set(hx0 + ex * f, hy0 - 2, INK); }
+  Hd.set(hx0 + 7 * f, hy0 + 1, INK);
+  if (roar > 0.5) {
+    for (let y = 0; y <= 5; y++) for (let x = -1; x <= 6; x++) Hd.set(hx0 + x * f, hy0 + 2 + y, (y === 0 || y === 5) && x % 2 === 0 ? WHITE : MOUTH_IN);
+  } else {
+    for (let x = -1; x <= 6; x++) Hd.set(hx0 + x * f, hy0 + 4, INK);
+    Hd.set(hx0, hy0 + 3, WHITE); Hd.set(hx0 + 5 * f, hy0 + 3, WHITE);
+  }
+  Hd.draw(INK, flash, true);
+  if (roar && a.t > 0.5)
+    for (let i = 0; i < 18; i++) {
+      const d = 7 + i * 1.8, spread = i * 0.45;
+      put(hx0 + d * f, hy0 + 4 + Math.sin(i * 2.3 + G.t * 30) * spread, i % 3 ? CYAN : WHITE);
+    }
+}
+
+// ---------------------------------------------------------------- lizard king: salamander with cape, crown and trident
+function drawLizking(B, sx, sy) {
+  const f = B.face || 1, a = B.atk || {}, flash = miniFlash(B), st = walkPhase(B), dash = B.dashing, lean = dash ? 4 : 0;
+  const X = d => sx + (d + lean) * f;
+  shadowEllipse(sx, sy + 1, 16, 4);
+  const back = new Layer(), L = new Layer(), front = new Layer();
+  poly(back, [[X(-8), sy - 30], [X(6), sy - 30], [X(10), sy - 6], [X(-14), sy - 6]], shadeX(ROYAL, X(-14), X(10)));
+  for (let i = 0; i < 6; i++) back.set(X(-13 + i * 4), sy - 5, GOLDP[1]);
+  for (let i = 0; i <= 12; i++) {
+    const t = i / 12, sw = Math.sin(B.t * 3 + t * 3) * 3 * t, r = 3.6 * (1 - t) + 1.1;
+    const x = X(-6 - 17 * t), y = sy - 8 + 5 * t - 9 * t * t + sw;
+    disc(back, x, y, r, SALA[1]);
+    back.set(x, y - r + 0.6, SALA[0]);
+    if (i % 3 === 1) back.set(x, y, SALA[2]);
+  }
+  back.draw(INK, flash, true);
+  for (const side of [-1, 1]) {
+    const k = side * st * 2;
+    blob(L, X(side * 5), sy - 5 + Math.min(0, k), 3.8, 5, SALA);
+    for (const c of [2, 4]) L.set(X(side * 5 + c), sy - 1 + Math.min(0, k), WHITE);
+  }
+  bline(L, [X(-7), sy - 25], [X(-11), sy - 15 + st], 2.4, SALA);
+  blob(L, X(0), sy - 18, 9, 11, SALA);
+  blob(L, X(3), sy - 17, 5, 8, SALA_BELLY);
+  for (let y = -23; y <= -11; y += 3) for (let x = 0; x <= 6; x++) if (L.has(X(x), sy + y)) L.set(X(x), sy + y, SALA_BELLY[2]);
+  for (const [dx, dy] of [[-5, -24], [-6, -18], [-4, -12]]) { L.set(X(dx), sy + dy, SALA[2]); L.set(X(dx + 1), sy + dy, SALA[2]); }
+  blob(L, X(4), sy - 31, 7, 6, SALA);
+  blob(L, X(11), sy - 29, 6, 3.6, SALA);
+  L.set(X(6), sy - 33, HOT); L.set(X(7), sy - 33, HOT); L.set(X(7), sy - 34, INK);
+  L.set(X(15), sy - 30, INK);
+  const open = a.name === "spit" && a.t < 0.6;
+  if (open) poly(L, [[X(7), sy - 27], [X(17), sy - 28], [X(17), sy - 23]], MOUTH_IN);
+  for (let x = 7; x <= 16; x++) { L.set(X(x), sy - 27, SALA[2]); if (x % 2) L.set(X(x), sy - 26, WHITE); }
+  if (!open && Math.floor(B.t * 2) % 3 === 0) { L.set(X(17), sy - 28, RED); L.set(X(18), sy - 28, RED); L.set(X(19), sy - 29, RED); L.set(X(19), sy - 27, RED); }
+  L.draw(INK, flash, true);
+  const hand = dash ? [X(10), sy - 20] : [X(12), sy - 18 + st];
+  bline(front, [X(7), sy - 25], hand, 2.6, SALA);
+  if (dash) {
+    const tip = hand[0] + 26 * f;
+    bline(front, [hand[0] - 10 * f, hand[1]], [tip, hand[1]], 1.1, GOLDP);
+    for (const dy of [-3, 0, 3]) bline(front, [tip, hand[1] + dy], [tip + 6 * f, hand[1] + dy], 0.6, IRON);
+    bline(front, [tip, hand[1] - 3], [tip, hand[1] + 3], 0.6, IRON);
+  } else {
+    const px = hand[0] + f;
+    bline(front, [px, sy - 2], [px, sy - 50], 1.1, GOLDP);
+    for (const dx of [-3, 0, 3]) bline(front, [px + dx, sy - 51], [px + dx, sy - 57], 0.6, IRON);
+    bline(front, [px - 3, sy - 51], [px + 3, sy - 51], 0.6, IRON);
+  }
+  blob(front, hand[0], hand[1], 2.8, 2.6, SALA);
+  front.draw(INK, flash, true);
+  crownOn(X(4), sy - 45, 1.6, flash);
+}
+
+// ---------------------------------------------------------------- bone knight: armoured skeleton, skull shield, greatsword
+function drawKnight(B, sx, sy) {
+  const a = B.atk || {}, flash = miniFlash(B), st = walkPhase(B), spin = B.spin;
+  if (spin) B.face = Math.floor(G.t * 16) % 2 ? 1 : -1;
+  const f = B.face || 1, X = d => sx + d * f;
+  shadowEllipse(sx, sy + 1, 15, 4);
+  if (spin) ellipseRing(sx, sy - 18, 34, 20, Math.floor(G.t * 12) % 2 ? WHITE : METAL[1], 2, Math.floor(G.t * 20));
+  const L = new Layer(), shield = new Layer(), front = new Layer();
+  for (const side of [-1, 1]) {
+    const k = side * st * 2, knee = [X(side * 5), sy - 9 + Math.min(0, k) * 0.3];
+    bline(L, [X(side * 4), sy - 16], knee, 1.6, BONEP);
+    bline(L, knee, [X(side * 5 + k * 0.6), sy - 3], 1.5, BONEP);
+    blob(L, X(side * 5 + k * 0.6 + 1), sy - 1.5, 3.6, 2.2, IRON);
+  }
+  blob(L, X(0), sy - 17, 6, 3, BONEP);
+  blob(L, X(0), sy - 26, 9, 9, IRON);
+  poly(L, [[X(-2), sy - 32], [X(2), sy - 32], [X(3), sy - 14], [X(-3), sy - 14]], REDCAPE[1]);
+  for (let y = -31; y <= -15; y += 4) L.set(X(0), sy + y, GOLDP[1]);
+  blob(L, X(0), sy - 39, 6.5, 6.5, IRON);
+  for (let x = -4; x <= 4; x++) L.set(X(x), sy - 39, INK);
+  const eyeC = a.name === "raise" || Math.floor(G.t * 6) % 2 ? RED : hx("#ff9a6a");
+  L.set(X(-2), sy - 39, eyeC); L.set(X(2), sy - 39, eyeC);
+  poly(L, [[X(-1), sy - 45], [X(1), sy - 46], [X(-5), sy - 52], [X(-9), sy - 49]], REDCAPE[1]);
+  L.draw(INK, flash, true);
+  // skull shield on the far arm, in front of the chest
+  const shx = X(-10), shy = sy - 24;
+  blob(shield, shx, shy, 7, 8.5, IRON);
+  for (let i = 0; i < 40; i++) { const t = i / 40 * Math.PI * 2; shield.set(shx + Math.cos(t) * 6.5, shy + Math.sin(t) * 8, IRON[2]); }
+  for (const [dx, dy] of [[-1, -2], [0, -2], [1, -2], [-2, -1], [2, -1], [-2, 0], [0, 0], [2, 0], [-1, 2], [1, 2], [0, 1]]) shield.set(shx + dx, shy + dy, dx === 0 && dy === 1 ? INK : WHITE);
+  shield.set(shx - 1, shy, INK); shield.set(shx + 1, shy, INK);
+  shield.draw(INK, flash, true);
+  const hand = a.name === "raise" ? [X(9), sy - 36] : [X(12), sy - 21];
+  bline(front, [X(7), sy - 31], hand, 1.7, BONEP);
+  const ang = spin ? G.t * 18 : a.name === "raise" ? -Math.PI / 2 : (f > 0 ? -1.15 : Math.PI + 1.15);
+  sword(front, hand, ang, 26);
+  front.draw(INK, flash, true);
+}
+
+// ---------------------------------------------------------------- magma king: crusted lava slime with glowing cracks
+function drawMagma(B, sx, sy) {
+  const flash = miniFlash(B), f = B.face || 1, z = Math.round(B.z || 0), jumping = B.atk && B.atk.name === "jump";
+  const sq = jumping ? (z > 2 ? -0.16 : 0.22) : Math.sin(B.t * 6) * 0.06;
+  shadowEllipse(sx, sy + 1, 22 * Math.max(0.4, 1 - z / 120), 5);
+  const cy = sy - 13 - z, rx = 19 * (1 + sq), ry = 13 * (1 - sq);
+  const L = new Layer();
+  blob(L, sx, cy, rx, ry, MAGMA);
+  for (let x = -rx + 2; x <= rx - 2; x++) L.set(sx + x, cy + ry - 1, MAGMA[2]);
+  for (const [dx, dy, px_, py_] of [[-8, -7, 6, 3], [4, -9, 7, 3.4], [-1, -3, 4, 2.4], [11, -2, 4, 2.4], [-13, 0, 3.5, 2.2]])
+    blob(L, sx + dx * (1 + sq), cy + dy * (1 - sq), px_, py_, CRUST);
+  const glow = Math.floor(G.t * 5) % 2 ? HOT : MAGMA[0], G3 = [glow, glow, glow];
+  for (const [x0, y0, x1, y1] of [[-3, -9, 0, -5], [1, -6, 6, -5], [7, -6, 9, -2], [-9, -4, -5, 0]]) bline(L, [sx + x0, cy + y0], [sx + x1, cy + y1], 0.5, G3);
+  const EYEP = [WHITE, HOT, GOLDP[1]];
+  for (const ex of [-6, 6]) { blob(L, sx + ex, cy + 1, 3, 2.6, EYEP); L.set(sx + ex + f, cy + 1, INK); L.set(sx + ex + f, cy + 2, INK); }
+  for (let x = -6; x <= 6; x++) L.set(sx + x, cy + 6 + (x % 2 === 0 ? 0 : 1), INK);
+  for (const fx of [-4, 4]) { L.set(sx + fx, cy + 5, WHITE); L.set(sx + fx, cy + 6, WHITE); }
+  L.draw(INK, flash, true);
+  for (let i = 0; i < 3; i++) {
+    const ph = (B.t * 1.4 + i * 0.37) % 1;
+    put(sx - 13 + i * 13, cy + ry - 1 + ph * 7, ph < 0.5 ? MAGMA[1] : MAGMA[2]);
+  }
+  crownOn(sx, Math.round(cy - ry - 8), 1.8, flash);
+}
+
+// ---------------------------------------------------------------- alien commander / overlord: armoured alien with a ray gun
+const COMMANDER_STYLE = { s: 1, armor: SILVER, cape: REDCAPE, pads: GOLDP, skin: ALIENSK, antenna: true };
+const OVERLORD_STYLE = { s: 1.25, armor: VIOLET_ARMOR, cape: ROYAL, pads: GOLDP, skin: BLUESK, jet: true, crown: true };
+function drawAlienLord(B, sx, sy, o) {
+  const s = o.s, f = B.face || 1, a = B.atk || {}, flash = miniFlash(B), st = walkPhase(B);
+  const X = d => sx + d * f * s, Y = d => sy + d * s;
+  const firing = (a.name === "triple" && a.t > 0.3 && (a.t - 0.3) % 0.28 < 0.07) || (a.name === "lasers" && a.t > 0.9 && a.t < 1.15);
+  const calling = a.name === "drones" || a.name === "debris";
+  shadowEllipse(sx, sy + 1, 12 * s, 3.5 * s);
+  const back = new Layer(), L = new Layer(), front = new Layer();
+  poly(back, [[X(-6), Y(-30)], [X(5), Y(-30)], [X(9), Y(-3)], [X(-13), Y(-3)]], shadeX(o.cape, X(-13), X(9)));
+  if (o.jet) for (const dx of [-7, -3]) blob(back, X(dx), Y(-25), 2.4 * s, 5.5 * s, IRON);
+  back.draw(INK, flash, true);
+  if (o.jet && B.entering <= 0) for (const dx of [-7, -3]) for (let i = 0; i < 4; i++) put(X(dx) + Math.round(Math.sin(G.t * 30 + i) * 1.2), Y(-18) + i + 1, pick([GOLD, hx("#ff9a2a"), WHITE]));
+  for (const side of [-1, 1]) {
+    const k = side * st * 2;
+    bline(L, [X(side * 3), Y(-14)], [X(side * 4 + k * 0.5), Y(-3)], 1.7 * s, o.armor);
+    blob(L, X(side * 4 + k * 0.5 + 1), Y(-1.5), 3 * s, 2 * s, o.armor);
+  }
+  const farHand = calling ? [X(-9), Y(-40)] : [X(-10), Y(-15) + st];
+  bline(L, [X(-7), Y(-26)], farHand, 1.8 * s, o.armor);
+  blob(L, farHand[0], farHand[1], 2 * s, 2 * s, o.skin);
+  blob(L, X(0), Y(-21), 7 * s, 8 * s, o.armor);
+  for (let x = -6; x <= 6; x++) L.set(X(x), Y(-14), o.armor[2]);
+  poly(L, [[X(-2), Y(-24)], [X(2), Y(-24)], [X(0), Y(-20)]], o.pads[1]);
+  blob(L, X(-7), Y(-27), 4 * s, 3 * s, o.pads);
+  blob(L, X(7), Y(-27), 4 * s, 3 * s, o.pads);
+  bline(L, [X(0), Y(-29)], [X(0), Y(-32)], 1.8 * s, o.skin);
+  blob(L, X(1), Y(-39), 9 * s, 8 * s, o.skin);
+  blob(L, X(0), Y(-43), 7 * s, 4 * s, o.skin);
+  const eyeGlow = a.name === "lasers" && a.t < 1.15 ? (Math.floor(G.t * 12) % 2 ? hx("#ff6ad0") : WHITE) : 0;
+  for (const [ex, ey] of [[-2, -39], [5, -39]]) {
+    const E = eyeGlow ? [eyeGlow, eyeGlow, eyeGlow] : [INK, INK, INK];
+    blob(L, X(ex), Y(ey), 2.6 * s, 1.8 * s, E);
+    if (!eyeGlow) L.set(X(ex) - f, Y(ey) - 1, WHITE);
+  }
+  L.set(X(2), Y(-34), o.skin[2]);
+  if (o.antenna) { bline(L, [X(-3), Y(-46)], [X(-6), Y(-52)], 0.6, o.armor); disc(L, X(-6), Y(-53), 1.6, Math.floor(G.t * 4) % 2 ? hx("#ff6ad0") : WHITE); }
+  L.draw(INK, flash, true);
+  const hand = [X(10), Y(-20)];
+  bline(front, [X(7), Y(-26)], hand, 1.8 * s, o.armor);
+  for (let x = 0; x <= 7; x++) for (let y = -1; y <= 1; y++) front.set(hand[0] + x * f, hand[1] + y, y < 0 ? IRON[0] : IRON[1]);
+  front.set(hand[0] + 8 * f, hand[1], Math.floor(G.t * 8) % 2 ? hx("#ff6ad0") : WHITE);
+  blob(front, hand[0], hand[1], 2 * s, 2 * s, o.skin);
+  front.draw(INK, flash, true);
+  if (firing) {
+    const mx = hand[0] + 10 * f, my = hand[1];
+    for (let k = -3; k <= 3; k++) { put(mx + k, my, WHITE); put(mx, my + k, k % 2 ? hx("#ff6ad0") : WHITE); }
+  }
+  if (o.crown) crownOn(X(1), Y(-49) - 4, 1.8, flash);
 }
 
 </script>
@@ -2861,11 +3236,19 @@ function drawWorld() {
   for (const p of G.parts) {
     const [sx, sy] = worldToScreen(p.x, p.y - p.z);
     if (p.bone) { blit(SPR.bone, sx - 3, sy - 2); continue; }
+    if (p.chunk) { put(sx, sy, p.c); put(sx + 1, sy, p.c); put(sx, sy + 1, p.c2); put(sx + 1, sy + 1, p.c2); continue; }
     put(sx, sy, p.c);
     if (!p.spark && p.z > 3) put(sx, sy + 1, p.c);
   }
   for (const p of G.pops) {
     if (p.t > p.life * 0.7 && Math.floor(p.t * 14) % 2) continue;
+    if (p.crit) {
+      // crits pop in big, hop up, bounce once and settle
+      const u = p.t - (p.ct || 0), hop = u < 0.3 ? Math.sin(u / 0.3 * Math.PI) * 13 : u < 0.46 ? Math.sin((u - 0.3) / 0.16 * Math.PI) * 3 : 0;
+      const k = u < 0.06 ? p.k + 1 : p.k, [sx, sy] = worldToScreen(p.x + (p.vx || 0) * Math.min(u, 0.46), p.y - 4 - hop);
+      text(p.s, Math.round(sx - textW(p.s, k) / 2), Math.round(sy - (k - p.k) * 3), u < 0.08 ? WHITE : GOLD, k, hx("#7a1020"));
+      continue;
+    }
     const [sx, sy] = worldToScreen(p.x, p.y - p.t * 16);
     text(p.s, sx - textW(p.s, p.k) / 2, sy, p.col, p.k);
   }
@@ -3044,6 +3427,18 @@ function drawShot(s) {
 }
 function drawFx(f) {
   const k = f.t / f.life;
+  if (f.kind === "slash") {
+    // a bright blade arc across the dash line, fading from white to blood
+    // a blade cut: grows fast, thick in the middle, fades from white to blood
+    const [sx, sy] = worldToScreen(f.x, f.y), ux = Math.cos(f.a), uy = Math.sin(f.a), len = (f.big ? 22 : 11) * Math.min(1, k * 4);
+    for (let i = -len; i <= len; i++) {
+      const m = 1 - (i / (len || 1)) ** 2, bend = m * (f.big ? 4 : 2), x = sx + ux * i - uy * bend, y = sy + uy * i + ux * bend;
+      put(x, y, k < 0.4 ? WHITE : BLOOD[0]);
+      if (m > 0.35) put(x - uy, y + ux, k < 0.5 ? PALE : BLOOD[1]);
+      if (m > 0.7 && f.big) put(x - 2 * uy, y + 2 * ux, BLOOD[1]);
+    }
+    return;
+  }
   if (f.kind === "lvring") {
     const [sx, sy] = worldToScreen(f.x, f.y), r = 8 + easeOut(k) * 46;
     ellipseRing(sx, sy - 6, r, r * 0.62, k < 0.3 ? WHITE : GOLD);
@@ -3120,9 +3515,10 @@ function bloodTrail(cx, cy, rx, ry, a, cols, len = 24) {
       if ((xx - x) ** 2 + ((yy - y) * 1.2) ** 2 <= r * r) put(xx, yy, c);
   }
 }
-function playerSprite(legs, up, mouth = "idle") {
+function playerSprite(legs, up, mouth = "idle", side = false) {
   const dark = P.skin === "dark";
   if (up) return (dark ? SPR.darkBack : SPR.butcherBack)["idle" + legs];
+  if (side && mouth === "idle") return (dark ? SPR.darkSide : SPR.butcherSide)["idle" + legs];
   return (dark ? SPR.dark : SPR.butcher)[mouth + legs];
 }
 function drawPlayer() {
@@ -3130,7 +3526,7 @@ function drawPlayer() {
   const [sx, sy] = worldToScreen(P.x, P.y);
   for (const g of P.ghosts) {
     const [gx, gy] = worldToScreen(g.x, g.y);
-    if (g.t < 0.2 && Math.floor(g.t * 30) % 2 === 0) blitFeet(playerSprite(0, g.up), gx, gy, { scale: s, flip: g.face < 0, flash: g.t < 0.08 ? WHITE : CYAN, dither: true });
+    if (g.t < 0.2 && Math.floor(g.t * 30) % 2 === 0) blitFeet(playerSprite(0, g.up, "idle", g.side), gx, gy, { scale: s, flip: g.face < 0, flash: g.t < 0.08 ? WHITE : P.p.dash ? hx("#ff5a5a") : CYAN, dither: true });
   }
   if (P.dying > 0) {
     const k = clamp((1.5 - P.dying) / 0.45, 0, 1);
@@ -3138,8 +3534,11 @@ function drawPlayer() {
     blitFeet(playerSprite(0, false, "open"), sx, sy, { sx: s * (1 + 0.35 * k), sy: s * (1 - 0.5 * k), flip: P.face < 0, flash: Math.floor(P.dying * 12) % 2 ? hx("#ff5a5a") : 0 });
     return;
   }
-  const bob = P.moving ? Math.round(Math.abs(Math.sin(P.walkT * Math.PI))) : (Math.floor(G.t * 2) % 2);
-  shadowEllipse(sx, sy + 1, 13 * s, 3.5 * s);
+  // belly slam: crouch, jump, land exactly when the slam fires
+  const hop = P.w.slam && G.mode === "play" && P.slamT < SLAM_HOP && !P.hook && !P.pulled && P.dashT <= 0 ? 1 - P.slamT / SLAM_HOP : 0;
+  const z = hop ? Math.round(Math.sin(hop * Math.PI) * 9 * s) : 0, hq = hop ? (hop < 0.2 ? 0.14 : -0.1) : 0;
+  const bob = z + (P.moving ? Math.round(Math.abs(Math.sin(P.walkT * Math.PI))) : (Math.floor(G.t * 2) % 2));
+  shadowEllipse(sx, sy + 1, 13 * s * (1 - z / 30), 3.5 * s * (1 - z / 40));
   const bx = sx, by = sy - BUTCHER_BELLY_UP * s - bob;
   const back = new Layer(), front = new Layer();
   const handL = [bx - 16 * s, by - s], handR = [bx + 16 * s, by - s];
@@ -3179,8 +3578,8 @@ function drawPlayer() {
   const legs = P.moving ? [1, 0, 2, 0][Math.floor(P.walkT * 2) % 4] : 0;
   const justHit = P.hitT > 0 && G.mode === "play", blink = !justHit && P.dashT <= 0 && P.inv > 0 && P.inv < 0.6 && Math.floor(P.inv * 20) % 2 && G.mode === "play";
   if (!blink) {
-    const dark = P.skin === "dark", q = P.squash;
-    blitFeet(playerSprite(legs, P.facingUp && P.mouth === "idle", P.mouth), sx, sy - bob, { sx: s * (1 + q), sy: s * (1 - q), flip: P.face < 0, flash: justHit ? WHITE : 0 });
+    const dark = P.skin === "dark", q = P.squash + hq;
+    blitFeet(playerSprite(legs, P.facingUp && P.mouth === "idle", P.mouth, P.side), sx, sy - bob, { sx: s * (1 + q), sy: s * (1 - q), flip: P.face < 0, flash: justHit ? WHITE : 0 });
     const arms = new Layer();
     drawArm(arms, [bx - 8 * s, by - 6 * s], handL, s, dark ? DARK_SKIN : SKIN);
     drawArm(arms, [bx + 8 * s, by - 6 * s], handR, s, dark ? DARK_SKIN : SKIN);
@@ -3323,7 +3722,7 @@ const BOT = {
   },
   act() {
     // dash out of a zone that is about to fire, or away from a bullet about to land
-    if (P.dashCd <= 0 && P.dashT <= 0 && !P.pulled && Math.random() < this.skill) {
+    if (P.dashCharges > 0 && P.dashT <= 0 && !P.pulled && Math.random() < this.skill) {
       let need = false;
       for (const t of G.tele) if (t.dmg && t.t / t.dur > 0.72 && teleHitsPlayer(t)) need = true;
       for (const s of G.shots) {
@@ -3354,7 +3753,7 @@ const BOT = {
       if (c.kind === "feast") return P.hp < P.maxHp * 0.5 ? 14 : 6;
       if (c.kind === "snack") return P.hp < P.maxHp * 0.5 ? 10 : 2;
       if (c.kind === "plus2") return 9;
-      const wt = { cleaver: 9, sword: 10, aura: 7, slam: 6, grenade: 6, saw: 6, might: 8, meaty: 7, armor: 7, regen: 6, speed: 5, glutton: 5, magnet: 4, hook: 3 };
+      const wt = { cleaver: 9, sword: 10, aura: 7, slam: 6, grenade: 6, saw: 6, might: 8, meaty: 7, armor: 7, regen: 6, speed: 5, dash: 5, glutton: 5, magnet: 4, hook: 3 };
       let s = wt[c.key] || 1;
       if (c.kind === "weapon" && c.isNew) s -= ownedWeapons().length >= 4 ? 4 : 0;
       for (const k in EVOS) {
@@ -3392,6 +3791,7 @@ const MINI_ICON = {
   grenade: makeSprite(["...w...", "..rRr..", ".rRRRr.", ".rRpRr.", ".rRRRr.", "..rrr..", "......."], { r: hx("#8a1a2a"), R: hx("#e04a5a"), p: hx("#ff9ac0"), w: WHITE }, INK),
   aura: makeSprite([".g.g.g.", "gGgGgGg", ".GGGGG.", "gGGGGGg", ".GgGgG.", "g.g.g.g", "......."], { g: hx("#4a8a2a"), G: hx("#b0ff5a") }, INK),
 };
+SPR.icons.dash = makeSprite(["RR..RR..", ".RR..RR.", "..RR..RR", ".RR..RR.", "RR..RR.."], { R: hx("#ff5a5a") });
 SPR.icons.armor = makeSprite([".MMMMM.", "MWMMMmM", "MWMMMmM", "MMMMMmM", ".MMMmM.", "..MmM..", "...M..."], { M: METAL[1], W: METAL[0], m: METAL[3] });
 SPR.icons.hookbtn = makeSprite(["...MM...", "..M..M..", "......M.", ".....M..", "M...M...", ".MMM....", "mmmm...."], { M: METAL[0], m: METAL[2] });
 SPR.icons.grenade = makeSprite(["...ww..", "..rRRr.", ".rRRRRr", ".rRpRRr", ".rrRRr.", "..rrr.."], { r: hx("#8a1a2a"), R: hx("#e04a5a"), p: hx("#ff9ac0"), w: WHITE });
@@ -3507,17 +3907,18 @@ function drawHUD() {
   blit(SPR.icons.hookbtn, hb.x - 5, hb.y - 6, { scale: port ? 1.25 : 1 });
   text("HOOK", hb.x - 7, hb.y + hb.r + 1 > H - 6 ? hb.y - hb.r - 7 : hb.y + hb.r + 1, ready ? GOLD : DIM);
   uiRect(hb.x - hb.r - 4, hb.y - hb.r - 4, hb.r * 2 + 8, hb.r * 2 + 8, "hook");
-  const db = DASH_BTN(), dready = P.dashCd <= 0;
+  const db = DASH_BTN(), dready = P.dashCharges > 0, dcol = P.p.dash ? hx("#ff6a5a") : CYAN;
   for (let y = -db.r; y <= db.r; y++) for (let x = -db.r; x <= db.r; x++) {
     const d = x * x + y * y;
     if (d > db.r * db.r) continue;
     let c = dready ? hx("#1a4a5a") : hx("#1a2228");
-    if (!dready) { const a = (Math.atan2(x, -y) + Math.PI * 2) % (Math.PI * 2) / (Math.PI * 2); if (a < 1 - P.dashCd / DASH_CD) c = hx("#1a3440"); }
-    if (d > (db.r - 1.5) ** 2) c = dready ? CYAN : INK;
+    if (!dready) { const a = (Math.atan2(x, -y) + Math.PI * 2) % (Math.PI * 2) / (Math.PI * 2); if (a < 1 - P.dashCd / dashCdMax()) c = hx("#1a3440"); }
+    if (d > (db.r - 1.5) ** 2) c = dready ? dcol : INK;
     put(db.x + x, db.y + y, c);
   }
   for (let i = -3; i <= 3; i++) { put(db.x + i - 2, db.y + Math.abs(i) - 1, dready ? WHITE : DIM); put(db.x + i + 2, db.y + Math.abs(i) - 1, dready ? WHITE : DIM); }
-  text("DASH", db.x - 7, port ? db.y - db.r - 7 : db.y + db.r + 1 > H - 6 ? db.y - db.r - 7 : db.y + db.r + 1, dready ? CYAN : DIM);
+  text("DASH", db.x - 7, port ? db.y - db.r - 7 : db.y + db.r + 1 > H - 6 ? db.y - db.r - 7 : db.y + db.r + 1, dready ? dcol : DIM);
+  if (dashMax() > 1) for (let i = 0; i < dashMax(); i++) { const px_ = db.x + db.r - 1 - i * 4, py_ = db.y - db.r + 1; rect(px_ - 1, py_ - 1, 3, 3, INK); put(px_, py_, i < P.dashCharges ? dcol : hx("#1a2228")); }
   uiRect(db.x - db.r - 3, db.y - db.r - 3, db.r * 2 + 6, db.r * 2 + 6, "dash");
   if (!JOY && !P.moving && ((G.ch === 0 && G.t < 60) || (G.idleT || 0) > 4) && !G.cine) {
     const gx = port ? W * 0.3 : W * 0.2, gy = H - (port ? 60 : 38), a = 0.5 + 0.5 * Math.sin(G.clock * 3);
@@ -3776,6 +4177,8 @@ function drawTitle(t, save, unlocks) {
 
 const Q = new URLSearchParams(location.search);
 const BOTPLAY = Q.has("bot"), SPEED = +(Q.get("speed") || 1), NO_REDIRECT = Q.has("noredirect") || BOTPLAY;
+// ad networks (playable.html) forbid leaving the ad without a tap: there the end card only waits for PLAY NOW
+const AUTO_STORE = !NO_REDIRECT && !window.BH_AD_BUILD;
 const SAVE_KEY = "bhpx_save_v1", OPT_KEY = "bhpx_opts_v1", UNL_KEY = "bhpx_unlocks_v1";
 let keys = {}, lastT = 0, acc = 0, titleT = 0, botWait = 0, pointers = new Map();
 
@@ -3793,7 +4196,7 @@ onVictory = () => {
   const fresh = !UNLOCKS.won;
   UNLOCKS.won = true; UNLOCKS.dark = true; kv.set(UNL_KEY, UNLOCKS);
   G.unlockMsg = fresh ? "UNLOCKED: HARD MODE, ENDLESS MODE, DARK BUTCHER SKIN" : "";
-  G.endT = 0; G.endCancel = NO_REDIRECT; G.endOpened = false;
+  G.endT = 0; G.endCancel = !AUTO_STORE; G.endOpened = false;
 };
 onUnlock = k => {
   if (k === "dark" && !UNLOCKS.dark) { UNLOCKS.dark = true; kv.set(UNL_KEY, UNLOCKS); popup("SKIN UNLOCKED: DARK BUTCHER", P.x, P.y - 70, hx("#c890ff"), 1, 2.5); }
@@ -4002,6 +4405,31 @@ sfx = name => {
     case "bossdie": tone(200, 1.2, "sawtooth", 0.15, 30); noise(1.2, 0.35, 300, 0, 0.5); break;
     case "win": [523, 659, 784, 659, 784, 1047].forEach((f, i) => tone(f, 0.16, "square", 0.07, null, i * 0.12)); break;
     case "dead": [392, 330, 262, 196].forEach((f, i) => tone(f, 0.25, "square", 0.07, null, i * 0.2)); break;
+    // stingers: short scored moments over a ducked music track
+    case "bossintro":
+      music.duck(2.3);
+      tone(55, 1.2, "sawtooth", 0.14, 40); tone(82.4, 1.2, "sawtooth", 0.09, 60); noise(0.8, 0.3, 200, 0, 0.5);
+      tone(58.3, 1.0, "sawtooth", 0.14, 42, 0.45); tone(87.3, 1.0, "square", 0.05, null, 0.45); noise(0.5, 0.25, 250, 0.45, 0.5);
+      tone(110, 1.0, "square", 0.04, 220, 0.9); tone(165, 1.0, "square", 0.03, 330, 0.9);
+      tone(49, 0.9, "sawtooth", 0.16, 30, 1.6); noise(0.7, 0.35, 300, 1.6, 0.5);
+      break;
+    case "ministing":
+      music.duck(1.1);
+      tone(98, 0.3, "sawtooth", 0.12, null); tone(92.5, 0.55, "sawtooth", 0.13, 70, 0.18); tone(185, 0.5, "square", 0.04, null, 0.18); noise(0.4, 0.25, 300, 0.18, 0.6);
+      break;
+    case "evo":
+      music.duck(1.7);
+      [262, 330, 392, 494, 523, 659, 784, 988].forEach((f, i) => { tone(f, 0.16, "triangle", 0.08, null, i * 0.06); tone(f * 2, 0.08, "square", 0.02, null, i * 0.06); });
+      [523, 659, 784, 988].forEach(f => tone(f, 0.9, "triangle", 0.05, null, 0.55));
+      noise(0.8, 0.12, 6000, 0.5, 2);
+      break;
+    case "fanfare":
+      music.duck(3.3);
+      [[392, 0, 0.12], [392, 0.14, 0.12], [392, 0.28, 0.12], [523, 0.42, 0.5], [466, 0.98, 0.22], [523, 1.24, 0.22], [587, 1.5, 0.22], [659, 1.76, 1.1]]
+        .forEach(([f, d, l]) => { tone(f, l, "square", 0.08, null, d); tone(f / 2, l, "triangle", 0.1, null, d); });
+      [523, 659, 784].forEach(f => tone(f, 1.2, "triangle", 0.06, null, 1.76));
+      noise(1.2, 0.15, 5000, 1.76, 1.5);
+      break;
   }
 };
 sfxThrottled = (name, gap) => {
@@ -4031,6 +4459,12 @@ music = {
     if (!this.timer) this.timer = setInterval(() => this.tick(), 30);
   },
   stop() { this.song = null; },
+  duck(sec) {
+    if (!audio || !this.gain) return;
+    const g = this.gain.gain, t = audio.currentTime;
+    g.cancelScheduledValues(t); g.setValueAtTime(g.value, t);
+    g.linearRampToValueAtTime(0.12, t + 0.06); g.setValueAtTime(0.12, t + sec); g.linearRampToValueAtTime(0.55, t + sec + 0.5);
+  },
   pause(p) { this.paused = p; },
   tick() {
     if (!audio || !this.song || this.paused || MUTED) { if (audio) this.next = audio.currentTime + 0.05; return; }
