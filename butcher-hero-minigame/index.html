@@ -55,6 +55,8 @@ const PAL_BASE = [
   "#1a2050", "#2e4a8a", "#4a78c8", "#8ab8f0", "#d8ecff",                          // blues: ice, snow
   "#2a1040", "#5a1e86", "#9a4ad0", "#d08aff",                                     // purples
   "#8a1a5a", "#ff6ad0", "#8ef0ff",                                                // magenta, cyan
+  "#ffd27a", "#ffb547", "#f3962e", "#e0762a", "#b5522b", "#7e3524",               // the Butcher's skin, as in the game
+  "#5cbf83", "#2e8b57", "#2f7470", "#1e5552", "#143d3c", "#9c6842", "#7a4b2e",    // his mohawk, shorts, leather
 ];
 const hexRGB = s => [parseInt(s.slice(1, 3), 16), parseInt(s.slice(3, 5), 16), parseInt(s.slice(5, 7), 16)];
 const palEntry = s => { const [r, g, b] = hexRGB(s); return [r, g, b, pack(r, g, b)]; };
@@ -318,6 +320,17 @@ function chainLine(L, a, b, sag = 0) {
     L.set(x, y, i % 2 ? METAL[1] : METAL[3]);
     if (i % 2) L.set(x, y - 1, METAL[0]);
   }
+}
+// the meat hook on the end of the chain: a steel shank and a big J curling back to a sharp point
+function meatHook(L, cx, cy, ang, size = 1) {
+  const ux = Math.cos(ang), uy = Math.sin(ang), vx = -uy, vy = ux;
+  const P_ = (a, b) => [cx + (ux * a + vx * b) * size, cy + (uy * a + vy * b) * size];
+  for (let a = -6; a <= 2; a += 0.5) { const [x, y] = P_(a, 0); L.set(x, y, METAL[1]); const [x2, y2] = P_(a, -1); L.set(x2, y2, METAL[0]); }
+  for (let t = -Math.PI / 2; t <= Math.PI * 0.85; t += 0.1) {
+    const r = 3.6, [x, y] = P_(2 + Math.cos(t) * r, r + Math.sin(t) * r), [x2, y2] = P_(2 + Math.cos(t) * (r + 1), r + Math.sin(t) * (r + 1));
+    L.set(x, y, METAL[2]); L.set(x2, y2, t < 0.6 ? METAL[0] : METAL[1]);
+  }
+  const [tx, ty] = P_(-1.6, 5.8); L.set(tx, ty, WHITE); const [tx2, ty2] = P_(-2.4, 5.2); L.set(tx2, ty2, METAL[0]);   // the point
 }
 function cleaver(L, cx, cy, ang, size = 1) {
   const ux = Math.cos(ang), uy = Math.sin(ang), vx = -uy, vy = ux;
@@ -775,224 +788,290 @@ function pineLayer(L, cx, top, h, w, pal, trunk) {
 <script>
 // ---- butcher.js
 "use strict";
-// Butcher 2.0: the hero built from hand-drawn parts (heads, a torso in four growth sizes, arms in poses, legs, belt gear),
-// composed at whole-pixel offsets every frame. Growth swaps in a bigger drawn torso instead of scaling pixels.
-// Chains are small ropes (verlet) and the belly lags behind on a spring.
+// The Butcher as he is in the game Butcher Hero (refs and colours: butcher-hungry-v2/REFS.md): a hunched orange brute
+// with no shirt, huge traps around a small head in a hockey mask (red V chevron, angry black eye holes, a grey nose,
+// red cheek slashes), a short swept-back green mohawk, very long thick arms hanging to the knees with big fists
+// (a leather bracer on the right wrist, a steel cuff on the left), a big belly with a navel, dark teal shorts with a
+// torn hem, short legs, bare blocky feet; a cleaver in the right fist and the meat hook in the left.
+// The body comes from the game model's proportions (native units: soles on y = 0, the mohawk peak at y = -600),
+// rasterised at each growth size in flat low-poly facets, so a bigger butcher is drawn bigger instead of scaled;
+// the head is drawn pixel by pixel.
 
-const B2_PAL = {
-  G: "#6ac04a", g: "#3a8a3a", d: "#1f5a36",                                   // hair
-  M: "#e4dcdc", m: "#b8acb4", n: "#8a7c8e", x: "#24101a", o: "#5e4e66",       // mask
-  b: "#d0283a",                                                               // mask marks, the glint in the eyes
-  k: "#ffc8a4", S: "#f09c80", s: "#c0685a", z: "#7a3a3a",                     // skin
-  Y: "#fff2a0", R: "#ffa24a", r: "#e8701e", q: "#a8400e", Q: "#5a1e10",       // shirt: hue-shifted to red-brown in shadow
-  A: "#e4dcdc", a: "#b8acb4", p: "#8a7c8e",                                   // apron
-  B: "#d0283a", 9: "#8a1428", 5: "#d0283a", 6: "#8a1428",                     // blood on the shirt / on the apron
-  L: "#8a5a2a", l: "#5e3a1e", C: "#ffe04a", c: "#b07a1a",                     // belt, buckle
-  w: "#b8acb4", W: "#ffffff", h: "#5e3a1e",                                   // steel, handle
-  T: "#2aa092", t: "#1a6a6a", U: "#0e3a40",                                   // trousers
-  N: "#5e3a1e", v: "#2e1a14", u: "#e0c08a",                                   // boots, laces
-  j: "#4a0a1e", J: "#d0283a",                                                 // mouth, tongue
+const B3_PAL = {
+  A: "#ffd27a", B: "#ffb547", C: "#f3962e", D: "#e0762a", E: "#b5522b", F: "#7e3524",        // skin: rim, lit, base, mid, shadow, deep
+  W: "#ffffff", M: "#e4dcdc", m: "#b8acb4", n: "#8a7c8e", r: "#d0283a", q: "#8a1428", k: "#24101a", e: "#ff5a4a", j: "#4a0a1e",   // mask, maw
+  G: "#5cbf83", g: "#2e8b57", h: "#1f5a36",                                                    // mohawk
+  T: "#2f7470", t: "#1e5552", u: "#143d3c", v: "#10281c",                                      // shorts
+  L: "#9c6842", l: "#7a4b2e", b: "#5e3a1e", f: "#e0c08a",                                      // leather, fur
+  S: "#f6f6ff", s: "#b8bccb", x: "#767a8c", X: "#4a4c5c",                                      // steel
+  o: "#5e3a1e", R: "#d0283a",                                                                   // wooden handle, blood
 };
-// the dark skin (unlocked by beating the Dark Butcher): the same drawings in other colours
-const B2_DARK = Object.assign({}, B2_PAL, {
-  G: "#d0283a", g: "#8a1428", d: "#4a0a1e", M: "#5e4e66", m: "#3a2a40", n: "#24101a", o: "#8a7c8e", b: "#ff5a4a",
-  k: "#d08aff", S: "#9a4ad0", s: "#5a1e86", z: "#2a1040",
-  Y: "#d08aff", R: "#9a4ad0", r: "#5a1e86", q: "#2a1040", Q: "#24101a", A: "#8a7c8e", a: "#5e4e66", p: "#3a2a40",
-  T: "#3a2a40", t: "#24101a", U: "#24101a", N: "#24101a", v: "#24101a",
+// the Dark Butcher (the boss, and the skin you unlock by beating him): the same drawing in night colours
+const B3_DARK = Object.assign({}, B3_PAL, {
+  A: "#d08aff", B: "#9a4ad0", C: "#5a1e86", D: "#3a2a40", E: "#2a1040", F: "#24101a",
+  W: "#8a7c8e", M: "#5e4e66", m: "#3a2a40", n: "#24101a", r: "#ff5a4a", e: "#ffe04a",
+  G: "#ff5a4a", g: "#d0283a", h: "#8a1428", T: "#3a2a40", t: "#24101a", u: "#24101a", v: "#24101a",
 });
-const padRow = (w, pad, s) => { const r = ".".repeat(pad) + s; if (r.length > w) throw new Error("row too long: " + s); return r + ".".repeat(w - r.length); };
 
-// ---------------------------------------------------------------- heads (18 wide, 15 tall; the last rows are chin and neck)
-const B2_FACE_TOP = [
-  "......dgGGgd......",
-  "....dgGGGGGGgd....",
-  "...dgGGgGGgGGgd...",
-  "..dgGMMMMMMMMGgd..",
-  "..dMMMMMMMMMMMMd..",
-  "..gMMbbMMMMbbMmg..",
-  "...MMxxbMMbxxMm...",
-  "...MxxbxMMxbxxm...",
-  "...MMxxxMMxxxMm...",
-  "...nMMMMooMMMMn...",
-  "....nMMoMMoMMn....",
-  ".....nmMMMMmn.....",
-];
-const B2_HEAD = {
-  front: B2_FACE_TOP.concat(["......kSSSSs......", "......sSzzSs......", ".......sSSs......."]),
-  open: B2_FACE_TOP.concat([".....zWWjjWWz.....", ".....zjjJJjjz.....", ".....sWjjjjWs.....", "......sSSSSs......"]),
-  bite: B2_FACE_TOP.concat([".....zWWWWWWz.....", ".....sSzzzzSs.....", "......sSSSSs......"]),
-  lick: B2_FACE_TOP.concat(["......kSSSSs......", "......sSzzJJ......", ".......sSSsJ......"]),
-  side: [
-    ".......dgGGgd.....",
-    ".....dgGGGGGGgd...",
-    "....dgGGgGGgGGgd..",
-    "...dgGGgMMMMMMMgd.",
-    "...dGGgMMMMMMMMMd.",
-    "...gGgmMMbbMMMbbg.",
-    "...dGsmMMxxbMbxxm.",
-    "...gGsmMxxbxMxbxm.",
-    "...dGGmMMxxxMMxxm.",
-    "....dGnMMMMoMMoMn.",
-    ".....dnMMMoMMMMn..",
-    "......nmMMMMMMn...",
-    ".......skSSSSs....",
-    ".......sSSzzSs....",
-    "........sSSSs.....",
+// ---------------------------------------------------------------- the game model's shapes (native units, from the ad rig)
+const mirrorR = R => R.concat(R.slice(1, -1).reverse().map(p => [-p[0], p[1]]));
+const B3_TORSO = mirrorR([[0, -446], [66, -450], [98, -466], [128, -492], [158, -520], [188, -540], [214, -548], [250, -526], [262, -470], [256, -410],
+  [240, -356], [238, -310], [246, -262], [242, -222], [220, -196], [168, -180], [90, -172], [0, -170]]);
+const B3_TORSO_B = B3_TORSO.map(p => [p[0], p[1] < -440 ? Math.min(p[1], -512 + 0.2 * Math.abs(p[0])) : p[1]]);   // from behind the hump dips
+const B3_FACETS = {   // flat planes lit from the upper left
+  front: [
+    ["B", [[-240, -560], [-90, -560], [-70, -470], [-150, -470], [-250, -470]]],
+    ["D", [[90, -560], [250, -560], [250, -440], [150, -455], [70, -470]]],
+    ["B", [[-60, -440], [-180, -445], [-236, -400], [-236, -330], [-150, -318], [-70, -345]]],
+    ["D", [[40, -430], [150, -440], [250, -420], [250, -300], [150, -320], [70, -350]]],
+    ["B", [[-150, -318], [-70, -310], [-40, -268], [-110, -236], [-236, -250], [-250, -300]]],
+    ["D", [[120, -330], [250, -330], [250, -214], [150, -226], [100, -268]]],
+    ["E", [[-250, -236], [-150, -218], [-60, -206], [0, -204], [60, -206], [150, -218], [250, -236], [250, -120], [-250, -120]]],
+    ["E", [[150, -226], [250, -250], [250, -120], [120, -120]]],
   ],
   back: [
-    "......dgGGgd......",
-    "....dgGGGGGGgd....",
-    "...dgGGgGGgGGgd...",
-    "..dgGGGgGGgGGGgd..",
-    "..dGGgGGGGGGgGGd..",
-    "..gGGGGgGGgGGGGg..",
-    "..mmmmmmmmmmmmmm..",
-    "..dGGgGGGGGGgGGd..",
-    "..sdGGGgGGgGGGds..",
-    "...kdgGGGGGGgdk...",
-    "....kSSSSSSSSs....",
-    "....sSSSSSSSSs....",
-    ".....sSSSSSSs.....",
-    "......sSSSSs......",
-    ".......sSSs.......",
+    ["B", [[-240, -560], [-80, -560], [-60, -470], [-240, -470]]],
+    ["B", [[-40, -460], [-150, -470], [-236, -420], [-240, -330], [-150, -320], [-60, -360]]],
+    ["D", [[60, -470], [150, -470], [250, -420], [250, -300], [250, -238], [210, -206], [150, -240], [80, -330]]],
+    ["D", [[-250, -240], [-160, -226], [0, -216], [160, -226], [250, -240], [250, -140], [-250, -140]]],
   ],
 };
-// where the red glints sit in each head (for blinking and the frenzy glow) and the mask cracks at low HP
-const B2_EYES = { front: [[6, 7], [11, 7]], open: [[6, 7], [11, 7]], bite: [[6, 7], [11, 7]], lick: [[6, 7], [11, 7]], side: [[10, 7], [14, 7]], back: [] };
-const B2_CRACKS = [
-  [[12, 4], [12, 5], [13, 5], [13, 6], [12, 6]],
-  [[5, 9], [4, 10], [5, 10], [6, 11], [6, 10], [13, 4], [14, 4]],
-];
+const B3_SHORTS = mirrorR([[0, -250], [200, -250], [206, -200], [210, -160], [206, -130], [190, -114], [172, -134], [152, -116], [132, -138], [112, -118],
+  [90, -140], [70, -122], [50, -142], [32, -130], [16, -150], [0, -156]]);
+const B3_APRON = [[-130, -470], [-60, -456], [60, -456], [130, -470], [170, -424], [184, -330], [190, -240], [184, -128], [-184, -128], [-190, -240], [-184, -330], [-170, -424]];
+const B3_STRAP = [[176, -560], [160, -512], [146, -462], [136, -410]];
+const B3_LEG = { hip: [96, -214], knee: [108, -122], ank: [102, -58] };
+const B3_FOOT = (fx, sg) => [[fx - sg * 50, -62], [fx + sg * 30, -66], [fx + sg * 62, -46], [fx + sg * 78, -18], [fx + sg * 74, 0], [fx - sg * 58, 0], [fx - sg * 66, -24]];
+// arm poses for the right arm (the left one is mirrored): elbow, wrist, fist centre; the shoulder is at (214, -470)
+const B3_SHOULDER = [214, -470];
+const B3_POSES = {
+  chain: [[279, -307], [268, -170], [263, -108]],      // the relaxed gorilla hang: the fist at the knee
+  up: [[330, -600], [300, -760], [290, -822]],         // raised over the head
+  throwS: [[380, -470], [520, -470], [582, -470]],     // thrown out sideways
+  throwU: [[340, -592], [440, -692], [484, -736]],
+  throwD: [[350, -380], [460, -290], [505, -253]],
+  eat: [[200, -300], [92, -360], [40, -385]],          // the fist up at the mouth
+  scratch: [[270, -320], [172, -250], [120, -235]],    // the hand on the belly
+};
+const B3_ARM_R = [80, 60, 70, 60], B3_FIST_R = 66;       // tube radii: shoulder, elbow, forearm bulge, wrist
+const B3_SCALE = [0.058, 0.064, 0.07, 0.076, 0.084];     // px per native unit at each growth size (4 = the Dark Butcher boss)
+const B3_HEAD_Y = -432;                                  // native height of the mask centre (the eyes)
 
-// ---------------------------------------------------------------- torsos, front view, four growth sizes
-// apron blood uses 5/6, shirt blood B/9, a torn apron x
-const B2_TORSO_FRONT = [
-  // S: 32 wide
-  [padRow(32, 11, "RaRRRrrraq"), padRow(32, 8, "YRRRaRRRrrrarrqq"), padRow(32, 5, "YYYRRRRRaAAAAarrrrrqqq"),
-    padRow(32, 3, "YYYYYRRRRRAAAAAarrrrrrqqqq"), padRow(32, 2, "RYYYYRRRRRRAAAAAarrrrrqqqqqQ"), padRow(32, 1, "RRYYYRRRRRRRAAAAAarrrrrqqqqqqQ"),
-    "RRRRYRRRRRpaAAAAAAapapqqqqqqqqQQ", "RRRRRRRRRRrAAAAAAAAaprrqqqqqqqQQ", "rRRRRRRRRrrA55AAAAAaprqqqqqqqqQQ",
-    "rrRRRRRRrrAA6AAAAAAAapqqqqqq9qQQ", "qrrRRRRrrrAAAAAAAA5AapqqqqqqqQQQ", padRow(32, 1, "qrrrRrrrrAAAAAAAA6aapqqqqqqQQQ"),
-    padRow(32, 2, "qqrrrrrraAAAAAAAAaapqqqqQQQQ"), padRow(32, 3, "Qqqqrrrpaaaaaaaaapppqqqqq"), padRow(32, 5, "QQqqqqqqqqqqqqqqqqqqqQQQ"),
-    padRow(32, 6, "LLLLLLLLcCCcLLLLLLLl"), padRow(32, 6, "llllllllcCccllllllll"), padRow(32, 7, "TTTTTTTttttttUUUUU"),
-    padRow(32, 7, "TTTTTTtttttttUUUUU"), padRow(32, 8, "TTTTtttUUtttUUUU")],
-  // M: 36 wide
-  [padRow(36, 13, "RaRRRrrraq"), padRow(36, 10, "YRRRaRRRrrrarrqq"), padRow(36, 7, "YYYRRRRRaAAAAarrrrrqqq"),
-    padRow(36, 4, "YYYYYRRRRRRAAAAAarrrrrrqqqqQ"), padRow(36, 3, "RYYYYYRRRRRRAAAAAarrrrrrqqqqqQ"), padRow(36, 2, "RRYYYYRRRRRRRAAAAAarrrrrrqqqqqqQ"),
-    padRow(36, 1, "RRRYYRRRRRRpaAAAAAAapaprqqqqqqqqQQ"), "RRRRRYRRRRRRrAAAAAAAAaprrqqqqqqqqqQQ", "RRRRRRRRRRRrrA55AAAAAaprqqqqqqqqqqQQ",
-    "rRRRRRRRRRrrAA6AAAAAAAapqqqqqqq9qqQQ", "rrRRRRRRRrrrAAAAAAAAAAapqqqqqqqqqQQQ", "qrrRRRRRrrrrAAAAAAAA5AapqqqqqqqqqQQQ",
-    padRow(36, 1, "qrrrRRrrrrrAAAAAAAA6aapqqqqqqqQQQQ"), padRow(36, 2, "qqrrrrrrrraAAAAAAAAaapqqqqqQQQQQ"), padRow(36, 4, "QqqqrrrrpaaaaaaaaappqqqqQQQQ"),
-    padRow(36, 6, "QQqqqqqqqqqqqqqqqqqqQQQQ"), padRow(36, 8, "LLLLLLLLcCCcLLLLLLLl"), padRow(36, 8, "llllllllcCccllllllll"),
-    padRow(36, 9, "TTTTTTTttttttUUUUU"), padRow(36, 9, "TTTTTTtttttttUUUUU"), padRow(36, 10, "TTTTtttUUtttUUUU")],
-  // L: 40 wide
-  [padRow(40, 15, "RaRRRrrraq"), padRow(40, 12, "YRRRaRRRrrrarrqq"), padRow(40, 9, "YYYRRRRRaAAAAarrrrrqqq"),
-    padRow(40, 6, "YYYYYRRRRRRAAAAAarrrrrrqqqqQ"), padRow(40, 4, "RYYYYYRRRRRRRAAAAAarrrrrrrqqqqqQ"), padRow(40, 3, "RRYYYYYRRRRRRRAAAAAarrrrrrrqqqqqqQ"),
-    padRow(40, 2, "RRRYYYYRRRRRRRRAAAAAarrrrrrqqqqqqqQQ"), padRow(40, 1, "RRRRYYRRRRRRRpaAAAAAAapaprrqqqqqqqqqQQ"), "RRRRRRYRRRRRRRrAAAAAAAAaprrqqqqqqqqqqqQQ",
-    "RRRRRRRRRRRRRrrA55AAAAAaprqqqqqqqqqqqqQQ", "rRRRRRRRRRRRrrAA6AAAAAAAapqqqqqqqqq9qqQQ", "rrRRRRRRRRRrrrAAAAAAAAAAapqqqqqqqqqqqQQQ",
-    "qrrRRRRRRRrrrrAAAAAAAA5AapqqqqqqqqqqqQQQ", padRow(40, 1, "qrrrRRRRrrrrrAAAAAAAA6aapqqqqqqqqqQQQQ"), padRow(40, 2, "qqrrrrrrrrrraAAAAAAAAaapqqqqqqqQQQQQ"),
-    padRow(40, 4, "QqqqqrrrrrpaaaaaaaaappqqqqqQQQQQ"), padRow(40, 7, "QQQqqqqqqqqqqqqqqqqqqqQQQQ"), padRow(40, 10, "LLLLLLLLcCCcLLLLLLLl"),
-    padRow(40, 10, "llllllllcCccllllllll"), padRow(40, 11, "TTTTTTTttttttUUUUU"), padRow(40, 11, "TTTTTTtttttttUUUUU"), padRow(40, 12, "TTTTtttUUtttUUUU")],
-  // XL: 44 wide - the left strap has snapped, the apron is torn, stretch marks show
-  [padRow(44, 17, "RRRRRrrraq"), padRow(44, 14, "YRRRpRRRrrrarrqq"), padRow(44, 11, "YYYRRRRRpAAAAarrrrrqqq"),
-    padRow(44, 8, "YYYYYRRRRRRAAAAAarrrrrrqqqqQ"), padRow(44, 6, "RYYYYYRRRRRRRAAAAAarrrrrrrqqqqqQ"), padRow(44, 4, "RRYYYYYRRRRRRRRAAAAAarrrrrrrrqqqqqqQ"),
-    padRow(44, 3, "RRRYYYYRRRRRRRRRAAAAAarrrrrrrqqqqqqqQQ"), padRow(44, 2, "RRRRYYYRRRRRRRRRRAAAAAarrrrrrqqqqqqqqqQQ"),
-    padRow(44, 1, "RRRRRYYRRRRRRRRRRAAAAAAapaprqqqqqqqqqqqqQQ"), "RRRRRRRYRRRRRRRRrAAAAAAAAaprrqqqqqqqqqqqqqQQ",
-    "RRRRRRRRRRRRRRRrrA55AAAAAaprqqqqqqqqqQqqqqQQ", "rRRRRRRRRRRRRRrrpA6AAAAAAAapqqqqqqqqQqq9qqQQ", "rrRRRRRRRRRRRrrrxAAAAAAAAAapqqqqqqqqqQqqqQQQ",
-    "qrrRRRRRRRRRrrrrpAAAAAAA5AapqqqqqqqqqqqqqQQQ", padRow(44, 1, "qrrrRRRRRrrrrrrAAAAAAAA6aapqqqqqqqqqqQQQQQ"), padRow(44, 2, "qqrrrrrrrrrrrraAAAAAAAAaapqqqqqqqqQQQQQQ"),
-    padRow(44, 4, "QqqqqqrrrrrrpQaaaaaaaQppqqqqqqQQQQQQ"), padRow(44, 7, "QQQqqqqqqqqqqqqqqqqqqqqqqQQQQQ"), padRow(44, 12, "LLLLLLLLcCCcLLLLLLLl"),
-    padRow(44, 12, "llllllllcCccllllllll"), padRow(44, 13, "TTTTTTTttttttUUUUU"), padRow(44, 13, "TTTTTTtttttttUUUUU"), padRow(44, 14, "TTTTtttUUtttUUUU")],
-];
-// the Dark Butcher boss is one size above the biggest butcher: the XL belly two pixels wider a side and one row deeper
-function widenTorso(rows) {
-  const out = rows.map(r => {
-    const a = r.search(/[^.]/), b = r.length - 1 - [...r].reverse().join("").search(/[^.]/);
-    if (b - a < 24) return ".." + r + "..";
-    return ".." + r.slice(0, a) + r[a] + r[a] + r.slice(a, b + 1) + r[b] + r[b] + r.slice(b + 1) + "..";
+// ---------------------------------------------------------------- a tiny rasteriser: native units -> letters on a grid
+function b3Grid() { return { w: 132, h: 100, ox: 66, oy: 92, d: new Array(132 * 100).fill(".") }; }
+const gAt = (g, x, y) => (x < 0 || y < 0 || x >= g.w || y >= g.h ? "." : g.d[y * g.w + x]);
+const gSet = (g, x, y, c) => { if (x >= 0 && y >= 0 && x < g.w && y < g.h) g.d[y * g.w + x] = c; };
+// fills the pixels whose centres fall inside the polygon; ch may be a letter or f(x, y, cur) -> letter | null
+function gPoly(g, k, pts, ch) {
+  const P_ = pts.map(p => [p[0] * k + g.ox, p[1] * k + g.oy]);
+  let y0 = Infinity, y1 = -Infinity;
+  for (const p of P_) { y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); }
+  for (let y = Math.floor(y0); y <= Math.ceil(y1); y++) {
+    const cy = y + 0.5, xs = [];
+    for (let i = 0; i < P_.length; i++) {
+      const a = P_[i], b = P_[(i + 1) % P_.length];
+      if ((a[1] <= cy && b[1] > cy) || (b[1] <= cy && a[1] > cy)) xs.push(a[0] + (cy - a[1]) / (b[1] - a[1]) * (b[0] - a[0]));
+    }
+    xs.sort((p, q) => p - q);
+    for (let j = 0; j + 1 < xs.length; j += 2)
+      for (let x = Math.ceil(xs[j] - 0.5); x < xs[j + 1] - 0.5; x++) {
+        const c = typeof ch === "function" ? ch(x, y, gAt(g, x, y)) : ch;
+        if (c) gSet(g, x, y, c);
+      }
+  }
+}
+// a tube along a polyline with a radius per point; fn(x, y, t, s) gets the place along it (0..1) and the light on it (-1..1)
+function gTube(g, k, pts, radii, fn) {
+  const P_ = pts.map(p => [p[0] * k + g.ox, p[1] * k + g.oy]), R = radii.map(r => r * k);
+  const seg = [];
+  let total = 0;
+  for (let i = 0; i + 1 < P_.length; i++) { const l = Math.hypot(P_[i + 1][0] - P_[i][0], P_[i + 1][1] - P_[i][1]); seg.push(l); total += l; }
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  P_.forEach((p, i) => { x0 = Math.min(x0, p[0] - R[i]); x1 = Math.max(x1, p[0] + R[i]); y0 = Math.min(y0, p[1] - R[i]); y1 = Math.max(y1, p[1] + R[i]); });
+  const Lx = -0.55, Ly = -0.6, Lz = 0.58;
+  for (let y = Math.floor(y0); y <= y1; y++) for (let x = Math.floor(x0); x <= x1; x++) {
+    const cx = x + 0.5, cy = y + 0.5;
+    let best = Infinity, bt = 0, bs = 0, acc = 0;
+    for (let i = 0; i < seg.length; i++) {
+      const a = P_[i], b = P_[i + 1], dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy || 1;
+      const u = clamp(((cx - a[0]) * dx + (cy - a[1]) * dy) / l2, 0, 1), px = a[0] + dx * u, py = a[1] + dy * u;
+      const r = lerp(R[i], R[i + 1], u), ox = cx - px, oy = cy - py, d = Math.hypot(ox, oy) / r;
+      if (d <= 1 && d < best) {
+        best = d; bt = (acc + seg[i] * u) / total;
+        const nx = ox / r, ny = oy / r;
+        bs = nx * Lx + ny * Ly + Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny)) * Lz;
+      }
+      acc += seg[i];
+    }
+    if (best <= 1) { const c = fn(x, y, bt, bs); if (c) gSet(g, x, y, c); }
+  }
+}
+const skinTone = s => (s > 0.78 ? "B" : s > 0.42 ? "C" : s > 0.08 ? "D" : "E");
+// point-in-polygon test for native coordinates
+const inPoly = pts => (x, y) => {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const a = pts[i], b = pts[j];
+    if ((a[1] > y) !== (b[1] > y) && x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0]) inside = !inside;
+  }
+  return inside;
+};
+// trims the grid to what was drawn; returns the rows and where their top-left sits relative to the feet
+function gOut(g) {
+  let x0 = g.w, x1 = -1, y0 = g.h, y1 = -1;
+  for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) if (g.d[y * g.w + x] !== ".") { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  if (x1 < 0) return { rows: ["."], ox: 0, oy: 0 };
+  const rows = [];
+  for (let y = y0; y <= y1; y++) { let r = ""; for (let x = x0; x <= x1; x++) r += g.d[y * g.w + x]; rows.push(r); }
+  return { rows, ox: x0 - g.ox, oy: y0 - g.oy };
+}
+
+// ---------------------------------------------------------------- body parts
+function b3Torso(k, view, breath) {
+  const g = b3Grid(), back = view === "back", side = view === "side";
+  // 3/4 view: the belly swings toward the way he faces
+  const tf = side ? (p => [p[0] * 0.9 + (p[1] > -340 ? 34 : 12) * clamp((p[1] + 560) / 250, 0, 1), p[1]]) : (p => p);
+  const bw = breath ? 1.04 : 1, def = p => { const q = tf(p); return [q[0] * (q[1] > -380 ? bw : 1), q[1]]; };
+  // shorts first: the belly hangs over the waistband
+  gPoly(g, k, B3_SHORTS.map(def), (x, y) => { const nx = (x - g.ox + 0.5) / k; return back ? (nx < -120 ? "t" : nx > 110 ? "u" : "t") : nx < -140 ? "T" : nx > 104 ? "u" : Math.abs(nx) < 14 && (y - g.oy) / k > -200 ? "u" : "t"; });
+  const body = (back ? B3_TORSO_B : B3_TORSO).map(def);
+  gPoly(g, k, body, "C");
+  for (const [c, pts] of B3_FACETS[back ? "back" : "front"]) gPoly(g, k, pts.map(def), (x, y, cur) => ("ABCDEF".includes(cur) ? c : null));
+  // the belly's shadow on the waistband, the deep crease under it, the navel
+  for (let x = 0; x < g.w; x++) for (let y = 1; y < g.h; y++) if ("ABCDE".includes(gAt(g, x, y - 1)) && "Ttu".includes(gAt(g, x, y))) { gSet(g, x, y, "v"); gSet(g, x, y - 1, "F"); }
+  if (!back) {
+    const [nx, ny] = def([0, -214]).map(v => v * k);
+    gSet(g, Math.round(nx + g.ox - 0.5), Math.round(ny + g.oy), "F"); gSet(g, Math.round(nx + g.ox - 0.5), Math.round(ny + g.oy) + 1, "E");
+    // the leather strap over the right trap, ending in an iron ring on the chest
+    const S = B3_STRAP.map(def);
+    gTube(g, k, S, [17, 17, 17, 17], (x, y, t, s) => (s > 0.5 ? "L" : "l"));
+    const [rx, ry] = [S[3][0] * k + g.ox, S[3][1] * k + g.oy];
+    for (const [dx, dy, c] of [[-1, 0, "s"], [0, 0, "X"], [1, 0, "x"], [0, 1, "x"], [-1, 1, "s"], [1, 1, "X"]]) gSet(g, Math.round(rx + dx - 0.5), Math.round(ry + dy), c);
+  } else {
+    // the leather apron on the back with a fur-trimmed hem, straps over both traps
+    gPoly(g, k, B3_APRON.map(def), (x, y) => { const nx = (x - g.ox + 0.5) / k; return nx < -100 ? "L" : nx > 100 ? "b" : "l"; });
+    for (const sg of [-1, 1]) gTube(g, k, [[sg * 132, -530], [sg * 140, -466]].map(def), [15, 15], () => "b");
+    for (const c of [[[-80, -420], [-66, -360], [-60, -300]], [[40, -430], [52, -370], [60, -320]], [[120, -360], [132, -300], [140, -250]]]) gTube(g, k, c.map(def), [8, 8, 8], () => "b");
+    const hemY = Math.round(-128 * k + g.oy);
+    for (let x = 0; x < g.w; x++) if ("Llb".includes(gAt(g, x, hemY - 1))) { gSet(g, x, hemY, x % 2 ? "f" : "L"); if (x % 3 === 0) gSet(g, x, hemY + 1, "f"); }
+  }
+  // rim light along the top-left edges of the traps
+  for (let y = 1; y < g.h; y++) for (let x = 1; x < g.w; x++)
+    if ("BC".includes(gAt(g, x, y)) && (gAt(g, x, y - 1) === "." || gAt(g, x - 1, y) === ".") && (x - g.ox) < 0 && (y - g.oy) / k < -380) gSet(g, x, y, "A");
+  return gOut(g);
+}
+function b3Leg(k, sg) {
+  const g = b3Grid(), L = B3_LEG;
+  gTube(g, k, [[sg * L.hip[0], L.hip[1]], [sg * L.knee[0], L.knee[1]], [sg * L.ank[0], L.ank[1]]], [64, 62, 50], (x, y, t, s) => skinTone(s + (sg < 0 ? 0.1 : -0.05)));
+  const fx = sg * 106;
+  gPoly(g, k, B3_FOOT(fx, sg), sg < 0 ? "C" : "D");
+  gPoly(g, k, [[fx - sg * 60, -70], [fx + sg * 34, -74], [fx + sg * 54, -42], [fx - sg * 44, -36]], (x, y, cur) => ("CD".includes(cur) ? (sg < 0 ? "B" : "C") : null));
+  const sole = Math.round(-8 * k + g.oy);
+  for (let x = 0; x < g.w; x++) if ("BCD".includes(gAt(g, x, sole))) gSet(g, x, sole, "E");
+  return gOut(g);
+}
+// an arm in a pose (native points for the right arm, mirrored for the left), with what the fist holds
+function b3Arm(k, sg, pose, hold) {
+  const g = b3Grid(), P0 = B3_POSES[pose], S = [sg * B3_SHOULDER[0], B3_SHOULDER[1]];
+  const E = [sg * P0[0][0], P0[0][1]], Wr = [sg * P0[1][0], P0[1][1]], F = [sg * P0[2][0], P0[2][1]];
+  const Mf = [lerp(E[0], Wr[0], 0.42), lerp(E[1], Wr[1], 0.42)];
+  const band = sg > 0 ? ["L", "l", "b"] : ["S", "s", "x"];   // leather bracer on the right wrist, a steel cuff on the left
+  const hump = inPoly(B3_TORSO);
+  gTube(g, k, [S, E, Mf, Wr], B3_ARM_R, (x, y, t, s) => {
+    const nx = (x - g.ox + 0.5) / k, ny = (y - g.oy + 0.5) / k;
+    if (ny < S[1] - 10 && hump(nx, ny) && pose !== "up" && pose !== "throwU") return null;   // the hump is the shoulder
+    return t > 0.86 ? band[s > 0.5 ? 0 : s > -0.1 ? 1 : 2] : skinTone(s);
   });
-  let wi = 0;
-  out.forEach((r, i) => { if (r.replace(/\./g, "").length > out[wi].replace(/\./g, "").length) wi = i; });
-  out.splice(wi, 0, out[wi]);
+  // the wrist band a touch thicker than the arm
+  gTube(g, k, [[lerp(Mf[0], Wr[0], 0.72), lerp(Mf[1], Wr[1], 0.72)], Wr], [74, 74], (x, y, t, s) => band[s > 0.5 ? 0 : s > -0.1 ? 1 : 2]);
+  // what the fist holds, drawn before the fist: the cleaver (right) or the meat hook (left)
+  const dx = F[0] - Wr[0], dy = F[1] - Wr[1], dl = Math.hypot(dx, dy) || 1, tilt = hold === "cleaver" ? -0.75 * sg : 0;
+  const va0 = [dx / dl, dy / dl], va = [va0[0] * Math.cos(tilt) - va0[1] * Math.sin(tilt), va0[0] * Math.sin(tilt) + va0[1] * Math.cos(tilt)], ua = [va[1] * sg, -va[0] * sg];
+  const at = (u, v) => [F[0] + ua[0] * u + va[0] * v, F[1] + ua[1] * u + va[1] * v];
+  if (hold === "cleaver") {
+    gTube(g, k, [at(0, 20), at(0, 100)], [18, 18], () => "o");
+    gPoly(g, k, [at(-40, 96), at(118, 96), at(128, 286), at(-36, 286)], (x, y) => {
+      const nx = (x - g.ox + 0.5) / k, ny = (y - g.oy + 0.5) / k, du = (nx - F[0]) * ua[0] + (ny - F[1]) * ua[1], dv = (nx - F[0]) * va[0] + (ny - F[1]) * va[1];
+      if (Math.hypot(du - 4, dv - 136) < 17) return "X";   // the hole in the blade
+      return du > 98 ? "S" : du < -22 ? "x" : dv > 236 && du > 30 ? "R" : dv < 120 ? "S" : "s";
+    });
+  } else if (hold === "hook") {
+    const pts = [at(0, 40), at(0, 120)];
+    for (let a = Math.PI; a >= -0.7; a -= 0.35) pts.push(at(40 + Math.cos(a) * 40, 120 + Math.sin(a) * 40));
+    gTube(g, k, pts, pts.map((p, i) => (i === pts.length - 1 ? 6 : 15)), (x, y, t, s) => (s > 0.4 ? "S" : s > -0.2 ? "s" : "x"));
+  }
+  // the fist: a blocky knot of knuckles
+  const fr = B3_FIST_R * k, fc = [F[0] * k + g.ox, F[1] * k + g.oy];
+  for (let y = Math.floor(fc[1] - fr - 1); y <= fc[1] + fr + 1; y++) for (let x = Math.floor(fc[0] - fr - 1); x <= fc[0] + fr + 1; x++) {
+    const nx = (x + 0.5 - fc[0]) / fr, ny = (y + 0.5 - fc[1]) / fr;
+    if (nx ** 4 + ny ** 4 > 1) continue;
+    const s = nx * -0.55 + ny * -0.6 + Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny) ) * 0.58;
+    gSet(g, x, y, skinTone(s));
+  }
+  // knuckle creases on the far end of the fist
+  for (const u of [-0.35, 0.05, 0.45]) { const p = [F[0] * k + g.ox + (ua[0] * u + va[0] * 0.55) * fr, F[1] * k + g.oy + (ua[1] * u + va[1] * 0.55) * fr]; gSet(g, Math.floor(p[0]), Math.floor(p[1]), "F"); }
+  const out = gOut(g);
+  out.hand = [F[0] * k, F[1] * k];
   return out;
 }
-B2_TORSO_FRONT.push(widenTorso(B2_TORSO_FRONT[3]));
-// the side (3/4) and back views come from the front drawing: the apron slides toward the belly, or is replaced by the
-// shirt's back with the straps crossing and a bow at the waist
-const APRON_CH = "Aap56x";
-function shirtAt(row, x) {   // shade a shirt pixel by where it sits in its row (light left, dark right)
-  const a = row.search(/[^.]/), b = row.length - 1 - [...row].reverse().join("").search(/[^.]/), k = (x - a) / Math.max(1, b - a);
-  return k < 0.35 ? "R" : k < 0.62 ? "r" : k < 0.9 ? "q" : "Q";
-}
-function torsoBack(rows) {
-  const out = rows.map((row, y) => [...row].map((ch, x) => APRON_CH.includes(ch) ? shirtAt(row, x) : ch === "c" || ch === "C" ? (y === rows.length - 5 ? "L" : "l") : ch));
-  const W_ = rows[0].length, cx = Math.round((W_ - 1) / 2), waist = Math.round((rows.length - 5) * 0.72);
-  const on = (x, y) => out[y] && out[y][x] && out[y][x] !== ".";
-  for (let y = 0; y < waist; y++) {   // the neck straps cross on the back and run down to the waist tie
-    const k = y / waist;
-    for (const sgn of [-1, 1]) { const x = Math.round(cx + sgn * (4 - 8 * k)); if (on(x, y)) out[y][x] = "a"; if (on(x + 1, y) && y % 2) out[y][x + 1] = "p"; }
-  }
-  for (let x = 0; x < W_; x++) { if (on(x, waist)) out[waist][x] = "a"; if (on(x, waist + 1)) out[waist + 1][x] = shirtAt(rows[waist + 1], x) === "R" ? "r" : "q"; }
-  for (const [dx, dy, ch] of [[-3, -1, "A"], [-2, -1, "A"], [2, -1, "A"], [3, -1, "A"], [-3, 0, "a"], [-2, 0, "p"], [-1, 0, "a"], [0, 0, "A"], [1, 0, "a"], [2, 0, "p"], [3, 0, "a"],
-    [-1, 1, "a"], [1, 1, "a"], [-2, 2, "p"], [2, 2, "p"]])
-    if (on(cx + dx, waist + dy)) out[waist + dy][cx + dx] = ch;   // the bow
-  return out.map(r => r.join(""));
-}
-function torsoSide(rows) {
-  const base = rows.map((row, y) => [...row].map((ch, x) => APRON_CH.includes(ch) ? shirtAt(row, x) : ch));
-  rows.forEach((row, y) => [...row].forEach((ch, x) => {
-    const nx = x + 3;
-    if ((APRON_CH.includes(ch) || ch === "c" || ch === "C") && base[y][nx] && base[y][nx] !== ".") base[y][nx] = ch;
-  }));
-  return base.map(r => r.join(""));
-}
-// breathing: the widest belly rows get one pixel wider on each side
-function breathe(rows) {
-  const maxw = Math.max(...rows.map(r => r.replace(/\./g, "").length));
-  return rows.map(r => {
-    if (r.replace(/\./g, "").length < maxw - 2) return r;
-    const a = r.search(/[^.]/), b = r.length - 1 - [...r].reverse().join("").search(/[^.]/), c = [...r];
-    if (a > 0) c[a - 1] = c[a]; if (b < c.length - 1) c[b + 1] = c[b];
-    return c.join("");
-  });
-}
-const pad1 = rows => rows.map(r => "." + r + ".");
 
-// ---------------------------------------------------------------- arms (the right arm; the left one is its mirror)
-// sh: the shoulder pixel that sits on the torso, hand: where a chain or a held victim starts
-const B2_ARM = {
-  chain: { rows: ["qrR.....", "qrRR....", ".qrRq...", ".qrRRq..", "..qYYYq.", "...kSSs.", "...kSSs.", "...kSSSs", "..kkSSSs", "..kSSSSs", "...sSss."], sh: [0, 0], hand: [5, 8] },
-  up: { rows: ["..kSs...", ".kkSSs..", ".kSSSs..", "..sSs...", "..kSs...", ".qYYq...", ".rRRq...", "qrRRq...", "qrRq....", "qrq....."], sh: [0, 9], hand: [2, 1] },
-  throwS: { rows: ["qrRq........", "qrRRYkSSskk.", "qrRRYkSSskSs", ".qqqYsSSskSs", "........sss."], sh: [0, 2], hand: [10, 2] },
-  throwU: { rows: ["........kk", ".......kSs", "......kSSs", ".....kSSs.", "....YYSs..", "...qYYq...", "..qrRq....", ".qrRq.....", "qrRq......", "qrq......."], sh: [0, 9], hand: [8, 1] },
-  throwD: { rows: ["qrq.......", "qrRq......", ".qrRq.....", "..qrRq....", "...qYYq...", "....YYSs..", ".....kSSs.", "......kSSs", ".......kSs", "........kk"], sh: [0, 0], hand: [8, 8] },
-  eat: { rows: [".kSs.....", "kkSSs....", "kSSSs....", ".sSSYq...", "...YYRq..", "....qrRq.", ".....qrRq", "......qrq"], sh: [8, 7], hand: [2, 1] },   // up to the mouth
-  scratch: { rows: ["....qrRq", "...qrRRq", "...qrRq.", "..qYYq..", "..kSs...", ".kSSs...", "kkSSs...", "kSSSs...", ".sSs...."], sh: [6, 0], hand: [1, 6] },
+// ---------------------------------------------------------------- the head, pixel by pixel (anchor: the mask centre, col 7 row 10)
+const B3_FACE = [
+  "......G.G......",
+  ".....gGgGg.....",
+  "....hgGGGgh....",
+  "....WWWWMMMm...",
+  "...WWWWWMMMMm..",
+  "..WWrrWWMrrMm..",
+  "..WWWWrrrMMMm..",
+  "..WWWWWWMMMMm..",
+  "..WkkkWWMkkkm..",
+  "CbWkekkMkkekmbE",
+  ".bWWkkkMkkkMmb.",
+  "..WWWWnnnMMMm..",
+  "..WrWWWnMMMrm..",
+];
+const B3_JAW = ["..rrWWMMMMMrr..", "...WWMMMMMMm...", "....mmmmmmm...."];
+const B3_HEAD = {
+  front: B3_FACE.concat(B3_JAW),
+  bite: B3_FACE.concat(["..rWkWkWkWkWr..", "...WWMMMMMMm...", "....mmmmmmm...."]),
+  open: B3_FACE.concat(["..kWkWkWkWkWk..", "..kjjjjjjjjjk..", "..kjjjrrrjjjk..", "..kWkWkWkWkWk..", "..rrWWMMMMMrr..", "...WWMMMMMMm...", "....mmmmmmm...."]),
+  lick: B3_FACE.concat(["..rrWWMMMrrrr..", "...WWMMMMrrr...", "....mmmmmmrr..."]),
+  side: [
+    ".....G.G.......", "....gGgGg......", "...hgGGGgh.....", "..CgGWWWWMm....", ".CCgWWWWWMMm...", ".CCCWWrrWMrrm..", ".CCCWWWWrrrMm..",
+    ".CCbWWWWWMMMm..", ".CbWWkkkWMkkm..", "CCbWWkekkMkem..", ".CbWWWkkkMkkm..", ".CCWWWWWnnnMm..", ".DCWWrWWWnMMrm.",
+    "..DrrWWMMMMMrr.", "...EWWMMMMMm...", "....mmmmmmm....",
+  ],
+  back: [
+    "......G.G......", ".....gGgGg.....", "....hgGGGgh....", "...BCgGGGgDE...", "..BCCCgGgCCDE..", "..BCCCgGgCCDE..",
+    "..CCCCgGgCCDE..", "..CCCChghCCDE..", "..bbbbbxbbbbb..", "CbBCCCCCCCCDEbE", ".bCCCCCCCCDDEb.", "..CCCCCCCDDDE..", "..DCCCCCDDDEE..",
+    "...DDDDDDDEE...", "....EEEEEEE....", "...............",
+  ],
 };
+const B3_EYES = { front: [[4, 9], [10, 9]], bite: [[4, 9], [10, 9]], open: [[4, 9], [10, 9]], lick: [[4, 9], [10, 9]], side: [[6, 9], [11, 9]], back: [] };
+const B3_CRACKS = [[[10, 3], [11, 4], [10, 6], [11, 7]], [[4, 11], [3, 12], [5, 13], [11, 3], [12, 4]]];
 
-// ---------------------------------------------------------------- legs and belt gear
-const B2_LEG = {
-  L: ["TTTTtt", "TTTttU", "NNNNNv", "NuNuNv", "NNNNvv", "vvvvvv"],
-  R: ["tttUUU", "ttUUUU", "NNNNvv", "NuNuvv", "NNNvvv", "vvvvvv"],
-};
-const B2_GEAR = {
-  hook: ["..ww.", ".w..w", "....w", "...W.", "..w..", ".w...", ".w..w", "..ww."],   // an S meat hook
-  knife: [".h.", ".h.", "lLl", "lLl", "lLl", ".l."],                               // a knife in its sheath
-};
-
-// ---------------------------------------------------------------- build both skins
+// ---------------------------------------------------------------- both skins (the dark one is built when first needed)
 function buildButcherSet(palHex) {
   const pal = {};
   for (const k in palHex) pal[k] = hx(palHex[k]);
-  const set = { head: {}, torso: { front: [], side: [], back: [] }, breath: { front: [], side: [], back: [] }, arm: {}, leg: {}, gear: {} };
-  for (const k in B2_HEAD) set.head[k] = makeSprite(B2_HEAD[k], pal);
-  B2_TORSO_FRONT.forEach((rows0, i) => {
-    const rows = pad1(rows0), views = { front: rows, side: torsoSide(rows), back: torsoBack(rows) };
-    for (const v in views) { set.torso[v][i] = makeSprite(views[v], pal); set.breath[v][i] = makeSprite(breathe(views[v]), pal); }
+  // makeSprite adds a pixel of outline all round: the sprite's corner sits one pixel up-left of the drawing's
+  const mk = o => Object.assign(makeSprite(o.rows, pal), { ox: o.ox - 1, oy: o.oy - 1, hand: o.hand });
+  const set = { head: {}, torso: { front: [], side: [], back: [] }, breath: { front: [], side: [], back: [] }, arm: { L: [], R: [] }, leg: [] };
+  for (const name in B3_HEAD) set.head[name] = makeSprite(B3_HEAD[name], pal);
+  B3_SCALE.forEach((k, i) => {
+    for (const v of ["front", "side", "back"]) { set.torso[v][i] = mk(b3Torso(k, v, false)); set.breath[v][i] = mk(b3Torso(k, v, true)); }
+    set.leg[i] = { L: mk(b3Leg(k, -1)), R: mk(b3Leg(k, 1)) };
+    set.arm.R[i] = {}; set.arm.L[i] = {};
+    for (const p in B3_POSES) {
+      set.arm.R[i][p] = mk(b3Arm(k, 1, p, p === "chain" || p === "up" ? "cleaver" : null));
+      set.arm.L[i][p] = mk(b3Arm(k, -1, p, null));
+    }
+    set.arm.L[i].chainHook = mk(b3Arm(k, -1, "chain", "hook"));   // the meat hook rests in the left fist until it is thrown
   });
-  for (const k in B2_ARM) set.arm[k] = Object.assign({ spr: makeSprite(B2_ARM[k].rows, pal) }, B2_ARM[k]);
-  for (const k in B2_LEG) set.leg[k] = makeSprite(B2_LEG[k], pal);
-  for (const k in B2_GEAR) set.gear[k] = makeSprite(B2_GEAR[k], pal);
   return set;
 }
-const B2 = { classic: buildButcherSet(B2_PAL), dark: buildButcherSet(B2_DARK) };
+const B2 = { classic: buildButcherSet(B3_PAL), _dark: null, get dark() { return this._dark || (this._dark = buildButcherSet(B3_DARK)); } };
 
 // ---------------------------------------------------------------- chains: small verlet ropes in world space
 const ROPES = new Map();
@@ -1043,90 +1122,74 @@ function jiggle(J, ax, ay) {
   J.x = clamp(J.x + J.vx, -2.4, 2.4); J.y = clamp(J.y + J.vy, -2.4, 2.4);
 }
 
-// ---------------------------------------------------------------- layout and drawing
+// ---------------------------------------------------------------- layout and drawing (all parts are placed in whole pixels from the feet)
 const B2_WALK = { liftL: [0, 0, 0, 0, 1, 2], liftR: [0, 1, 2, 0, 0, 0], bob: [1, 0, 0, 1, 0, 0], swing: [0, 1, 1, 0, -1, -1], sway: [0, -1, -1, 0, 1, 1] };
-// o: { size, view: front|side|back, flipX, walk (frame or -1), breath, head, armL, armR, dyL, dyR, jx, jy (belly spring), z (hop height),
-//      sq (squash in px, negative stretches), flash, dither, skin, eyes: glow|blink|0, crack: 0..2, dirt: 0..2 }
+// o: { size 0..4, view: front|side|back, flipX, walk (frame or -1), breath, head, armL, armR, dyL, dyR, hookInHand, jx, jy (belly spring),
+//      z (hop height), sq (squash in px, negative stretches), flash, dither, ol, skin, eyes: glow|blink|0, crack: 0..2, dirt: 0..2 }
 function layoutButcher2(sx, sy, o) {
-  const S = B2[o.skin || "classic"], view = o.view || "front", size = o.size || 0, side = view === "side";
+  const S = o.skin === "dark" ? B2.dark : B2.classic, view = o.view || "front", size = o.size || 0, side = view === "side", k = B3_SCALE[size];
   const T = (o.breath ? S.breath : S.torso)[view][size];
   const wk = o.walk >= 0 ? o.walk : -1, z = Math.round(o.z || 0);
   const liftL = wk >= 0 ? B2_WALK.liftL[wk] : 0, liftR = wk >= 0 ? B2_WALK.liftR[wk] : 0;
-  // a fat man waddles: the body sways over the foot that carries it
+  // a fat man waddles: the body sways over the foot that carries it; the belly spring moves it a pixel or two
   const bob = (wk >= 0 ? B2_WALK.bob[wk] : 0) + Math.round(o.sq || 0) - z, sway = wk >= 0 && !side ? B2_WALK.sway[wk] : 0;
-  const jx = Math.round(o.jx || 0), jy = Math.round(o.jy || 0);
-  const tyBase = sy - T.h - 2 + bob, tx = sx - (T.w >> 1) + jx + sway, ty = tyBase + jy;   // the belly's last rows overlap the legs
-  const legY = sy - S.leg.L.h + 2 - z;
+  const jx = Math.round(o.jx || 0), jy = Math.round(o.jy || 0), bx = jx + sway, by = bob + jy;
   const hk = o.head || (view === "front" ? "front" : view), Hd = S.head[hk];
-  const hx_ = sx - (Hd.w >> 1) + Math.round(jx / 2) + sway + (side ? 1 : 0), hy_ = tyBase - 12 + Math.round(jy / 2) - (o.breath ? 1 : 0);   // the head wobbles half as much
-  const sw = wk >= 0 ? B2_WALK.swing[wk] : 0;
-  // side view: the near arm (drawing-left) comes over the body, the far one tucks behind the belly
-  const shR = [tx + T.w - 5 - (side ? 3 : 0), ty + 5], shL = [tx + 4 + (side ? 3 : 0), ty + 5];
-  const place = (pose, sh, mirror, dy) => {
-    // sprite pixels sit one in from the outline; a mirrored arm reads its columns from the other side
-    const A = S.arm[pose], w = A.spr.w;
-    const x = mirror ? sh[0] - (w - 2 - A.sh[0]) : sh[0] - A.sh[0] - 1, y = sh[1] - A.sh[1] - 1 + dy;
-    const hand = mirror ? [x + (w - 2 - A.hand[0]), y + 1 + A.hand[1]] : [x + 1 + A.hand[0], y + 1 + A.hand[1]];
-    return { A, x, y, hand, mirror };
-  };
-  const pR = o.armR || "chain", pL = o.armL || "chain";
-  const armR = place(pR, shR, false, (pR === "chain" ? sw : 0) + (o.dyR || 0));
-  const armL = place(pL, shL, true, (pL === "chain" ? -sw : 0) + (o.dyL || 0));
-  return { S, T, tx, ty, legY, liftL, liftR, stepL: side ? liftL : 0, stepR: side ? liftR : 0, sx, sy, Hd, hk, hx: hx_, hy: hy_, armR, armL,
-    handR: armR.hand, handL: armL.hand, view, size, o };
+  const hx_ = sx - 8 + Math.round(jx / 2) + sway + (side ? 1 : 0), hy_ = sy + Math.round(B3_HEAD_Y * k) - 10 + bob + Math.round(jy / 2) - (o.breath ? 1 : 0);
+  const leg = (A, lift, step) => ({ A, x: sx + A.ox + step, y: sy + A.oy - lift - z });
+  const sw = wk >= 0 ? B2_WALK.swing[wk] : 0, pR = o.armR || "chain", pL = o.armL || "chain";
+  // the side view: the near arm (drawing-left) comes over the body, the far one tucks behind the belly
+  const arm = (A, dx, dy) => ({ A, x: sx + A.ox + bx + dx, y: sy + A.oy + by + dy, hand: [sx + A.hand[0] + bx + dx, sy + A.hand[1] + by + dy] });
+  const armR = arm(S.arm.R[size][pR], side ? -3 : 0, (pR === "chain" ? sw : 0) + (o.dyR || 0));
+  const armL = arm(S.arm.L[size][pL === "chain" && o.hookInHand !== false ? "chainHook" : pL], side ? 2 : 0, (pL === "chain" ? -sw : 0) + (o.dyL || 0));
+  return { S, T, tx: sx + T.ox + bx, ty: sy + T.oy + by, legL: leg(S.leg[size].L, liftL, side ? liftL : 0), legR: leg(S.leg[size].R, liftR, side ? liftR : 0),
+    sx, sy, k, Hd, hk, hx: hx_, hy: hy_, armR, armL, handR: armR.hand, handL: armL.hand, belly: [sx + bx, sy + by + Math.round(-280 * k)], view, size, o };
 }
+// blood that piles up on the belly during a chapter: [dx, dy] from the belly centre
+const B2_DIRT = [[-4, -2], [-3, -2], [-3, -1], [3, -4], [4, -4], [1, 1], [-6, -5], [-5, -5], [2, -7], [6, 0], [-1, -4], [0, 2]];
 function drawButcher2(Lt) {
   const { S, T, o } = Lt, fl = { flash: o.flash || 0, dither: o.dither, ol: o.ol || 0 };
   const flip = !!o.flipX, sx = Lt.sx, view = Lt.view, back = view === "back", side = view === "side", plain = !o.flash;
   // mirror an x drawn for a right-facing figure when the butcher faces left (side view)
   const X = (x, w) => flip ? 2 * sx - x - w + 1 : x;
-  const bl = (spr, x, y, extra = {}) => blit(spr, X(x, spr.w), y, Object.assign({}, fl, extra, { flip: flip !== !!extra.flip }));
-  // in the side view the lifted foot also steps forward
-  bl(S.leg.L, sx - 8 + Lt.stepL, Lt.legY - Lt.liftL);
-  bl(S.leg.R, sx + Lt.stepR, Lt.legY - Lt.liftR);
-  // the knife hangs on the left hip, the S-hook on the right one and swings as he walks
-  const beltY = Lt.ty + T.h - 6, cx = Lt.tx + (T.w >> 1) + (side ? 2 : 0);
-  const hookX = cx + 6 + Math.round(Math.sin(G.t * 7 + (o.walk || 0)) * (o.walk >= 0 ? 1.4 : 0.4) - (o.jx || 0) * 0.6);
-  if (side) bl(S.gear.hook, hookX, beltY);   // far hip: behind the belly
-  if (back || side) drawArm2(Lt.armR, bl);
-  if (back) drawArm2(Lt.armL, bl);
+  const bl = (spr, x, y) => blit(spr, X(x, spr.w), y, Object.assign({}, fl, { flip }));
+  bl(Lt.legL.A, Lt.legL.x, Lt.legL.y);
+  bl(Lt.legR.A, Lt.legR.x, Lt.legR.y);
+  // from behind the arms and the head go first (the hump hides the head's lower half); from the front the arms go over the belly
+  const across = p => p === "eat" || p === "scratch", pL = o.armL || "chain", pR = o.armR || "chain";
+  const armRFirst = back || side || !across(pR), armLFirst = back || (!side && !across(pL));
+  if (armRFirst) bl(Lt.armR.A, Lt.armR.x, Lt.armR.y);
+  if (armLFirst) bl(Lt.armL.A, Lt.armL.x, Lt.armL.y);
+  if (back) bl(Lt.Hd, Lt.hx, Lt.hy);
   bl(T, Lt.tx, Lt.ty);
-  if (!back) {
-    bl(S.gear.knife, cx - 10, beltY);
-    if (!side) bl(S.gear.hook, hookX, beltY);
-  }
-  if (!back && o.dirt && plain) for (const [dx, dy, ch] of B2_DIRT.slice(0, o.dirt === 1 ? 5 : B2_DIRT.length))
-    put(X(Lt.tx + (T.w >> 1) + dx + (side ? 3 : 0), 1), Lt.ty + T.h - 7 + dy, ch === 5 ? hx("#d0283a") : hx("#8a1428"));
-  bl(Lt.Hd, Lt.hx, Lt.hy);
-  // eyes: blink, or glow red in a frenzy; cracks in the mask at low HP
-  if (plain) {
-    for (const [ex, ey] of B2_EYES[Lt.hk] || []) {
+  if (!back && o.dirt && plain) for (const [dx, dy] of B2_DIRT.slice(0, o.dirt === 1 ? 5 : B2_DIRT.length))
+    put(X(Lt.belly[0] + dx + (side ? 2 : 0), 1), Lt.belly[1] + dy, (dx + dy) % 2 ? hx("#d0283a") : hx("#8a1428"));
+  if (!back) bl(Lt.Hd, Lt.hx, Lt.hy);
+  // eyes: blink, or glow in a frenzy; cracks in the mask at low HP
+  if (plain && !back) {
+    for (const [ex, ey] of B3_EYES[Lt.hk] || []) {
       const px_ = X(Lt.hx + ex + 1, 1), py_ = Lt.hy + ey + 1;
       if (o.eyes === "blink") put(px_, py_, INK);
-      else if (o.eyes === "glow") { put(px_, py_, WHITE); put(px_ - 1, py_, RED); put(px_ + 1, py_, RED); put(px_, py_ - 1, RED); }
+      else if (o.eyes === "glow") { put(px_, py_, WHITE); put(px_ - 1, py_, RED); put(px_ + 1, py_, RED); put(px_, py_ - 1, hx("#ffe04a")); }
     }
-    if (o.crack && !back) for (let c = 0; c < o.crack; c++) for (const [cx_, cy_] of B2_CRACKS[c])
-      put(X(Lt.hx + cx_ + 1 + (side ? 3 : 0), 1), Lt.hy + cy_ + 1, c ? INK : hx("#5e4e66"));
+    if (o.crack) for (let c = 0; c < o.crack; c++) for (const [cx_, cy_] of B3_CRACKS[c]) put(X(Lt.hx + cx_ + 1 + (side ? 1 : 0), 1), Lt.hy + cy_ + 1, c ? INK : hx("#5e4e66"));
   }
-  if (!back) { drawArm2(Lt.armL, bl); if (!side) drawArm2(Lt.armR, bl); }
+  if (!armLFirst) bl(Lt.armL.A, Lt.armL.x, Lt.armL.y);
+  if (!armRFirst) bl(Lt.armR.A, Lt.armR.x, Lt.armR.y);
 }
-function drawArm2(a, bl) { bl(a.A.spr, a.x, a.y, { flip: a.mirror }); }
-// apron stains that pile up during a chapter: [dx from the centre, dy from the belt, 5 light | 6 dark]
-const B2_DIRT = [[-4, -4, 5], [-3, -4, 5], [-3, -3, 6], [3, -6, 5], [4, -6, 6], [1, -2, 5], [-5, -8, 5], [-5, -7, 6], [2, -9, 5], [5, -3, 6], [-1, -6, 5], [0, -6, 6]];
 // screen positions of the hands for a layout, mirrored for a left-facing side view
 function butcherHands(Lt) {
   const flip = !!Lt.o.flipX, sx = Lt.sx, X = x => flip ? 2 * sx - x : x;
   return { handR: [X(Lt.handR[0]), Lt.handR[1]], handL: [X(Lt.handL[0]), Lt.handL[1]] };
 }
-// the butcher lying on his back: the idle figure turned a quarter, cached per size and skin
+// the butcher lying on his back: the struck figure turned a quarter, cached per size and skin
 const B2_DEAD = new Map();
 function deadButcher(size, skin) {
   const key = size + skin;
   if (B2_DEAD.has(key)) return B2_DEAD.get(key);
-  const w = 64, h = 64, saved = [pix, W, H];
+  const w = 96, h = 96, saved = [pix, W, H];
   pix = new Uint32Array(w * h); W = w; H = h;
-  const Lt = layoutButcher2(32, 58, { size, skin, head: "open", armL: "up", armR: "up" });
-  drawButcher2(Lt);
+  drawButcher2(layoutButcher2(48, 90, { size, skin, head: "open", armL: "up", armR: "up", hookInHand: false }));
   const src = pix; [pix, W, H] = saved;
   // trim, then rotate a quarter turn counter-clockwise (head to the left)
   let x0 = w, x1 = 0, y0 = h, y1 = 0;
@@ -3615,6 +3678,7 @@ function drawDark(B, sx, sy) {
     const slope = (hookAt[1] - by) / Math.max(1, Math.abs(hookAt[0] - bx)), pose = slope < -0.6 ? "throwU" : slope > 0.6 ? "throwD" : "throwS";
     if (hookAt[0] >= bx) o.armR = pose; else o.armL = pose;
   }
+  o.hookInHand = !hookAt;
   const Lt = layoutButcher2(sx, sy, o), hands = butcherHands(Lt), [hA, hB] = [hands.handL, hands.handR].sort((p, q) => p[0] - q[0]);
   const back = new Layer(), front = new Layer();
   const n = B.cleavers || 3, rx = B.ringR || 46, ry = rx * 0.62;
@@ -3627,7 +3691,7 @@ function drawDark(B, sx, sy) {
   }
   if (hookAt) {
     drawRope(front, rope("dkhook", hookAt[0] >= bx ? hB : hA, hookAt, 9, 1.03));
-    cleaver(front, hookAt[0], hookAt[1], a.t * 12, 1.4);
+    meatHook(front, hookAt[0], hookAt[1], a.t * 12, 1.3);
   }
   back.draw(INK, flash, true);
   drawButcher2(Lt);
@@ -5352,23 +5416,22 @@ function bloodTrail(cx, cy, rx, ry, a, cols, len = 24) {
       if ((xx - x) ** 2 + ((yy - y) * 1.2) ** 2 <= r * r) put(xx, yy, c);
   }
 }
-// frenzy: steam out of the ears and an anger vein on the mask; after a swallow the lump slides down the throat
+// frenzy: steam out of the ears and an anger vein on the mask; after a swallow the lump slides down into the belly
 function butcherExtras(Lt, view, flipX, chewing) {
   const X = x => flipX ? 2 * Lt.sx - x : x, hx0 = Lt.hx, hy0 = Lt.hy;
   if (P.frenzy > 0 && view !== "back") {
     for (let i = 0; i < 4; i++) {
-      const k = (G.t * 2.2 + i * 0.25) % 1, c = k < 0.4 ? WHITE : PALE, dy = Math.round(hy0 + 7 - k * 10), big = k < 0.55;
-      for (const [x, dir] of [[hx0 + 1, -1], [hx0 + 18, 1]]) {
+      const k = (G.t * 2.2 + i * 0.25) % 1, c = k < 0.4 ? WHITE : PALE, dy = Math.round(hy0 + 10 - k * 10), big = k < 0.55;
+      for (const [x, dir] of [[hx0 + 1, -1], [hx0 + 15, 1]]) {
         const px_ = X(Math.round(x + dir * (1 + k * 5)));
         put(px_, dy, c); if (big) { put(px_ + 1, dy, c); put(px_, dy - 1, c); }
       }
     }
-    if (Math.floor(G.t * 6) % 2) for (const [dx, dy] of [[12, 4], [14, 4], [13, 5], [12, 6], [14, 6]]) put(X(hx0 + dx + (view === "side" ? 2 : 0)), hy0 + dy, RED);
+    if (Math.floor(G.t * 6) % 2) for (const [dx, dy] of [[11, 6], [13, 6], [12, 7], [11, 8], [13, 8]]) put(X(hx0 + dx + (view === "side" ? 1 : 0)), hy0 + dy, RED);
   }
   if (chewing && P.chewT > 0.14 && view === "front") {
-    const k = clamp((0.4 - P.chewT) / 0.26, 0, 1), cx = hx0 + 10, ly = hy0 + 13 + Math.round(k * 3);
-    put(cx - 3, ly, hx("#f09c80")); put(cx + 2, ly, hx("#c0685a")); put(cx - 3, ly + 1, hx("#c0685a")); put(cx + 2, ly + 1, hx("#7a3a3a"));
-    put(cx - 1, ly - 1, hx("#ffc8a4")); put(cx, ly - 1, hx("#ffc8a4"));
+    const k = clamp((0.4 - P.chewT) / 0.26, 0, 1), cx = hx0 + 8, ly = hy0 + 18 + Math.round(k * 4);
+    put(cx - 2, ly, hx("#ffb547")); put(cx - 1, ly - 1, hx("#ffd27a")); put(cx, ly - 1, hx("#ffd27a")); put(cx + 1, ly, hx("#e0762a")); put(cx - 1, ly + 1, hx("#b5522b")); put(cx, ly + 1, hx("#b5522b"));
   }
 }
 // Butcher 2.0: the drawn torso size that goes with the growth scale (1, 1.125, 1.25, 1.375)
@@ -5401,10 +5464,10 @@ function drawPlayer() {
   const z = hop ? Math.round(Math.sin(hop * Math.PI) * 9 * s) : 0;
   const dance = P.danceT > 0 && !P.moving && !P.hook ? P.danceT : 0;
   const H = P.hook, eating = !!H && H.phase === "eat", chewing = !H && P.chewT > 0;
-  shadowEllipse(sx, sy + 1, 13 * s * (1 - z / 30), 3.5 * s * (1 - z / 40));
+  shadowEllipse(sx, sy + 1, 17 * s * (1 - z / 30), 4 * s * (1 - z / 40));
   // hunger: a ring around the feet fills with every meal (starting in front, clockwise); full ring = frenzy
   if (G.mode !== "title") {
-    const k = P.frenzy > 0 ? 1 : P.hunger, rx = 15 * s, ry = 5.5 * s, n = Math.round(Math.PI * (rx + ry) * 1.4);
+    const k = P.frenzy > 0 ? 1 : P.hunger, rx = 19 * s, ry = 6 * s, n = Math.round(Math.PI * (rx + ry) * 1.4);
     const col = P.frenzy > 0 ? (Math.floor(G.t * 10) % 2 ? RED : WHITE) : k > 0.8 && Math.floor(G.t * 6) % 2 ? WHITE : GOLD;
     for (let i = 0; i < n; i++) {
       const on = i / n < k;
@@ -5428,7 +5491,7 @@ function drawPlayer() {
   jiggle(J, ax, ay);
   const idle = !P.moving && !hop && !H && !dance && P.dashT <= 0 && !chewing, idleT = G.idleT || 0;
   const q = P.squash + (hop ? (hop < 0.2 ? 0.14 : -0.1) : 0);
-  const o = { size, skin, view, flipX, walk, z, jx: J.x, jy: J.y, sq: Math.round(q * 8), armL: "chain", armR: "chain",
+  const o = { size, skin, view, flipX, walk, z, jx: J.x, jy: J.y, sq: Math.round(q * 8), armL: "chain", armR: "chain", hookInHand: !H,
     breath: q > 0.1 || (idle && Math.floor(G.t / 0.9) % 2 === 1),
     eyes: P.frenzy > 0 ? "glow" : view !== "back" && G.t % 3.3 < 0.12 ? "blink" : 0,
     crack: P.hp < P.maxHp * 0.25 ? 2 : P.hp < P.maxHp * 0.5 ? 1 : 0, dirt: G.chKills > 350 ? 2 : G.chKills > 120 ? 1 : 0 };
@@ -5456,7 +5519,7 @@ function drawPlayer() {
     const [hx_, hy_] = worldToScreen(H.x, H.y), hand = hands[hookHand];
     drawRope(front, rope("hook", hand, [hx_, hy_], 9, H.phase === "pull" ? 1 : 1.05));
     if (H.phase === "fly") hookSmear(hx_, hy_, hx_ - hand[0], hy_ - hand[1], H.t);
-    if (H.phase !== "pull") cleaver(front, hx_, hy_, Math.atan2(hy_ - hand[1], hx_ - hand[0]) + (H.phase === "fly" ? H.t * 14 : 0), 1.3);
+    if (H.phase !== "pull") meatHook(front, hx_, hy_, Math.atan2(hy_ - hand[1], hx_ - hand[0]) + (H.phase === "fly" ? H.t * 14 : 0), 1.2);
   }
   if (P.w.cleaver) {
     const n = cleaverCount(), rx = orbitRx(), ry = rx * 0.62, sz = cleaverSize();
@@ -5490,7 +5553,7 @@ function drawPlayer() {
     drawButcher2(Lt);
     if (!justHit) butcherExtras(Lt, view, flipX, chewing);
     if (G.CH.key === "snow" && (G.t % 1.8) < 0.7) {   // breath vapour
-      const k = (G.t % 1.8) / 0.7, mx = sx + (view === "side" ? (flipX ? -6 : 6) : 0), my = Lt.hy + 12 - k * 6;
+      const k = (G.t % 1.8) / 0.7, mx = sx + (view === "side" ? (flipX ? -6 : 6) : 0), my = Lt.hy + 15 - k * 6;
       for (let i = 0; i < 5; i++) if ((i + Math.floor(G.t * 20)) % 3) put(mx + (i - 2) * (1 + k * 2) + P.face * k * 3, my + (i % 2), mix(WHITE, BLACK, k * 0.3));
     }
   }
@@ -5908,8 +5971,8 @@ function stack(y, items, w = 110, h = 15, gap = 5) {
 }
 
 // a tiny butcher for the belly-slam card, drawn at its size
-const SLAM_ICON = makeSprite(["....gGGg....", "...gGGGGg...", "...MMMMMMm..", "...MxbMxbm..", "....mMMMm...", "..RRkSSkqq..", ".RRRRAAqqqq.",
-  "RRRRRAAqqqqq", "RRRRRAAqqqqq", ".rrrrAAqqqq.", "..LLLCLLLL..", "..TT....tt.."], (() => { const p = {}; for (const k in B2_PAL) p[k] = hx(B2_PAL[k]); return p; })());
+const SLAM_ICON = makeSprite(["....gGg.....", "..CCWWWmCC..", ".CCCWrrmCCC.", "BCCCkWMkCCCD", "BCCCWnnmCCCD", "CCCCCMMCCCDE", "CC.BCCCCD.DE",
+  "CC.CCCCCD.DE", "BC.tttttt.CE", "...tt..tt...", "...CC..CD..."], (() => { const p = {}; for (const k in B3_PAL) p[k] = hx(B3_PAL[k]); return p; })());
 function drawIcon(key, cx, cy, scale = 2) {
   const art = scale >= 2 && CARD_ICONS[key];   // the card pictures are drawn at their own size
   if (art) { blit(art, Math.round(cx - art.w / 2), Math.round(cy - art.h / 2)); return; }
