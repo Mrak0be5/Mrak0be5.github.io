@@ -1118,10 +1118,19 @@ function drawRope(L, pts) {
 }
 
 // ---------------------------------------------------------------- the belly spring
-function jiggle(J, ax, ay) {
-  // ax, ay: the butcher's acceleration this frame (px/frame^2); the belly lags behind it and wobbles back
-  J.vx += (-J.x * 0.22 - J.vx * 0.2) - ax * 0.9; J.vy += (-J.y * 0.22 - J.vy * 0.2) - ay * 0.9;
-  J.x = clamp(J.x + J.vx, -2.4, 2.4); J.y = clamp(J.y + J.vy, -2.4, 2.4);
+// It lags behind every start, stop and turn and drops when he lands. Stepped with the world in real time (the old
+// per-frame spring ran twice as fast on 120 Hz screens), damped so that walking no longer keeps it wobbling.
+function bellySpring(J, x, y, sq, dt) {
+  if (!(dt > 0)) return;
+  let vx = (x - J.px) / dt, vy = (y - J.py) / dt;
+  if (Math.abs(vx) > 400 || Math.abs(vy) > 400) { vx = J.mvx; vy = J.mvy; }   // a teleport (new chapter) is not a push
+  J.vx -= 0.9 * clamp(vx - J.mvx, -150, 150); J.vy -= 0.9 * clamp(vy - J.mvy, -150, 150);
+  if (sq > J.sq) J.vy += 200 * (sq - J.sq);
+  J.vx += (-355 * J.x - 13 * J.vx) * dt; J.vy += (-355 * J.y - 13 * J.vy) * dt;
+  J.x += J.vx * dt; J.y += J.vy * dt;
+  if (Math.abs(J.x) > 2.4) { J.x = Math.sign(J.x) * 2.4; J.vx = 0; }
+  if (Math.abs(J.y) > 2.4) { J.y = Math.sign(J.y) * 2.4; J.vy = 0; }
+  J.px = x; J.py = y; J.mvx = vx; J.mvy = vy; J.sq = sq;
 }
 
 // ---------------------------------------------------------------- layout and drawing (all parts are placed in whole pixels from the feet)
@@ -1889,13 +1898,13 @@ function drawCrows() {
     A.crows = [];
     for (let i = 0; i < 6; i++) A.crows.push({ x: INSET.l + 20 + r() * (AW - 100), y: INSET.t + 20 + r() * (AH - 90), z: 0, st: "sit", t: r() * 3, face: r() < 0.5 ? 1 : -1 });
   }
-  const dt = 1 / 60;
+  const dt = Math.min(0.05, G.frameDt || 1 / 60);
   for (const c of A.crows) {
     c.t += dt;
     if (c.st === "sit") {
       const near = Math.hypot(P.x - c.x, P.y - c.y) < 48 || G.enemies.some(e => !e.T.crate && Math.abs(e.x - c.x) < 14 && Math.abs(e.y - c.y) < 10);
       if (near) { c.st = "fly"; c.vx = (c.x > P.x ? 1 : -1) * rnd(40, 70); c.vy = rnd(-30, 10); c.face = c.vx > 0 ? 1 : -1; c.t = 0; }
-      else if (c.t > 1.2 && Math.random() < 0.01) { c.x += c.face * 3; c.t = 0; if (Math.random() < 0.3) c.face *= -1; }   // a hop
+      else if (c.t > 1.2 && Math.random() < 0.6 * dt) { c.x += c.face * 3; c.t = 0; if (Math.random() < 0.3) c.face *= -1; }   // a hop
     } else if (c.st === "fly") {
       c.x += c.vx * dt; c.y += c.vy * dt; c.z += 38 * dt;
       if (c.t > 3) { c.st = "gone"; c.t = 0; }
@@ -1918,7 +1927,8 @@ function drawFish() {
   if (!A.pools || !A.pools.length) return;
   A.fish = A.fish || { t: 0, next: 1.5, j: null };
   const F = A.fish;
-  F.t += 1 / 60;
+  const dt = Math.min(0.05, G.frameDt || 1 / 60);
+  F.t += dt;
   if (!F.j && F.t > F.next) {
     const pool = A.pools[Math.floor(Math.random() * A.pools.length)], [sx, sy] = worldToScreen(pool.x, pool.y);
     F.t = 0; F.next = rnd(1.5, 3.5);
@@ -1929,7 +1939,7 @@ function drawFish() {
     }
   }
   if (F.j) {
-    const j = F.j; j.t += 1 / 60;
+    const j = F.j; j.t += dt;
     const k = j.t / 0.6, x = lerp(j.x0, j.x1, k), z = Math.sin(k * Math.PI) * 12, [sx, sy] = worldToScreen(x, j.y);
     blitFeet(FISH, sx, sy - z, { flip: j.dir < 0 });
     if (k >= 1) { G.fx.push({ kind: "splash", x: j.x1, y: j.y, t: 0, life: 0.35 }); F.j = null; }
@@ -2029,7 +2039,7 @@ function newPlayer() {
     w: { cleaver: 1, sword: 0, saw: 0, slam: 0, grenade: 0, aura: 0 },
     p: { meaty: 0, speed: 0, might: 0, magnet: 0, hook: 0, glutton: 0, regen: 0, armor: 0, dash: 0 },
     evo: {}, ang: 0, ang2: -Math.PI / 2, sawT: 1, slamT: 2, grenT: 2, auraT: 0, hookCd: 0, hook: null, regenAcc: 0, pulled: null,
-    dashT: 0, dashCd: 0, dashCharges: 1, dashId: 0, dashDir: [1, 0], ghosts: [], squash: 0, dying: 0, stepT: 0, stepSide: 1, facingUp: false,
+    dashT: 0, dashCd: 0, dashCharges: 1, dashId: 0, dashDir: [1, 0], ghosts: [], squash: 0, dying: 0, wf: -1, stepSide: 1, facingUp: false,
     teeth: 0, toothAcc: 0, relics: {}, curses: {}, hunger: 0, frenzy: 0, frenzyDur: 0, maskT: 0,
   };
 }
@@ -2109,7 +2119,7 @@ function retryChapter() {
 // ---------------------------------------------------------------- derived stats
 const might = () => (1 + 0.15 * P.p.might) * (1 + 0.15 * (G.revenge || 0)) * (1 + 0.5 * R("cursed")) *
   (R("drum") && G.streak >= 25 ? 1.25 : 1) * (P.frenzy > 0 ? 1.4 : 1);
-const moveSpeed = () => 42 * (1 + 0.1 * P.p.speed) * (P.hook && P.hook.phase === "eat" ? 0.55 : 1) * (P.slowT > 0 ? 0.6 : 1) *
+const moveSpeed = () => 42 * (1 + 0.1 * P.p.speed) * (P.slowT > 0 ? 0.6 : 1) *
   (R("boots") ? 1.2 : 1) * (P.frenzy > 0 ? 1.25 : 1);
 const magnetR = () => 34 * (1 + 0.4 * P.p.magnet) * (R("snout") ? 2 : 1);
 const hookCooldown = () => 2.6 * Math.pow(0.85, P.p.hook) * (R("hourglass") ? 0.7 : 1) * (CURSED("rust") ? 1.4 : 1);
@@ -2124,11 +2134,12 @@ const belly = (s = P.scale) => [P.x, P.y - BUTCHER_BELLY_UP * s];
 // dash: a short invulnerable burst with a cooldown (flick on touch, Shift / K on keyboard, the DASH button)
 // BLOODY DASH: level 1 slices enemies on the way, 2 = shorter cooldown and a harder slice, 3 = two charges
 const DASH_CD = 2.2, DASH_T = 0.2, DASH_SPD = 180;
+const WALK_FPS = 11;   // walk frames per second at the base speed (a 6-frame waddle)
 const dashCdMax = () => DASH_CD * (P.p.dash >= 2 ? 0.65 : 1) * (R("hourglass") ? 0.7 : 1);
 const dashMax = () => P.p.dash >= 3 ? 2 : 1;
 const dashDmg = () => (P.p.dash >= 2 ? 60 : 36) * might() * (1 + 0.6 * G.ch);
 function tryDash(dx = 0, dy = 0) {
-  if (G.mode !== "play" || P.dying || P.pulled || P.dashT > 0 || G.cine || (P.hook && P.hook.phase === "eat")) return false;
+  if (G.mode !== "play" || P.dying || P.pulled || P.dashT > 0 || G.cine) return false;
   if (P.dashCharges <= 0) { sfx("nope"); return false; }
   let l = Math.hypot(dx, dy);
   if (l < 0.1) { const v = inputVector(); dx = v.x; dy = v.y; l = Math.hypot(dx, dy); }
@@ -2306,7 +2317,14 @@ function groundDebris(x, y, R, n) {
 }
 function popup(s, x, y, col, k = 1, life = 0.8) { if (G.pops.length < 70) G.pops.push({ s, x, y, col, k, t: 0, life }); }
 function banner(s, col = GOLD, life = 2.2, sub = "") { G.banner = { s, col, t: 0, life, sub }; }
-function shake(t, m = 2) { if (t >= G.shake || m > G.shakeMag) { G.shake = Math.max(G.shake, t); G.shakeMag = Math.max(m, G.shake > 0 ? G.shakeMag : 0); } }
+// screen shake: drawn as a decaying wobble along one direction (see shakeOffset); mostly up and down, so it reads as a thud
+function shake(t, m = 2) {
+  const live = G.shake > 0;
+  if (live && t < G.shake && m <= G.shakeMag) return;
+  G.shakeMag = live ? Math.max(m, G.shakeMag) : m;
+  G.shake = G.shakeLen = Math.max(G.shake, t);
+  G.shakeDir = Math.PI / 2 + (Math.random() - 0.5) * 1.2;
+}
 // crit impact: a few frames of speed lines (see drawImpact); not more often than every 0.3 s
 function impactAt(x, y) { if (!G.impact || G.impact.t > 0.3) G.impact = { x, y, t: 0, seed: Math.random() * 99 }; }
 function addPart(p) { if (G.parts.length < 700) G.parts.push(p); }
@@ -2373,11 +2391,11 @@ function hurtPlayer(dmg, from, src = "?") {
   G.stats.hits[src] = (G.stats.hits[src] || 0) + dmg;
   popup("-" + dmg, P.x, P.y - 40 * P.scale, RED, 1);
   blood(P.x, P.y - 12, 6);
-  shake(0.25, 2);
+  if (dmg > P.maxHp * 0.12) shake(0.25, 2); else shake(0.12, 1);
   sfx("hurt"); buzz(60);
-  if (from) {
+  if (from) {   // knocked back: a short slide, not a jump
     const a = Math.atan2(P.y - from.y, P.x - from.x);
-    P.x += Math.cos(a) * 6; P.y += Math.sin(a) * 6; clampArena(P, 4);
+    P.kbx = Math.cos(a) * 110; P.kby = Math.sin(a) * 110;
   }
   if (P.hp <= 0) {
     if (G.phase === "den") { fleeDen(); return; }
@@ -2397,7 +2415,7 @@ function hurtEnemy(e, dmg, kx = 0, ky = 0, quiet = false) {
   if (e.T.golden) goldenHit(e);
   dmg = Math.round(dmg * (crit ? 2 : 1));
   e.hp -= dmg; e.flash = 0.09; e.hurtT = 0.14;
-  if (!e.T.crate && (!e.elite || crit)) { e.x += kx; e.y += ky; }
+  if (!e.T.crate && (!e.elite || crit)) { e.kvx = (e.kvx || 0) + kx * 18; e.kvy = (e.kvy || 0) + ky * 18; }   // a slide of about kx, ky px
   if (!quiet || crit) dmgPopup(e, e.x, e.y - e.h - 2, dmg, crit);
   if (crit) impactAt(e.x, e.y - e.h / 2);
   if (Math.random() < 0.4) blood(e.x, e.y - e.h / 2, 2, 0.6, e.h / 2);
@@ -2626,7 +2644,14 @@ function updateEnemies(dt) {
       }
     }
     e.x += mx * dt; e.y += my * dt;
-    if (Math.abs(mx) > 1) e.face = mx > 0 ? 1 : -1; else if (e.spd === 0 || e.T.keep) e.face = dx > 0 ? 1 : -1;
+    if (e.kvx || e.kvy) {
+      e.x += e.kvx * dt; e.y += e.kvy * dt;
+      const f = Math.exp(-18 * dt); e.kvx *= f; e.kvy *= f;
+      if (Math.abs(e.kvx) + Math.abs(e.kvy) < 2) e.kvx = e.kvy = 0;
+    }
+    // it turns only when it clearly walks the other way (walking up or down past the butcher it flipped every frame)
+    if (mx > 0.35 * e.spd + 1) e.face = 1; else if (mx < -0.35 * e.spd - 1) e.face = -1;
+    else if (e.spd === 0 || e.T.keep) { if (dx > 4) e.face = 1; else if (dx < -4) e.face = -1; }
     if (mx || my || e.T.fly) e.walkT += dt * (e.T.anim || 3);
     if (e.T.shoot && e.stun <= 0) {
       e.shootCd -= dt;
@@ -2688,21 +2713,28 @@ function updatePlayer(dt) {
       P.mvx = v.x / l; P.mvy = v.y / l;
       P.x += v.x / l * k * moveSpeed() * dt; P.y += v.y / l * k * moveSpeed() * dt;
       if (Math.abs(v.x) > 0.1) P.face = v.x > 0 ? 1 : -1;
-      P.walkT += dt * 5;
+      P.walkT += dt * WALK_FPS * Math.min(1.6, k * moveSpeed() / 42);
       if (!G.demo) G.movedOnce = (G.movedOnce || 0) + dt;   // the autopilot before the first touch does not count
-      P.stepT -= dt;
-      if (P.stepT <= 0) { P.stepT = 0.17; P.stepSide *= -1; stepFx(); }
+      const wf = Math.floor(P.walkT) % 6;   // frames 0 and 3 put a foot down (see B2_WALK)
+      if (wf !== P.wf && (wf === 0 || wf === 3)) { P.stepSide = wf ? 1 : -1; stepFx(); }
+      P.wf = wf;
     }
   }
   if (P.dashCharges < dashMax()) {
     P.dashCd -= dt;
     if (P.dashCd <= 0) { P.dashCharges++; P.dashCd = P.dashCharges < dashMax() ? dashCdMax() : 0; if (P.p.dash >= 3) sfx("tick"); }
   } else P.dashCd = 0;
+  if (P.kbx || P.kby) {
+    P.x += P.kbx * dt; P.y += P.kby * dt;
+    const f = Math.exp(-18 * dt); P.kbx *= f; P.kby *= f;
+    if (Math.abs(P.kbx) + Math.abs(P.kby) < 2) P.kbx = P.kby = 0;
+  }
   G.idleT = P.moving || P.dashT > 0 ? 0 : (G.idleT || 0) + dt;
   for (const g of P.ghosts) g.t += dt;
   P.ghosts = P.ghosts.filter(g => g.t < 0.25);
   P.squash *= Math.max(0, 1 - dt * 9);
   clampArena(P, 4);
+  bellySpring(P.jig || (P.jig = { x: 0, y: 0, vx: 0, vy: 0, px: P.x, py: P.y, mvx: 0, mvy: 0, sq: 0 }), P.x, P.y, P.squash, dt);
   P.inv = Math.max(0, P.inv - dt);
   P.hitT = Math.max(0, (P.hitT || 0) - dt);
   P.slowT = Math.max(0, (P.slowT || 0) - dt);
@@ -2812,7 +2844,7 @@ function updateHook(dt) {
         hurtEnemy(tgt, dmg); tgt.stun = 1.1;
         const a = Math.atan2(P.y - tgt.y, P.x - tgt.x); tgt.x += Math.cos(a) * 18; tgt.y += Math.sin(a) * 18;
         popup("STUN", tgt.x, tgt.y - tgt.h - 8, CYAN);
-        H.phase = "back"; sfx("hit"); shake(0.1, 1);
+        H.phase = "back"; sfx("hit");
       } else {
         tgt.grabbed = true; H.phase = "pull"; H.t = 0; sfx("hit");
         blood(tgt.x, tgt.y - tgt.h / 2, 5);
@@ -2826,11 +2858,11 @@ function updateHook(dt) {
     if (d < sp * dt + 1) { tgt.x = hold.x; tgt.y = hold.y; H.phase = "eat"; H.t = 0; H.chomps = 0; }
     else { tgt.x += dx / d * sp * dt; tgt.y += dy / d * sp * dt; if (Math.random() < 0.5) dust(tgt.x, tgt.y, 1, PALE); }
     // the victim kicks and flails on the chain
-    tgt.face = Math.floor(H.t * 14) % 2 ? 1 : -1; tgt.walkT += dt * 14; tgt.z = Math.abs(Math.sin(H.t * 28)) * 3;
+    tgt.face = Math.floor(H.t * 8) % 2 ? 1 : -1; tgt.walkT += dt * 10; tgt.z = Math.abs(Math.sin(H.t * 16)) * 3;
     if (H.phase === "eat") tgt.z = 0;
     H.x = tgt.x; H.y = tgt.y - tgt.h / 2;
   } else if (H.phase === "eat") {
-    tgt.x = P.x + H.side * 12 * P.scale + (Math.random() < 0.5 ? 1 : -1); tgt.y = P.y + 1;
+    tgt.x = P.x + H.side * 12 * P.scale; tgt.y = P.y + 1;
     P.mouth = "open";
     const es = P.frenzy > 0 ? 0.35 : 1, ct = [0.2 * es, 0.4 * es, 0.6 * es];
     if (H.chomps < 3 && H.t >= ct[H.chomps]) {
@@ -2841,7 +2873,6 @@ function updateHook(dt) {
       blood(P.x + H.side * 4 * P.scale, P.y, 5, 0.8, 22 * P.scale);
       for (let i = 0; i < 4; i++) addPart({ x: P.x + H.side * 8 * P.scale, y: P.y + rnd(-2, 2), z: 22 * P.scale, vx: H.side * rnd(12, 45), vy: rnd(-10, 10), vz: rnd(25, 70), life: 0.8, stain: i === 0, c: pick(CRUMBS) });
       if (Math.random() < 0.6) bones(P.x, P.y, 1);
-      shake(0.06, 1);
     }
     if (H.chomps > 0 && H.t - ct[H.chomps - 1] < 0.08) P.mouth = "bite";
     if (H.t >= 0.78 * es) {
@@ -3016,7 +3047,8 @@ function slamAt(x, y, R, dmg) {
     if (d < R && !e.grabbed) { const a = Math.atan2(e.y - y, e.x - x); hurtEnemy(e, dmg, Math.cos(a) * 12, Math.sin(a) * 12); }
   }
   hitsBoss(x, y, R, "slam", dmg, 1);
-  shake(0.15, 1); sfx("stomp"); dust(x, y, 12, PALE);
+  if (P.evo.quake) shake(0.15, 1);
+  sfx("stomp"); dust(x, y, 12, PALE);
 }
 function explode(x, y, R, dmg, split) {
   for (const e of G.enemies) if (!e.grabbed && Math.hypot(e.x - x, (e.y - y) * 1.3) < R + e.r) hurtEnemy(e, dmg, 0, 0, true);
@@ -4988,7 +5020,8 @@ function pickNodeOption(i) {
 // World rendering into the 256x160 pixel buffer. Works headless too (sim screenshots).
 
 let camX = 0, camY = 0;
-const worldToScreen = (x, y) => [x - camX, y - camY];
+// whole pixels, rounded the same way for every sprite, pixel and ring, so nothing drifts a pixel off its owner
+const worldToScreen = (x, y) => [Math.round(x) - camX, Math.round(y) - camY];
 const TRAIL = [hx("#f0ffff"), hx("#8ef0ff"), hx("#3aa8e0"), hx("#1a5a9a")];
 // drawn at the size they are shown (these used to be scaled up)
 const METEOR = makeSprite(["...ooo...", "..oOOOo..", ".oOOYOOo.", "oOOYWYOOo", "oOYYYYYOo", "oOOYYYOOo", ".oOOOOOo.", "..oOOOo..", "...ooo..."],
@@ -4999,11 +5032,40 @@ const GUT = makeSprite([".rR.", "rRRr", ".rr."], { r: hx("#8a1a2a"), R: hx("#e04
 const BLOB_G = makeSprite([".gG.", "gGGg", ".gg."], { g: hx("#3aa82a"), G: hx("#9aff6a") });
 const SPIKE = makeSprite(["...W...", "...W...", "..WwW..", "..Wwb..", ".WwwbW.", ".Wwwbb.", "WwwwbbW", "wwwbbbw", "wwbbbbb"], { W: WHITE, w: hx("#bff6ff"), b: hx("#6ab8d8") });
 
+// screen shake: a decaying wobble along one direction (a fresh random offset every frame read as jitter)
+function shakeOffset() {
+  if (!(G.shake > 0) || G.mode !== "play") return [0, 0];
+  const len = Math.max(G.shake, G.shakeLen || 0), a = G.shakeMag * (G.shake / len) * Math.cos((len - G.shake) * 80), d = G.shakeDir || Math.PI / 2;
+  return [Math.round(Math.cos(d) * a), Math.round(Math.sin(d) * a)];
+}
+// the drawn pixel (o.dpx, o.dpy) of something that moves: plain rounding while it keeps going one way, but it turns back
+// only once the position really moved back (0.7 px). A snap after "most of a pixel" either way made uneven 0-2 px steps
+function stickyPix(o, x, y, snap) {
+  const rx = Math.round(x), ry = Math.round(y);
+  if (snap || o.dpx === undefined) { o.dpx = rx; o.dpy = ry; o.ddx = o.ddy = 0; return; }
+  if (rx !== o.dpx && (Math.sign(rx - o.dpx) === o.ddx || Math.abs(x - o.dpx) > 0.7)) { o.ddx = Math.sign(rx - o.dpx); o.dpx = rx; }
+  if (ry !== o.dpy && (Math.sign(ry - o.dpy) === o.ddy || Math.abs(y - o.dpy) > 0.7)) { o.ddy = Math.sign(ry - o.dpy); o.dpy = ry; }
+}
+// the camera's lag behind the butcher, in whole pixels (with a little hysteresis). The ground moves by his step plus the
+// lag's, and it should only ever make the steps the eased camera would (floor or ceil of vc): a lag pixel stacked on his
+// step jumped the ground 2 px right after a still frame, one against it stepped the ground back and forth. So a lag
+// pixel waits for a frame where the sum is such a step, and when his step alone would jolt the ground the lag evens it
+// out (a camera going about 1 px a frame takes only 1 px steps: 2 then 0 was a stutter). When his next pixel is due the
+// other way (pend: how far he is past the drawn one, pv: how far he went last frame), the two cancel out
+function lagStep(cur, want, step, pend, pv, vc, snap) {
+  const d = want - cur;
+  if (snap || cur === undefined || Math.abs(d) > 2.5) return Math.round(want);
+  const s = Math.sign(d), lo = Math.floor(vc + 0.12), hi = Math.ceil(vc - 0.12), ok = g => g >= lo && g <= hi;
+  if (Math.abs(d) > 1.5) return cur + s;
+  if (!ok(step) && ok(step + s) && Math.abs(d) > 0.25) return cur + s;
+  if (Math.abs(d) <= 0.75 || (step === 0 && (s * pend < -0.45 || s * (pend + pv) < -0.5))) return cur;
+  return ok(step + s) || (!ok(step) && Math.abs(step + s - vc) < Math.abs(step - vc)) ? cur + s : cur;
+}
 function drawWorld() {
-  const sm = G.shake > 0 ? G.shakeMag : 0;
-  // the camera looks a little ahead of where the butcher walks
-  G.lookX = lerp(G.lookX || 0, P.moving ? (P.mvx || 0) * 24 : 0, 0.04);
-  G.lookY = lerp(G.lookY || 0, P.moving ? (P.mvy || 0) * 16 : 0, 0.04);
+  // the camera eases in real time (per drawn frame it ran twice as fast on 120 Hz screens) and looks a little ahead
+  const fdt = Math.min(0.05, G.frameDt || 1 / 60), ease = r => 1 - Math.exp(-r * fdt);
+  G.lookX = lerp(G.lookX || 0, P.moving ? (P.mvx || 0) * 24 : 0, ease(2.4));
+  G.lookY = lerp(G.lookY || 0, P.moving ? (P.mvy || 0) * 16 : 0, ease(2.4));
   let fx_ = P.x + G.lookX, fy_ = P.y - 14 + G.lookY;
   const B = G.boss;
   if (G.cine) { fx_ = G.cine.x; fy_ = G.cine.y; }
@@ -5013,11 +5075,20 @@ function drawWorld() {
     fy_ += clamp((c.y - 10 - P.y) * 0.3, -H / 2 + 60, H / 2 - 70);
   }
   const far = G.camX === undefined || Math.abs(G.camX - fx_) > W * 0.6 || Math.abs(G.camY - fy_) > H * 0.6;
-  const ck = G.cine ? 0.18 : 0.08;
+  const ck = ease(G.cine ? 12 : 5), cx0 = G.camX, cy0 = G.camY;
   G.camX = far ? fx_ : lerp(G.camX, fx_, ck);
   G.camY = far ? fy_ : lerp(G.camY, fy_, ck);
-  camX = Math.round(clamp(G.camX - W / 2, 0, AW - W) + (sm ? rnd(-sm, sm) : 0));
-  camY = Math.round(clamp(G.camY - H / 2, 0, AH - H) + (sm ? rnd(-sm, sm) : 0));
+  stickyPix(P, P.x, P.y, far);   // pushed back and forth by a crowd, he no longer flickers the whole screen
+  // locked to the butcher's pixel: the eased lag is rounded on its own, so the camera steps exactly when he does and he
+  // never wobbles a pixel against the ground
+  const stx = G.camPX === undefined ? 0 : P.dpx - G.camPX, sty = G.camPY === undefined ? 0 : P.dpy - G.camPY;
+  const pvx = G.camLX === undefined ? 0 : P.x - G.camLX, pvy = G.camLY === undefined ? 0 : P.y - G.camLY;
+  G.camOX = lagStep(G.camOX, G.camX - P.x, stx, P.x - P.dpx, pvx, G.camX - cx0, far);
+  G.camOY = lagStep(G.camOY, G.camY - P.y, sty, P.y - P.dpy, pvy, G.camY - cy0, far);
+  G.camPX = P.dpx; G.camPY = P.dpy; G.camLX = P.x; G.camLY = P.y;
+  const [shx, shy] = shakeOffset();
+  camX = clamp(P.dpx + G.camOX - W / 2, 0, AW - W) + shx;
+  camY = clamp(P.dpy + G.camOY - H / 2, 0, AH - H) + shy;
   const A = G.arena;
   if (camX >= 0 && camX + W <= AW && camY >= 0 && camY + H <= AH) {
     for (let y = 0; y < H; y++) { const row = (y + camY) * AW + camX; pix.set(A.d.subarray(row, row + W), y * W); }
@@ -5106,7 +5177,7 @@ function drawWorld() {
 function postFx() {
   const b = G.CH.key;
   if (b === "grave") {
-    const [px_, py_] = worldToScreen(P.x, P.y - 14 * P.scale);
+    const [px_, py_] = worldToScreen(P.dpx, P.dpy - 14 * P.scale);
     const lights = [{ x: px_, y: py_, r: 82 + 5 * Math.sin(G.t * 3) }];
     for (const pr of G.arena.props) if (pr.spr === CANDLE) {
       const [x, y] = worldToScreen(pr.x, pr.y - 6);
@@ -5123,7 +5194,7 @@ function postFx() {
   } else if (b === "lava") vignette(hx("#3a0804"), 0.9, 0.3);
   if (G.hurtFx > 0) vignette(RED, 0.65 * G.hurtFx / 0.3, 0.22);
   if (G.heartFx > 0) vignette(RED, 0.4 * G.heartFx / 0.25, 0.16);   // low HP: the edges pulse with the heartbeat
-  if (P.frenzy > 0) vignette(Math.floor(G.t * 6) % 2 ? RED : hx("#ff7a2a"), 0.3 + 0.15 * Math.sin(G.t * 12), 0.2);
+  if (P.frenzy > 0) vignette(mix(RED, hx("#ff7a2a"), 0.5 + 0.5 * Math.sin(G.t * 5)), 0.32 + 0.08 * Math.sin(G.t * 5), 0.2);   // a slow burning pulse, not a strobe
   if (G.flashFx) {
     const k = 1 - G.flashFx.t / G.flashFx.life;
     for (let y = 0; y < H; y++) for (let x = (y & 1); x < W; x += 2) pix[y * W + x] = mix(pix[y * W + x], G.flashFx.col, 0.4 * k);
@@ -5155,14 +5226,18 @@ function drawAmbient() {
   }
   const b = G.CH.key, slot = Math.floor(G.t * 2), ph = G.t * 2 % 1;
   const rnd01 = n => ((Math.sin(n * 127.1) * 43758.5453) % 1 + 1) % 1;
+  // the spots are pinned to the ground (wrapped every screen), so they slide with the world instead of riding the camera
+  const wx = n => (((rnd01(n) * W - camX) % W) + W) % W, wy = n => (((rnd01(n) * H - camY) % H) + H) % H;
   if (b === "lava") for (let k = 0; k < 7; k++) {
-    const x = rnd01(slot * 13 + k) * W, y = rnd01(slot * 29 + k * 7) * H, r = ph * 3;
+    const x = wx(slot * 13 + k), y = wy(slot * 29 + k * 7), r = ph * 3;
     if (ph < 0.8) ellipseRing(x, y, r + 1, (r + 1) * 0.6, ph < 0.4 ? hx("#ffc03a") : hx("#ff6a1a"), 2);
-  } else if (b === "jungle") for (let k = 0; k < 10; k++) {
-    const x = rnd01(G.t * 9 + k * 3.1) * W, y = rnd01(G.t * 7 + k * 5.3) * H;
-    put(x - 1, y, hx("#bfe8ff")); put(x + 1, y, hx("#bfe8ff")); put(x, y - 1, WHITE);
+  } else if (b === "jungle") for (let k = 0; k < 6; k++) {   // dew glints: each lives a moment in one spot, then another one lights up
+    const s3 = Math.floor(G.t * 3 + k * 0.37), q = (G.t * 3 + k * 0.37) % 1;
+    if (q > 0.55) continue;
+    const x = wx(s3 * 9 + k * 3.1), y = wy(s3 * 7 + k * 5.3);
+    put(x, y, WHITE); if (q < 0.3) { put(x - 1, y, hx("#bfe8ff")); put(x + 1, y, hx("#bfe8ff")); put(x, y - 1, hx("#bfe8ff")); }
   } else if (b === "snow") for (let k = 0; k < 8; k++) {
-    const x = rnd01(slot * 5 + k * 11) * W, y = rnd01(slot * 17 + k * 3) * H;
+    const x = wx(slot * 5 + k * 11), y = wy(slot * 17 + k * 3);
     if (Math.floor(G.t * 8 + k) % 3 === 0) put(x, y, WHITE);
   }
 }
@@ -5178,7 +5253,7 @@ function drawWreck(f) {
   }
   for (let y = -14; y <= -2; y++) for (let x = -12; x <= 6; x++) if ((x / 10) ** 2 + (y / 9) ** 2 < 1 && (x + y) % 3) L.set(sx + x - 6, sy + y, GLASS[(x + y + 30) % 3]);
   L.draw();
-  if (Math.random() < 0.3) G.fx.push({ kind: "smoke", x: f.x + rnd(-25, 25), y: f.y - 4, t: 0, life: 1.4 });
+  if (Math.random() < 18 * Math.min(0.05, G.frameDt || 1 / 60)) G.fx.push({ kind: "smoke", x: f.x + rnd(-25, 25), y: f.y - 4, t: 0, life: 1.4 });
   if (Math.floor(G.t * 3 + f.x) % 5 === 0) put(sx + 20, sy - 2, Math.floor(G.t * 10) % 2 ? RED : GOLD);
 }
 function drawCracks(f) {
@@ -5192,7 +5267,7 @@ function drawCracks(f) {
   }
 }
 function drawAura() {
-  const R = auraR(), [sx, sy] = worldToScreen(P.x, P.y - 4), col = P.evo.plague ? hx("#b0ff5a") : hx("#8ac04a");
+  const R = auraR(), [sx, sy] = worldToScreen(P.dpx, P.dpy - 4), col = P.evo.plague ? hx("#b0ff5a") : hx("#8ac04a");
   for (let y = Math.floor(sy - R * 0.62); y <= sy + R * 0.62; y++)
     for (let x = Math.floor(sx - R); x <= sx + R; x++) {
       const d = ((x - sx) / R) ** 2 + ((y - sy) / (R * 0.62)) ** 2;
@@ -5380,7 +5455,8 @@ function drawCorpse(c) {
 }
 function drawEnemy(e) {
   if (P.hook && P.hook.target === e && (P.hook.phase === "pull" || P.hook.phase === "eat")) return;   // the butcher draws what he holds
-  const [sx, sy] = worldToScreen(e.x, e.y);
+  stickyPix(e, e.x, e.y, false);   // a crowd pressing on the butcher no longer flickers
+  const [sx, sy] = worldToScreen(e.dpx, e.dpy);
   if (sx < -30 || sx > W + 30 || sy < -10 || sy > H + 60) return;
   const fr = enemyFrame(e), sw = Math.max(3, fr.w * 0.3);
   if (!e.T.fly) shadowEllipse(sx, sy + 1, sw, Math.max(1.4, sw * 0.32));
@@ -5440,10 +5516,10 @@ function butcherExtras(Lt, view, flipX, chewing) {
 const b2Size = sc => sc >= 1.36 ? 3 : sc >= 1.24 ? 2 : sc >= 1.12 ? 1 : 0;
 function drawPlayer() {
   const fk = frenzyK(), s = P.scale * (1 + 0.25 * fk);
-  const [sx, sy] = worldToScreen(P.x, P.y);
+  const [sx, sy] = worldToScreen(P.dpx, P.dpy);   // his hysteresis pixel, the one the camera is locked to
   const skin = P.skin === "dark" ? "dark" : "classic", size = Math.min(3, b2Size(P.scale) + (P.frenzy > 0 ? 1 : 0));
   dropOldRopes();
-  if (fk > 0) fillEllipseDither(sx, sy, 18 * s, 7 * s, Math.floor(G.t * 8) % 2 ? RED : hx("#ff7a2a"), 0.4, false);
+  if (fk > 0) fillEllipseDither(sx, sy, 18 * s, 7 * s, Math.floor(G.t * 4) % 2 ? RED : hx("#ff7a2a"), 0.4, false);
   for (const g of P.ghosts) {
     const [gx, gy] = worldToScreen(g.x, g.y);
     if (g.t < 0.2 && Math.floor(g.t * 30) % 2 === 0)
@@ -5470,7 +5546,7 @@ function drawPlayer() {
   // hunger: a ring around the feet fills with every meal (starting in front, clockwise); full ring = frenzy
   if (G.mode !== "title") {
     const k = P.frenzy > 0 ? 1 : P.hunger, rx = 19 * s, ry = 6 * s, n = Math.round(Math.PI * (rx + ry) * 1.4);
-    const col = P.frenzy > 0 ? (Math.floor(G.t * 10) % 2 ? RED : WHITE) : k > 0.8 && Math.floor(G.t * 6) % 2 ? WHITE : GOLD;
+    const col = P.frenzy > 0 ? (Math.floor(G.t * 5) % 2 ? RED : WHITE) : k > 0.8 && Math.floor(G.t * 4) % 2 ? WHITE : GOLD;
     for (let i = 0; i < n; i++) {
       const on = i / n < k;
       if (!on && i % 3) continue;
@@ -5482,15 +5558,9 @@ function drawPlayer() {
   // the view: from behind walking up, three-quarter walking sideways, facing us whenever the mouth is busy
   const mouthBusy = P.mouth !== "idle" || eating || chewing || dance;
   const view = mouthBusy ? "front" : P.facingUp ? "back" : P.side ? "side" : "front", flipX = view === "side" && P.face < 0;
-  // the belly spring lags behind every start, stop and turn and bounces on impacts and footfalls
-  const J = P.jig || (P.jig = { x: 0, y: 0, vx: 0, vy: 0, px: P.x, py: P.y, mvx: 0, mvy: 0, sq: 0, wf: -1 });
-  const mvx = P.x - J.px, mvy = P.y - J.py;
-  const walk = P.moving && !hop ? Math.floor(P.walkT * 3.2) % 6 : -1;
-  let ax = clamp(mvx - J.mvx, -3, 3), ay = clamp(mvy - J.mvy, -3, 3) + Math.max(0, P.squash - J.sq) * 10;
-  if (walk !== J.wf && (walk === 0 || walk === 3)) ay += 0.6;
-  if (Math.abs(mvx) > 20 || Math.abs(mvy) > 20) ax = ay = 0;   // a teleport (new chapter) is not a push
-  J.px = P.x; J.py = P.y; J.mvx = mvx; J.mvy = mvy; J.sq = P.squash; J.wf = walk;
-  jiggle(J, ax, ay);
+  // the belly spring lags behind every start, stop and turn (stepped with the world: bellySpring in updatePlayer)
+  const J = P.jig || { x: 0, y: 0 };
+  const walk = P.moving && !hop ? Math.floor(P.walkT) % 6 : -1;
   const idle = !P.moving && !hop && !H && !dance && P.dashT <= 0 && !chewing, idleT = G.idleT || 0;
   const q = P.squash + (hop ? (hop < 0.2 ? 0.14 : -0.1) : 0);
   const o = { size, skin, view, flipX, walk, z, jx: J.x, jy: J.y, sq: Math.round(q * 8), armL: "chain", armR: "chain", hookInHand: !H,
@@ -5562,7 +5632,7 @@ function drawPlayer() {
   front.draw();
   if (H && (H.phase === "pull" || H.phase === "eat")) {
     const e = H.target, S = e.spr, fl = e.flash > 0 ? WHITE : 0;
-    const fr = !S.hurt ? S[0] : eating || Math.floor(H.t * 14) % 2 ? S.hurt : S.wind;
+    const fr = !S.hurt ? S[0] : eating || Math.floor(H.t * 8) % 2 ? S.hurt : S.wind;
     let [ex, ey] = worldToScreen(e.x, e.y);
     if (eating) {
       // lifted to the mouth; every chomp bites off the side nearest the face
@@ -5579,7 +5649,12 @@ function drawPlayer() {
 // weather in screen space
 const WX = Array.from({ length: 46 }, () => ({ x: Math.random() * W, y: Math.random() * H, s: Math.random() }));
 function drawWeather() {
-  const B = BIOMES[G.CH.key], dt = 1 / 60, wx = B.weather;
+  const B = BIOMES[G.CH.key], dt = Math.min(0.05, G.frameDt || 1 / 60), wx = B.weather;
+  // it hangs in the world: when the camera moves, the flakes and leaves slide the other way with the ground
+  const last = G.wxCam || [camX, camY], dcx = Math.abs(camX - last[0]) < 40 ? camX - last[0] : 0, dcy = Math.abs(camY - last[1]) < 40 ? camY - last[1] : 0;
+  G.wxCam = [camX, camY];
+  if (dcx || dcy) for (const w of WX) { w.x -= dcx; w.y -= dcy; if (w.land) w.land -= dcy; if (w.sx !== undefined) { w.sx -= dcx; w.sy -= dcy; } }
+  const f60 = dt * 60;   // the sway terms were tuned per 60 Hz frame
   if (wx === "fog") {
     // slow banks of fog instead of single pixels
     for (let k = 0; k < 4; k++) {
@@ -5588,11 +5663,11 @@ function drawWeather() {
     }
   }
   for (const w of WX) {
-    if (wx === "leaves") { w.x += (8 + w.s * 10) * dt + Math.sin(G.t * 2 + w.s * 6) * 0.2; w.y += (14 + w.s * 12) * dt; }
-    else if (wx === "snow") { w.x += Math.sin(G.t + w.s * 6) * 0.25; w.y += (10 + w.s * 14) * dt; }
+    if (wx === "leaves") { w.x += (8 + w.s * 10) * dt + Math.sin(G.t * 2 + w.s * 6) * 0.2 * f60; w.y += (14 + w.s * 12) * dt; }
+    else if (wx === "snow") { w.x += Math.sin(G.t + w.s * 6) * 0.25 * f60; w.y += (10 + w.s * 14) * dt; }
     else if (wx === "rain") { w.x -= 60 * dt; w.y += 190 * dt; }
-    else if (wx === "sand") { w.x += (70 + w.s * 50) * dt; w.y += Math.sin(G.t * 3 + w.s * 9) * 0.2; }
-    else if (wx === "embers") { if (w.s < 0.3) { w.y += (8 + w.s * 10) * dt; w.x += Math.sin(G.t + w.s * 9) * 0.3; } else { w.y -= (12 + w.s * 16) * dt; w.x += Math.sin(G.t * 2 + w.s * 7) * 0.3; } }
+    else if (wx === "sand") { w.x += (70 + w.s * 50) * dt; w.y += Math.sin(G.t * 3 + w.s * 9) * 0.2 * f60; }
+    else if (wx === "embers") { if (w.s < 0.3) { w.y += (8 + w.s * 10) * dt; w.x += Math.sin(G.t + w.s * 9) * 0.3 * f60; } else { w.y -= (12 + w.s * 16) * dt; w.x += Math.sin(G.t * 2 + w.s * 7) * 0.3 * f60; } }
     else if (wx === "fog") { w.x += (6 + w.s * 6) * dt; }
     if (wx === "rain" && w.y > (w.land || H)) {   // a drop hits the ground: a tiny splash ring
       w.sx = w.x; w.sy = w.land; w.st = 0.18; w.y = -2; w.x = Math.random() * (W + 60); w.land = H * (0.25 + Math.random() * 0.75);
@@ -5615,7 +5690,7 @@ function drawWeather() {
   if (wx === "sand") {
     // now and then a tumbleweed rolls across
     const T = G.tumble;
-    if (!T || T.x > W + 12) { if (!T || Math.random() < 0.004) G.tumble = { x: -10, y: H * (0.3 + Math.random() * 0.6), t: 0 }; }
+    if (!T || T.x > W + 12) { if (!T || Math.random() < 0.24 * dt) G.tumble = { x: -10, y: H * (0.3 + Math.random() * 0.6), t: 0 }; }
     else { T.x += 55 * dt; T.t += dt; blitFeet(TUMBLE[Math.floor(T.t * 8) % 2], T.x, T.y - Math.abs(Math.sin(T.t * 6)) * 6); }
   }
 }
@@ -6399,10 +6474,10 @@ function drawMetaHUD() {
   keys.slice(0, max).forEach((k, i) => blit(RELIC_SPR[k], 3 + i * 10, 29, { flash: P.relics[k] === 2 ? hx("#5a5068") : 0 }));
   if (keys.length > max) text("+" + (keys.length - max), 3 + max * 10, 31, WHITE);
   // FRENZY!
-  if (G.frenzyFx) {
+  if (G.frenzyFx && G.mode === "play") {   // (it showed through the chapter-clear screen)
     const f = G.frenzyFx, y = port ? 104 : 58;
-    if (!(f.t > 1.1 && Math.floor(f.t * 14) % 2)) {
-      centered("FRENZY!", y, Math.floor(f.t * 12) % 2 ? RED : hx("#ff9a2a"), f.t < 0.07 ? 5 : 4);
+    if (!(f.t > 1.1 && Math.floor(f.t * 8) % 2)) {
+      centered("FRENZY!", y, Math.floor(f.t * 6) % 2 ? RED : hx("#ff9a2a"), f.t < 0.07 ? 5 : 4);
       centered("EAT EVERYTHING!", y + 24, PALE);
     }
   }
@@ -6627,7 +6702,7 @@ const BOTPLAY = Q.has("bot"), SPEED = +(Q.get("speed") || 1), NO_REDIRECT = Q.ha
 // ad networks (playable.html) forbid leaving the ad without a tap: there the end card only waits for PLAY NOW
 const AUTO_STORE = !NO_REDIRECT && !window.BH_AD_BUILD;
 const SAVE_KEY = "bhpx_save_v1", OPT_KEY = "bhpx_opts_v1", UNL_KEY = "bhpx_unlocks_v1";
-let keys = {}, lastT = 0, acc = 0, titleT = 0, botWait = 0, pointers = new Map();
+let keys = {}, lastT = 0, titleT = 0, botWait = 0, pointers = new Map();
 
 // ---------------------------------------------------------------- storage (ad containers may block it: never fail)
 const kv = {
@@ -7008,9 +7083,14 @@ function present() {
   sctx.imageSmoothingEnabled = false;
   sctx.drawImage(octx.canvas, 0, 0, cw, ch);
 }
+// rAF timestamps wobble around the screen's refresh rate: snapped to it, every frame moves the world by the same step
+const VSYNC = [1 / 60, 1 / 120, 1 / 90, 1 / 144, 1 / 75, 1 / 30];
 function loop(now) {
-  const dt = Math.min(0.05, (now - (lastT || now)) / 1000) * SPEED;
+  let fdt = Math.max(0, Math.min(0.05, (now - (lastT || now)) / 1000));
+  for (const r of VSYNC) if (Math.abs(fdt - r) < 0.0015) { fdt = r; break; }
+  const dt = fdt * SPEED;
   lastT = now;
+  G.frameDt = dt;
   const m = G.mode;
   G.menuT = (G.menuT || 0) + dt;
   G.demo = !TOUCHED && !BOTPLAY;
@@ -7022,10 +7102,11 @@ function loop(now) {
     if (BOTPLAY && titleT > 1) uiAction("new");
   } else {
     if (m === "play") {
-      acc += dt;
-      let n = 0;
-      while (acc >= 1 / 60 && n++ < 8) { if (BOTPLAY) BOT.act(); update(1 / 60); acc -= 1 / 60; if (G.mode !== "play") { acc = 0; break; } }
-    } else { acc = 0; G.clock += dt; }
+      // exactly one world update per drawn frame (split into steps of at most 1/60 s at x2, x3): a fixed 1/60 step
+      // against a 59.9 / 90 / 120 Hz screen ran 0 or 2 updates in some frames, and the whole picture stuttered
+      const n = Math.min(8, Math.ceil(dt * 60 - 0.001));
+      for (let i = 0; i < n; i++) { if (BOTPLAY) BOT.act(); update(dt / n); if (G.mode !== "play") break; }
+    } else G.clock += dt;
     if (m === "intro") { G.introT = (G.introT || 0) + dt; if (G.introT > (BOTPLAY ? 1.5 : window.BH_AD_BUILD ? 3 : 60)) setMode("play"); }
     if (m === "victory" && !G.endCancel) {
       G.endT = (G.endT || 0) + dt;
