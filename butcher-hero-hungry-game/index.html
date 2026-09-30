@@ -13,22 +13,37 @@
   .links{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}
   .links a{flex:1 1 auto;text-align:center;padding:11px 14px;border-radius:999px;background:#4be630;color:#0b1a06;font-weight:800;text-decoration:none}
   .links a.alt{background:#2b2240;color:#f3e9e6}
-  ul{padding-left:20px;color:#d8cde6} small{color:#8c7fa0}
+  h2{font-size:17px;margin:18px 0 4px;color:#ffd21a}
+  ul{padding-left:20px;color:#d8cde6;margin:4px 0} small{color:#8c7fa0}
 </style>
 </head>
 <body>
 <main>
   <h1>BUTCHER HERO · <b>HUNGRY</b></h1>
-  <p class="sub">Игровая версия: тот же бесконечный отъезд камеры, собранный в 3D из настоящих моделей, анимаций, эффектов, шрифта, логотипа и звука игры (ветка butcher/dev).</p>
-  <video src="./butcher-hero-hungry-game.mp4" controls playsinline preload="metadata"></video>
+  <p class="sub">Игровая версия, v2: бесконечный отъезд камеры, собранный в 3D из настоящих моделей, анимаций, эффектов, шрифта, логотипа и звука игры (ветка butcher/dev).</p>
+  <video src="./butcher-hero-hungry-game-v2.mp4" controls playsinline preload="metadata"></video>
   <div class="links">
-    <a href="./butcher-hero-hungry-game.mp4">Скачать MP4</a>
+    <a href="./butcher-hero-hungry-game-v2.mp4">Скачать MP4</a>
+    <a class="alt" href="./butcher-hero-hungry-game.mp4">Прошлая версия (v1)</a>
     <a class="alt" href="../butcher-hero-hungry/">Нарисованная версия</a>
   </div>
+  <h2>Что нового в v2</h2>
+  <ul>
+    <li>Монтаж под родной темп музыки (128 BPM, 16 тактов = 30 с): трек без ускорения, каждый удар в сетку</li>
+    <li>Добыча растёт: голем выше Pudge, дракон с огромными крыльями, башня боссов вырастает из земли</li>
+    <li>На башне сидят боссы игры: Король викингов, Лич, Вампир и Краб; башню выдёргивают с комом корней</li>
+    <li>Видно, как жертва влетает в рот: стоп-кадр, сжатие головы, глоток</li>
+    <li>Рост без скачков, камера отстаёт от героя и догоняет, лёгкий облёт по спирали</li>
+    <li>Деревня из игры, трава игры, облака на подъёме, тени, толстые контуры, motion blur</li>
+    <li>Карта мира в правильной ориентации, из неё вырываются настоящие острова</li>
+    <li>Луна: плавный подтяг, укус со следами зубов, полумесяц за логотипом</li>
+    <li>Звук: разгон и главный удар на укусе луны, тишина, отрыжка, налёт перед ударом в объектив</li>
+  </ul>
+  <h2>Из игры</h2>
   <ul>
     <li>Pudge (Pudge_rig + клипы Mixamo игры), маска, цепи, легендарное оружие</li>
-    <li>Враги по тирам игры: Swordman → Spearman → Mounted Knight → Bear → Golem → Fire Dragon</li>
-    <li>Башня, острова и карта мира игры (Minimap), эффекты Epic Toon FX</li>
+    <li>Враги по тирам: Swordman → Spearman → Mounted Knight → Bear → Golem → Fire Dragon</li>
+    <li>Arena CastleTower, IslandsLevel, Lowpoly Township, Minimap, Epic Toon FX</li>
     <li>Музыка: Devour OST — The Boss Fight; SFX игры: needle, devour, power-up, boss tower</li>
   </ul>
   <small>Рендер: three.js на сервере, тун-шейдинг по параметрам Toony Colors Pro из материалов игры.</small>
