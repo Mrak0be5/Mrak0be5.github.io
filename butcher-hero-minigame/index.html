@@ -824,7 +824,7 @@ const UPG = {
   glutton: { name: "GLUTTON", max: 5, desc: () => "EATING HEALS +6 AND GIVES +20% XP" },
   regen: { name: "REGEN", max: 5, desc: () => "+0.5 HP EVERY SECOND" },
   armor: { name: "IRON GUT", max: 5, desc: () => "-8% DAMAGE TAKEN" },
-  dash: { name: "BLOODY DASH", max: 3, desc: l => ["YOUR DASH SLICES EVERYONE IN THE WAY", "-35% DASH COOLDOWN, HARDER SLICE", "TWO DASH CHARGES"][l] },
+  dash: { name: "BLOODY DASH", max: 3, desc: l => ["YOU CHARGE INTO CROWDS AND SLICE EVERYONE IN THE WAY", "-35% DASH COOLDOWN, HARDER SLICE", "TWO DASH CHARGES"][l] },
 };
 // evolution: weapon at max level + the partner passive -> offered in boss chests
 const EVOS = {
@@ -905,7 +905,7 @@ function startChapter(idx, fromSnapshot) {
   setMode("intro");
   music.play(idx, false);
 }
-function setMode(m) { G.mode = m; onMode(m); }
+function setMode(m) { G.mode = m; G.menuT = 0; onMode(m); }   // menuT: how long this screen has been up (menus ignore taps at first)
 function playerDied() {
   G.stats.deaths++;
   P.dying = 0;
@@ -933,7 +933,7 @@ const cleaverDmg = () => 10 * (1 + 0.25 * ((P.w.cleaver >= 2) + (P.w.cleaver >= 
 const cleaverSize = () => P.evo.razor ? 1.7 : 1.2;
 const orbitRx = () => 30 * P.scale + 3 * cleaverCount() + (P.evo.razor ? 6 : 0);
 const auraR = () => (22 + 4 * P.w.aura) * (P.evo.plague ? 1.5 : 1) * Math.sqrt(P.scale);
-const chMul = () => [1.15, 1.45, 1.65, 2.1, 2.6, 3.9][G.ch];
+const chMul = () => [1.3, 1.65, 1.9, 2.4, 3.0, 4.5][G.ch];   // +15% again: one-finger play dodges by itself
 const belly = (s = P.scale) => [P.x, P.y - BUTCHER_BELLY_UP * s];
 
 // dash: a short invulnerable burst with a cooldown (flick on touch, Shift / K on keyboard, the DASH button)
@@ -974,6 +974,78 @@ function dashSlice() {
     G.fx.push({ kind: "slash", x: P.x, y: P.y - 12 * P.scale, a: Math.atan2(P.dashDir[1], P.dashDir[0]) + 0.9, t: 0, life: 0.2, big: true });
   }
   if (hits) { G.freeze = Math.max(G.freeze, 0.03); sfxThrottled("slash", 0.04); }
+}
+// ---------------------------------------------------------------- one-finger play
+// The finger only steers. The butcher hooks the best meal in reach by himself, dodges what is about to hit him,
+// and with BLOODY DASH charges into crowds that stand in his way.
+const AUTO_HOOK_R = 120, AUTO_HOOK_GOLD_R = 210;
+function autoHook(dt) {
+  if (P.hook || P.pulled || P.hookCd > 0 || P.dashT > 0 || P.frenzy > 0 || P.dying) return;
+  if ((P.autoHookT = (P.autoHookT || 0) - dt) > 0) return;
+  let best = null, bs = -1e9;
+  for (const e of G.enemies) {
+    if (e.grabbed || e.dead) continue;
+    const d = Math.hypot(e.x - P.x, e.y - P.y);
+    if (d > (e.T.golden ? AUTO_HOOK_GOLD_R : AUTO_HOOK_R)) continue;
+    const eat = !e.champion && (!e.elite || e.hp < e.maxHp * 0.35 || R("gut"));
+    const sc = e.T.golden ? 100 - d / 60 : (eat ? 2 : 0.6) * (e.xp + 1) + (P.hp < P.maxHp * 0.6 && eat ? 3 : 0) - d / 60;
+    if (sc > bs) { bs = sc; best = e; }
+  }
+  const B = G.boss;
+  if (!best && B && !B.dying && !B.untouchable && B.entering <= 0) {
+    const c = bossCircles(B)[0];
+    if (Math.hypot(c.x - P.x, c.y - P.y) < AUTO_HOOK_R + c.r) best = B;
+  }
+  if (best && tryHook(best)) P.autoHookT = 0.12;
+}
+// what is about to hit the butcher right now: an escape direction, or null
+function dangerDir() {
+  let x = 0, y = 0, hit = false;
+  for (const t of G.tele) {
+    if (!(t.dmg || t.shape === "line" || t.shape === "ring") || t.t / t.dur < 0.72 || !teleHitsPlayer(t)) continue;
+    hit = true;
+    if (t.shape === "circle") { const dx = P.x - t.x, dy = (P.y - t.y) * 1.3, d = Math.hypot(dx, dy) || 1; x += dx / d; y += dy / d / 1.3; }
+    else if (t.shape === "band") y += P.y >= t.y ? 1 : -1;
+    else if (t.shape === "vband") x += P.x >= t.x ? 1 : -1;
+    else if (t.shape === "ring") { const dx = P.x - t.x, dy = P.y - t.y, d = Math.hypot(dx, dy) || 1, out = d > (t.r0 + t.r1) / 2 ? 1 : -1; x += dx / d * out; y += dy / d * out; }
+    else { const lx = t.x2 - t.x1, ly = t.y2 - t.y1, l = Math.hypot(lx, ly) || 1, nx = -ly / l, ny = lx / l, sd = (P.x - t.x1) * nx + (P.y - t.y1) * ny >= 0 ? 1 : -1; x += nx * sd; y += ny * sd; }
+  }
+  for (const s of G.shots) {
+    const dx = P.x - s.x, dy = P.y - 8 * P.scale - s.y, d = Math.hypot(dx, dy), sp = Math.hypot(s.vx, s.vy) || 1;
+    if (d > 16 || (dx * s.vx + dy * s.vy) / ((d || 1) * sp) < 0.5) continue;
+    hit = true;
+    const nx = -s.vy / sp, ny = s.vx / sp, sd = dx * nx + dy * ny >= 0 ? 1 : -1; x += nx * sd; y += ny * sd;
+  }
+  for (const e of G.enemies) if (e.state === "dash" && segDist(P.x, P.y, e.x, e.y, e.x + e.cdx * 45, e.y + e.cdy * 45) < 12 + e.r) {
+    hit = true;
+    const nx = -e.cdy, ny = e.cdx, sd = (P.x - e.x) * nx + (P.y - e.y) * ny >= 0 ? 1 : -1; x += nx * sd; y += ny * sd;
+  }
+  return hit ? { x, y } : null;
+}
+function autoDodge(dt) {
+  if ((P.dodgeT = (P.dodgeT || 0) - dt) > 0) return;
+  if (P.dashCharges <= 0 || P.dashT > 0 || P.pulled || P.frenzy > 0 || P.inv > 0.3 || P.dying) return;
+  const v = dangerDir();
+  if (!v) return;
+  const vl = Math.hypot(v.x, v.y) || 1, iv = inputVector(), il = Math.hypot(iv.x, iv.y);
+  let dx = v.x / vl, dy = v.y / vl;
+  if (il > 0.3 && (iv.x * dx + iv.y * dy) / il > 0.2) { dx += iv.x / il * 0.7; dy += iv.y / il * 0.7; }   // lean where the finger goes
+  if (tryDash(dx, dy)) {
+    P.dodgeT = 0.8; G.stats.dodges = (G.stats.dodges || 0) + 1;
+    if (G.stats.dodges <= 3) popup("AUTO-DODGE!", P.x, P.y - 44 * P.scale, CYAN, 1, 0.9);
+  }
+}
+// BLOODY DASH: a full charge and a crowd ahead = cut straight through it
+function autoCharge(dt) {
+  if ((P.chargeT = (P.chargeT || 0) - dt) > 0) return;
+  if (!P.p.dash || !P.moving || P.dashCharges < dashMax() || P.dashT > 0 || P.hook || P.pulled || P.dying) return;
+  let n = 0;
+  for (const e of G.enemies) {
+    if (e.grabbed || e.T.golden) continue;
+    const dx = e.x - P.x, dy = e.y - P.y, ahead = dx * P.mvx + dy * P.mvy;
+    if (ahead > 6 && ahead < 44 && Math.abs(dx * P.mvy - dy * P.mvx) < 10 + e.r) n++;
+  }
+  if (n >= 4 && tryDash(P.mvx, P.mvy)) P.chargeT = 1.5;
 }
 // growth comes in steps (9/8, 5/4, 11/8) so the scaled pixels stay in a regular pattern
 const GROW_STEPS = [[0, 1], [40, 1.125], [120, 1.25], [250, 1.375]];
@@ -1371,6 +1443,7 @@ function updatePlayer(dt) {
     P.side = P.moving && !P.facingUp && Math.abs(v.x) / l > 0.6;
     if (P.moving) {
       const k = Math.min(1, l);
+      P.mvx = v.x / l; P.mvy = v.y / l;
       P.x += v.x / l * k * moveSpeed() * dt; P.y += v.y / l * k * moveSpeed() * dt;
       if (Math.abs(v.x) > 0.1) P.face = v.x > 0 ? 1 : -1;
       P.walkT += dt * 5;
@@ -1398,6 +1471,8 @@ function updatePlayer(dt) {
   }
   P.maskT = Math.max(0, P.maskT - dt); P.fangT = Math.max(0, (P.fangT || 0) - dt);
   updateFrenzy(dt);
+  autoDodge(dt); autoCharge(dt); autoHook(dt);
+  if (P.chewT > 0 && !P.hook) { P.chewT -= dt; P.mouth = P.chewT > 0 && Math.floor(P.chewT * 14) % 2 ? "bite" : "idle"; }
   updateHook(dt);
   updateWeapons(dt);
   const mr = magnetR();
@@ -1549,7 +1624,7 @@ function updateHook(dt) {
       popup("+" + xp + "XP", P.x, P.y - 48 * P.scale, PALE, 1, 0.9);
       popup("+" + heal, P.x + 14, P.y - 38 * P.scale, GREEN, 1, 0.9);
       gainXp(xp);
-      P.mouth = "idle"; P.hook = null; P.hookCd = hookCooldown();
+      P.mouth = "idle"; P.hook = null; P.hookCd = hookCooldown(); P.chewT = 0.4;
       if (!G.ateOnce) { G.ateOnce = true; popup("EAT TO GROW & HEAL!", P.x, P.y - 64, GOLD, 1, 2.2); }
       return;
     }
@@ -3618,7 +3693,10 @@ const SPIKE = makeSprite(["..W..", "..W..", ".WwW.", ".WwW.", "WwwbW", "wwbbw"],
 
 function drawWorld() {
   const sm = G.shake > 0 ? G.shakeMag : 0;
-  let fx_ = P.x, fy_ = P.y - 14;
+  // the camera looks a little ahead of where the butcher walks
+  G.lookX = lerp(G.lookX || 0, P.moving ? (P.mvx || 0) * 24 : 0, 0.04);
+  G.lookY = lerp(G.lookY || 0, P.moving ? (P.mvy || 0) * 16 : 0, 0.04);
+  let fx_ = P.x + G.lookX, fy_ = P.y - 14 + G.lookY;
   const B = G.boss;
   if (G.cine) { fx_ = G.cine.x; fy_ = G.cine.y; }
   else if (B && !B.dying) {
@@ -4015,6 +4093,18 @@ function drawPlayer() {
   const z = hop ? Math.round(Math.sin(hop * Math.PI) * 9 * s) : 0, hq = hop ? (hop < 0.2 ? 0.14 : -0.1) : 0;
   const bob = z + (P.moving ? Math.round(Math.abs(Math.sin(P.walkT * Math.PI))) : (Math.floor(G.t * 2) % 2));
   shadowEllipse(sx, sy + 1, 13 * s * (1 - z / 30), 3.5 * s * (1 - z / 40));
+  // hunger: a ring around the feet fills with every meal (starting in front, clockwise); full ring = frenzy
+  if (G.mode !== "title") {
+    const k = P.frenzy > 0 ? 1 : P.hunger, rx = 15 * s, ry = 5.5 * s, n = Math.round(Math.PI * (rx + ry) * 1.4);
+    const col = P.frenzy > 0 ? (Math.floor(G.t * 10) % 2 ? RED : WHITE) : k > 0.8 && Math.floor(G.t * 6) % 2 ? WHITE : GOLD;
+    for (let i = 0; i < n; i++) {
+      const on = i / n < k;
+      if (!on && i % 3) continue;
+      const a = Math.PI / 2 + i / n * Math.PI * 2, px_ = sx + Math.cos(a) * rx, py_ = sy + 1 + Math.sin(a) * ry;
+      put(px_, py_, on ? col : INK);
+      if (on) put(px_, py_ + 1, INK);   // a dark edge keeps it readable on every ground
+    }
+  }
   const bx = sx, by = sy - BUTCHER_BELLY_UP * s - bob;
   const back = new Layer(), front = new Layer();
   const handL = [bx - 16 * s, by - s], handR = [bx + 16 * s, by - s];
@@ -4199,33 +4289,8 @@ const BOT = {
     const l = Math.hypot(v.x, v.y);
     return l > 0.12 ? { x: v.x / l, y: v.y / l } : { x: 0, y: 0 };
   },
-  act() {
-    // dash out of a zone that is about to fire, or away from a bullet about to land
-    if (P.dashCharges > 0 && P.dashT <= 0 && !P.pulled && Math.random() < this.skill) {
-      let need = false;
-      for (const t of G.tele) if (t.dmg && t.t / t.dur > 0.72 && teleHitsPlayer(t)) need = true;
-      for (const s of G.shots) {
-        const dx = P.x - s.x, dy = P.y - 8 - s.y, d = Math.hypot(dx, dy);
-        if (d < 16 && (dx * s.vx + dy * s.vy) > 0) need = true;
-      }
-      if (need) { const v = this.inputVector(); tryDash(v.x, v.y); }
-    }
-    if (P.hook || P.hookCd > 0 || P.pulled) return;
-    let best = null, bs = -1;
-    for (const e of G.enemies) {
-      if (e.grabbed) continue;
-      const d = Math.hypot(e.x - P.x, e.y - P.y);
-      if (d > 115) continue;
-      const eatable = !e.champion && (!e.elite || e.hp < e.maxHp * 0.35 || R("gut"));
-      const score = e.T.golden ? 100 - d / 60 : (eatable ? 2 : 0.6) * (e.xp + 1) + (P.hp < P.maxHp * 0.6 && eatable ? 3 : 0) - d / 60;
-      if (score > bs) { bs = score; best = e; }
-    }
-    if (!best && G.boss && !G.boss.dying && !G.boss.untouchable) {
-      const c = bossCircles(G.boss)[0];
-      if (Math.hypot(c.x - P.x, c.y - P.y) < 150) best = G.boss;
-    }
-    if (best) tryHook(best);
-  },
+  // the game itself hooks and dodges now (one-finger play): the bot only steers
+  act() {},
   choose(cards) {
     const score = c => {
       if (c.kind === "evo") return 100;
@@ -4294,8 +4359,6 @@ let UI_RECTS = [];      // {x,y,w,h,id}
 let JOY = null;         // {ox,oy,x,y} while the move stick is held
 let MUTED = false;
 const STORE = "https://play.google.com/store/apps/details?id=com.multicastgames.butcher";
-const HOOK_BTN = () => portrait() ? { x: W - 24, y: H - 30, r: 16 } : { x: W - 22, y: H - 24, r: 13 };
-const DASH_BTN = () => portrait() ? { x: W - 24, y: H - 72, r: 12 } : { x: W - 54, y: H - 18, r: 10 };
 // 7x7 loadout icons for the HUD
 const MINI_ICON = {
   cleaver: makeSprite(["WWWW...", "WwwW...", "WwKW...", "WwwWh..", "WWWW.h.", ".....h.", "......h"], { W: METAL[0], w: METAL[1], K: INK, h: HANDLE }, INK),
@@ -4417,37 +4480,10 @@ function drawHUD() {
   }
   const B = G.boss;
   if (B && B.entering <= 0) {
-    const w = Math.min(B.mini ? 90 : 120, W - 60), x = Math.round((W - (port ? 44 : 0) - w) / 2), y = H - 9;
+    const w = Math.min(B.mini ? 90 : 120, W - 60), x = Math.round((W - w) / 2), y = H - 9;
     text(B.name, x + Math.round((w - textW(B.name)) / 2), y - 8, B.mini ? GOLD : WHITE);
     bar(x, y, w, 4, B.hp / B.maxHp, B.phase2 ? hx("#ff3a3a") : B.mini ? hx("#ff9a2a") : RED, undefined, B.trail);
   }
-  const hb = HOOK_BTN(), ready = P.hookCd <= 0 && !P.hook;
-  for (let y = -hb.r; y <= hb.r; y++) for (let x = -hb.r; x <= hb.r; x++) {
-    const d = x * x + y * y;
-    if (d > hb.r * hb.r) continue;
-    let c = ready ? hx("#6a2a1a") : hx("#2a1a1a");
-    if (!ready) { const a = (Math.atan2(x, -y) + Math.PI * 2) % (Math.PI * 2) / (Math.PI * 2); if (a < 1 - P.hookCd / hookCooldown()) c = hx("#4a2a1a"); }
-    if (d > (hb.r - 1.5) ** 2) c = ready ? (Math.floor(G.t * 3) % 2 ? GOLD : hx("#e08a1a")) : INK;
-    put(hb.x + x, hb.y + y, c);
-  }
-  blit(SPR.icons.hookbtn, hb.x - 5, hb.y - 6, { scale: port ? 1.25 : 1 });
-  const hl = P.frenzy > 0 ? "FRENZY" : "HOOK";
-  const ly = hb.y + hb.r + 6;   // clear of the hunger ring
-  text(hl, hb.x - Math.round(textW(hl) / 2), ly + 5 > H - 1 ? hb.y - hb.r - 12 : ly, P.frenzy > 0 ? RED : ready ? GOLD : DIM);
-  uiRect(hb.x - hb.r - 4, hb.y - hb.r - 4, hb.r * 2 + 8, hb.r * 2 + 8, "hook");
-  const db = DASH_BTN(), dready = P.dashCharges > 0, dcol = P.p.dash ? hx("#ff6a5a") : CYAN;
-  for (let y = -db.r; y <= db.r; y++) for (let x = -db.r; x <= db.r; x++) {
-    const d = x * x + y * y;
-    if (d > db.r * db.r) continue;
-    let c = dready ? hx("#1a4a5a") : hx("#1a2228");
-    if (!dready) { const a = (Math.atan2(x, -y) + Math.PI * 2) % (Math.PI * 2) / (Math.PI * 2); if (a < 1 - P.dashCd / dashCdMax()) c = hx("#1a3440"); }
-    if (d > (db.r - 1.5) ** 2) c = dready ? dcol : INK;
-    put(db.x + x, db.y + y, c);
-  }
-  for (let i = -3; i <= 3; i++) { put(db.x + i - 2, db.y + Math.abs(i) - 1, dready ? WHITE : DIM); put(db.x + i + 2, db.y + Math.abs(i) - 1, dready ? WHITE : DIM); }
-  text("DASH", db.x - 7, port ? db.y - db.r - 7 : db.y + db.r + 1 > H - 6 ? db.y - db.r - 7 : db.y + db.r + 1, dready ? dcol : DIM);
-  if (dashMax() > 1) for (let i = 0; i < dashMax(); i++) { const px_ = db.x + db.r - 1 - i * 4, py_ = db.y - db.r + 1; rect(px_ - 1, py_ - 1, 3, 3, INK); put(px_, py_, i < P.dashCharges ? dcol : hx("#1a2228")); }
-  uiRect(db.x - db.r - 3, db.y - db.r - 3, db.r * 2 + 6, db.r * 2 + 6, "dash");
   if (!JOY && !P.moving && ((G.ch === 0 && G.t < 60) || (G.idleT || 0) > 4) && !G.cine) {
     const gx = port ? W * 0.3 : W * 0.2, gy = H - (port ? 60 : 38), a = 0.5 + 0.5 * Math.sin(G.clock * 3);
     ellipseRing(gx, gy, 16, 16, mix(WHITE, BLACK, 0.55 - a * 0.2), 3);
@@ -4515,17 +4551,17 @@ function drawTutorial() {
     hint("DRAG ANYWHERE TO MOVE");
     return;
   }
-  if (!G.hookedOnce) {
+  if (!G.ateOnce) {
     let best = null, bd = 1e9;
     for (const e of G.enemies) { const d = Math.hypot(e.x - P.x, e.y - P.y); if (d < bd && !e.elite) { bd = d; best = e; } }
-    if (best && bd < 110) {
+    if (best && bd < 160) {
       const [sx, sy] = worldToScreen(best.x, best.y - best.h / 2);
       ellipseRing(sx, sy + 3, 8 + (G.t * 3 % 1) * 6, 5, GOLD);
-      hand(sx, sy, Math.floor(G.t * 2) % 2);
-      hint("TAP A GOBLIN TO HOOK AND EAT IT!");
     }
+    hint("WALK UP TO A GOBLIN - THE BUTCHER HOOKS AND EATS IT BY HIMSELF!");
     return;
   }
+  if (P.hunger < 0.4 && !G.stats.frenzies && G.t < 75) { hint("EVERY MEAL FILLS THE RING AT YOUR FEET. FULL RING = FRENZY!"); return; }
   if (G.t > 40) G.tutorialDone = true;
 }
 function hint(s) {
@@ -4560,14 +4596,15 @@ function drawCard(c, x, y, w, h, i, tall) {
   uiRect(x, y, w, h, "card" + i);
 }
 function drawCards(cards, y0) {
-  const n = cards.length;
+  const n = cards.length, mt = G.menuT === undefined ? 9 : G.menuT;
+  const slide = i => Math.round((1 - easeOut(clamp((mt - i * 0.06) / 0.22, 0, 1))) * 36);   // cards drop in one after another
   if (portrait()) {
     const w = W - 16, h = 50;
-    cards.forEach((c, i) => drawCard(c, 8, y0 + i * (h + 6), w, h, i, false));
+    cards.forEach((c, i) => drawCard(c, 8 + slide(i) * (i % 2 ? 1 : -1) * 2, y0 + i * (h + 6), w, h, i, false));
     return y0 + n * (h + 6);
   }
   const w = 88, gap = 8, x0 = Math.round((W - (n * w + (n - 1) * gap)) / 2);
-  cards.forEach((c, i) => drawCard(c, x0 + i * (w + gap), y0, w, 84, i, true));
+  cards.forEach((c, i) => drawCard(c, x0 + i * (w + gap), y0 + slide(i), w, 84, i, true));
   return y0 + 84;
 }
 function drawScreen() {
@@ -4599,7 +4636,7 @@ function drawScreen() {
     y = ctext(G.CH.name, y, GOLD, 3) + 8;
     y = cwrap("MINI-BOSS: " + BOSSES[G.CH.mini].name, y, PALE);
     y = cwrap("BOSS: " + BOSSES[G.CH.boss].name + (G.ch === CHAPTERS.length - 1 ? " + ???" : ""), y, hx("#ff8a8a")) + 6;
-    if (G.ch === 0 && !G.endless) y = cwrap("DRAG TO MOVE - TAP ENEMIES TO HOOK AND EAT THEM", y, DIM) + 6;
+    if (G.ch === 0 && !G.endless) y = cwrap("ONE FINGER: DRAG TO MOVE. HOOKING, EATING AND DODGING ARE AUTOMATIC", y, DIM) + 6;
     if (Math.floor((G.introT || 0) * 2) % 2 === 0) ctext("TAP TO START", y + 6, WHITE);
     uiRect(0, 16, W, H - 16, "start");
     drawMuteBtn(); drawCtaPill();
@@ -4706,7 +4743,7 @@ function drawTitle(t, save, unlocks) {
     const bw = extra.length > 1 ? 88 : 100, gap = 4, x0 = (W - (extra.length * bw + (extra.length - 1) * gap)) / 2;
     extra.forEach((it, i) => button(x0 + i * (bw + gap), y + 2, bw, 13, it[0], it[1], it[2]));
   }
-  cwrap("DRAG = MOVE   TAP ENEMY OR HOOK = HOOK", H - 10 - (port ? 8 : 0), DIM);
+  cwrap("ONE FINGER: DRAG TO MOVE, THE REST IS AUTOMATIC", H - 10 - (port ? 8 : 0), DIM);
   drawMuteBtn();
 }
 
@@ -4779,16 +4816,6 @@ function drawMetaHUD() {
   const keys = Object.keys(P.relics), max = port ? 8 : 12;
   keys.slice(0, max).forEach((k, i) => blit(RELIC_SPR[k], 3 + i * 10, 29, { flash: P.relics[k] === 2 ? hx("#5a5068") : 0 }));
   if (keys.length > max) text("+" + (keys.length - max), 3 + max * 10, 31, WHITE);
-  // hunger ring around HOOK; during a frenzy it shows the time left
-  const hb = HOOK_BTN(), R_ = hb.r + 3;
-  const fr = P.frenzy > 0, k = fr ? P.frenzy / P.frenzyDur : P.hunger;
-  const col = fr ? (Math.floor(G.t * 10) % 2 ? RED : WHITE) : k > 0.8 ? (Math.floor(G.t * 6) % 2 ? RED : hx("#ffc23a")) : hx("#ff7a2a");
-  for (let y = -R_ - 2; y <= R_ + 2; y++) for (let x = -R_ - 2; x <= R_ + 2; x++) {
-    const d = Math.hypot(x, y);
-    if (d < R_ - 0.5 || d > R_ + 1.5) continue;
-    const a = (Math.atan2(x, -y) + Math.PI * 2) % (Math.PI * 2) / (Math.PI * 2);
-    put(hb.x + x, hb.y + y, a < k ? col : hx("#2a1418"));
-  }
   // FRENZY!
   if (G.frenzyFx) {
     const f = G.frenzyFx, y = port ? 104 : 58;
@@ -5078,7 +5105,10 @@ screenCv.addEventListener("pointerdown", e => {
   unlockAudio();
   const p = toArt(e);
   const id = hitRect(p);
-  if (G.mode !== "play") { uiAction(id); return; }
+  if (G.mode !== "play") {
+    if ((G.menuT || 0) < 0.3 && !["mute", "store", "pause", "resume"].includes(id)) return;   // the steering finger must not pick a card by accident
+    uiAction(id); return;
+  }
   if (id === "hook" || id === "dash" || id === "pause" || id === "mute" || id === "store") { uiAction(id); return; }
   if (!JOY) { JOY = { id: e.pointerId, ox: p.x, oy: p.y, sx: p.x, sy: p.y, x: p.x, y: p.y, t0: performance.now(), moved: false }; try { screenCv.setPointerCapture(e.pointerId); } catch (err) { } }
   else pointers.set(e.pointerId, { x: p.x, y: p.y, t0: performance.now() });
@@ -5319,6 +5349,7 @@ function loop(now) {
   const dt = Math.min(0.05, (now - (lastT || now)) / 1000) * SPEED;
   lastT = now;
   const m = G.mode;
+  G.menuT = (G.menuT || 0) + dt;
   if (m === "title") {
     titleTick(dt);
     drawWorld();
