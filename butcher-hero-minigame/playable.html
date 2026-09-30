@@ -135,7 +135,7 @@ function makeSprite(rows, pal, outline = INK) {
   }
   return { w: sw, h: sh, d };
 }
-// o: scale | sx+sy (squash & stretch), flip, flash (+dither), fade, rect [x, y, w, h] = draw only that part of the sprite
+// o: scale | sx+sy (squash & stretch), flip, flash (+dither), fade, ol (outline colour), rect [x, y, w, h] = draw only that part of the sprite
 function blit(s, x, y, o = {}) {
   const sc = o.scale || 1, kx = o.sx || sc, ky = o.sy || sc, flip = o.flip, flash = o.flash;
   const [rx, ry, rw, rh] = o.rect || [0, 0, s.w, s.h];
@@ -150,9 +150,10 @@ function blit(s, x, y, o = {}) {
       if (xx < 0 || xx >= W) continue;
       let sx = Math.min(rw - 1, (tx / kx) | 0);
       sx = flip ? rx + rw - 1 - sx : rx + sx;
-      const c = s.d[sy * s.w + sx];
+      let c = s.d[sy * s.w + sx];
       if (!c) continue;
-      pix[yy * W + xx] = flash && c !== INK && (!o.dither || (xx + yy) % 2 === 0) ? flash : (o.fade ? mix(pix[yy * W + xx], c, o.fade) : c);
+      if (o.ol && c === INK) c = o.ol;   // recoloured outline (elites, shooters)
+      pix[yy * W + xx] = flash && c !== o.ol && c !== INK && (!o.dither || (xx + yy) % 2 === 0) ? flash : (o.fade ? mix(pix[yy * W + xx], c, o.fade) : c);
     }
   }
 }
@@ -518,6 +519,14 @@ SPR.icons = {
   regen: makeSprite(["..G..", "..G..", "GGGGG", "..G..", "..G.."], ICON_PAL),
   feast: makeSprite([".RR.RR.", "RRRRRRR", "RRwRRRR", ".RRRRR.", "..RRR..", "...R..."], ICON_PAL),
 };
+// loot crates and barrels, and a tumbleweed for the desert wind
+const WOOD_PAL = { B: hx("#6a3a1a"), w: hx("#c08a4a"), W: hx("#d8a868"), b: hx("#8a5a2a"), m: hx("#9aa0b0") };
+SPR.crate = [makeSprite(["mBBBBBBBBBBm", "BWWWWWWWWWWB", "BbBwwwwwwBbB", "BwbBwwwwBbwB", "BwwbBwwBbwwB", "BwwwbBBbwwwB",
+  "BwwBbwwbBwwB", "BwBbwwwwbBwB", "BbbwwwwwwbbB", "mBBBBBBBBBBm"], WOOD_PAL)];
+SPR.barrel = [makeSprite(["..bBBBBb..", ".bWwwwwwb.", "mmmmmmmmmm", "bWwwwwwwwb", "bWwwwwwwwb", "bWwwwwwwwb", "mmmmmmmmmm",
+  "bWwwwwwwwb", ".bWwwwwwb.", "..bBBBBb.."], WOOD_PAL)];
+const TUMBLE = [0, 1].map(k => makeSprite(k ? ["..tTt..", ".T.t.T.", "tTtTtTt", "T.tTt.T", "tTtTtTt", ".T.t.T.", "..tTt.."]
+  : [".tTtTt.", "tT.t.Tt", "T.tTt.T", "t.TtT.t", "T.tTt.T", "tT.t.Tt", ".tTtTt."], { t: hx("#a8844a"), T: hx("#d8b070") }));
 const CACTUS = makeSprite(["....GG...", "...GgGG..", "...GgGG..", "G..GgGG..", "GG.GgGG.G", "GGGGgGG.G", ".GGGgGGGG",
   "...GgGGG.", "...GgGG..", "...GgGG..", "...GgGG..", "..dddddd."], { G: hx("#6ab04a"), g: hx("#3a8030"), d: hx("#8a5020") });
 const CRYSTAL = makeSprite(["..p..", ".pPp.", ".pPp.", "pPPPp", "pPWPp", ".pPp."], { p: hx("#9a4ae0"), P: hx("#d08aff"), W: WHITE });
@@ -807,6 +816,7 @@ const ETYPES = {
   alien: { spr: "alien", hp: 36, spd: 21, dmg: 8, xp: 2, r: 5, keep: 56, shoot: { cd: 2.4, spd: 72, dmg: 9, col: "pink" } },
   drone: { spr: "drone", hp: 22, spd: 40, dmg: 7, xp: 1, r: 5, fly: true },
   golden: { spr: "golden", hp: 60, spd: 58, dmg: 0, xp: 0, r: 6, scale: 1.25, golden: true },
+  crate: { spr: "crate", hp: 26, spd: 0, dmg: 0, xp: 0, r: 6, crate: true },
 };
 
 const WEAPONS = ["cleaver", "sword", "saw", "slam", "grenade", "aura"];
@@ -853,7 +863,7 @@ function newPlayer() {
     teeth: 0, toothAcc: 0, relics: {}, curses: {}, hunger: 0, frenzy: 0, frenzyDur: 0, maskT: 0,
   };
 }
-const xpNeed = l => Math.round(10 + 7 * l + l * l / 6 + Math.max(0, l - 20) ** 2 / 4);
+const xpNeed = l => Math.round(16 + 7 * l + l * l / 6 + Math.max(0, l - 20) ** 2 / 4);
 function newRun(opts = {}) {
   P = newPlayer();
   G = { mode: "title", rerolls: 2, stats: { kills: 0, devours: 0, dmgTaken: 0, deaths: 0, time: 0, bossTimes: [], hits: {} },
@@ -896,6 +906,8 @@ function prepChapter(idx) {
     streak: 0, streakT: 0, streakPop: 0, streakFx: null, streakTier: 0, hpTrail: P.hp / P.maxHp, hpHold: 0, healFx: 0, heartT: 0, heartFx: 0,
   });
   P.x = AW / 2; P.y = AH / 2 + 30; P.hook = null; P.pulled = null; P.inv = 1.5; P.mouth = "idle";
+  G.crateT = 40;
+  for (let i = 0; i < 4; i++) spawnCrate();
 }
 function startChapter(idx, fromSnapshot) {
   if (fromSnapshot) restoreSnapshot(fromSnapshot);
@@ -986,7 +998,7 @@ function autoHook(dt) {
   if ((P.autoHookT = (P.autoHookT || 0) - dt) > 0) return;
   let best = null, bs = -1e9;
   for (const e of G.enemies) {
-    if (e.grabbed || e.dead) continue;
+    if (e.grabbed || e.dead || e.T.crate || e.spawnT > 0) continue;
     const d = Math.hypot(e.x - P.x, e.y - P.y);
     if (d > (e.T.golden ? AUTO_HOOK_GOLD_R : AUTO_HOOK_R)) continue;
     const eat = !e.champion && (!e.elite || e.hp < e.maxHp * 0.35 || R("gut"));
@@ -1033,7 +1045,7 @@ function autoDodge(dt) {
   let dx = v.x / vl, dy = v.y / vl;
   if (il > 0.3 && (iv.x * dx + iv.y * dy) / il > 0.2) { dx += iv.x / il * 0.7; dy += iv.y / il * 0.7; }   // lean where the finger goes
   if (tryDash(dx, dy)) {
-    P.dodgeT = 0.8; G.stats.dodges = (G.stats.dodges || 0) + 1;
+    P.dodgeT = 0.8; G.stats.dodges = (G.stats.dodges || 0) + 1; buzz(20);
     if (G.stats.dodges <= 3) popup("AUTO-DODGE!", P.x, P.y - 44 * P.scale, CYAN, 1, 0.9);
   }
 }
@@ -1043,7 +1055,7 @@ function autoCharge(dt) {
   if (!P.p.dash || !P.moving || P.dashCharges < dashMax() || P.dashT > 0 || P.hook || P.pulled || P.dying) return;
   let n = 0;
   for (const e of G.enemies) {
-    if (e.grabbed || e.T.golden) continue;
+    if (e.grabbed || e.T.golden || e.T.crate) continue;
     const dx = e.x - P.x, dy = e.y - P.y, ahead = dx * P.mvx + dy * P.mvy;
     if (ahead > 6 && ahead < 44 && Math.abs(dx * P.mvy - dy * P.mvx) < 10 + e.r) n++;
   }
@@ -1075,7 +1087,7 @@ function startDying() {
 function lvFx() {
   G.fx.push({ kind: "lvring", x: P.x, y: P.y, t: 0, life: 0.45 });
   G.flashFx = { col: GOLD, t: 0, life: 0.18 };
-  sfx("levelup");
+  sfx("levelup"); buzz(30);
 }
 
 // ---------------------------------------------------------------- feedback: kill streaks, bar trails, low-HP heartbeat
@@ -1212,7 +1224,7 @@ function hurtEnemy(e, dmg, kx = 0, ky = 0, quiet = false) {
   if (e.T.golden) goldenHit(e);
   dmg = Math.round(dmg * (crit ? 2 : 1));
   e.hp -= dmg; e.flash = 0.09;
-  if (!e.elite || crit) { e.x += kx; e.y += ky; }
+  if (!e.T.crate && (!e.elite || crit)) { e.x += kx; e.y += ky; }
   if (!quiet || crit) dmgPopup(e, e.x, e.y - e.h - 2, dmg, crit);
   if (Math.random() < 0.4) blood(e.x, e.y - e.h / 2, 2, 0.6, e.h / 2);
   if (e.hp <= 0) killEnemy(e);
@@ -1220,6 +1232,7 @@ function hurtEnemy(e, dmg, kx = 0, ky = 0, quiet = false) {
 // damage numbers: hits on the same target within 0.3 s merge into one number; off in settings except crits
 function dmgPopup(key, x, y, dmg, crit) {
   if (!G.opts.numbers && !crit) return;
+  if (!crit && G.ch >= 3 && key !== G.boss && !(key && key.elite)) return;
   for (const p of G.pops) if (p.key === key && p.t < 0.3) {
     p.val += dmg; p.s = String(Math.round(p.val)); p.t = Math.min(p.t, 0.12);
     if (crit && !p.crit) { p.col = GOLD; p.k = 2; p.crit = true; p.ct = p.t; p.vx = rnd(-14, 14); p.life = p.t + 0.8; }
@@ -1231,12 +1244,20 @@ function dmgPopup(key, x, y, dmg, crit) {
 }
 function killEnemy(e, eaten = false) {
   if (e.dead) return;
+  if (e.T.crate) { e.dead = true; crateBreak(e); return; }
   e.dead = true; P.kills++; G.chKills++; G.stats.kills++;
   countStreak();
   if (P.evo.plague && Math.hypot(e.x - P.x, e.y - P.y) < auraR()) P.hp = Math.min(P.maxHp, P.hp + 1);
   if (eaten) return;
-  blood(e.x, e.y - e.h / 2, e.elite ? 12 : 6, e.elite ? 1.3 : 1, e.h / 2);
-  if (G.gibs.length < 40 && (e.elite || Math.random() < 0.45)) {
+  const sty = e.T.spr, fleshy = !["skel", "slime", "drone", "bat", "plant"].includes(sty);
+  if (sty === "skel") { bones(e.x, e.y - 3, 3); dust(e.x, e.y - 4, 6, hx("#d8ccb0")); sfxThrottled("bones", 0.12); }   // crumbles
+  else if (sty === "slime") { splat(e.x, e.y - 3, 9, SLIME_SPLAT, 5); stainArena(e.x, e.y, SLIME_SPLAT[2], 2); }        // splashes
+  else if (sty === "drone") { sparks(e.x, e.y - 6, 10, CYAN, 60); G.fx.push({ kind: "boom", x: e.x, y: e.y - 4, R: 9, t: 0, life: 0.22 }); }   // pops
+  else if (sty === "bat") { dust(e.x, e.y - 8, 7, hx("#9a5aaa")); blood(e.x, e.y - 6, 2, 0.6, 6); }
+  else if (sty === "plant") splat(e.x, e.y - 4, 8, [hx("#6ac04a"), hx("#2a7030")], 5);
+  else if (sty === "alien") splat(e.x, e.y - e.h / 2, e.elite ? 12 : 6, [hx("#8aff5a"), hx("#3a9a2a")], e.h / 2);
+  else blood(e.x, e.y - e.h / 2, e.elite ? 12 : 6, e.elite ? 1.3 : 1, e.h / 2);
+  if (G.gibs.length < 40 && sty !== "skel" && sty !== "slime" && sty !== "bat" && (e.elite || Math.random() < 0.45)) {
     const fr = e.spr[0], h2 = Math.floor(fr.h / 2), sc = e.scale, fl = e.face < 0;
     G.gibs.push({ spr: fr, rect: [0, 0, fr.w, h2], x: e.x, y: e.y, z: (fr.h - h2) * sc, vx: rnd(-28, 28), vy: rnd(-8, 8), vz: rnd(45, 75), sc, flip: fl, t: 0 });
     G.gibs.push({ spr: fr, rect: [0, h2, fr.w, fr.h - h2], x: e.x, y: e.y, z: 0, vx: rnd(-10, 10), vy: rnd(-4, 4), vz: rnd(8, 20), sc, flip: fl, t: 0 });
@@ -1247,9 +1268,11 @@ function killEnemy(e, eaten = false) {
     if (R("keg")) explode(e.x, e.y - 4, 36, 60 * might() * (1 + 0.6 * G.ch), 0);
   }
   if (e.T.golden) goldenJackpot(e, false);
-  if (Math.random() < 0.35) bones(e.x, e.y - 3, e.elite ? 3 : 1);
-  stainArena(e.x, e.y, BLOOD[3], e.elite ? 3 : 2);
-  stainArena(e.x + rnd(-3, 3), e.y + rnd(-2, 2), BLOOD[2], 1);
+  if (fleshy) {
+    if (Math.random() < 0.35) bones(e.x, e.y - 3, e.elite ? 3 : 1);
+    stainArena(e.x, e.y, BLOOD[3], e.elite ? 3 : 2);
+    stainArena(e.x + rnd(-3, 3), e.y + rnd(-2, 2), BLOOD[2], 1);
+  }
   if (e.xp > 0) G.drops.push({ x: e.x, y: e.y, kind: e.xp >= 5 ? "big" : "meat", xp: Math.max(1, Math.round(e.xp * (1 + G.ch * 0.2))), t: rnd(0, 6) });
   if (Math.random() < (e.elite ? 0.25 : 0.012)) G.drops.push({ x: e.x + 6, y: e.y, kind: "heart", xp: 0, t: 0 });
   if (e.T.split) for (let i = 0; i < 2; i++) spawnEnemy(e.T.split, e.x + (i ? 5 : -5), e.y + rnd(-3, 3));
@@ -1288,9 +1311,41 @@ function spawnEnemy(type, x, y) {
     type, T, x, y, hp: T.hp * hpMul, maxHp: T.hp * hpMul, spd: T.spd * rnd(0.9, 1.1), dmg: T.dmg, xp: T.xp, r: T.r * sc,
     spr: sprs, scale: sc, h: sprs[0].h * sc, elite: !!T.elite, flash: 0, stun: 0, hitCd: {}, walkT: rnd(0, 2), face: 1,
     shootCd: T.shoot ? rnd(1, T.shoot.cd) : 0, state: "walk", st: 0, wob: rnd(0, 6), shrink: 1, hopT: rnd(0, 0.8), z: 0,
+    spawnT: T.crate || type === "slimelet" ? 0 : 0.35, biteT: 0,
   };
   G.enemies.push(e);
+  if (e.spawnT && Math.abs(x - P.x) < 120 && Math.abs(y - P.y) < 175) dust(x, y, 4, PALE);
   return e;
+}
+// loot crates and barrels: a few per chapter, one more every 40 s
+function spawnCrate() {
+  for (let k = 0; k < 12; k++) {
+    const o = { x: rnd(INSET.l + 24, AW - INSET.r - 24), y: rnd(INSET.t + 24, AH - INSET.b - 24) };
+    if (Math.hypot(o.x - P.x, o.y - P.y) < 70 || G.enemies.some(e => e.T.crate && Math.hypot(e.x - o.x, e.y - o.y) < 50)) continue;
+    const e = spawnEnemy("crate", o.x, o.y);
+    e.spr = Math.random() < 0.5 ? SPR.crate : SPR.barrel; e.h = e.spr[0].h;
+    return e;
+  }
+}
+const WOOD_BITS = [hx("#c08a4a"), hx("#6a3a1a")], SLIME_SPLAT = [hx("#ffb02a"), hx("#ff6a1a"), hx("#8a2a0a")];
+function crateBreak(e) {
+  for (let i = 0; i < 10; i++) {
+    const a = Math.random() * Math.PI * 2, sp = rnd(20, 60);
+    addPart({ x: e.x, y: e.y, z: 6, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.6, vz: rnd(40, 90), life: rnd(0.8, 1.2), chunk: true, c: WOOD_BITS[0], c2: WOOD_BITS[1] });
+  }
+  sfxThrottled("bones", 0.1);
+  const r = Math.random();
+  if (r < 0.4) G.drops.push({ x: e.x, y: e.y, kind: "big", xp: 4 + 2 * G.ch, t: 0 });
+  else if (r < 0.7) teethDrop(e.x, e.y, 3);
+  else if (r < 0.85) G.drops.push({ x: e.x, y: e.y, kind: "heart", xp: 0, t: 0 });
+  else { feedHunger(3); popup("SNACK!", e.x, e.y - 14, hx("#ff9a2a"), 1, 1); }
+}
+// coloured splats for things that do not bleed red
+function splat(x, y, n, cols, h = 6) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, sp = rnd(15, 50);
+    addPart({ x, y, z: h, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.6, vz: rnd(20, 60), c: cols[(Math.random() * 2) | 0], life: 2 });
+  }
 }
 function spawnPoint(minD = 85) {
   for (let k = 0; k < 10; k++) {
@@ -1328,6 +1383,7 @@ function spawning(dt) {
     G.spawnT = interval;
   }
   if (G.phase === "waveA" || G.phase === "waveB") {
+    if ((G.crateT -= dt) <= 0) { G.crateT = 40; if (G.enemies.filter(e => e.T.crate).length < 5) spawnCrate(); }
     G.hordeT -= dt;
     if (G.hordeT <= 0) {
       G.hordeT = 24;
@@ -1360,8 +1416,10 @@ function updatePhase(dt) {
 function updateEnemies(dt) {
   const list = G.enemies;
   for (const e of list) {
-    e.flash = Math.max(0, e.flash - dt);
+    e.flash = Math.max(0, e.flash - dt); e.biteT = Math.max(0, e.biteT - dt);
     for (const k in e.hitCd) e.hitCd[k] -= dt;
+    if (e.spawnT > 0) { e.spawnT -= dt; continue; }
+    if (e.T.crate) continue;
     if (e.grabbed) continue;
     const dx = P.x - e.x, dy = P.y - e.y, d = Math.hypot(dx, dy) || 1;
     let mx = 0, my = 0;
@@ -1398,7 +1456,7 @@ function updateEnemies(dt) {
         sfxThrottled("pew", 0.12);
       }
     }
-    if (d < e.r + 6 * P.scale && e.z < 3 && e.dmg > 0) hurtPlayer(e.state === "dash" ? e.dmg * 1.4 : e.dmg, e, e.type);
+    if (d < e.r + 6 * P.scale && e.z < 3 && e.dmg > 0) { const hp0 = P.hp; hurtPlayer(e.state === "dash" ? e.dmg * 1.4 : e.dmg, e, e.type); if (P.hp < hp0) e.biteT = 0.18; }
   }
   for (let i = 0; i < list.length; i++) {
     const a = list[i];
@@ -1410,7 +1468,7 @@ function updateEnemies(dt) {
       if (dx > rr || dx < -rr || dy > rr || dy < -rr) continue;
       const d = Math.hypot(dx, dy);
       if (d < rr && d > 0.01) {
-        const push = (rr - d) / 2, ux = dx / d, uy = dy / d, wa = a.elite ? 0.3 : 1, wb = b.elite ? 0.3 : 1;
+        const push = (rr - d) / 2, ux = dx / d, uy = dy / d, wa = a.T.crate ? 0 : a.elite ? 0.3 : 1, wb = b.T.crate ? 0 : b.elite ? 0.3 : 1;
         a.x -= ux * push * wa; a.y -= uy * push * wa; b.x += ux * push * wb; b.y += uy * push * wb;
       }
     }
@@ -1473,7 +1531,7 @@ function updatePlayer(dt) {
     P.regenAcc += dt * (0.5 * P.p.regen + R("heart"));
     if (P.regenAcc >= 1) { const h = Math.floor(P.regenAcc); P.hp = Math.min(P.maxHp, P.hp + h); P.regenAcc -= h; }
   }
-  P.maskT = Math.max(0, P.maskT - dt); P.fangT = Math.max(0, (P.fangT || 0) - dt);
+  P.maskT = Math.max(0, P.maskT - dt); P.fangT = Math.max(0, (P.fangT || 0) - dt); P.danceT = Math.max(0, (P.danceT || 0) - dt);
   updateFrenzy(dt);
   autoDodge(dt); autoCharge(dt); autoHook(dt);
   if (P.chewT > 0 && !P.hook) { P.chewT -= dt; P.mouth = P.chewT > 0 && Math.floor(P.chewT * 14) % 2 ? "bite" : "idle"; }
@@ -1526,6 +1584,7 @@ function tryHook(target) {
   P.face = side;
   const h = handPos(side);
   P.hook = { phase: "fly", target, x: h[0], y: h[1], side, t: 0 };
+  P.squash = Math.min(P.squash, -0.12);
   sfx("whoosh");
   G.hookedOnce = true;
   return true;
@@ -1533,7 +1592,7 @@ function tryHook(target) {
 function hookTargetAt(wx, wy) {
   let best = null, bd = 1e9;
   for (const e of G.enemies) {
-    if (e.grabbed || e.dead) continue;
+    if (e.grabbed || e.dead || e.T.crate) continue;
     const d = Math.hypot(e.x - wx, e.y - e.h / 2 - wy);
     if (d < bd) { bd = d; best = e; }
   }
@@ -1628,7 +1687,7 @@ function updateHook(dt) {
       popup("+" + xp + "XP", P.x, P.y - 48 * P.scale, PALE, 1, 0.9);
       popup("+" + heal, P.x + 14, P.y - 38 * P.scale, GREEN, 1, 0.9);
       gainXp(xp);
-      P.mouth = "idle"; P.hook = null; P.hookCd = hookCooldown(); P.chewT = 0.4;
+      P.mouth = "idle"; P.hook = null; P.hookCd = hookCooldown(); P.chewT = 0.4; buzz(15);
       if (!G.ateOnce) { G.ateOnce = true; popup("EAT TO GROW & HEAL!", P.x, P.y - 64, GOLD, 1, 2.2); }
       return;
     }
@@ -1686,7 +1745,7 @@ function updateWeapons(dt) {
     if (P.sawT <= 0) {
       P.sawT = 1.4 * Math.pow(0.88, L - 1);
       const n = P.evo.boomer ? 3 : L >= 4 ? 2 : 1;
-      const targets = G.enemies.filter(e => !e.grabbed).sort((a, c) => dist(a, P) - dist(c, P));
+      const targets = G.enemies.filter(e => !e.grabbed && !e.T.crate).sort((a, c) => dist(a, P) - dist(c, P));
       for (let i = 0; i < n; i++) {
         const t = targets[i] || (G.boss && !G.boss.dying ? bossCircles(G.boss)[0] : null);
         let a = t ? Math.atan2((t.y - (t.h ? t.h / 2 : 0)) - b[1], t.x - b[0]) : Math.random() * 6.28;
@@ -1743,7 +1802,7 @@ function updateWeapons(dt) {
     if (P.grenT <= 0) {
       P.grenT = 2.6 * Math.pow(0.9, L - 1);
       const n = 1 + Math.floor(L / 2), dmg = 38 * (1 + 0.25 * Math.floor((L - 1) / 2)) * might(), R = 20 + 2 * L;
-      const pool = G.enemies.filter(e => !e.grabbed && Math.hypot(e.x - P.x, e.y - P.y) < 130);
+      const pool = G.enemies.filter(e => !e.grabbed && !e.T.crate && Math.hypot(e.x - P.x, e.y - P.y) < 130);
       for (let i = 0; i < n; i++) {
         let tx, ty;
         const t = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
@@ -1849,7 +1908,10 @@ function updateParts(dt) {
     if (p.spark) { p.vx *= 0.9; p.vy *= 0.9; continue; }
     p.z += p.vz * dt; p.vz -= 200 * dt;
     if (p.z <= 0) {
-      if (p.bone || p.chunk) { p.z = 0; p.vx *= 0.5; p.vy *= 0.5; p.vz = p.vz < -30 ? -p.vz * 0.3 : 0; }
+      if (p.bone || p.chunk) {
+        p.z = 0; p.vx *= 0.5; p.vy *= 0.5; p.vz = p.vz < -30 ? -p.vz * 0.3 : 0;
+        if (p.bone && !p.vz && !p.stamped) { p.stamped = true; stainArena(p.x, p.y, hx("#e8dcc0")); stainArena(p.x + 1, p.y, hx("#c8bca0")); }
+      }
       else { if (p.stain) stainArena(p.x, p.y, Math.random() < 0.5 ? BLOOD[2] : BLOOD[3]); p.life = 0; }
     }
   }
@@ -1945,6 +2007,7 @@ function openChest() {
   C.opened = true; C.ot = 0;
   sfx("chest"); buzz(40);
   sparks(C.x, C.y - 10, 20, GOLD, 70, 0.6);
+  G.fx.push({ kind: "rays", x: C.x, y: C.y - 8, t: 0, life: 1.0, big: C.big }, { kind: "lid", x: C.x, y: C.y, t: 0, life: 0.9, big: C.big, vx: rnd(-18, 18) });
   G.pendingChest = C.big ? "boss" : "mini";
   G.chestDelay = 0.8;
 }
@@ -1968,6 +2031,7 @@ function update(dt) {
   }
   // hit-stop: a few frozen frames sell the impact
   if (G.freeze > 0) { G.freeze -= dt; G.shake = Math.max(0, G.shake - dt); return; }
+  if (G.slowmo > 0) { G.slowmo -= dt; dt *= 0.35; }
   if (P.dying > 0) {
     P.dying -= dt;
     G.shake = Math.max(0, G.shake - dt);
@@ -1991,7 +2055,7 @@ function update(dt) {
   if (G.frenzyFx && (G.frenzyFx.t += dt) > 1.4) G.frenzyFx = null;
   G.teethPop = Math.max(0, G.teethPop - dt);
   const A = G.arena;
-  if (A.base) for (let i = 0; i < 140; i++) { const k = (Math.random() * A.d.length) | 0; A.d[k] = A.base[k]; }
+  if (A.base) for (let i = 0; i < 30; i++) { const k = (Math.random() * A.d.length) | 0; A.d[k] = A.base[k]; }
   if (G.pendingChest) {
     G.chestDelay -= dt;
     if (G.chestDelay <= 0) {
@@ -2068,6 +2132,10 @@ const BOSS_SUB = {
   skeleton: "RULER OF THE AUTUMN DEAD", troll: "HE HATES WARM BLOOD", hydra: "THREE HEADS, ONE APPETITE",
   dark: "YOUR EVIL TWIN", golem: "A WALKING VOLCANO", ship: "THEY CAME FOR THE MEAT", overlord: "THE PILOT CRAWLS OUT OF THE WRECK",
 };
+const BOSS_RAGE = {
+  skeleton: "THE BONES REARRANGE", troll: "THE ICE CRACKS UNDER HIS FEET", hydra: "THE HEADS GROW HUNGRIER", dark: "FIVE CLEAVERS NOW",
+  golem: "THE LAVA BOILS OVER", ship: "ALL WEAPONS ONLINE", overlord: "NO MORE GAMES",
+};
 const EYE = hx("#ff3a2a"), EYE2 = hx("#ffd8a8");
 const CROWN = makeSprite(["Y.Y.Y", "YYYYY", "yRyRy"], { Y: hx("#ffe04a"), y: hx("#c08a1a"), R: hx("#e02030") });
 const TROLL_PAL = { fur: [hx("#f4f8ff"), hx("#c4d4ea"), hx("#8aa2c4")], belly: [hx("#ffffff"), hx("#e0ecf8"), hx("#b8cce4")],
@@ -2114,7 +2182,8 @@ function updateBoss(dt) {
   }
   if (!B.phase2 && B.hp < B.maxHp * 0.5) {
     B.phase2 = true;
-    popup("ENRAGED!", B.x, B.y - 60, RED, 2, 1.4);
+    if (B.mini) popup("ENRAGED!", B.x, B.y - 60, RED, 2, 1.4);
+    else G.cine = { kind: "rage", t: 0, dur: 1.3, x: B.x, y: B.y - 30, title: "ENRAGED!", sub: BOSS_RAGE[B.kind] || "" };
     shake(0.3, 2); sfx("warning");
     K.onPhase2 && K.onPhase2(B);
   }
@@ -2134,12 +2203,19 @@ function bossDefeated() {
   G.tele = G.tele.filter(t => t.keep);
   if (P.pulled) P.pulled = null;
   shake(0.6, 3); sfx("bossdie"); buzz(200);
+  if (!B.mini) G.slowmo = 1.0;
   banner(B.mini ? "MINI-BOSS DOWN!" : "BOSS DEFEATED!", GOLD, 2.2, B.name);
   if (!B.mini) G.bossTime = B.t + (B.tShip || 0);
 }
 function finishBoss(B) {
   const c = bossCircles(B)[0];
   blood(c.x, c.y, 30, 2, 12);
+  if (!B.mini) {
+    // the big one bursts into meat, and the butcher dances
+    for (let i = 0; i < 26; i++) { const a = Math.random() * Math.PI * 2, sp = rnd(30, 90); addPart({ x: c.x, y: c.y, z: 12, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.6, vz: rnd(60, 130), life: rnd(1, 1.6), chunk: true, c: BLOOD[1], c2: BLOOD[3] }); }
+    G.fx.push({ kind: "boom", x: c.x, y: c.y, R: 44, t: 0, life: 0.5 });
+    P.danceT = 1.8;
+  }
   bones(c.x, c.y + 10, B.mini ? 4 : 10);
   gainXp(Math.round((B.mini ? 30 : 90) * (1 + G.ch * 0.4)));
   popup("+" + Math.round((B.mini ? 30 : 90) * (1 + G.ch * 0.4)) + "XP", c.x, c.y - 20, PALE, 2, 1.5);
@@ -3459,7 +3535,7 @@ function updateFrenzy(dt) {
   P.inv = Math.max(P.inv, 0.05); P.hookCd = 0;
   if (!P.hook && !P.pulled && P.dashT <= 0) {
     let best = null, bd = 150;
-    for (const e of G.enemies) { if (e.grabbed || e.dead || e.champion) continue; const d = Math.hypot(e.x - P.x, e.y - P.y); if (d < bd) { bd = d; best = e; } }
+    for (const e of G.enemies) { if (e.grabbed || e.dead || e.champion || e.T.crate) continue; const d = Math.hypot(e.x - P.x, e.y - P.y); if (d < bd) { bd = d; best = e; } }
     if (best) tryHook(best);
   }
   if (Math.random() < 0.5) { const b = belly(); sparks(b[0] + rnd(-8, 8) * P.scale, b[1] - 22 * P.scale, 1, Math.random() < 0.5 ? RED : hx("#ff9a2a"), 25, 0.3); }
@@ -3903,12 +3979,19 @@ function drawAura() {
     put(sx + Math.cos(a) * R * 0.7, sy + Math.sin(a) * R * 0.4 - k * 10, col);
   }
 }
+// diagonal stripes crawling across a danger zone
+function hatchEllipse(cx, cy, rx, ry, col) {
+  const ph = Math.floor(G.t * 12);
+  for (let y = Math.floor(cy - ry); y <= cy + ry; y++) for (let x = Math.floor(cx - rx); x <= cx + rx; x++)
+    if (((x + y + ph) & 7) < 2 && ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1) tint(x, y, col, 0.55);
+}
 function drawTele(t) {
   const k = clamp(t.t / t.dur, 0, 1), col = t.col || RED;
   const blink = k > 0.7 && Math.floor(G.t * 16) % 2;
   if (t.shape === "circle") {
     const [sx, sy] = worldToScreen(t.x, t.y);
     fillEllipseDither(sx, sy, t.r, t.r * 0.62, col, 0.15 + k * 0.5, false);
+    hatchEllipse(sx, sy, t.r, t.r * 0.62, col);
     ellipseRing(sx, sy, t.r, t.r * 0.62, blink ? WHITE : col);
     ellipseRing(sx, sy, t.r * k, t.r * 0.62 * k, col, 2);
     if (t.fall && k > 0.55) {
@@ -3932,8 +4015,9 @@ function drawTele(t) {
     const vert = t.shape === "vband";
     const x0 = vert ? t.x - t.w / 2 - camX : 0, y0 = vert ? 0 : t.y - t.h / 2 - camY;
     const w = vert ? t.w : W, h = vert ? H : t.h;
+    const ph = Math.floor(G.t * 12);
     for (let y = Math.floor(y0); y < y0 + h; y++) for (let x = Math.floor(x0); x < x0 + w; x++)
-      if (BAYER[((y % 4) + 4) % 4][((x % 4) + 4) % 4] < 16 * (0.12 + k * 0.45)) tint(x, y, col, 0.6);
+      if (BAYER[((y % 4) + 4) % 4][((x % 4) + 4) % 4] < 16 * (0.12 + k * 0.45) || ((x + y + ph) & 7) < 2) tint(x, y, col, 0.6);
     const c = blink ? WHITE : col;
     if (vert) { line(x0, 0, x0, H, c); line(x0 + w, 0, x0 + w, H, c); } else { line(0, y0, W, y0, c); line(0, y0 + h, W, y0 + h, c); }
   } else if (t.shape === "line") {
@@ -3974,6 +4058,21 @@ function drawShot(s) {
 }
 function drawFx(f) {
   const k = f.t / f.life;
+  if (f.kind === "rays") {
+    // light pours out of an opened chest
+    const [sx, sy] = worldToScreen(f.x, f.y), hgt = (f.big ? 80 : 55) * easeOut(Math.min(1, k * 3)), fade = 1 - k;
+    for (let i = -2; i <= 2; i++) {
+      const bx = sx + i * 6 + Math.round(Math.sin(G.t * 3 + i) * 1.5), w = i === 0 ? 3 : 2;
+      for (let y = 0; y < hgt; y++) for (let x = 0; x < w; x++)
+        if (BAYER[y & 3][(bx + x) & 3] < 16 * fade * (1 - y / hgt) * 0.9) tint(bx + x, sy - y, i === 0 ? PALE : GOLD, 0.7);
+    }
+    return;
+  }
+  if (f.kind === "lid") {
+    const [sx, sy] = worldToScreen(f.x + f.vx * f.t, f.y), sc = f.big ? 1.8 : 1.3, z = 16 + 90 * f.t - 200 * f.t * f.t;   // pops up, falls back
+    if (z > -4) blitFeet(SPR.chest, sx, sy - Math.max(0, z) - 12 * sc, { scale: sc, rect: [0, 0, SPR.chest.w, 4], flip: Math.floor(f.t * 12) % 2 === 0 });
+    return;
+  }
   if (f.kind === "slash") {
     // a bright blade arc across the dash line, fading from white to blood
     // a blade cut: grows fast, thick in the middle, fades from white to blood
@@ -4028,6 +4127,7 @@ function drawFx(f) {
       if ((x * 3 + y + Math.floor(G.t * 30)) % 5 < 2) put(x, y, col[(x + y) % 2]);
   }
 }
+const OL_ELITE = hx("#d89a20"), OL_SHOOT = hx("#9a4ad0");
 function drawEnemy(e) {
   const [sx, sy] = worldToScreen(e.x, e.y);
   if (sx < -30 || sx > W + 30 || sy < -10 || sy > H + 60) return;
@@ -4038,8 +4138,13 @@ function drawEnemy(e) {
   const fr = e.spr[Math.floor(e.walkT) % e.spr.length];
   const lift = e.T.fly ? Math.round(Math.sin(G.t * 4 + e.wob) * 2) - 5 : -Math.round(e.z || 0);
   if (e.T.golden) blitFeet(SACK, sx - e.face * 5, sy - 4 + lift, { flip: e.face < 0 });
-  const hk = e.flash > 0 ? e.flash / 0.09 : 0;
-  blitFeet(fr, sx, sy + lift, { scale: sc, sx: sc * (1 + 0.3 * hk), sy: sc * (1 - 0.22 * hk), flip: e.face < 0, flash: e.flash > 0 ? WHITE : (e.stun > 0 && Math.floor(G.t * 10) % 2 ? CYAN : 0) });
+  const hk = e.flash > 0 ? e.flash / 0.09 : 0, bk = e.biteT > 0 ? e.biteT / 0.18 : 0;
+  const rise = e.spawnT > 0 ? 1 - e.spawnT / 0.35 : 1;   // climbing out of the ground: the head shows first
+  if (rise < 1) { fillEllipseDither(sx, sy, 7 * sc, 2.5 * sc, hx("#3a2418"), 0.6, false); if (Math.random() < 0.3) put(sx + rnd(-5, 5), sy - rnd(0, 3), PALE); }
+  const ol = e.champion || e.elite ? OL_ELITE : e.T.shoot ? OL_SHOOT : 0;
+  blitFeet(fr, sx + Math.round(bk * 2 * (P.x > e.x ? 1 : -1)), sy + lift, { scale: sc, sx: sc * (1 + 0.3 * hk + 0.25 * bk), sy: sc * (1 - 0.22 * hk), flip: e.face < 0, ol,
+    rect: rise < 1 ? [0, 0, fr.w, Math.max(1, Math.round(fr.h * rise))] : undefined,
+    flash: e.flash > 0 ? WHITE : (e.stun > 0 && Math.floor(G.t * 10) % 2 ? CYAN : 0) });
   if (e.champion && !e.grabbed) {
     const w = 22, x0 = Math.round(sx - w / 2), y0 = Math.round(sy - e.h - 5);
     rect(x0 - 1, y0 - 1, w + 2, 4, INK); rect(x0, y0, w, 2, hx("#3a1418")); rect(x0, y0, Math.round(w * e.hp / e.maxHp), 2, GOLD);
@@ -4095,7 +4200,9 @@ function drawPlayer() {
   // belly slam: crouch, jump, land exactly when the slam fires
   const hop = P.w.slam && G.mode === "play" && P.slamT < SLAM_HOP && !P.hook && !P.pulled && P.dashT <= 0 ? 1 - P.slamT / SLAM_HOP : 0;
   const z = hop ? Math.round(Math.sin(hop * Math.PI) * 9 * s) : 0, hq = hop ? (hop < 0.2 ? 0.14 : -0.1) : 0;
-  const bob = z + (P.moving ? Math.round(Math.abs(Math.sin(P.walkT * Math.PI))) : (Math.floor(G.t * 2) % 2));
+  const dance = P.danceT > 0 && !P.moving && !P.hook ? P.danceT : 0;
+  const bob = z + (P.moving ? Math.round(Math.abs(Math.sin(P.walkT * Math.PI))) : dance ? Math.round(Math.abs(Math.sin(dance * 10)) * 4 * s) : 0);
+  const breath = !P.moving && !hop && !P.hook ? Math.sin(G.t * 2.4) * 0.03 : 0;   // idle: the belly rises and falls
   shadowEllipse(sx, sy + 1, 13 * s * (1 - z / 30), 3.5 * s * (1 - z / 40));
   // hunger: a ring around the feet fills with every meal (starting in front, clockwise); full ring = frenzy
   if (G.mode !== "title") {
@@ -4149,7 +4256,13 @@ function drawPlayer() {
   const justHit = P.hitT > 0 && G.mode === "play", blink = !justHit && P.dashT <= 0 && !(P.frenzy > 0) && P.inv > 0 && P.inv < 0.6 && Math.floor(P.inv * 20) % 2 && G.mode === "play";
   if (!blink) {
     const dark = P.skin === "dark", q = P.squash + hq;
-    blitFeet(playerSprite(legs, P.facingUp && P.mouth === "idle", P.mouth, P.side), sx, sy - bob, { sx: s * (1 + q), sy: s * (1 - q), flip: P.face < 0, flash: justHit ? WHITE : 0 });
+    const flip = dance ? Math.floor(dance * 6) % 2 === 0 : P.face < 0;
+    blitFeet(playerSprite(legs, P.facingUp && P.mouth === "idle", dance ? "open" : P.mouth, P.side), sx, sy - bob, { sx: s * (1 + q + breath), sy: s * (1 - q - breath * 0.6), flip, flash: justHit ? WHITE : 0 });
+    if (dance) { handL[1] = by - 12 * s; handR[1] = by - 12 * s; handL[0] += 4 * s; handR[0] -= 4 * s; }
+    if (G.CH.key === "snow" && (G.t % 1.8) < 0.7 && !P.dying) {   // breath vapour
+      const k = (G.t % 1.8) / 0.7, mx = sx + (P.side ? P.face * 7 : 0) * s, my = sy - bob - 26 * s - k * 6;
+      for (let i = 0; i < 5; i++) if ((i + Math.floor(G.t * 20)) % 3) put(mx + (i - 2) * (1 + k * 2) + P.face * k * 3, my + (i % 2), mix(WHITE, BLACK, k * 0.3));
+    }
     const arms = new Layer();
     drawArm(arms, [bx - 8 * s, by - 6 * s], handL, s, dark ? DARK_SKIN : SKIN);
     drawArm(arms, [bx + 8 * s, by - 6 * s], handR, s, dark ? DARK_SKIN : SKIN);
@@ -4166,21 +4279,44 @@ function drawPlayer() {
 // weather in screen space
 const WX = Array.from({ length: 46 }, () => ({ x: Math.random() * W, y: Math.random() * H, s: Math.random() }));
 function drawWeather() {
-  const B = BIOMES[G.CH.key], dt = 1 / 60;
+  const B = BIOMES[G.CH.key], dt = 1 / 60, wx = B.weather;
+  if (wx === "fog") {
+    // slow banks of fog instead of single pixels
+    for (let k = 0; k < 4; k++) {
+      const fx = ((G.t * (5 + k * 2) + k * 97) % (W + 80)) - 40, fy = (k * 71 + 30) % H;
+      fillEllipseDither(fx, fy + Math.sin(G.t * 0.5 + k) * 6, 30 + k * 4, 9, B.fx[k % B.fx.length], 0.22, false);
+    }
+  }
   for (const w of WX) {
-    if (B.weather === "leaves") { w.x += (8 + w.s * 10) * dt + Math.sin(G.t * 2 + w.s * 6) * 0.2; w.y += (14 + w.s * 12) * dt; }
-    else if (B.weather === "snow") { w.x += Math.sin(G.t + w.s * 6) * 0.25; w.y += (10 + w.s * 14) * dt; }
-    else if (B.weather === "rain") { w.x -= 60 * dt; w.y += 190 * dt; }
-    else if (B.weather === "sand") { w.x += (70 + w.s * 50) * dt; w.y += Math.sin(G.t * 3 + w.s * 9) * 0.2; }
-    else if (B.weather === "embers") { w.y -= (12 + w.s * 16) * dt; w.x += Math.sin(G.t * 2 + w.s * 7) * 0.3; }
-    else if (B.weather === "fog") { w.x += (6 + w.s * 6) * dt; }
+    if (wx === "leaves") { w.x += (8 + w.s * 10) * dt + Math.sin(G.t * 2 + w.s * 6) * 0.2; w.y += (14 + w.s * 12) * dt; }
+    else if (wx === "snow") { w.x += Math.sin(G.t + w.s * 6) * 0.25; w.y += (10 + w.s * 14) * dt; }
+    else if (wx === "rain") { w.x -= 60 * dt; w.y += 190 * dt; }
+    else if (wx === "sand") { w.x += (70 + w.s * 50) * dt; w.y += Math.sin(G.t * 3 + w.s * 9) * 0.2; }
+    else if (wx === "embers") { if (w.s < 0.3) { w.y += (8 + w.s * 10) * dt; w.x += Math.sin(G.t + w.s * 9) * 0.3; } else { w.y -= (12 + w.s * 16) * dt; w.x += Math.sin(G.t * 2 + w.s * 7) * 0.3; } }
+    else if (wx === "fog") { w.x += (6 + w.s * 6) * dt; }
+    if (wx === "rain" && w.y > (w.land || H)) {   // a drop hits the ground: a tiny splash ring
+      w.sx = w.x; w.sy = w.land; w.st = 0.18; w.y = -2; w.x = Math.random() * (W + 60); w.land = H * (0.25 + Math.random() * 0.75);
+    }
     if (w.y > H) { w.y = -2; w.x = Math.random() * W; }
     if (w.y < -3) { w.y = H + 1; w.x = Math.random() * W; }
     if (w.x > W) { w.x = -2; } if (w.x < -3) { w.x = W + 1; }
     const c = B.fx[Math.floor(w.s * B.fx.length)];
-    if (B.weather === "rain") { put(w.x, w.y, c); put(w.x - 0.4, w.y - 2, c); put(w.x - 0.8, w.y - 4, c); }
-    else if (B.weather === "fog") { for (let i = 0; i < 6; i++) tint(w.x + i, w.y + (i % 2), c, 0.25); }
-    else { put(w.x, w.y, c); if (B.weather === "leaves" && w.s > 0.5) put(w.x + 1, w.y, c); }
+    if (wx === "rain") {
+      put(w.x, w.y, c); put(w.x - 0.4, w.y - 2, c); put(w.x - 0.8, w.y - 4, c);
+      if (w.st > 0) { w.st -= dt; const r = 1 + (0.18 - w.st) * 12; ellipseRing(w.sx, w.sy, r, r * 0.4, c, w.st < 0.08 ? 2 : 0); }
+    } else if (wx === "fog") { if (w.s > 0.7) put(w.x, w.y, c); }
+    else if (wx === "leaves") {   // two-pixel leaves that tumble
+      const flip = Math.floor(G.t * 6 + w.s * 10) % 2;
+      put(w.x, w.y, c); put(w.x + flip, w.y + 1 - flip, mix(c, BLACK, 0.3));
+    } else if (wx === "snow" && w.s > 0.72) { put(w.x, w.y, WHITE); put(w.x - 1, w.y, c); put(w.x + 1, w.y, c); put(w.x, w.y - 1, c); put(w.x, w.y + 1, c); }
+    else if (wx === "embers" && w.s < 0.3) put(w.x, w.y, hx("#8a8088"));   // ash
+    else put(w.x, w.y, c);
+  }
+  if (wx === "sand") {
+    // now and then a tumbleweed rolls across
+    const T = G.tumble;
+    if (!T || T.x > W + 12) { if (!T || Math.random() < 0.004) G.tumble = { x: -10, y: H * (0.3 + Math.random() * 0.6), t: 0 }; }
+    else { T.x += 55 * dt; T.t += dt; blitFeet(TUMBLE[Math.floor(T.t * 8) % 2], T.x, T.y - Math.abs(Math.sin(T.t * 6)) * 6); }
   }
 }
 
@@ -4246,7 +4382,7 @@ const BOT = {
     const orbit = P.w.cleaver ? orbitRx() : 20;
     let nearest = null, nd = 1e9, crowd = 0;
     for (const e of G.enemies) {
-      if (e.grabbed) continue;
+      if (e.grabbed || e.T.crate) continue;
       const dx = P.x - e.x, dy = P.y - e.y, d = Math.hypot(dx, dy) || 0.01;
       if (d < nd) { nd = d; nearest = e; }
       if (d < 60) crowd++;
@@ -4452,10 +4588,10 @@ function drawHUD() {
   const port = portrait(), bw = port ? 72 : 62;
   text("LV" + P.lvl, 3, 3, WHITE);
   bar(22, 3, bw, 3, P.xp / P.next, hx("#8af0ff"), hx("#14242e"));
-  text("HP", 3, 11, WHITE);
+  blit(SPR.heart, 2, 9 - (G.heartFx > 0 ? 1 : 0));   // a heart instead of the letters, it beats at low HP
   const hpCol = P.hp > P.maxHp * 0.5 ? GREEN : P.hp > P.maxHp * 0.25 ? hx("#ffc23a") : RED;
   bar(14, 11, bw + 8, 4, P.hp / P.maxHp, G.healFx > 0 ? mix(hpCol, WHITE, 0.55) : G.heartFx > 0 ? mix(hpCol, WHITE, 0.3) : hpCol, undefined, G.hpTrail);
-  if (P.hp < P.maxHp * 0.25 && Math.floor(G.t * 4) % 2) text("!", bw + 25, 10, RED);
+  text(String(Math.ceil(P.hp)), 14 + bw + 8 + 3, 11, P.hp < P.maxHp * 0.25 ? RED : WHITE);
   let wx = 3;
   for (const w of WEAPONS) {
     if (!P.w[w]) continue;
