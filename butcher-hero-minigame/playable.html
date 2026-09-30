@@ -39,17 +39,25 @@ if (!HEADLESS) {
   setView(W, H);
 }
 
+// colours are parsed once: draw code calls hx("#...") every frame
+const HX_CACHE = new Map();
 function hx(s) {
-  const r = parseInt(s.slice(1, 3), 16), g = parseInt(s.slice(3, 5), 16), b = parseInt(s.slice(5, 7), 16);
-  return ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
+  let v = HX_CACHE.get(s);
+  if (v === undefined) {
+    const r = parseInt(s.slice(1, 3), 16), g = parseInt(s.slice(3, 5), 16), b = parseInt(s.slice(5, 7), 16);
+    v = ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
+    HX_CACHE.set(s, v);
+  }
+  return v;
 }
 const rgb = c => [c & 255, (c >>> 8) & 255, (c >>> 16) & 255];
 const pack = (r, g, b) => ((255 << 24) | ((b & 255) << 16) | ((g & 255) << 8) | (r & 255)) >>> 0;
+// no temporary arrays: these run per pixel in the post effects
 function mix(a, b, t) {
-  const A = rgb(a), B = rgb(b);
-  return pack(A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t, A[2] + (B[2] - A[2]) * t);
+  const ar = a & 255, ag = (a >>> 8) & 255, ab = (a >>> 16) & 255;
+  return pack(ar + ((b & 255) - ar) * t, ag + (((b >>> 8) & 255) - ag) * t, ab + (((b >>> 16) & 255) - ab) * t);
 }
-const mul = (c, k) => { const A = rgb(c); return pack(A[0] * k[0], A[1] * k[1], A[2] * k[2]); };
+const mul = (c, k) => pack((c & 255) * k[0], ((c >>> 8) & 255) * k[1], ((c >>> 16) & 255) * k[2]);
 
 const INK = hx("#24101a"), WHITE = hx("#ffffff"), GOLD = hx("#ffe04a"), PALE = hx("#fff2a0"), RED = hx("#e02030");
 const BLACK = hx("#000000"), CYAN = hx("#8ef0ff"), GREEN = hx("#4ad86a"), DIM = hx("#b09878");
@@ -167,24 +175,54 @@ function zoomView(cx, cy, z) {
     }
   }
 }
-// darkness with dithered light pools: lights = [{x, y, r}] in screen pixels
+// darkness with dithered light pools: lights = [{x, y, r}] in screen pixels.
+// Each light only touches its own box; the result is 4 dithered light bands.
+let LIGHT = null;
 function lightPass(lights, ambient, tintCol) {
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    let best = 0;
-    for (const L of lights) {
-      const d = Math.hypot(x - L.x, (y - L.y) * 1.25) / L.r;
-      if (d < 1) best = Math.max(best, 1 - d * d);
+  if (!LIGHT || LIGHT.length !== W * H) LIGHT = new Float32Array(W * H); else LIGHT.fill(0);
+  for (const L of lights) {
+    const r = L.r, ir2 = 1 / (r * r), x0 = Math.max(0, Math.floor(L.x - r)), x1 = Math.min(W - 1, Math.ceil(L.x + r));
+    const y0 = Math.max(0, Math.floor(L.y - r / 1.25)), y1 = Math.min(H - 1, Math.ceil(L.y + r / 1.25));
+    for (let y = y0; y <= y1; y++) {
+      const dy = (y - L.y) * 1.25, dy2 = dy * dy, row = y * W;
+      for (let x = x0; x <= x1; x++) {
+        const dx = x - L.x, v = 1 - (dx * dx + dy2) * ir2;
+        if (v > LIGHT[row + x]) LIGHT[row + x] = v;
+      }
     }
-    const lit = ambient + (1 - ambient) * best;
-    const q = Math.min(3, Math.floor(lit * 3 + BAYER[y & 3][x & 3] / 16));   // 4 dithered light bands
-    if (q < 3) pix[y * W + x] = mix(pix[y * W + x], tintCol, (3 - q) * 0.2);
+  }
+  const tr = tintCol & 255, tg = (tintCol >>> 8) & 255, tb = (tintCol >>> 16) & 255, k = 1 - ambient;
+  for (let y = 0; y < H; y++) {
+    const B = BAYER[y & 3], row = y * W;
+    for (let x = 0; x < W; x++) {
+      const i = row + x, q = Math.floor((ambient + k * LIGHT[i]) * 3 + B[x & 3] / 16);
+      if (q < 3) {
+        const t = (3 - q) * 0.2, c = pix[i], r = c & 255, g = (c >>> 8) & 255, b = (c >>> 16) & 255;
+        pix[i] = ((255 << 24) | (((b + (tb - b) * t) & 255) << 16) | (((g + (tg - g) * t) & 255) << 8) | ((r + (tr - r) * t) & 255)) >>> 0;
+      }
+    }
   }
 }
+// screen-edge glow; the border mask (pixel index, depth, dither) is built once per view size and width
+const VIG_CACHE = new Map();
 function vignette(col, strength, width = 0.35) {
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    const dx = Math.abs(x - W / 2) / (W / 2), dy = Math.abs(y - H / 2) / (H / 2), d = Math.max(dx, dy);
-    const k = (d - (1 - width)) / width;
-    if (k > 0 && BAYER[y & 3][x & 3] / 16 < k * strength * 1.4) pix[y * W + x] = mix(pix[y * W + x], col, 0.5 * k * strength + 0.15);
+  const key = W + "x" + H + ":" + width;
+  let M = VIG_CACHE.get(key);
+  if (!M) {
+    const idx = [], ks = [], bay = [];
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const dx = Math.abs(x - W / 2) / (W / 2), dy = Math.abs(y - H / 2) / (H / 2), d = Math.max(dx, dy), k = (d - (1 - width)) / width;
+      if (k > 0) { idx.push(y * W + x); ks.push(k); bay.push(BAYER[y & 3][x & 3] / 16); }
+    }
+    M = { idx: Int32Array.from(idx), k: Float64Array.from(ks), bay: Float64Array.from(bay) };
+    VIG_CACHE.set(key, M);
+  }
+  const cr = col & 255, cg = (col >>> 8) & 255, cb = (col >>> 16) & 255, s14 = strength * 1.4;
+  for (let j = 0; j < M.idx.length; j++) {
+    const k = M.k[j];
+    if (M.bay[j] >= k * s14) continue;
+    const i = M.idx[j], t = 0.5 * k * strength + 0.15, c = pix[i], r = c & 255, g = (c >>> 8) & 255, b = (c >>> 16) & 255;
+    pix[i] = ((255 << 24) | (((b + (cb - b) * t) & 255) << 16) | (((g + (cg - g) * t) & 255) << 8) | ((r + (cr - r) * t) & 255)) >>> 0;
   }
 }
 
@@ -848,6 +886,7 @@ function prepChapter(idx) {
     enemies: [], piles: [], drops: [], parts: [], pops: [], shots: [], lobs: [], saws: [], rings: [], tele: [], puddles: [], fx: [],
     boss: null, chest: null, banner: null, spawnT: 0.6, hordeT: 22, shake: 0, shakeMag: 0, pendingLevels: 0, chKills: 0,
     gibs: [], uiParts: [], cine: null, freeze: 0, lvDelay: 0, hurtFx: 0, flashFx: null,
+    streak: 0, streakT: 0, streakPop: 0, streakFx: null, streakTier: 0, hpTrail: P.hp / P.maxHp, hpHold: 0, healFx: 0, heartT: 0, heartFx: 0,
   });
   P.x = AW / 2; P.y = AH / 2 + 30; P.hook = null; P.pulled = null; P.inv = 1.5; P.mouth = "idle";
 }
@@ -958,6 +997,37 @@ function lvFx() {
   sfx("levelup");
 }
 
+// ---------------------------------------------------------------- feedback: kill streaks, bar trails, low-HP heartbeat
+// a streak breaks after STREAK_GAP s without a kill; each tier is announced once per chapter, so the calls escalate
+const STREAKS = [[25, "RAMPAGE!"], [50, "MASSACRE!"], [100, "BUTCHERY!"], [200, "MEAT GRINDER!"], [400, "UNSTOPPABLE!"], [800, "GODLIKE!"], [1600, "GOD OF MEAT!"]];
+const STREAK_GAP = 1.2;
+const CRUMBS = [hx("#d81a2a"), hx("#ff8a6a"), hx("#c05a3a"), hx("#fff2a0")];
+const BURP_GREEN = hx("#b8e07a");
+function countStreak() {
+  G.streak = (G.streakT > 0 ? G.streak : 0) + 1; G.streakT = STREAK_GAP; G.streakPop = 0.1;
+  G.stats.bestStreak = Math.max(G.stats.bestStreak || 0, G.streak);
+  for (const [n, s] of STREAKS) if (G.streak === n && n > (G.streakTier || 0)) {
+    G.streakTier = n; G.streakFx = { s, n, t: 0 }; sfx("streak"); G.flashFx = { col: GOLD, t: 0, life: 0.12 };
+    (G.stats.streakLog = G.stats.streakLog || []).push([G.ch, n, Math.round(G.t)]);
+  }
+}
+function updateFeedback(dt) {
+  if (G.streakT > 0 && (G.streakT -= dt) <= 0) G.streak = 0;
+  G.streakPop = Math.max(0, G.streakPop - dt);
+  if (G.streakFx && !G.banner && (G.streakFx.t += dt) > 1.6) G.streakFx = null;   // waits while a banner is up
+  // the lost chunk of a bar stays lit for a moment, then drains
+  const k = P.hp / P.maxHp;
+  if (!(G.hpTrail > k)) G.hpTrail = k; else if ((G.hpHold -= dt) <= 0) G.hpTrail = Math.max(k, G.hpTrail - dt * (0.3 + (G.hpTrail - k) * 2));
+  const B = G.boss;
+  if (B) {
+    const kb = Math.max(0, B.hp / B.maxHp);
+    if (!(B.trail > kb)) B.trail = kb; else if ((B.trailHold -= dt) <= 0) B.trail = Math.max(kb, B.trail - dt * (0.12 + (B.trail - kb) * 2));
+  }
+  G.healFx = Math.max(0, G.healFx - dt);
+  if (k < 0.25 && P.hp > 0 && !P.dying) { if ((G.heartT -= dt) <= 0) { G.heartT = 0.8; G.heartFx = 0.25; sfx("heart"); } }
+  else G.heartT = 0;
+  G.heartFx = Math.max(0, G.heartFx - dt);
+}
 // ---------------------------------------------------------------- helpers
 // rock / dirt / snow chunks thrown up by slams, in the colours of the biome
 const DEBRIS = { forest: [hx("#a8743a"), hx("#5e3a1a")], snow: [hx("#ffffff"), hx("#9ab0d0")], jungle: [hx("#6a9a3a"), hx("#2e4a1e")],
@@ -1024,6 +1094,7 @@ function lob(x, y, tx, ty, dur, hgt, col, land) { G.lobs.push({ x0: x, y0: y, x:
 function hurtPlayer(dmg, from, src = "?") {
   if (P.inv > 0 || G.god || G.mode !== "play" || P.dying || G.cine) return;
   dmg = Math.max(1, Math.round(dmg * chMul() * diffDmg() * (1 - 0.08 * P.p.armor) * (1 - 0.1 * (G.revenge || 0))));
+  if (G.hpTrail - P.hp / P.maxHp < 0.005) G.hpHold = 0.35;
   P.hp -= dmg; P.inv = 0.7; P.hitT = 0.12; G.hurtFx = 0.3; G.freeze = Math.max(G.freeze, 0.05); P.squash = -0.15;
   G.stats.dmgTaken += dmg;
   G.stats.hits[src] = (G.stats.hits[src] || 0) + dmg;
@@ -1062,6 +1133,7 @@ function dmgPopup(key, x, y, dmg, crit) {
 function killEnemy(e, eaten = false) {
   if (e.dead) return;
   e.dead = true; P.kills++; G.chKills++; G.stats.kills++;
+  countStreak();
   if (P.evo.plague && Math.hypot(e.x - P.x, e.y - P.y) < auraR()) P.hp = Math.min(P.maxHp, P.hp + 1);
   if (eaten) return;
   blood(e.x, e.y - e.h / 2, e.elite ? 12 : 6, e.elite ? 1.3 : 1, e.h / 2);
@@ -1088,6 +1160,7 @@ function hitsBoss(x, y, r, key, dmg, cd = 0.35) {
       if ((B.hitCd[key] || 0) > 0) return true;
       B.hitCd[key] = cd;
       const crit = Math.random() < 0.08, d = Math.round(dmg * (crit ? 2 : 1));
+      if ((B.trail === undefined ? 1 : B.trail) - B.hp / B.maxHp < 0.005) B.trailHold = 0.35;
       B.hp -= d; B.dmgTaken = (B.dmgTaken || 0) + d;
       if ((B.flashCd || 0) <= 0) { B.flash = 0.06; B.flashCd = 0.25; }
       dmgPopup(B, x, y - 6, d, crit);
@@ -1299,7 +1372,7 @@ function updatePlayer(dt) {
       d.x += (P.x - d.x) / dd * sp * dt; d.y += (P.y - 6 - d.y) / dd * sp * dt;
       if (dd < 6) {
         d.got = true;
-        if (d.kind === "heart") { const h = 25; P.hp = Math.min(P.maxHp, P.hp + h); popup("+" + h + " HP", P.x, P.y - 44 * P.scale, GREEN); sfx("heal"); }
+        if (d.kind === "heart") { const h = 25; P.hp = Math.min(P.maxHp, P.hp + h); G.healFx = 0.3; popup("+" + h + " HP", P.x, P.y - 44 * P.scale, GREEN); sfx("heal"); }
         else {
           gainXp(d.xp); sfxThrottled("pickup", 0.05);
           if (G.uiParts.length < 24) G.uiParts.push({ x: P.x - camX, y: P.y - 10 - camY, t: 0 });
@@ -1393,6 +1466,9 @@ function updateHook(dt) {
     const dx = hold.x - tgt.x, dy = hold.y - tgt.y, d = Math.hypot(dx, dy), sp = 240;
     if (d < sp * dt + 1) { tgt.x = hold.x; tgt.y = hold.y; H.phase = "eat"; H.t = 0; H.chomps = 0; }
     else { tgt.x += dx / d * sp * dt; tgt.y += dy / d * sp * dt; if (Math.random() < 0.5) dust(tgt.x, tgt.y, 1, PALE); }
+    // the victim kicks and flails on the chain
+    tgt.face = Math.floor(H.t * 14) % 2 ? 1 : -1; tgt.walkT += dt * 14; tgt.z = Math.abs(Math.sin(H.t * 28)) * 3;
+    if (H.phase === "eat") tgt.z = 0;
     H.x = tgt.x; H.y = tgt.y - tgt.h / 2;
   } else if (H.phase === "eat") {
     tgt.x = P.x + H.side * 12 * P.scale + (Math.random() < 0.5 ? 1 : -1); tgt.y = P.y + 1;
@@ -1404,6 +1480,7 @@ function updateHook(dt) {
       P.squash = 0.12;
       sfx("chomp"); buzz(25);
       blood(P.x + H.side * 4 * P.scale, P.y, 5, 0.8, 22 * P.scale);
+      for (let i = 0; i < 4; i++) addPart({ x: P.x + H.side * 8 * P.scale, y: P.y + rnd(-2, 2), z: 22 * P.scale, vx: H.side * rnd(12, 45), vy: rnd(-10, 10), vz: rnd(25, 70), life: 0.8, stain: i === 0, c: pick(CRUMBS) });
       if (Math.random() < 0.6) bones(P.x, P.y, 1);
       shake(0.06, 1);
     }
@@ -1415,7 +1492,12 @@ function updateHook(dt) {
       P.devours++; G.stats.devours++;
       const ns = growthFor(P.devours);
       if (ns > P.scale + 0.01) { P.scale = ns; growFx(); } else P.squash = 0.22;
-      P.hp = Math.min(P.maxHp, P.hp + heal);
+      P.hp = Math.min(P.maxHp, P.hp + heal); G.healFx = 0.3;
+      if (Math.random() < 0.16) setTimeoutG(0.45, () => {
+        if (P.dying || G.mode !== "play") return;
+        popup("BURP!", P.x + P.face * 10, P.y - 50 * P.scale, BURP_GREEN, 1, 0.9); sfx("burp");
+        dust(P.x + P.face * 7 * P.scale, P.y - 26 * P.scale, 5, BURP_GREEN);
+      });
       popup("+" + xp + "XP", P.x, P.y - 48 * P.scale, PALE, 1, 0.9);
       popup("+" + heal, P.x + 14, P.y - 38 * P.scale, GREEN, 1, 0.9);
       gainXp(xp);
@@ -1774,6 +1856,7 @@ function update(dt) {
   if (G.mode !== "play") return;
   updateShots(dt);
   updateParts(dt);
+  updateFeedback(dt);
   const A = G.arena;
   if (A.base) for (let i = 0; i < 140; i++) { const k = (Math.random() * A.d.length) | 0; A.d[k] = A.base[k]; }
   if (G.pendingChest) {
@@ -3173,7 +3256,9 @@ function drawWorld() {
   camX = Math.round(clamp(G.camX - W / 2, 0, AW - W) + (sm ? rnd(-sm, sm) : 0));
   camY = Math.round(clamp(G.camY - H / 2, 0, AH - H) + (sm ? rnd(-sm, sm) : 0));
   const A = G.arena;
-  for (let y = 0; y < H; y++) {
+  if (camX >= 0 && camX + W <= AW && camY >= 0 && camY + H <= AH) {
+    for (let y = 0; y < H; y++) { const row = (y + camY) * AW + camX; pix.set(A.d.subarray(row, row + W), y * W); }
+  } else for (let y = 0; y < H; y++) {   // screen shake can push the view past the arena edge
     const ay = clamp(y + camY, 0, AH - 1), row = ay * AW;
     for (let x = 0; x < W; x++) pix[y * W + x] = A.d[row + clamp(x + camX, 0, AW - 1)];
   }
@@ -3275,6 +3360,7 @@ function postFx() {
     }
   } else if (b === "lava") vignette(hx("#3a0804"), 0.9, 0.3);
   if (G.hurtFx > 0) vignette(RED, 0.65 * G.hurtFx / 0.3, 0.22);
+  if (G.heartFx > 0) vignette(RED, 0.4 * G.heartFx / 0.25, 0.16);   // low HP: the edges pulse with the heartbeat
   if (G.flashFx) {
     const k = 1 - G.flashFx.t / G.flashFx.life;
     for (let y = 0; y < H; y++) for (let x = (y & 1); x < W; x += 2) pix[y * W + x] = mix(pix[y * W + x], G.flashFx.col, 0.4 * k);
@@ -3490,7 +3576,8 @@ function drawEnemy(e) {
   if (e.state === "aim") drawTele({ shape: "line", x1: e.x, y1: e.y, x2: e.x + e.cdx * 90, y2: e.y + e.cdy * 90, w: 12, t: e.st, dur: 0.75 });
   const fr = e.spr[Math.floor(e.walkT) % e.spr.length];
   const lift = e.T.fly ? Math.round(Math.sin(G.t * 4 + e.wob) * 2) - 5 : -Math.round(e.z || 0);
-  blitFeet(fr, sx, sy + lift, { scale: sc, flip: e.face < 0, flash: e.flash > 0 ? WHITE : (e.stun > 0 && Math.floor(G.t * 10) % 2 ? CYAN : 0) });
+  const hk = e.flash > 0 ? e.flash / 0.09 : 0;
+  blitFeet(fr, sx, sy + lift, { scale: sc, sx: sc * (1 + 0.3 * hk), sy: sc * (1 - 0.22 * hk), flip: e.face < 0, flash: e.flash > 0 ? WHITE : (e.stun > 0 && Math.floor(G.t * 10) % 2 ? CYAN : 0) });
   if (e.elite && e.hp < e.maxHp && !e.grabbed) {
     const w = 14, x0 = Math.round(sx - w / 2), y0 = Math.round(sy - e.h - 4);
     rect(x0 - 1, y0 - 1, w + 2, 4, INK); rect(x0, y0, w, 2, hx("#3a1418")); rect(x0, y0, Math.round(w * e.hp / e.maxHp), 2, RED);
@@ -3818,8 +3905,10 @@ function button(x, y, w, h, label, id, color = "orange", k = 1) {
   text(label, x + Math.round((w - textW(label, k)) / 2), y + Math.round((h - 5 * k) / 2), WHITE, k);
   uiRect(x, y, w, h, id);
 }
-function bar(x, y, w, h, k, col, bg = hx("#3a1418")) {
+// trail: where the bar was a moment ago; the lost chunk shows pale before it drains
+function bar(x, y, w, h, k, col, bg = hx("#3a1418"), trail = 0) {
   rect(x - 1, y - 1, w + 2, h + 2, INK); rect(x, y, w, h, bg);
+  if (trail > k) rect(x, y, Math.round(w * clamp(trail, 0, 1)), h, PALE);
   rect(x, y, Math.round(w * clamp(k, 0, 1)), h, col);
   rect(x, y, Math.round(w * clamp(k, 0, 1)), 1, mix(col, WHITE, 0.45));
 }
@@ -3868,7 +3957,8 @@ function drawHUD() {
   text("LV" + P.lvl, 3, 3, WHITE);
   bar(22, 3, bw, 3, P.xp / P.next, hx("#8af0ff"), hx("#14242e"));
   text("HP", 3, 11, WHITE);
-  bar(14, 11, bw + 8, 4, P.hp / P.maxHp, P.hp > P.maxHp * 0.5 ? GREEN : P.hp > P.maxHp * 0.25 ? hx("#ffc23a") : RED);
+  const hpCol = P.hp > P.maxHp * 0.5 ? GREEN : P.hp > P.maxHp * 0.25 ? hx("#ffc23a") : RED;
+  bar(14, 11, bw + 8, 4, P.hp / P.maxHp, G.healFx > 0 ? mix(hpCol, WHITE, 0.55) : G.heartFx > 0 ? mix(hpCol, WHITE, 0.3) : hpCol, undefined, G.hpTrail);
   if (P.hp < P.maxHp * 0.25 && Math.floor(G.t * 4) % 2) text("!", bw + 25, 10, RED);
   let wx = 3;
   for (const w of WEAPONS) {
@@ -3889,11 +3979,18 @@ function drawHUD() {
   const ks = String(P.kills);
   blit(SPR.icons.skull, W - 11 - textW(ks), 13);
   text(ks, W - 3 - textW(ks), 14, WHITE);
+  if (G.streak >= 10) {
+    // kill streak: the number pops on every kill, the thin bar is the time left to keep it going
+    const ss = "X" + G.streak, sk = G.streakPop > 0 ? 2 : 1, sc = G.streakPop > 0 ? WHITE : G.streak >= STREAKS[0][0] ? GOLD : PALE;
+    text(ss, W - 3 - textW(ss, sk), 22, sc, sk);
+    const tw = 18, tk = clamp(G.streakT / STREAK_GAP, 0, 1);
+    rect(W - 3 - tw, 23 + 5 * sk, tw, 1, hx("#3a1418")); rect(W - 3 - tw, 23 + 5 * sk, Math.round(tw * tk), 1, tk < 0.3 ? RED : GOLD);
+  }
   const B = G.boss;
   if (B && B.entering <= 0) {
     const w = Math.min(B.mini ? 90 : 120, W - 60), x = Math.round((W - w) / 2), y = H - 9;
     centered(B.name, y - 8, B.mini ? GOLD : WHITE);
-    bar(x, y, w, 4, B.hp / B.maxHp, B.phase2 ? hx("#ff3a3a") : B.mini ? hx("#ff9a2a") : RED);
+    bar(x, y, w, 4, B.hp / B.maxHp, B.phase2 ? hx("#ff3a3a") : B.mini ? hx("#ff9a2a") : RED, undefined, B.trail);
   }
   const hb = HOOK_BTN(), ready = P.hookCd <= 0 && !P.hook;
   for (let y = -hb.r; y <= hb.r; y++) for (let x = -hb.r; x <= hb.r; x++) {
@@ -3943,6 +4040,14 @@ function drawHUD() {
       const kk = fitK(b.s, W - 8, 3);
       centered(b.s, y, b.col, kk);
       if (b.sub) cwrap(b.sub, y + 5 * kk + 4, WHITE);
+    }
+  }
+  if (G.streakFx && !G.banner) {
+    const f = G.streakFx, y = (port ? 84 : 46) - Math.round(f.t * 4);
+    if (!(f.t > 1.25 && Math.floor(f.t * 14) % 2)) {
+      const kk = fitK(f.s, W - 8, f.t < 0.07 ? 4 : 3);
+      centered(f.s, y, Math.floor(f.t * 10) % 2 ? GOLD : hx("#ff9a2a"), kk);
+      centered(f.n + " KILL STREAK", y + 5 * kk + 3, PALE);
     }
   }
   drawTutorial();
@@ -4072,7 +4177,7 @@ function drawScreen() {
     let y = ctext("CHAPTER CLEAR!", port ? 48 : 22, GOLD, 3) + 6;
     const s = G.stats;
     y = cwrap("BOSS DOWN IN " + (G.bossTime ? Math.round(G.bossTime) + "S" : "-"), y, PALE, 9);
-    y = cwrap("KILLS THIS CHAPTER " + G.chKills + "   TOTAL " + s.kills + "   EATEN " + s.devours, y, WHITE, 9);
+    y = cwrap("KILLS THIS CHAPTER " + G.chKills + "   TOTAL " + s.kills + "   EATEN " + s.devours + "   BEST STREAK " + (s.bestStreak || 0), y, WHITE, 9);
     y = cwrap("LEVEL " + P.lvl + "   HP " + Math.ceil(P.hp) + "/" + P.maxHp, y, WHITE, 9);
     y = cwrap("WEAPONS: " + ownedWeapons().map(w => UPG[w].name.split(" ")[0] + " " + P.w[w]).join(", "), y, WHITE, 9) + 4;
     const nxt = G.ch + 1 < CHAPTERS.length ? CHAPTERS[G.ch + 1].name : "LOOP " + (G.loop + 2) + ": " + CHAPTERS[0].name;
@@ -4122,7 +4227,7 @@ function drawEndCard() {
   dim(0.74);
   let y = ctext("YOU ATE THE WORLD!", port ? 44 : 20, GOLD, 3) + 2;
   const s = G.stats;
-  y = cwrap("TIME " + fmt(s.time) + "  LEVEL " + P.lvl + "  KILLS " + s.kills + "  EATEN " + s.devours + "  DEATHS " + s.deaths, y, WHITE, 8);
+  y = cwrap("TIME " + fmt(s.time) + "  LEVEL " + P.lvl + "  KILLS " + s.kills + "  EATEN " + s.devours + "  BEST STREAK " + (s.bestStreak || 0) + "  DEATHS " + s.deaths, y, WHITE, 8);
   if (G.unlockMsg) y = cwrap(G.unlockMsg, y, hx("#8af0ff"), 8);
   y += port ? 14 : 4;
   y = ctext("THE REAL CARNAGE IS IN", y, PALE) + 1;
@@ -4237,6 +4342,7 @@ addEventListener("resize", applyOrientation);
 addEventListener("orientationchange", () => setTimeout(applyOrientation, 50));
 
 // ---------------------------------------------------------------- input
+const JOY_R = 16;   // stick radius in art pixels
 inputVector = () => {
   if (BOTPLAY) return BOT.inputVector();
   let x = 0, y = 0;
@@ -4259,8 +4365,22 @@ function newGame(ch = 0, snap = null) {
   newRun({ god: Q.has("god"), opts: OPTS });
   startChapter(ch, snap);
 }
+// scene changes dissolve: the last frame breaks up diagonally in a dither pattern over the new scene
+let WIPE = null;
+const startWipe = () => { WIPE = { img: pix.slice(), t: 0 }; };
+function drawWipe(dt) {
+  if (!WIPE) return;
+  const p = (WIPE.t += dt) / 0.45;
+  if (p >= 1 || WIPE.img.length !== pix.length) { WIPE = null; return; }
+  for (let y = 0; y < H; y++) {
+    const B = BAYER[y & 3], row = y * W;
+    for (let x = 0; x < W; x++) if (0.6 * (x / W + y / H) / 2 + 0.4 * B[x & 3] / 16 >= p) pix[row + x] = WIPE.img[row + x];
+  }
+}
+const WIPE_IDS = new Set(["next", "retry", "new", "continue", "endless", "title", "again"]);
 function uiAction(id) {
   if (!id) return false;
+  if (WIPE_IDS.has(id)) startWipe();
   if (id === "mute") { MUTED = !MUTED; if (masterGain) masterGain.gain.value = MUTED ? 0 : 1; return true; }
   if (id === "pause") { if (G.mode === "play") { setMode("pause"); music.pause(true); } return true; }
   if (id === "resume") { setMode("play"); music.pause(false); return true; }
@@ -4295,19 +4415,22 @@ screenCv.addEventListener("pointerdown", e => {
   const id = hitRect(p);
   if (G.mode !== "play") { uiAction(id); return; }
   if (id === "hook" || id === "dash" || id === "pause" || id === "mute" || id === "store") { uiAction(id); return; }
-  if (!JOY) { JOY = { id: e.pointerId, ox: p.x, oy: p.y, x: p.x, y: p.y, t0: performance.now(), moved: false }; try { screenCv.setPointerCapture(e.pointerId); } catch (err) { } }
+  if (!JOY) { JOY = { id: e.pointerId, ox: p.x, oy: p.y, sx: p.x, sy: p.y, x: p.x, y: p.y, t0: performance.now(), moved: false }; try { screenCv.setPointerCapture(e.pointerId); } catch (err) { } }
   else pointers.set(e.pointerId, { x: p.x, y: p.y, t0: performance.now() });
 });
 screenCv.addEventListener("pointermove", e => {
   if (JOY && e.pointerId === JOY.id) {
     const p = toArt(e); JOY.x = p.x; JOY.y = p.y;
-    if (Math.hypot(p.x - JOY.ox, p.y - JOY.oy) > 5) JOY.moved = true;
+    if (Math.hypot(p.x - JOY.sx, p.y - JOY.sy) > 5) JOY.moved = true;
+    // the stick base trails the finger: turning around never needs a long drag back
+    const dx = p.x - JOY.ox, dy = p.y - JOY.oy, d = Math.hypot(dx, dy);
+    if (d > JOY_R) { JOY.ox = p.x - dx / d * JOY_R; JOY.oy = p.y - dy / d * JOY_R; }
   }
 });
 function endPointer(e) {
   const p = toArt(e);
   if (JOY && e.pointerId === JOY.id) {
-    const dur = performance.now() - JOY.t0, dx = p.x - JOY.ox, dy = p.y - JOY.oy, d = Math.hypot(dx, dy);
+    const dur = performance.now() - JOY.t0, dx = p.x - JOY.sx, dy = p.y - JOY.sy, d = Math.hypot(dx, dy);
     const quick = dur < 260 && !JOY.moved;
     JOY = null;
     if (quick && G.mode === "play") tapHook(p);
@@ -4405,6 +4528,13 @@ sfx = name => {
     case "bossdie": tone(200, 1.2, "sawtooth", 0.15, 30); noise(1.2, 0.35, 300, 0, 0.5); break;
     case "win": [523, 659, 784, 659, 784, 1047].forEach((f, i) => tone(f, 0.16, "square", 0.07, null, i * 0.12)); break;
     case "dead": [392, 330, 262, 196].forEach((f, i) => tone(f, 0.25, "square", 0.07, null, i * 0.2)); break;
+    case "streak":
+      music.duck(0.9);
+      [196, 294, 392].forEach(f => tone(f, 0.35, "sawtooth", 0.07, null)); [392, 587, 784].forEach(f => tone(f, 0.45, "square", 0.04, null, 0.12));
+      noise(0.5, 0.2, 5000, 0.12, 1.5);
+      break;
+    case "heart": tone(58, 0.11, "sine", 0.35, 45); tone(52, 0.13, "sine", 0.28, 40, 0.15); break;
+    case "burp": tone(110 + Math.random() * 30, 0.32, "sawtooth", 0.08, 60); noise(0.25, 0.12, 300, 0.02, 1); break;
     // stingers: short scored moments over a ducked music track
     case "bossintro":
       music.duck(2.3);
@@ -4524,7 +4654,7 @@ function loop(now) {
       let n = 0;
       while (acc >= 1 / 60 && n++ < 8) { if (BOTPLAY) BOT.act(); update(1 / 60); acc -= 1 / 60; if (G.mode !== "play") { acc = 0; break; } }
     } else { acc = 0; G.clock += dt; }
-    if (m === "intro") { G.introT = (G.introT || 0) + dt; if (G.introT > (BOTPLAY ? 1.5 : 60)) setMode("play"); }
+    if (m === "intro") { G.introT = (G.introT || 0) + dt; if (G.introT > (BOTPLAY ? 1.5 : window.BH_AD_BUILD ? 3 : 60)) setMode("play"); }
     if (m === "victory" && !G.endCancel) {
       G.endT = (G.endT || 0) + dt;
       if (G.endT >= END_AUTO_OPEN && !G.endOpened) { G.endOpened = true; G.endCancel = true; autoOpenStore(); }
@@ -4537,12 +4667,13 @@ function loop(now) {
     drawHUD();
     if (G.mode !== "play") drawScreen();
   }
+  drawWipe(dt);
   present();
   requestAnimationFrame(loop);
 }
 function boot() {
   applyOrientation();
-  goTitle();
+  if (window.BH_AD_BUILD && !BOTPLAY) newGame(0); else goTitle();   // an ad starts with gameplay, not a menu
   requestAnimationFrame(loop);
 }
 if (window.mraid && mraid.getState && mraid.getState() === "loading") mraid.addEventListener("ready", boot);
