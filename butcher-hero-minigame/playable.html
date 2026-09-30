@@ -935,7 +935,7 @@ const cleaverDmg = () => 10 * (1 + 0.25 * ((P.w.cleaver >= 2) + (P.w.cleaver >= 
 const cleaverSize = () => P.evo.razor ? 1.7 : 1.2;
 const orbitRx = () => 30 * P.scale + 3 * cleaverCount() + (P.evo.razor ? 6 : 0);
 const auraR = () => (22 + 4 * P.w.aura) * (P.evo.plague ? 1.5 : 1) * Math.sqrt(P.scale);
-const chMul = () => [1.3, 1.65, 1.9, 2.4, 3.0, 4.5][G.ch];   // +15% again: one-finger play dodges by itself
+const chMul = () => [1, 1.65, 1.9, 2.4, 3.0, 4.5][G.ch];   // chapters 2-6 +15%: one-finger play dodges by itself
 const belly = (s = P.scale) => [P.x, P.y - BUTCHER_BELLY_UP * s];
 
 // dash: a short invulnerable burst with a cooldown (flick on touch, Shift / K on keyboard, the DASH button)
@@ -1179,7 +1179,8 @@ function hurtPlayer(dmg, from, src = "?") {
     popup("BLOCKED!", P.x, P.y - 44 * P.scale, WHITE, 1, 0.9); sparks(P.x, P.y - 20 * P.scale, 8, WHITE, 50); sfx("hit");
     return;
   }
-  dmg = Math.max(1, Math.round(dmg * chMul() * diffDmg() * (1 - 0.08 * P.p.armor) * (1 - 0.1 * (G.revenge || 0)) * (R("collar") ? 0.9 : 1)));
+  const warmup = G.ch === 0 && !G.loop ? Math.min(1, 0.5 + G.t / 90) : 1;   // the first minute of the game is gentle: ad viewers are still finding the controls
+  dmg = Math.max(1, Math.round(dmg * chMul() * diffDmg() * warmup * (1 - 0.08 * P.p.armor) * (1 - 0.1 * (G.revenge || 0)) * (R("collar") ? 0.9 : 1)));
   if (R("collar") && from && from.T && !from.dead) hurtEnemy(from, 30 * might() * (1 + 0.6 * G.ch), 0, 0, true);
   if (G.hpTrail - P.hp / P.maxHp < 0.005) G.hpHold = 0.35;
   P.hp -= dmg; P.inv = 0.7; P.hitT = 0.12; G.hurtFx = 0.3; G.freeze = Math.max(G.freeze, 0.05); P.squash = -0.15;
@@ -1314,6 +1315,7 @@ function spawning(dt) {
     if ((G.spawnT -= dt) <= 0 && G.enemies.length < 30 && G.enemies.some(e => e.champion)) { const p = spawnPoint(); spawnEnemy(G.CH.horde, p.x, p.y); G.spawnT = 1.4; }
     return;
   }
+  if (G.ch === 0 && !G.loop && !G.movedOnce && G.t < 6) return;   // the horde waits for the first touch (or 6 s)
   const [s0, s1] = SPAWN[G.ch];
   let interval = (s0 - (s0 - s1) * Math.min(1, G.t / 200)) * (CURSED("swarm") ? 0.74 : 1);
   if (G.phase === "waveB") interval *= 0.9;
@@ -1449,7 +1451,7 @@ function updatePlayer(dt) {
       P.x += v.x / l * k * moveSpeed() * dt; P.y += v.y / l * k * moveSpeed() * dt;
       if (Math.abs(v.x) > 0.1) P.face = v.x > 0 ? 1 : -1;
       P.walkT += dt * 5;
-      G.movedOnce = (G.movedOnce || 0) + dt;
+      if (!G.demo) G.movedOnce = (G.movedOnce || 0) + dt;   // the autopilot before the first touch does not count
       P.stepT -= dt;
       if (P.stepT <= 0) { P.stepT = 0.17; P.stepSide *= -1; stepFx(); }
     }
@@ -5033,8 +5035,10 @@ addEventListener("orientationchange", () => setTimeout(applyOrientation, 50));
 
 // ---------------------------------------------------------------- input
 const JOY_R = 16;   // stick radius in art pixels
+// until the very first touch the butcher plays by himself (an ad viewer sees the action, not a corpse); a touch takes over
+let TOUCHED = false;
 inputVector = () => {
-  if (BOTPLAY) return BOT.inputVector();
+  if (BOTPLAY || !TOUCHED) return BOT.inputVector();
   let x = 0, y = 0;
   if (keys.ArrowLeft || keys.KeyA) x -= 1;
   if (keys.ArrowRight || keys.KeyD) x += 1;
@@ -5105,6 +5109,7 @@ function uiAction(id) {
 screenCv.addEventListener("pointerdown", e => {
   e.preventDefault();
   unlockAudio();
+  TOUCHED = true;
   const p = toArt(e);
   const id = hitRect(p);
   if (G.mode !== "play") {
@@ -5146,6 +5151,7 @@ screenCv.addEventListener("pointercancel", e => { if (JOY && e.pointerId === JOY
 addEventListener("keydown", e => {
   keys[e.code] = true;
   unlockAudio();
+  TOUCHED = true;
   if (G.mode === "play") {
     if (e.code === "Space" || e.code === "KeyJ") hookNearest();
     if (e.code === "ShiftLeft" || e.code === "ShiftRight" || e.code === "KeyK") tryDash();
@@ -5352,6 +5358,7 @@ function loop(now) {
   lastT = now;
   const m = G.mode;
   G.menuT = (G.menuT || 0) + dt;
+  G.demo = !TOUCHED && !BOTPLAY;
   if (m === "title") {
     titleTick(dt);
     drawWorld();
