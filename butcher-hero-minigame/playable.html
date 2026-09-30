@@ -453,7 +453,8 @@ const PALS = {
   brute: { G: hx("#d08a58"), g: hx("#a25a34"), d: hx("#6a3018"), y: hx("#ffea60"), c: hx("#3a2a2a"), C: hx("#5a4a4a"), w: METAL[1], W: METAL[0], h: HANDLE },
   ice: { G: hx("#8fb8ec"), g: hx("#5a82c4"), d: hx("#34508e"), y: hx("#ff5a5a"), c: hx("#22306a"), C: hx("#3e4e8e"), w: hx("#bff6ff"), W: WHITE, h: hx("#22306a") },
 };
-for (const k of ["goblin", "brute", "ice"]) {
+PALS.golden = { G: hx("#ffe04a"), g: hx("#d8a820"), d: hx("#9a6a10"), y: WHITE, c: hx("#6a3a18"), C: hx("#9c5c2a"), w: hx("#fff2a0"), W: WHITE, h: hx("#6a3a18") };
+for (const k of ["goblin", "brute", "ice", "golden"]) {
   SPR[k] = [0, 1].map(l => makeSprite(GOB_ROWS.concat(GOB_LEGS[l]), PALS[k]));
 }
 const YETI_PAL = { W: hx("#f4f8ff"), w: hx("#bcd0e8"), s: hx("#8aa2c4"), b: hx("#6a9ad0"), y: hx("#ff4040"), m: hx("#2a1a2a"), n: hx("#5a6a8a"), t: WHITE };
@@ -775,7 +776,7 @@ let onVictory = () => {}, onUnlock = () => {};
 // A chapter: wave A until MINI_AT, the mini-boss, wave B for WAVE_B seconds, the boss, the chest. ~5 min each, 6 chapters.
 const MINI_AT = 110, WAVE_B = 90;
 const SPAWN = [[1.2, 0.45], [1.05, 0.38], [0.9, 0.3], [0.85, 0.26], [0.72, 0.2], [0.65, 0.16]];   // [start, fastest] interval per chapter
-const CH_HP = [1, 1.7, 2.9, 4.5, 7.6, 13.5];
+const CH_HP = [1.15, 1.95, 3.35, 5.2, 8.75, 15.5];   // +15% over the pre-relic balance: relics, frenzy and the market add power
 const CHAPTERS = [
   { key: "forest", name: "AUTUMN FOREST", horde: "goblin", mini: "chief", boss: "skeleton",
     mix: [["goblin", 1, 0], ["brute", 0.1, 40]] },
@@ -805,11 +806,11 @@ const ETYPES = {
   slimelet: { spr: "slime", hp: 12, spd: 28, dmg: 6, xp: 0, r: 4, hop: true, scale: 0.6 },
   alien: { spr: "alien", hp: 36, spd: 21, dmg: 8, xp: 2, r: 5, keep: 56, shoot: { cd: 2.4, spd: 72, dmg: 9, col: "pink" } },
   drone: { spr: "drone", hp: 22, spd: 40, dmg: 7, xp: 1, r: 5, fly: true },
+  golden: { spr: "golden", hp: 60, spd: 58, dmg: 0, xp: 0, r: 6, scale: 1.25, golden: true },
 };
 
 const WEAPONS = ["cleaver", "sword", "saw", "slam", "grenade", "aura"];
 const PASSIVES = ["meaty", "speed", "might", "magnet", "hook", "glutton", "regen", "armor", "dash"];
-const MAX_WEAPONS = 4;
 const UPG = {
   cleaver: { name: "CLEAVERS", max: 6, desc: l => l === 0 ? "CHAINED CLEAVERS SPIN AROUND YOU" : (l === 2 || l === 4 || l === 5 ? "+1 CLEAVER ON A CHAIN" : "+25% CLEAVER DAMAGE") },
   sword: { name: "CHAIN SWORD", max: 5, desc: l => l === 0 ? "A SWORD ON A CHAIN BURSTS FROM YOUR BACK" : "+30% DAMAGE, SPINS FASTER, LONGER" },
@@ -849,6 +850,7 @@ function newPlayer() {
     p: { meaty: 0, speed: 0, might: 0, magnet: 0, hook: 0, glutton: 0, regen: 0, armor: 0, dash: 0 },
     evo: {}, ang: 0, ang2: -Math.PI / 2, sawT: 1, slamT: 2, grenT: 2, auraT: 0, hookCd: 0, hook: null, regenAcc: 0, pulled: null,
     dashT: 0, dashCd: 0, dashCharges: 1, dashId: 0, dashDir: [1, 0], ghosts: [], squash: 0, dying: 0, stepT: 0, stepSide: 1, facingUp: false,
+    teeth: 0, toothAcc: 0, relics: {}, curses: {}, hunger: 0, frenzy: 0, frenzyDur: 0, maskT: 0,
   };
 }
 const xpNeed = l => Math.round(10 + 7 * l + l * l / 6 + Math.max(0, l - 20) ** 2 / 4);
@@ -858,6 +860,7 @@ function newRun(opts = {}) {
     god: !!opts.god, clock: 0, rng: Math.random, loop: 0, endless: !!opts.endless,
     opts: Object.assign({ numbers: true, auto: false, skin: "classic", hard: false }, opts.opts || {}) };
   G.hard = !!G.opts.hard;
+  G.route = makeRoute();
   P.skin = G.opts.skin;
 }
 // hard mode and endless loops scale enemies and bosses
@@ -865,16 +868,19 @@ const diffHp = () => (G.hard ? 1.5 : 1) * (1 + 0.8 * (G.loop || 0));
 const diffDmg = () => (G.hard ? 1.3 : 1) * (1 + 0.3 * (G.loop || 0));
 function snapshot() {
   return JSON.parse(JSON.stringify({ hp: P.hp, maxHp: P.maxHp, lvl: P.lvl, xp: P.xp, next: P.next, scale: P.scale, w: P.w, p: P.p,
-    evo: P.evo, devours: P.devours, kills: P.kills, rerolls: G.rerolls, stats: G.stats }));
+    evo: P.evo, devours: P.devours, kills: P.kills, rerolls: G.rerolls, stats: G.stats,
+    teeth: P.teeth, relics: P.relics, curses: P.curses, hunger: P.hunger, route: G.route }));
 }
 function restoreSnapshot(s) {
   const deaths = G.stats.deaths;
   P = newPlayer();
-  for (const k of ["hp", "maxHp", "lvl", "xp", "next", "scale", "w", "p", "evo", "devours", "kills"]) {
+  for (const k of ["hp", "maxHp", "lvl", "xp", "next", "scale", "w", "p", "evo", "devours", "kills", "teeth", "relics", "curses", "hunger"]) {
+    if (s[k] === undefined) continue;   // saves from before the meta layer
     const v = JSON.parse(JSON.stringify(s[k]));
     P[k] = v && typeof v === "object" ? Object.assign(P[k], v) : v;
   }
   G.rerolls = s.rerolls;
+  if (s.route) G.route = s.route;
   G.stats = JSON.parse(JSON.stringify(s.stats));
   G.stats.deaths = deaths;
   P.skin = G.opts.skin;
@@ -886,6 +892,7 @@ function prepChapter(idx) {
     enemies: [], piles: [], drops: [], parts: [], pops: [], shots: [], lobs: [], saws: [], rings: [], tele: [], puddles: [], fx: [],
     boss: null, chest: null, banner: null, spawnT: 0.6, hordeT: 22, shake: 0, shakeMag: 0, pendingLevels: 0, chKills: 0,
     gibs: [], uiParts: [], cine: null, freeze: 0, lvDelay: 0, hurtFx: 0, flashFx: null,
+    goldAt: rnd(30, 95), goldDone: false, frenzyFx: null, teethPop: 0, denExit: 0, denReward: 0,
     streak: 0, streakT: 0, streakPop: 0, streakFx: null, streakTier: 0, hpTrail: P.hp / P.maxHp, hpHold: 0, healFx: 0, heartT: 0, heartFx: 0,
   });
   P.x = AW / 2; P.y = AH / 2 + 30; P.hook = null; P.pulled = null; P.inv = 1.5; P.mouth = "idle";
@@ -917,22 +924,24 @@ function retryChapter() {
 }
 
 // ---------------------------------------------------------------- derived stats
-const might = () => (1 + 0.15 * P.p.might) * (1 + 0.15 * (G.revenge || 0));
-const moveSpeed = () => 42 * (1 + 0.1 * P.p.speed) * (P.hook && P.hook.phase === "eat" ? 0.55 : 1) * (P.slowT > 0 ? 0.6 : 1);
-const magnetR = () => 34 * (1 + 0.4 * P.p.magnet);
-const hookCooldown = () => 2.6 * Math.pow(0.85, P.p.hook);
+const might = () => (1 + 0.15 * P.p.might) * (1 + 0.15 * (G.revenge || 0)) * (1 + 0.5 * R("cursed")) *
+  (R("drum") && G.streak >= 25 ? 1.25 : 1) * (P.frenzy > 0 ? 1.4 : 1);
+const moveSpeed = () => 42 * (1 + 0.1 * P.p.speed) * (P.hook && P.hook.phase === "eat" ? 0.55 : 1) * (P.slowT > 0 ? 0.6 : 1) *
+  (R("boots") ? 1.2 : 1) * (P.frenzy > 0 ? 1.25 : 1);
+const magnetR = () => 34 * (1 + 0.4 * P.p.magnet) * (R("snout") ? 2 : 1);
+const hookCooldown = () => 2.6 * Math.pow(0.85, P.p.hook) * (R("hourglass") ? 0.7 : 1) * (CURSED("rust") ? 1.4 : 1);
 const cleaverCount = () => P.evo.razor ? 6 : [0, 2, 2, 3, 3, 4, 5][P.w.cleaver];
-const cleaverDmg = () => 10 * (1 + 0.25 * ((P.w.cleaver >= 2) + (P.w.cleaver >= 4))) * might() * (P.evo.razor ? 1.4 : 1);
+const cleaverDmg = () => 10 * (1 + 0.25 * ((P.w.cleaver >= 2) + (P.w.cleaver >= 4))) * might() * (P.evo.razor ? 1.4 : 1) * (R("whetstone") ? 1.25 : 1);
 const cleaverSize = () => P.evo.razor ? 1.7 : 1.2;
 const orbitRx = () => 30 * P.scale + 3 * cleaverCount() + (P.evo.razor ? 6 : 0);
 const auraR = () => (22 + 4 * P.w.aura) * (P.evo.plague ? 1.5 : 1) * Math.sqrt(P.scale);
-const chMul = () => [1, 1.25, 1.45, 1.85, 2.25, 3.4][G.ch];
+const chMul = () => [1.15, 1.45, 1.65, 2.1, 2.6, 3.9][G.ch];
 const belly = (s = P.scale) => [P.x, P.y - BUTCHER_BELLY_UP * s];
 
 // dash: a short invulnerable burst with a cooldown (flick on touch, Shift / K on keyboard, the DASH button)
 // BLOODY DASH: level 1 slices enemies on the way, 2 = shorter cooldown and a harder slice, 3 = two charges
 const DASH_CD = 2.2, DASH_T = 0.2, DASH_SPD = 180;
-const dashCdMax = () => DASH_CD * (P.p.dash >= 2 ? 0.65 : 1);
+const dashCdMax = () => DASH_CD * (P.p.dash >= 2 ? 0.65 : 1) * (R("hourglass") ? 0.7 : 1);
 const dashMax = () => P.p.dash >= 3 ? 2 : 1;
 const dashDmg = () => (P.p.dash >= 2 ? 60 : 36) * might() * (1 + 0.6 * G.ch);
 function tryDash(dx = 0, dy = 0) {
@@ -1093,7 +1102,13 @@ function lob(x, y, tx, ty, dur, hgt, col, land) { G.lobs.push({ x0: x, y0: y, x:
 // ---------------------------------------------------------------- damage
 function hurtPlayer(dmg, from, src = "?") {
   if (P.inv > 0 || G.god || G.mode !== "play" || P.dying || G.cine) return;
-  dmg = Math.max(1, Math.round(dmg * chMul() * diffDmg() * (1 - 0.08 * P.p.armor) * (1 - 0.1 * (G.revenge || 0))));
+  if (R("mask") && P.maskT <= 0) {
+    P.maskT = 15; P.inv = 0.5;
+    popup("BLOCKED!", P.x, P.y - 44 * P.scale, WHITE, 1, 0.9); sparks(P.x, P.y - 20 * P.scale, 8, WHITE, 50); sfx("hit");
+    return;
+  }
+  dmg = Math.max(1, Math.round(dmg * chMul() * diffDmg() * (1 - 0.08 * P.p.armor) * (1 - 0.1 * (G.revenge || 0)) * (R("collar") ? 0.9 : 1)));
+  if (R("collar") && from && from.T && !from.dead) hurtEnemy(from, 30 * might() * (1 + 0.6 * G.ch), 0, 0, true);
   if (G.hpTrail - P.hp / P.maxHp < 0.005) G.hpHold = 0.35;
   P.hp -= dmg; P.inv = 0.7; P.hitT = 0.12; G.hurtFx = 0.3; G.freeze = Math.max(G.freeze, 0.05); P.squash = -0.15;
   G.stats.dmgTaken += dmg;
@@ -1106,11 +1121,22 @@ function hurtPlayer(dmg, from, src = "?") {
     const a = Math.atan2(P.y - from.y, P.x - from.x);
     P.x += Math.cos(a) * 6; P.y += Math.sin(a) * 6; clampArena(P, 4);
   }
-  if (P.hp <= 0) { P.hp = 0; startDying(); }
+  if (P.hp <= 0) {
+    if (G.phase === "den") { fleeDen(); return; }
+    if (P.relics.apron === 1) {
+      P.relics.apron = 2; P.hp = Math.round(P.maxHp * 0.5); P.inv = 2;
+      banner("SECOND WIND!", GOLD, 1.6, "THE CHAIN APRON SAVED YOU");
+      slamAt(P.x, P.y, 70, 80 * might() * (1 + 0.6 * G.ch));
+      return;
+    }
+    P.hp = 0; startDying();
+  }
 }
 function hurtEnemy(e, dmg, kx = 0, ky = 0, quiet = false) {
   if (e.dead) return;
-  const crit = Math.random() < 0.08;
+  const crit = Math.random() < critChance();
+  if (crit && R("fang") && !(P.fangT > 0)) { P.hp = Math.min(P.maxHp, P.hp + 1); P.fangT = 0.35; }
+  if (e.T.golden) goldenHit(e);
   dmg = Math.round(dmg * (crit ? 2 : 1));
   e.hp -= dmg; e.flash = 0.09;
   if (!e.elite || crit) { e.x += kx; e.y += ky; }
@@ -1142,7 +1168,12 @@ function killEnemy(e, eaten = false) {
     G.gibs.push({ spr: fr, rect: [0, 0, fr.w, h2], x: e.x, y: e.y, z: (fr.h - h2) * sc, vx: rnd(-28, 28), vy: rnd(-8, 8), vz: rnd(45, 75), sc, flip: fl, t: 0 });
     G.gibs.push({ spr: fr, rect: [0, h2, fr.w, fr.h - h2], x: e.x, y: e.y, z: 0, vx: rnd(-10, 10), vy: rnd(-4, 4), vz: rnd(8, 20), sc, flip: fl, t: 0 });
   }
-  if (e.elite) G.freeze = Math.max(G.freeze, 0.04);
+  if (e.elite) {
+    G.freeze = Math.max(G.freeze, 0.04);
+    if (e.champion) teethDrop(e.x, e.y, 3); else if (Math.random() < 0.35) teethDrop(e.x, e.y, 1);
+    if (R("keg")) explode(e.x, e.y - 4, 36, 60 * might() * (1 + 0.6 * G.ch), 0);
+  }
+  if (e.T.golden) goldenJackpot(e, false);
   if (Math.random() < 0.35) bones(e.x, e.y - 3, e.elite ? 3 : 1);
   stainArena(e.x, e.y, BLOOD[3], e.elite ? 3 : 2);
   stainArena(e.x + rnd(-3, 3), e.y + rnd(-2, 2), BLOOD[2], 1);
@@ -1159,7 +1190,8 @@ function hitsBoss(x, y, r, key, dmg, cd = 0.35) {
     if (Math.hypot(x - c.x, y - c.y) < r + c.r) {
       if ((B.hitCd[key] || 0) > 0) return true;
       B.hitCd[key] = cd;
-      const crit = Math.random() < 0.08, d = Math.round(dmg * (crit ? 2 : 1));
+      const crit = Math.random() < critChance(), d = Math.round(dmg * (crit ? 2 : 1));
+      if (crit && R("fang") && !(P.fangT > 0)) { P.hp = Math.min(P.maxHp, P.hp + 1); P.fangT = 0.35; }
       if ((B.trail === undefined ? 1 : B.trail) - B.hp / B.maxHp < 0.005) B.trailHold = 0.35;
       B.hp -= d; B.dmgTaken = (B.dmgTaken || 0) + d;
       if ((B.flashCd || 0) <= 0) { B.flash = 0.06; B.flashCd = 0.25; }
@@ -1206,8 +1238,12 @@ function pickType() {
 }
 function spawning(dt) {
   if (G.phase === "done") return;
+  if (G.phase === "den") {
+    if ((G.spawnT -= dt) <= 0 && G.enemies.length < 30 && G.enemies.some(e => e.champion)) { const p = spawnPoint(); spawnEnemy(G.CH.horde, p.x, p.y); G.spawnT = 1.4; }
+    return;
+  }
   const [s0, s1] = SPAWN[G.ch];
-  let interval = s0 - (s0 - s1) * Math.min(1, G.t / 200);
+  let interval = (s0 - (s0 - s1) * Math.min(1, G.t / 200)) * (CURSED("swarm") ? 0.74 : 1);
   if (G.phase === "waveB") interval *= 0.9;
   if (G.phase === "mini") interval *= 2.0;
   if (G.phase === "boss") interval *= 2.6;
@@ -1234,6 +1270,8 @@ function spawning(dt) {
 }
 function updatePhase(dt) {
   G.phaseT += dt;
+  if (G.phase === "den") { updateDen(dt); return; }
+  maybeGoldenGoblin();
   if (G.phase === "waveA" && G.t >= MINI_AT) {
     G.phase = "mini"; G.phaseT = 0;
     spawnBoss(G.CH.mini);
@@ -1254,6 +1292,7 @@ function updateEnemies(dt) {
     const dx = P.x - e.x, dy = P.y - e.y, d = Math.hypot(dx, dy) || 1;
     let mx = 0, my = 0;
     if (e.stun > 0) e.stun -= dt;
+    else if (e.T.golden) { [mx, my] = goldenMove(e, dt, dx, dy, d); if (e.dead) continue; }
     else if (e.T.charge && e.state !== "walk") {
       e.st += dt;
       if (e.state === "aim" && e.st > 0.9) { e.state = "dash"; e.st = 0; sfx("whoosh"); }
@@ -1285,7 +1324,7 @@ function updateEnemies(dt) {
         sfxThrottled("pew", 0.12);
       }
     }
-    if (d < e.r + 6 * P.scale && e.z < 3) hurtPlayer(e.state === "dash" ? e.dmg * 1.4 : e.dmg, e, e.type);
+    if (d < e.r + 6 * P.scale && e.z < 3 && e.dmg > 0) hurtPlayer(e.state === "dash" ? e.dmg * 1.4 : e.dmg, e, e.type);
   }
   for (let i = 0; i < list.length; i++) {
     const a = list[i];
@@ -1355,10 +1394,12 @@ function updatePlayer(dt) {
   P.hitT = Math.max(0, (P.hitT || 0) - dt);
   P.slowT = Math.max(0, (P.slowT || 0) - dt);
   P.hookCd = Math.max(0, P.hookCd - dt);
-  if (P.p.regen) {
-    P.regenAcc += dt * 0.5 * P.p.regen;
+  if (P.p.regen || R("heart")) {
+    P.regenAcc += dt * (0.5 * P.p.regen + R("heart"));
     if (P.regenAcc >= 1) { const h = Math.floor(P.regenAcc); P.hp = Math.min(P.maxHp, P.hp + h); P.regenAcc -= h; }
   }
+  P.maskT = Math.max(0, P.maskT - dt); P.fangT = Math.max(0, (P.fangT || 0) - dt);
+  updateFrenzy(dt);
   updateHook(dt);
   updateWeapons(dt);
   const mr = magnetR();
@@ -1373,6 +1414,7 @@ function updatePlayer(dt) {
       if (dd < 6) {
         d.got = true;
         if (d.kind === "heart") { const h = 25; P.hp = Math.min(P.maxHp, P.hp + h); G.healFx = 0.3; popup("+" + h + " HP", P.x, P.y - 44 * P.scale, GREEN); sfx("heal"); }
+        else if (d.kind === "tooth") { gainTeeth(1); sfxThrottled("tick", 0.04); }
         else {
           gainXp(d.xp); sfxThrottled("pickup", 0.05);
           if (G.uiParts.length < 24) G.uiParts.push({ x: P.x - camX, y: P.y - 10 - camY, t: 0 });
@@ -1382,7 +1424,7 @@ function updatePlayer(dt) {
   }
   G.drops = G.drops.filter(d => !d.got);
   G.vacuum = Math.max(0, (G.vacuum || 0) - dt);
-  if (G.drops.length > 140) { const extra = G.drops.splice(0, G.drops.length - 140); let x = 0; extra.forEach(d => x += d.xp); gainXp(x); }
+  if (G.drops.length > 140) { const extra = G.drops.splice(0, G.drops.length - 140); let x = 0; extra.forEach(d => { x += d.xp; if (d.kind === "tooth") gainTeeth(1); }); gainXp(x); }
   const C = G.chest;
   if (C && !C.opened) {
     C.t += dt;
@@ -1442,14 +1484,15 @@ function updateHook(dt) {
   if (H.phase === "fly") {
     if (!isBoss && (tgt.dead || tgt.grabbed || !G.enemies.includes(tgt))) { H.phase = "back"; return; }
     const tp = isBoss ? bossCircles(tgt)[0] : { x: tgt.x, y: tgt.y - tgt.h / 2 };
-    const dx = tp.x - H.x, dy = tp.y - H.y, d = Math.hypot(dx, dy), sp = 280;
+    const dx = tp.x - H.x, dy = tp.y - H.y, d = Math.hypot(dx, dy), sp = P.frenzy > 0 ? 420 : 280;
+    if (R("rusty")) hitEnemiesAt(H.x, H.y, 5, "rhook", 0.5, 40 * (1 + 0.25 * P.p.hook) * might(), 3);
     if (d < sp * dt + 4) {
       H.x = tp.x; H.y = tp.y;
-      const dmg = 40 * (1 + 0.25 * P.p.hook) * might();
+      const dmg = 40 * (1 + 0.25 * P.p.hook) * might() * (R("rusty") ? 2 : 1);
       if (isBoss) {
         hitsBoss(tp.x, tp.y, 4, "hook", dmg * 1.5, 0);
         H.phase = "back"; sfx("hit"); shake(0.12, 1);
-      } else if (tgt.elite && tgt.hp > tgt.maxHp * 0.35) {
+      } else if (tgt.champion || (tgt.elite && tgt.hp > tgt.maxHp * 0.35 && !R("gut") && !(P.frenzy > 0))) {
         hurtEnemy(tgt, dmg); tgt.stun = 1.1;
         const a = Math.atan2(P.y - tgt.y, P.x - tgt.x); tgt.x += Math.cos(a) * 18; tgt.y += Math.sin(a) * 18;
         popup("STUN", tgt.x, tgt.y - tgt.h - 8, CYAN);
@@ -1457,13 +1500,13 @@ function updateHook(dt) {
       } else {
         tgt.grabbed = true; H.phase = "pull"; H.t = 0; sfx("hit");
         blood(tgt.x, tgt.y - tgt.h / 2, 5);
-        popup(tgt.elite ? "EXECUTE!" : "HOOKED!", tgt.x, tgt.y - tgt.h - 6, GOLD);
+        popup(tgt.T.golden ? "GOTCHA!" : tgt.elite ? "EXECUTE!" : "HOOKED!", tgt.x, tgt.y - tgt.h - 6, GOLD);
       }
     } else { H.x += dx / d * sp * dt; H.y += dy / d * sp * dt; }
     if (H.t > 1.2) H.phase = "back";
   } else if (H.phase === "pull") {
     const hold = { x: P.x + H.side * 13 * P.scale, y: P.y + 2 };
-    const dx = hold.x - tgt.x, dy = hold.y - tgt.y, d = Math.hypot(dx, dy), sp = 240;
+    const dx = hold.x - tgt.x, dy = hold.y - tgt.y, d = Math.hypot(dx, dy), sp = P.frenzy > 0 ? 480 : 240;
     if (d < sp * dt + 1) { tgt.x = hold.x; tgt.y = hold.y; H.phase = "eat"; H.t = 0; H.chomps = 0; }
     else { tgt.x += dx / d * sp * dt; tgt.y += dy / d * sp * dt; if (Math.random() < 0.5) dust(tgt.x, tgt.y, 1, PALE); }
     // the victim kicks and flails on the chain
@@ -1473,7 +1516,7 @@ function updateHook(dt) {
   } else if (H.phase === "eat") {
     tgt.x = P.x + H.side * 12 * P.scale + (Math.random() < 0.5 ? 1 : -1); tgt.y = P.y + 1;
     P.mouth = "open";
-    const ct = [0.2, 0.4, 0.6];
+    const es = P.frenzy > 0 ? 0.35 : 1, ct = [0.2 * es, 0.4 * es, 0.6 * es];
     if (H.chomps < 3 && H.t >= ct[H.chomps]) {
       H.chomps++;
       tgt.shrink = [0.72, 0.45, 0.15][H.chomps - 1];
@@ -1485,10 +1528,17 @@ function updateHook(dt) {
       shake(0.06, 1);
     }
     if (H.chomps > 0 && H.t - ct[H.chomps - 1] < 0.08) P.mouth = "bite";
-    if (H.t >= 0.78) {
+    if (H.t >= 0.78 * es) {
       const xp = Math.max(1, Math.round((tgt.xp || 1) * 2 * (1 + G.ch * 0.2) * (1 + 0.2 * P.p.glutton)));
-      const heal = 6 + 6 * P.p.glutton;
+      const heal = (6 + 6 * P.p.glutton) * (R("hat") ? 2 : 1);
       killEnemy(tgt, true);
+      if (tgt.T.golden) goldenJackpot(tgt, true); else feedHunger();
+      if (R("sauce")) {
+        const b = belly(), R_ = 38 * Math.sqrt(P.scale), dmg = 30 * might() * (1 + 0.6 * G.ch);
+        for (const e of G.enemies) if (!e.grabbed && Math.hypot(e.x - P.x, (e.y - P.y) * 1.3) < R_ + e.r) hurtEnemy(e, dmg, 0, 0, true);
+        hitsBoss(P.x, P.y - 8, R_, "sauce", dmg, 0.3);
+        G.fx.push({ kind: "boom", x: b[0] + H.side * 10 * P.scale, y: P.y - 4, R: R_ * 0.8, t: 0, life: 0.3, fire: true });
+      }
       P.devours++; G.stats.devours++;
       const ns = growthFor(P.devours);
       if (ns > P.scale + 0.01) { P.scale = ns; growFx(); } else P.squash = 0.22;
@@ -1755,7 +1805,7 @@ function levelCards(n = 3) {
   for (const w of WEAPONS) {
     const l = P.w[w];
     if (l > 0 && l < UPG[w].max) pool.push({ key: w, wt: 1.5 });
-    else if (l === 0 && owned < MAX_WEAPONS) pool.push({ key: w, wt: G.clock < 600 ? 1.3 : 1 });
+    else if (l === 0 && owned < maxWeapons()) pool.push({ key: w, wt: G.clock < 600 ? 1.3 : 1 });
   }
   for (const p of PASSIVES) if (P.p[p] < UPG[p].max) pool.push({ key: p, wt: 1 });
   const out = [];
@@ -1776,7 +1826,7 @@ function rewardCards(big) {
   if (big) {
     for (const k of evoReady()) if (out.length < 2) out.push(cardFor(k));
     const fresh = WEAPONS.filter(w => P.w[w] === 0);
-    if (fresh.length && ownedWeapons().length < MAX_WEAPONS && out.length < 3) {
+    if (fresh.length && ownedWeapons().length < maxWeapons() && out.length < 3) {
       const w = G.ch === 0 && fresh.includes("sword") ? "sword" : pick(fresh);
       out.push(cardFor(w));
     }
@@ -1785,15 +1835,19 @@ function rewardCards(big) {
       const w = pick(up);
       out.push({ key: w, kind: "plus2", title: UPG[w].name + " +2", desc: "TWO LEVELS AT ONCE", icon: w, lvl: P.w[w] });
     }
-    while (out.length < 3) out.push({ key: "feast", kind: "feast", title: "FEAST", desc: "+30 MAX HP AND FULL HEAL", icon: "feast" });
+    if (out.length < 3) { const r = relicCards(1)[0]; if (r.kind === "relic") out.push(r); }
+    if (out.length < 3) out.push({ key: "feast", kind: "feast", title: "FEAST", desc: "+30 MAX HP AND FULL HEAL", icon: "feast" });
+    if (out.length < 3) out.push({ key: "teeth", kind: "teeth", title: "SACK OF TEETH", desc: "+" + (25 + 5 * G.ch) + " GOLD TEETH", icon: "sack" });
     return out;
   }
   return levelCards(3);
 }
 function applyCard(c) {
+  if (c.kind === "relic") { applyRelic(c.key); return; }
   if (c.kind === "evo") { P.evo[c.key] = true; G.cine = { kind: "evo", t: 0, dur: 1.6, x: P.x, y: P.y - 20, title: c.title + "!", sub: "EVOLUTION" }; sfx("evo"); return; }
   if (c.kind === "snack") { P.hp = Math.min(P.maxHp, P.hp + 40); return; }
   if (c.kind === "feast") { P.maxHp += 30; P.hp = P.maxHp; return; }
+  if (c.kind === "teeth") { gainTeeth(25 + 5 * G.ch); sfx("jingle"); return; }
   if (c.kind === "plus2") { P.w[c.key] = Math.min(UPG[c.key].max, P.w[c.key] + 2); return; }
   if (WEAPONS.includes(c.key)) {
     P.w[c.key]++;
@@ -1857,6 +1911,8 @@ function update(dt) {
   updateShots(dt);
   updateParts(dt);
   updateFeedback(dt);
+  if (G.frenzyFx && (G.frenzyFx.t += dt) > 1.4) G.frenzyFx = null;
+  G.teethPop = Math.max(0, G.teethPop - dt);
   const A = G.arena;
   if (A.base) for (let i = 0; i < 140; i++) { const k = (Math.random() * A.d.length) | 0; A.d[k] = A.base[k]; }
   if (G.pendingChest) {
@@ -1894,6 +1950,7 @@ function chooseCard(i) {
     return;
   }
   if (G.mode === "reward" && G.rewardKind === "mini") { G.phase = "waveB"; G.phaseT = 0; }
+  if (G.mode === "relic") { leaveNode(); return; }
   setMode("play");
 }
 function finishBossReward() {
@@ -1909,7 +1966,9 @@ function reroll() {
 }
 function nextChapter() {
   G.revenge = 0;
-  if (G.ch + 1 >= CHAPTERS.length) { G.loop++; startChapter(0); banner("LOOP " + (G.loop + 1), RED, 2.4, "EVERYTHING HITS HARDER"); }
+  if (R("bone")) G.rerolls++;
+  P.frenzy = 0;
+  if (G.ch + 1 >= CHAPTERS.length) { G.loop++; G.route = makeRoute(); startChapter(0); banner("LOOP " + (G.loop + 1), RED, 2.4, "EVERYTHING HITS HARDER"); }
   else startChapter(G.ch + 1);
 }
 function startEndless() {
@@ -1946,7 +2005,7 @@ const DARK_SKIN = { k: hx("#c8b0d8"), S: hx("#9a80b0"), s: hx("#6a5080") };
 // ---------------------------------------------------------------- framework
 function spawnBoss(kind) {
   const K = BOSSES[kind];
-  const hpMul = diffHp();
+  const hpMul = diffHp() * (CURSED("iron") && !K.mini ? 1.3 : 1) * 1.2;   // +20%: the meta layer made the player stronger
   const B = {
     kind, K, name: K.name, mini: !!K.mini, hp: K.hp * hpMul, maxHp: K.hp * hpMul, t: 0, cd: 2.2, atk: null, flash: 0, hitCd: {},
     face: -1, stun: 0, phase2: false, entering: K.mini ? 0.9 : 1.6, dying: false, deathT: 0, z: 0,
@@ -3226,6 +3285,326 @@ function drawAlienLord(B, sx, sy, o) {
 
 </script>
 <script>
+// ---- meta.js
+"use strict";
+// Run meta layer: gold teeth, relics, hunger & FRENZY, the golden goblin, the road map between chapters
+// (elite den, meat market, blood shrine, stranger events, campfire). Rules only, no DOM.
+
+// ---------------------------------------------------------------- relics
+// rare: 1 = legendary (blood shrine, sometimes the market)
+const RELICS = {
+  snout: { name: "PIG SNOUT", desc: "MEAT PICKUP RANGE X2" },
+  apron: { name: "CHAIN APRON", desc: "SURVIVE ONE DEATH WITH HALF HP" },
+  gut: { name: "BOTTOMLESS GUT", desc: "THE HOOK SWALLOWS ELITES AT ANY HP" },
+  fang: { name: "VAMPIRE FANG", desc: "CRITS HEAL YOU (UP TO 3 HP A SECOND)" },
+  sauce: { name: "HOT SAUCE", desc: "EATING BREATHES FIRE AROUND YOU" },
+  rusty: { name: "RUSTY HOOK", desc: "HOOK DAMAGE X2, IT CUTS ALL ON ITS WAY" },
+  whetstone: { name: "WHETSTONE", desc: "+25% CLEAVER AND SWORD DAMAGE" },
+  pie: { name: "GRANNY'S PIE", desc: "+40 MAX HP" },
+  bone: { name: "LUCKY BONE", desc: "+5% CRIT CHANCE, +1 REROLL EACH CHAPTER" },
+  hat: { name: "CHEF HAT", desc: "EATING HEALS TWICE AS MUCH" },
+  drum: { name: "WAR DRUM", desc: "+25% DAMAGE WHILE YOUR KILL STREAK IS 25+" },
+  collar: { name: "SPIKED COLLAR", desc: "-10% DAMAGE TAKEN, BITERS GET HURT BACK" },
+  hourglass: { name: "HOURGLASS", desc: "-30% DASH AND HOOK COOLDOWN" },
+  jaw: { name: "GOLD JAW", desc: "+50% GOLD TEETH" },
+  keg: { name: "POWDER KEG", desc: "ELITES EXPLODE WHEN THEY DIE" },
+  crown: { name: "GLUTTON CROWN", desc: "HUNGER FILLS 50% FASTER" },
+  boots: { name: "SEVEN-LEAGUE BOOTS", desc: "+20% MOVE SPEED" },
+  mask: { name: "SPARE MASK", desc: "BLOCKS ONE HIT EVERY 15 SEC" },
+  cursed: { name: "CURSED CLEAVER", desc: "+50% DAMAGE, -25% MAX HP", rare: 1 },
+  pact: { name: "BLOOD PACT", desc: "FRENZY LASTS TWICE AS LONG", rare: 1 },
+  bag: { name: "BUTCHER'S BAG", desc: "+1 WEAPON SLOT", rare: 1 },
+  heart: { name: "OGRE HEART", desc: "+100 MAX HP AND +1 HP EVERY SECOND", rare: 1 },
+};
+const R = k => (P.relics && P.relics[k]) ? 1 : 0;
+const critChance = () => 0.08 + 0.05 * R("bone");
+const maxWeapons = () => 4 + R("bag");
+function relicCard(k) { return { key: k, kind: "relic", title: RELICS[k].name, desc: RELICS[k].desc, icon: "relic:" + k, rare: RELICS[k].rare || 0 }; }
+function relicPool(rare) { return Object.keys(RELICS).filter(k => !P.relics[k] && !!RELICS[k].rare === !!rare); }
+function relicCards(n, rare = 0) {
+  const pool = relicPool(rare), out = [];
+  while (out.length < n && pool.length) out.push(relicCard(pool.splice((Math.random() * pool.length) | 0, 1)[0]));
+  while (out.length < n) out.push({ key: "feast", kind: "feast", title: "FEAST", desc: "+30 MAX HP AND FULL HEAL", icon: "feast" });
+  return out;
+}
+function applyRelic(k) {
+  P.relics[k] = 1;
+  if (k === "pie") { P.maxHp += 40; P.hp += 40; }
+  if (k === "heart") { P.maxHp += 100; P.hp += 100; }
+  if (k === "cursed") { P.maxHp = Math.round(P.maxHp * 0.75); P.hp = Math.min(P.hp, P.maxHp); }
+  G.stats.relics = (G.stats.relics || 0) + 1;
+  popup(RELICS[k].name, P.x, P.y - 60 * P.scale, RELICS[k].rare ? hx("#ff8aff") : GOLD, 1, 1.6);
+  sfx("chest");
+}
+
+// ---------------------------------------------------------------- curses (blood shrine)
+const CURSES = {
+  fragile: { name: "FRAGILE BONES", desc: "-20% MAX HP" },
+  swarm: { name: "THE SWARM", desc: "35% MORE MONSTERS" },
+  iron: { name: "IRON BOSSES", desc: "BOSSES HAVE +30% HP" },
+  rust: { name: "RUSTY CHAIN", desc: "HOOK COOLDOWN +40%" },
+};
+const CURSED = k => (P.curses && P.curses[k]) ? 1 : 0;
+function applyCurse(k) {
+  P.curses[k] = 1;
+  if (k === "fragile") { P.maxHp = Math.round(P.maxHp * 0.8); P.hp = Math.min(P.hp, P.maxHp); }
+}
+
+// ---------------------------------------------------------------- gold teeth
+function teethDrop(x, y, n) {
+  for (let i = 0; i < n; i++) G.drops.push({ x: x + rnd(-6, 6), y: y + rnd(-4, 4), kind: "tooth", xp: 0, t: rnd(0, 0.3), hop: rnd(0, 6) });
+}
+function gainTeeth(n) {
+  const k = n * (R("jaw") ? 1.5 : 1) + (P.toothAcc || 0), whole = Math.floor(k);
+  P.toothAcc = k - whole;
+  P.teeth += whole; G.stats.teeth = (G.stats.teeth || 0) + whole;
+  G.teethPop = 0.15;
+}
+
+// ---------------------------------------------------------------- hunger -> FRENZY
+// every devour fills the belly; a full belly = 6 s of frenzy: bigger, invulnerable, x1.4 damage, the hook fires by itself
+const HUNGER_NEED = 20, FRENZY_T = 6;
+function feedHunger(k = 1) {
+  if (P.frenzy > 0) return;
+  P.hunger = Math.min(1, P.hunger + k / HUNGER_NEED * (R("crown") ? 1.5 : 1));
+  if (P.hunger >= 1) startFrenzy();
+}
+function startFrenzy() {
+  P.hunger = 0; P.frenzy = P.frenzyDur = FRENZY_T * (R("pact") ? 2 : 1);
+  G.frenzyFx = { t: 0 }; G.stats.frenzies = (G.stats.frenzies || 0) + 1;
+  G.flashFx = { col: RED, t: 0, life: 0.2 }; G.freeze = Math.max(G.freeze, 0.1);
+  G.rings.push({ x: P.x, y: P.y, r: 0, R: 80, t: 0, col: RED });
+  shake(0.35, 3); sfx("frenzy"); buzz(120);
+}
+function updateFrenzy(dt) {
+  if (!(P.frenzy > 0)) return;
+  P.frenzy -= dt;
+  P.inv = Math.max(P.inv, 0.05); P.hookCd = 0;
+  if (!P.hook && !P.pulled && P.dashT <= 0) {
+    let best = null, bd = 150;
+    for (const e of G.enemies) { if (e.grabbed || e.dead || e.champion) continue; const d = Math.hypot(e.x - P.x, e.y - P.y); if (d < bd) { bd = d; best = e; } }
+    if (best) tryHook(best);
+  }
+  if (Math.random() < 0.5) { const b = belly(); sparks(b[0] + rnd(-8, 8) * P.scale, b[1] - 22 * P.scale, 1, Math.random() < 0.5 ? RED : hx("#ff9a2a"), 25, 0.3); }
+  if (P.frenzy <= 0) { P.frenzy = 0; popup("FRENZY OVER", P.x, P.y - 56 * P.scale, DIM, 1, 1); }
+}
+const frenzyK = () => P.frenzy > 0 ? Math.min(1, (P.frenzyDur - P.frenzy) / 0.2, P.frenzy / 0.3) : 0;
+
+// ---------------------------------------------------------------- golden goblin: a thief with a sack of teeth
+// once per chapter it shows up, runs away and escapes after GOLDEN_T s; hits shake teeth out, the hook eats the whole sack
+const GOLDEN_T = 14;
+function maybeGoldenGoblin() {
+  if (G.goldDone || G.phase !== "waveA" || G.t < G.goldAt) return;
+  G.goldDone = true;
+  const a = Math.random() * Math.PI * 2, o = { x: P.x + Math.cos(a) * 115, y: P.y + Math.sin(a) * 75 };
+  clampArena(o, 12);
+  const e = spawnEnemy("golden", o.x, o.y);
+  e.goldLife = GOLDEN_T; e.goldHits = 0;
+  banner("GOLDEN GOBLIN!", GOLD, 2.2, "HOOK IT BEFORE IT ESCAPES!");
+  sfx("jingle");
+}
+function goldenMove(e, dt, dx, dy, d) {
+  e.goldLife -= dt;
+  if (e.goldLife <= 0) {
+    e.dead = true; e.escaped = true;
+    sparks(e.x, e.y - 6, 18, GOLD, 60, 0.5); G.fx.push({ kind: "lvring", x: e.x, y: e.y, t: 0, life: 0.45 });
+    popup("IT ESCAPED...", e.x, e.y - 20, DIM, 1, 1.4); sfx("blink");
+    return [0, 0];
+  }
+  if (Math.random() < 0.25) sparks(e.x + rnd(-4, 4), e.y - rnd(2, 10), 1, Math.random() < 0.5 ? GOLD : WHITE, 12, 0.3);
+  // flees, but stops every few seconds to count its gold
+  if ((e.goldLife % 3) < 0.7) return [0, 0];
+  const wx = -dx / d + Math.cos(G.t * 1.7 + e.wob) * 0.5, wy = -dy / d + Math.sin(G.t * 1.3 + e.wob) * 0.5, l = Math.hypot(wx, wy) || 1;
+  let mx = wx / l * e.spd, my = wy / l * e.spd;
+  // slide along the arena walls instead of sticking in a corner
+  if (e.x < INSET.l + 20 || e.x > AW - INSET.r - 20) mx *= 0.2;
+  if (e.y < INSET.t + 20 || e.y > AH - INSET.b - 20) my *= 0.2;
+  return [mx, my];
+}
+function goldenHit(e) {
+  if (e.goldHits < 8) { e.goldHits++; teethDrop(e.x, e.y, 1); sfxThrottled("pickup", 0.05); }
+}
+function goldenJackpot(e, eaten) {
+  const n = Math.round((10 + 3 * G.ch) * (eaten ? 1.5 : 1));
+  if (eaten) { gainTeeth(n); popup("+" + Math.round(n * (R("jaw") ? 1.5 : 1)) + " TEETH!", P.x, P.y - 58 * P.scale, GOLD, 2, 1.6); feedHunger(8); }
+  else teethDrop(e.x, e.y, n);
+  sfx("jingle"); G.stats.goldens = (G.stats.goldens || 0) + 1;
+}
+
+// ---------------------------------------------------------------- the road between chapters
+const NODES = {
+  elite: { name: "ELITE DEN", desc: "FIGHT 3 CHAMPIONS. WIN A RELIC AND TEETH." },
+  shop: { name: "MEAT MARKET", desc: "SPEND GOLD TEETH ON RELICS AND UPGRADES." },
+  shrine: { name: "BLOOD SHRINE", desc: "TAKE A CURSE, GET A LEGENDARY RELIC." },
+  event: { name: "STRANGER", desc: "SOMEONE IS WAITING ON THE ROAD..." },
+  rest: { name: "CAMPFIRE", desc: "HEAL 50% HP AND +1 REROLL." },
+};
+// 5 stops, 3 choices each; markets are guaranteed at stops 2, 4 and the last one, so saved teeth always find a counter
+function makeRoute() {
+  const route = [];
+  for (let s = 0; s < CHAPTERS.length - 1; s++) {
+    const a = s === 1 || s >= 3 ? "shop" : pick(["shop", "rest", "rest"]);
+    const b = pick(s === 0 ? ["event", "rest"] : ["shrine", "event"]);
+    const opts = ["elite", a, b].filter((v, i, arr) => arr.indexOf(v) === i);
+    while (opts.length < 3) opts.push(["event", "rest", "shrine"].find(v => !opts.includes(v)));
+    route.push(opts.sort(() => Math.random() - 0.5));
+  }
+  return route;
+}
+function continueFromClear() {
+  if (G.ch + 1 >= CHAPTERS.length || !G.route) { nextChapter(); return; }
+  G.mapOpts = G.route[G.ch];
+  setMode("map");
+}
+function chooseNode(i) {
+  const kind = G.mapOpts && G.mapOpts[i];
+  if (!kind) return;
+  (G.stats.road = G.stats.road || []).push(kind);
+  sfx("go");
+  if (kind === "elite") startDen();
+  else if (kind === "shop") openShop();
+  else if (kind === "shrine") openShrine();
+  else if (kind === "event") openEvent();
+  else {
+    P.hp = Math.min(P.maxHp, P.hp + P.maxHp * 0.5); G.rerolls++;
+    G.node = { kind: "rest", title: "CAMPFIRE", text: "YOU ROAST A GOBLIN ON A STICK. +50% HP, +1 REROLL.", options: [{ label: "CONTINUE", id: "leave" }] };
+    sfx("heal"); setMode("node");
+  }
+}
+function leaveNode() { G.node = null; G.shop = null; nextChapter(); }
+
+// ---- elite den: the current arena, 3 champions and their escort
+const DEN_TYPES = ["brute", "yeti", "brute", "brute", "yeti", "yeti"];
+function startDen() {
+  Object.assign(G, { phase: "den", phaseT: 0, enemies: [], shots: [], lobs: [], tele: [], puddles: [], drops: [], boss: null, chest: null,
+    denExit: 0, denReward: 0, denQueue: 3, denNext: 1, spawnT: 2, banner: null, cine: null });
+  P.inv = 1.2;
+  for (let i = 0; i < 8; i++) { const p = spawnPoint(80); spawnEnemy(G.CH.horde, p.x, p.y); }
+  banner("ELITE DEN!", GOLD, 2, "3 CHAMPIONS ARE COMING");
+  setMode("play"); music.play(G.ch, true);
+}
+// champions come one at a time: the next when the last one falls or after 12 s
+function spawnChampion() {
+  const type = DEN_TYPES[G.ch], a = Math.random() * Math.PI * 2, o = { x: P.x + Math.cos(a) * 100, y: P.y + Math.sin(a) * 70 };
+  clampArena(o, 10);
+  const e = spawnEnemy(type, o.x, o.y);
+  e.champion = true; e.hp = e.maxHp = ETYPES[type].hp * CH_HP[G.ch] * diffHp() * 14; e.scale *= 1.3; e.r *= 1.3; e.h *= 1.3; e.xp = 10;
+  G.denQueue--; G.denNext = 12;
+  dust(e.x, e.y, 10, PALE); popup("CHAMPION!", e.x, e.y - e.h - 8, GOLD, 1, 1.2); sfx("ministing");
+}
+const denLeft = () => G.denQueue + G.enemies.filter(e => e.champion).length;
+function updateDen(dt) {
+  if (G.denQueue > 0 && G.denExit <= 0 && ((G.denNext -= dt) <= 0 || !G.enemies.some(e => e.champion))) spawnChampion();
+  if (G.denExit > 0) {
+    if ((G.denExit -= dt) <= 0) {
+      if (G.denReward) { G.cards = relicCards(3); G.rewardKind = "den"; setMode("relic"); }
+      else leaveNode();
+    }
+    return;
+  }
+  if (!denLeft()) {
+    for (const e of G.enemies) if (!e.grabbed) killEnemy(e);   // the escort panics and dies
+    const n = 12 + 3 * G.ch;
+    teethDrop(P.x, P.y - 30, n);
+    G.vacuum = 2; G.denReward = 1; G.denExit = 1.6;
+    banner("DEN CLEARED!", GOLD, 1.6, "+" + n + " TEETH AND A RELIC");
+    sfx("win");
+  }
+}
+function fleeDen() {
+  P.hp = Math.max(1, Math.round(P.maxHp * 0.35)); P.inv = 2;
+  G.enemies = []; G.shots = []; G.tele = [];
+  G.denReward = 0; G.denExit = 1.6;
+  banner("YOU FLED!", RED, 1.6, "NO RELIC THIS TIME");
+  sfx("hurt");
+}
+
+// ---- meat market
+function openShop() {
+  const items = [];
+  const rel = relicCards(3);
+  const legend = relicPool(1);
+  if (legend.length && Math.random() < 0.35) rel[2] = relicCard(pick(legend));
+  for (const c of rel) if (c.kind === "relic") items.push(Object.assign(c, { price: c.rare ? 75 + 12 * G.ch : 36 + 8 * G.ch }));
+  const up = ownedWeapons().filter(w => P.w[w] < UPG[w].max);
+  if (up.length) { const w = pick(up); items.push({ key: w, kind: "wlevel", title: UPG[w].name + " +1", desc: "ONE WEAPON LEVEL", icon: w, price: 26 + 5 * G.ch }); }
+  items.push({ key: "heal", kind: "heal", title: "MEAT PIE", desc: "HEAL TO FULL HP", icon: "feast", price: 15 + 3 * G.ch });
+  items.push({ key: "reroll", kind: "reroll", title: "LOADED DICE", desc: "+2 REROLLS", icon: "dice", price: 12 });
+  G.shop = { items };
+  setMode("shop"); sfx("chest");
+}
+function buyItem(i) {
+  const it = G.shop && G.shop.items[i];
+  if (!it || it.sold) return false;
+  if (P.teeth < it.price) { sfx("nope"); return false; }
+  P.teeth -= it.price; it.sold = true;
+  if (it.kind === "relic") applyRelic(it.key);
+  else if (it.kind === "wlevel") { P.w[it.key] = Math.min(UPG[it.key].max, P.w[it.key] + 1); sfx("weapon"); }
+  else if (it.kind === "heal") { P.hp = P.maxHp; sfx("heal"); }
+  else if (it.kind === "reroll") { G.rerolls += 2; sfx("go"); }
+  G.stats.spent = (G.stats.spent || 0) + it.price;
+  return true;
+}
+
+// ---- blood shrine
+function openShrine() {
+  const leg = relicPool(1), curses = Object.keys(CURSES).filter(k => !P.curses[k]);
+  if (!leg.length || !curses.length) { openEvent(); return; }
+  const rk = pick(leg), ck = pick(curses);
+  G.node = { kind: "shrine", title: "BLOOD SHRINE", relic: rk, curse: ck,
+    text: "THE ALTAR OFFERS " + RELICS[rk].name + ": " + RELICS[rk].desc + ". THE PRICE: " + CURSES[ck].name + " (" + CURSES[ck].desc + ").",
+    options: [{ label: "ACCEPT THE DEAL", id: "shrine" }, { label: "WALK AWAY", id: "leave" }] };
+  setMode("node"); sfx("summon");
+}
+
+// ---- stranger events: two choices, the first one costs something
+const EVENTS = [
+  { id: "cook", title: "WANDERING COOK", text: "A COOK STIRS A GIANT POT. \"15 TEETH FOR A BOWL. IT MAKES YOU BIGGER.\"",
+    a: "PAY 15 TEETH: +20 MAX HP, FULL HEAL", cost: 15, b: "LEAVE" },
+  { id: "dice", title: "BONE DICE", text: "A GOBLIN SHAKES BONE DICE. \"DOUBLE OR NOTHING, BIG BOY?\"",
+    a: "BET HALF YOUR TEETH (50%: DOUBLE)", cost: 1, b: "LEAVE" },
+  { id: "stone", title: "CLEAVER IN A STONE", text: "A BLOODY CLEAVER IS STUCK IN A ROCK. PULLING IT OUT WILL HURT.",
+    a: "PULL: +1 WEAPON LEVEL, -25% HP", cost: 0, b: "LEAVE" },
+  { id: "dog", title: "HUNGRY DOG", text: "A SKINNY DOG WITH SOMETHING SHINY IN ITS MOUTH LOOKS AT YOUR MEAT.",
+    a: "FEED IT 10 TEETH: IT GIVES A RELIC", cost: 10, b: "LEAVE" },
+  { id: "kitchen", title: "FIELD KITCHEN", text: "AN ABANDONED KITCHEN. THE STOVE IS STILL HOT.",
+    a: "EAT: HEAL 40%, START HUNGRY FOR BLOOD", cost: 0, b: "PACK FOOD: +8 TEETH" },
+];
+const eventOk = E => P.teeth >= E.cost && (E.id !== "stone" || ownedWeapons().some(w => P.w[w] < UPG[w].max)) &&
+  (E.id !== "dog" || relicPool(0).length > 0) && (E.id !== "dice" || P.teeth >= 10);
+function openEvent() {
+  const ok = EVENTS.filter(eventOk), E = pick(ok.length ? ok : EVENTS.filter(e => e.id === "kitchen"));
+  G.node = { kind: "event", title: E.title, event: E.id, text: E.text,
+    options: [{ label: E.a, id: "ev_a", enabled: P.teeth >= E.cost && (E.id !== "stone" || ownedWeapons().some(w => P.w[w] < UPG[w].max)) }, { label: E.b, id: "ev_b" }] };
+  setMode("node"); sfx("summon");
+}
+// node screens: one call per tap; a result line replaces the choices until CONTINUE
+function pickNodeOption(i) {
+  const N = G.node;
+  if (!N) return;
+  if (N.result) { leaveNode(); return; }
+  const o = N.options[i];
+  if (!o || o.enabled === false) { sfx("nope"); return; }
+  let res = null;
+  if (o.id === "leave") { leaveNode(); return; }
+  if (o.id === "shrine") { applyRelic(N.relic); applyCurse(N.curse); res = "THE ALTAR DRINKS. " + RELICS[N.relic].name + " IS YOURS."; }
+  if (o.id === "ev_a") {
+    if (N.event === "cook") { P.teeth -= 15; P.maxHp += 20; P.hp = P.maxHp; res = "DELICIOUS. +20 MAX HP."; sfx("heal"); }
+    if (N.event === "dice") { const bet = Math.floor(P.teeth / 2); if (Math.random() < 0.5) { P.teeth += bet; res = "YOU WIN " + bet + " TEETH!"; sfx("jingle"); } else { P.teeth -= bet; res = "YOU LOSE " + bet + " TEETH."; sfx("nope"); } }
+    if (N.event === "stone") { const up = ownedWeapons().filter(w => P.w[w] < UPG[w].max), w = pick(up); P.w[w]++; P.hp = Math.max(1, Math.round(P.hp - P.maxHp * 0.25)); res = UPG[w].name + " LEVEL " + P.w[w] + "! IT HURT."; sfx("weapon"); }
+    if (N.event === "dog") { P.teeth -= 10; const k = pick(relicPool(0)); if (k) { applyRelic(k); res = "THE DOG DROPS " + RELICS[k].name + "."; } else res = "THE DOG WAGS ITS TAIL."; }
+    if (N.event === "kitchen") { P.hp = Math.min(P.maxHp, P.hp + P.maxHp * 0.4); P.hunger = 0.99; res = "FULL BELLY. YOUR FRENZY IS ONE BITE AWAY."; sfx("heal"); }
+  }
+  if (o.id === "ev_b") {
+    if (N.event === "kitchen") { gainTeeth(8); res = "+8 TEETH."; }
+    else { leaveNode(); return; }
+  }
+  N.result = res || "...";
+  N.options = [{ label: "CONTINUE", id: "leave" }];
+}
+
+</script>
+<script>
 // ---- render.js
 "use strict";
 // World rendering into the 256x160 pixel buffer. Works headless too (sim screenshots).
@@ -3290,6 +3669,7 @@ function drawWorld() {
     if (sx < -6 || sx > W + 6 || sy < -6 || sy > H + 6) continue;
     const bob = Math.round(Math.sin(d.t * 5) * 1.2);
     darken(sx, sy + 1); darken(sx - 1, sy + 1); darken(sx + 1, sy + 1);
+    if (d.kind === "tooth") { blitFeet(TOOTH, sx, sy - 1 + bob - Math.round(Math.abs(Math.sin(d.t * 3 + d.hop)) * 2)); continue; }
     blitFeet(d.kind === "heart" ? SPR.heart : d.kind === "big" ? SPR.bigmeat : SPR.meat, sx, sy - 1 + bob);
     if ((d.t * 1.3 + d.x * 0.1) % 1 < 0.12) { put(sx + 1, sy - 5 + bob, WHITE); put(sx, sy - 6 + bob, WHITE); put(sx + 2, sy - 6 + bob, WHITE); put(sx + 1, sy - 7 + bob, WHITE); }
   }
@@ -3361,6 +3741,7 @@ function postFx() {
   } else if (b === "lava") vignette(hx("#3a0804"), 0.9, 0.3);
   if (G.hurtFx > 0) vignette(RED, 0.65 * G.hurtFx / 0.3, 0.22);
   if (G.heartFx > 0) vignette(RED, 0.4 * G.heartFx / 0.25, 0.16);   // low HP: the edges pulse with the heartbeat
+  if (P.frenzy > 0) vignette(Math.floor(G.t * 6) % 2 ? RED : hx("#ff7a2a"), 0.3 + 0.15 * Math.sin(G.t * 12), 0.2);
   if (G.flashFx) {
     const k = 1 - G.flashFx.t / G.flashFx.life;
     for (let y = 0; y < H; y++) for (let x = (y & 1); x < W; x += 2) pix[y * W + x] = mix(pix[y * W + x], G.flashFx.col, 0.4 * k);
@@ -3576,11 +3957,20 @@ function drawEnemy(e) {
   if (e.state === "aim") drawTele({ shape: "line", x1: e.x, y1: e.y, x2: e.x + e.cdx * 90, y2: e.y + e.cdy * 90, w: 12, t: e.st, dur: 0.75 });
   const fr = e.spr[Math.floor(e.walkT) % e.spr.length];
   const lift = e.T.fly ? Math.round(Math.sin(G.t * 4 + e.wob) * 2) - 5 : -Math.round(e.z || 0);
+  if (e.T.golden) blitFeet(SACK, sx - e.face * 5, sy - 4 + lift, { flip: e.face < 0 });
   const hk = e.flash > 0 ? e.flash / 0.09 : 0;
   blitFeet(fr, sx, sy + lift, { scale: sc, sx: sc * (1 + 0.3 * hk), sy: sc * (1 - 0.22 * hk), flip: e.face < 0, flash: e.flash > 0 ? WHITE : (e.stun > 0 && Math.floor(G.t * 10) % 2 ? CYAN : 0) });
-  if (e.elite && e.hp < e.maxHp && !e.grabbed) {
+  if (e.champion && !e.grabbed) {
+    const w = 22, x0 = Math.round(sx - w / 2), y0 = Math.round(sy - e.h - 5);
+    rect(x0 - 1, y0 - 1, w + 2, 4, INK); rect(x0, y0, w, 2, hx("#3a1418")); rect(x0, y0, Math.round(w * e.hp / e.maxHp), 2, GOLD);
+    blit(CROWN, Math.round(sx - 4), y0 - 7);
+  } else if (e.elite && e.hp < e.maxHp && !e.grabbed) {
     const w = 14, x0 = Math.round(sx - w / 2), y0 = Math.round(sy - e.h - 4);
     rect(x0 - 1, y0 - 1, w + 2, 4, INK); rect(x0, y0, w, 2, hx("#3a1418")); rect(x0, y0, Math.round(w * e.hp / e.maxHp), 2, RED);
+  }
+  if (e.T.golden && !e.grabbed) {
+    const w = 14, x0 = Math.round(sx - w / 2), y0 = Math.round(sy - e.h - 5), k = clamp(e.goldLife / GOLDEN_T, 0, 1);
+    rect(x0 - 1, y0 - 1, w + 2, 3, INK); rect(x0, y0, Math.round(w * k), 1, k < 0.3 && Math.floor(G.t * 8) % 2 ? RED : GOLD);
   }
   if (e.stun > 0) for (let i = 0; i < 3; i++) put(sx + Math.cos(G.t * 6 + i * 2.1) * 6, sy - e.h - 2 + Math.sin(G.t * 6 + i * 2.1) * 2, GOLD);
 }
@@ -3609,8 +3999,9 @@ function playerSprite(legs, up, mouth = "idle", side = false) {
   return (dark ? SPR.dark : SPR.butcher)[mouth + legs];
 }
 function drawPlayer() {
-  const s = P.scale;
+  const fk = frenzyK(), s = P.scale * (1 + 0.25 * fk);
   const [sx, sy] = worldToScreen(P.x, P.y);
+  if (fk > 0) fillEllipseDither(sx, sy, 18 * s, 7 * s, Math.floor(G.t * 8) % 2 ? RED : hx("#ff7a2a"), 0.4, false);
   for (const g of P.ghosts) {
     const [gx, gy] = worldToScreen(g.x, g.y);
     if (g.t < 0.2 && Math.floor(g.t * 30) % 2 === 0) blitFeet(playerSprite(0, g.up, "idle", g.side), gx, gy, { scale: s, flip: g.face < 0, flash: g.t < 0.08 ? WHITE : P.p.dash ? hx("#ff5a5a") : CYAN, dither: true });
@@ -3663,7 +4054,7 @@ function drawPlayer() {
   }
   back.draw();
   const legs = P.moving ? [1, 0, 2, 0][Math.floor(P.walkT * 2) % 4] : 0;
-  const justHit = P.hitT > 0 && G.mode === "play", blink = !justHit && P.dashT <= 0 && P.inv > 0 && P.inv < 0.6 && Math.floor(P.inv * 20) % 2 && G.mode === "play";
+  const justHit = P.hitT > 0 && G.mode === "play", blink = !justHit && P.dashT <= 0 && !(P.frenzy > 0) && P.inv > 0 && P.inv < 0.6 && Math.floor(P.inv * 20) % 2 && G.mode === "play";
   if (!blink) {
     const dark = P.skin === "dark", q = P.squash + hq;
     blitFeet(playerSprite(legs, P.facingUp && P.mouth === "idle", P.mouth, P.side), sx, sy - bob, { sx: s * (1 + q), sy: s * (1 - q), flip: P.face < 0, flash: justHit ? WHITE : 0 });
@@ -3795,6 +4186,9 @@ const BOT = {
       for (const d of G.drops) { const dd = Math.hypot(d.x - P.x, d.y - P.y); if (dd < bd && (d.kind !== "heart" || P.hp < P.maxHp * 0.8)) { bd = dd; best = d; } }
       if (best) add((best.x - P.x) / bd, (best.y - P.y) / bd, best.kind === "heart" ? 1.5 : 0.7);
     }
+    // the golden goblin is worth a chase
+    const gg = G.enemies.find(e => e.T.golden && !e.grabbed && !e.dead);
+    if (gg && danger === 0) { const dx = gg.x - P.x, dy = gg.y - P.y, d = Math.hypot(dx, dy) || 1; if (d > 40) add(dx / d, dy / d, 2); }
     // walls
     const m = 22;
     if (P.x < INSET.l + m) add(1, 0, (INSET.l + m - P.x) / m * 2.5);
@@ -3824,8 +4218,8 @@ const BOT = {
       if (e.grabbed) continue;
       const d = Math.hypot(e.x - P.x, e.y - P.y);
       if (d > 115) continue;
-      const eatable = !e.elite || e.hp < e.maxHp * 0.35;
-      const score = (eatable ? 2 : 0.6) * (e.xp + 1) + (P.hp < P.maxHp * 0.6 && eatable ? 3 : 0) - d / 60;
+      const eatable = !e.champion && (!e.elite || e.hp < e.maxHp * 0.35 || R("gut"));
+      const score = e.T.golden ? 100 - d / 60 : (eatable ? 2 : 0.6) * (e.xp + 1) + (P.hp < P.maxHp * 0.6 && eatable ? 3 : 0) - d / 60;
       if (score > bs) { bs = score; best = e; }
     }
     if (!best && G.boss && !G.boss.dying && !G.boss.untouchable) {
@@ -3837,6 +4231,7 @@ const BOT = {
   choose(cards) {
     const score = c => {
       if (c.kind === "evo") return 100;
+      if (c.kind === "relic") return (this.relicWt[c.key] || 4) + Math.random();
       if (c.kind === "feast") return P.hp < P.maxHp * 0.5 ? 14 : 6;
       if (c.kind === "snack") return P.hp < P.maxHp * 0.5 ? 10 : 2;
       if (c.kind === "plus2") return 9;
@@ -3853,6 +4248,40 @@ const BOT = {
     let bi = 0, bs = -1e9;
     cards.forEach((c, i) => { const s = score(c); if (s > bs) { bs = s; bi = i; } });
     return bi;
+  },
+  relicWt: { heart: 10, bag: 9, cursed: 8, pact: 7, whetstone: 7, apron: 7, drum: 6, hat: 6, gut: 6, sauce: 6, pie: 6, collar: 6, mask: 6,
+    fang: 5, rusty: 5, bone: 5, hourglass: 5, keg: 5, crown: 5, boots: 5, snout: 4, jaw: 4 },
+  // the road: patch up when hurt, shop when rich, otherwise go looking for a fight
+  chooseNode(opts) {
+    const hp = P.hp / P.maxHp, sc = { elite: hp > 0.55 ? 6 : 1, shop: P.teeth >= 38 ? 7 : 2, shrine: hp > 0.7 && G.ch < 4 ? 5 : 0.5, event: 3, rest: hp < 0.45 ? 9 : 1.5 };
+    let bi = 0, bs = -1;
+    opts.forEach((k, i) => { const s = sc[k] + Math.random(); if (s > bs) { bs = s; bi = i; } });
+    return bi;
+  },
+  shop() {
+    const items = G.shop.items.map((it, i) => ({ it, i, s: it.kind === "relic" ? (this.relicWt[it.key] || 4) + 2 : it.kind === "wlevel" ? 6 : it.kind === "heal" ? (P.hp < P.maxHp * 0.6 ? 8 : 0) : 1 }))
+      .sort((a, b) => b.s - a.s);
+    for (const { it, i, s } of items) if (s >= 2 && P.teeth >= it.price) buyItem(i);
+  },
+  nodeOption() {
+    const N = G.node;
+    if (N.result || N.kind === "rest") return 0;
+    if (N.kind === "shrine") return P.hp > P.maxHp * 0.5 ? 0 : 1;
+    const a = N.options[0];
+    if (a.enabled === false) return 1;
+    if (N.event === "dice") return P.teeth < 30 ? 0 : 1;
+    if (N.event === "stone") return P.hp > P.maxHp * 0.6 ? 0 : 1;
+    return 0;
+  },
+  // one decision on any menu screen (sim and ?bot)
+  decide() {
+    const m = G.mode;
+    if (m === "levelup" || m === "reward" || m === "relic") chooseCard(this.choose(G.cards));
+    else if (m === "clear") continueFromClear();
+    else if (m === "dead") retryChapter();
+    else if (m === "map") chooseNode(this.chooseNode(G.mapOpts));
+    else if (m === "shop") { this.shop(); leaveNode(); }
+    else if (m === "node") pickNodeOption(this.nodeOption());
   },
 };
 
@@ -3923,6 +4352,7 @@ function stack(y, items, w = 110, h = 15, gap = 5) {
 }
 
 function drawIcon(key, cx, cy, scale = 2) {
+  if (drawMetaIcon(key, cx, cy, scale)) return;
   if (key === "cleaver") { const L = new Layer(); cleaver(L, cx - 4, cy + 3, -0.9, 1.4); L.draw(); return; }
   if (key === "sword") { const L = new Layer(); sword(L, [cx - 7, cy + 6], -0.8, 18); L.draw(); return; }
   if (key === "saw") { const L = new Layer(); sawDisc(L, cx, cy, G ? G.t * 3 : 0, 6); L.draw(); return; }
@@ -3944,6 +4374,7 @@ function drawCineBars() {
 }
 // ---------------------------------------------------------------- in-game HUD
 function phaseLabel() {
+  if (G.phase === "den") { const n = denLeft(); return [n ? "CHAMPIONS LEFT: " + n : "DEN CLEARED!", GOLD]; }
   if (G.phase === "waveA") return ["MINI-BOSS " + fmt(MINI_AT - G.t), MINI_AT - G.t < 10 ? GOLD : WHITE];
   if (G.phase === "mini" || (G.boss && G.boss.mini)) return ["KILL THE MINI-BOSS", GOLD];
   if (G.phase === "waveB") return ["BOSS " + fmt(WAVE_B - G.phaseT), WAVE_B - G.phaseT < 10 ? RED : WHITE];
@@ -3969,12 +4400,12 @@ function drawHUD() {
     wx += ic.w + 2;
   }
   let lx = 3;
-  const sy_ = 30;
+  const sy_ = Object.keys(P.relics).length ? 40 : 30;
   if (G.revenge) { text("REVENGE X" + G.revenge, lx, sy_, RED); lx += textW("REVENGE X" + G.revenge) + 6; }
   if (G.hard) { text("HARD", lx, sy_, hx("#ff8a8a")); lx += 22; }
   if (G.endless) text("LOOP " + (G.loop + 1), lx, sy_, hx("#ff8a8a"));
-  const [t, col] = phaseLabel(), chn = (G.ch + 1) + "-" + G.CH.name;
-  if (port) { centered(t, 40, col); centered(chn, 48, DIM); } else { centered(t, 3, col); centered(chn, 11, DIM); }
+  const [t, col] = phaseLabel(), chn = (G.ch + 1) + "-" + G.CH.name, bossUp = G.boss && G.boss.entering <= 0 && !G.boss.dying;
+  if (G.mode === "play" && !bossUp) { if (port) { centered(t, 40, col); centered(chn, 48, DIM); } else { centered(t, 3, col); centered(chn, 11, DIM); } }
   drawPauseBtn(); drawMuteBtn(); drawCtaPill();
   const ks = String(P.kills);
   blit(SPR.icons.skull, W - 11 - textW(ks), 13);
@@ -3988,8 +4419,8 @@ function drawHUD() {
   }
   const B = G.boss;
   if (B && B.entering <= 0) {
-    const w = Math.min(B.mini ? 90 : 120, W - 60), x = Math.round((W - w) / 2), y = H - 9;
-    centered(B.name, y - 8, B.mini ? GOLD : WHITE);
+    const w = Math.min(B.mini ? 90 : 120, W - 60), x = Math.round((W - (port ? 44 : 0) - w) / 2), y = H - 9;
+    text(B.name, x + Math.round((w - textW(B.name)) / 2), y - 8, B.mini ? GOLD : WHITE);
     bar(x, y, w, 4, B.hp / B.maxHp, B.phase2 ? hx("#ff3a3a") : B.mini ? hx("#ff9a2a") : RED, undefined, B.trail);
   }
   const hb = HOOK_BTN(), ready = P.hookCd <= 0 && !P.hook;
@@ -4002,7 +4433,9 @@ function drawHUD() {
     put(hb.x + x, hb.y + y, c);
   }
   blit(SPR.icons.hookbtn, hb.x - 5, hb.y - 6, { scale: port ? 1.25 : 1 });
-  text("HOOK", hb.x - 7, hb.y + hb.r + 1 > H - 6 ? hb.y - hb.r - 7 : hb.y + hb.r + 1, ready ? GOLD : DIM);
+  const hl = P.frenzy > 0 ? "FRENZY" : "HOOK";
+  const ly = hb.y + hb.r + 6;   // clear of the hunger ring
+  text(hl, hb.x - Math.round(textW(hl) / 2), ly + 5 > H - 1 ? hb.y - hb.r - 12 : ly, P.frenzy > 0 ? RED : ready ? GOLD : DIM);
   uiRect(hb.x - hb.r - 4, hb.y - hb.r - 4, hb.r * 2 + 8, hb.r * 2 + 8, "hook");
   const db = DASH_BTN(), dready = P.dashCharges > 0, dcol = P.p.dash ? hx("#ff6a5a") : CYAN;
   for (let y = -db.r; y <= db.r; y++) for (let x = -db.r; x <= db.r; x++) {
@@ -4042,6 +4475,7 @@ function drawHUD() {
       if (b.sub) cwrap(b.sub, y + 5 * kk + 4, WHITE);
     }
   }
+  drawMetaHUD();
   if (G.streakFx && !G.banner) {
     const f = G.streakFx, y = (port ? 84 : 46) - Math.round(f.t * 4);
     if (!(f.t > 1.25 && Math.floor(f.t * 14) % 2)) {
@@ -4075,7 +4509,7 @@ function drawCtaPill() {
 }
 
 function drawTutorial() {
-  if (G.ch !== 0 || G.tutorialDone || G.endless) return;
+  if (G.ch !== 0 || G.tutorialDone || G.endless || G.phase === "den") return;
   const hand = (x, y, press) => blit(SPR.hand, x - 2, y + (press ? 3 : 6));
   if ((G.movedOnce || 0) < 0.8) {
     const k = (G.t * 0.8) % 1, x = W * 0.25 + Math.sin(k * Math.PI * 2) * 18, y = H - 56 + Math.cos(k * Math.PI * 2) * 8;
@@ -4107,10 +4541,11 @@ function hint(s) {
 // ---------------------------------------------------------------- full screens
 function dim(k = 0.62, c = hx("#0a0408")) { rectA(0, 0, W, H, c, k); }
 function drawCard(c, x, y, w, h, i, tall) {
-  const border = c.kind === "evo" ? (Math.floor(G.clock * 6) % 2 ? hx("#ff6ad0") : GOLD) : c.kind === "weapon" || c.kind === "plus2" ? GOLD : c.kind === "passive" ? hx("#8af0ff") : GREEN;
+  const border = c.kind === "evo" || (c.kind === "relic" && c.rare) ? (Math.floor(G.clock * 6) % 2 ? hx("#ff6ad0") : GOLD) : c.kind === "relic" ? hx("#ff9a2a") :
+    c.kind === "weapon" || c.kind === "plus2" ? GOLD : c.kind === "passive" ? hx("#8af0ff") : GREEN;
   panel(x, y, w, h, border);
-  const tag = c.kind === "evo" ? "EVOLUTION!" : c.isNew ? "NEW!" : c.kind === "plus2" ? "+2 LEVELS" : (c.kind === "weapon" || c.kind === "passive") ? "LV " + c.lvl + ">" + (c.lvl + 1) : "";
-  const tagCol = c.isNew || c.kind === "evo" ? GOLD : DIM;
+  const tag = c.kind === "relic" ? (c.rare ? "LEGENDARY" : "RELIC") : c.kind === "evo" ? "EVOLUTION!" : c.isNew ? "NEW!" : c.kind === "plus2" ? "+2 LEVELS" : (c.kind === "weapon" || c.kind === "passive") ? "LV " + c.lvl + ">" + (c.lvl + 1) : "";
+  const tagCol = c.isNew || c.kind === "evo" || c.rare ? GOLD : c.kind === "relic" ? hx("#ff9a2a") : DIM;
   if (tall) {
     if (tag) text(tag, x + Math.round((w - textW(tag)) / 2), y + 4, tagCol);
     drawIcon(c.icon, x + w / 2, y + 22, 2);
@@ -4139,6 +4574,7 @@ function drawCards(cards, y0) {
 }
 function drawScreen() {
   const m = G.mode, port = portrait();
+  if (m === "map" || m === "shop" || m === "node" || m === "relic") { drawMetaScreen(m); return; }
   if (m === "levelup") {
     UI_RECTS = [];
     dim(0.55);
@@ -4173,13 +4609,14 @@ function drawScreen() {
   }
   if (m === "clear") {
     UI_RECTS = [];
-    dim(0.7);
-    let y = ctext("CHAPTER CLEAR!", port ? 48 : 22, GOLD, 3) + 6;
+    dim(0.78);
+    let y = ctext("CHAPTER CLEAR!", port ? 44 : 12, GOLD, 3) + 4;
     const s = G.stats;
-    y = cwrap("BOSS DOWN IN " + (G.bossTime ? Math.round(G.bossTime) + "S" : "-"), y, PALE, 9);
-    y = cwrap("KILLS THIS CHAPTER " + G.chKills + "   TOTAL " + s.kills + "   EATEN " + s.devours + "   BEST STREAK " + (s.bestStreak || 0), y, WHITE, 9);
-    y = cwrap("LEVEL " + P.lvl + "   HP " + Math.ceil(P.hp) + "/" + P.maxHp, y, WHITE, 9);
-    y = cwrap("WEAPONS: " + ownedWeapons().map(w => UPG[w].name.split(" ")[0] + " " + P.w[w]).join(", "), y, WHITE, 9) + 4;
+    y = ctext("BOSS DOWN IN " + (G.bossTime ? Math.round(G.bossTime) + "S" : "-"), y, PALE) + 1;
+    y = ctext("KILLS " + G.chKills + "   EATEN " + s.devours, y, WHITE);
+    y = ctext("BEST STREAK " + (s.bestStreak || 0) + "   LEVEL " + P.lvl, y, WHITE);
+    y = ctext("HP " + Math.ceil(P.hp) + "/" + P.maxHp + "   TEETH " + P.teeth, y, WHITE) + 3;
+    y = drawLoadout(y) + 2;
     const nxt = G.ch + 1 < CHAPTERS.length ? CHAPTERS[G.ch + 1].name : "LOOP " + (G.loop + 2) + ": " + CHAPTERS[0].name;
     y = cwrap("NEXT: " + nxt, y, GOLD, 9);
     y = cwrap("+50% HP BEFORE THE NEXT CHAPTER", y, GREEN, 9);
@@ -4228,6 +4665,7 @@ function drawEndCard() {
   let y = ctext("YOU ATE THE WORLD!", port ? 44 : 20, GOLD, 3) + 2;
   const s = G.stats;
   y = cwrap("TIME " + fmt(s.time) + "  LEVEL " + P.lvl + "  KILLS " + s.kills + "  EATEN " + s.devours + "  BEST STREAK " + (s.bestStreak || 0) + "  DEATHS " + s.deaths, y, WHITE, 8);
+  y = cwrap("FRENZIES " + (s.frenzies || 0) + "  RELICS " + Object.keys(P.relics).length + "  GOLDEN GOBLINS " + (s.goldens || 0) + "  TEETH " + (s.teeth || 0), y, GOLD, 8);
   if (G.unlockMsg) y = cwrap(G.unlockMsg, y, hx("#8af0ff"), 8);
   y += port ? 14 : 4;
   y = ctext("THE REAL CARNAGE IS IN", y, PALE) + 1;
@@ -4272,6 +4710,231 @@ function drawTitle(t, save, unlocks) {
   }
   cwrap("DRAG = MOVE   TAP ENEMY OR HOOK = HOOK", H - 10 - (port ? 8 : 0), DIM);
   drawMuteBtn();
+}
+
+</script>
+<script>
+// ---- metahud.js
+"use strict";
+// Meta layer on screen: relic and road icons, the road map, the meat market, stranger / shrine / campfire screens,
+// relic picks, gold teeth, the relic row, the hunger ring around HOOK, the frenzy overlay, the golden goblin arrow.
+
+const ICON_COLS = {
+  P: hx("#ff9ab0"), p: hx("#d8607a"), W: WHITE, w: hx("#c8c0d0"), M: hx("#b8bccb"), m: hx("#767a8c"), R: hx("#e02030"), r: hx("#9a0c1e"),
+  Y: hx("#ffe04a"), y: hx("#c08a1a"), G: hx("#4ad86a"), g: hx("#1f7a44"), B: hx("#b07a40"), b: hx("#7a4e26"), k: hx("#3a2030"),
+  S: hx("#9a9aae"), s: hx("#5a5a6e"), V: hx("#c890ff"), v: hx("#6a2aa0"), o: hx("#ff9a2a"), h: hx("#6a3a1a"),
+};
+const RELIC_ART = {
+  snout: [".PPPPP.", "PPPPPPP", "PPkPkPP", "PPkPkPP", "PPPPPPP", ".ppppp."],
+  apron: ["..M.M..", "..M.M..", ".MMMMM.", ".MmMmM.", ".MMMMM.", ".MmMmM.", "..MMM.."],
+  gut: [".RRRR..", "RRRRRR.", "RRkkRRR", "RRkkRRR", ".RRRRRR", "..rrrr."],
+  fang: ["WWWWWWW", ".WWWWW.", "..WWW..", "..WWw..", "...W...", "...R..."],
+  sauce: ["..GG...", "..gg...", "..RR...", ".RRRR..", ".RWRR..", ".RRRR..", ".rrrr.."],
+  rusty: ["...oo..", "..o..o.", ".....o.", "....o..", "o..o...", ".oo...."],
+  whetstone: ["......W", ".....W.", "....W..", "SSSSSSS", "SwwSSSS", "sssssss"],
+  pie: ["...Y...", "..YYY..", ".YyYyY.", "YYYYYYY", "yyyyyyy", ".BBBBB."],
+  bone: ["Y.....Y", "WW...WW", ".WWWWW.", "WW...WW", "Y.....Y"],
+  hat: [".WWWWW.", "WWWWWWW", "WWWWWWW", ".WWWWW.", ".wwwww.", ".WWWWW."],
+  drum: ["h.....h", ".h...h.", ".RRRRR.", "RWRWRWR", "RRRRRRR", ".rrrrr."],
+  collar: [".M.M.M.", "kkkkkkk", "k.....k", "kkkkkkk", ".M.M.M."],
+  hourglass: ["YYYYYYY", ".ySSSy.", "..ySy..", "...y...", "..yYy..", ".yYYYy.", "YYYYYYY"],
+  jaw: ["YYYYYYY", "YWYWYWY", "Y.Y.Y.Y", ".......", "Y.Y.Y.Y", "YWYWYWY", "YYYYYYY"],
+  keg: ["....o..", "...h...", ".bbbb..", "bBBBBb.", "bkkkkb.", "bBBBBb.", ".bbbb.."],
+  crown: ["Y.Y.Y.Y", "YYYYYYY", "YRYGYRY", "YYYYYYY", "yyyyyyy"],
+  boots: ["W......", "WW.bb..", ".W.bb..", "...bb..", "..bbbbb", "..BBBBB"],
+  mask: [".WWWWW.", "WWWWWWW", "WkkWkkW", "WWWWWWW", "WWkWkWW", ".WWWWW."],
+  cursed: ["VVVV...", "VVVVv..", "VkVVv..", "VVVVh..", "....h..", ".....h."],
+  pact: [".wwwww.", ".wRRRw.", ".wwwww.", ".wRwRw.", ".wwwww.", "...R...", "...r..."],
+  bag: ["...k...", "..bbb..", ".bBBBb.", "bBBYBBb", "bBYYYBb", "bBBYBBb", ".bbbbb."],
+  heart: [".RR.RR.", "RWRRRRR", "RRRRRRR", ".RRRRR.", "..RRR..", "...R..."],
+};
+const RELIC_SPR = {};
+for (const k in RELIC_ART) RELIC_SPR[k] = makeSprite(RELIC_ART[k], ICON_COLS);
+const NODE_SPR = {
+  elite: makeSprite(["W.....W", ".W...W.", "..W.W..", "...W...", "..W.W..", ".h...h.", "h.....h"], ICON_COLS),
+  shop: makeSprite(["RWRWRWR", "RWRWRWR", ".......", ".h...h.", ".hYYYh.", ".hYyYh.", ".hhhhh."], ICON_COLS),
+  shrine: makeSprite(["...Y...", "..YRY..", "...R...", ".kkkkk.", "..kRk..", "..kkk..", ".kkkkk."], ICON_COLS),
+  event: makeSprite([".WWWW..", "W....W.", "....W..", "...W...", "...W...", ".......", "...W..."], ICON_COLS),
+  rest: makeSprite(["...R...", "..RYR..", ".RYWYR.", ".RYYYR.", "hh.h.hh", ".hhhhh."], ICON_COLS),
+};
+const NODE_COL = { elite: RED, shop: GOLD, shrine: hx("#c890ff"), event: hx("#8af0ff"), rest: hx("#ff9a2a") };
+const TOOTH = makeSprite(["YYYYY", "YWYYY", "YYYYY", "YY.YY", "Y...Y"], ICON_COLS);
+const DICE = makeSprite(["WWWWWWW", "WkWWWkW", "WWWWWWW", "WWWkWWW", "WWWWWWW", "WkWWWkW", "WWWWWWW"], ICON_COLS);
+const SACK = makeSprite(["...k...", "..bbb..", ".bBBBb.", "bBBYBBb", "bBYYYBb", "bBBYBBb", ".bbbbb."], ICON_COLS);
+
+// icons the card and shop code can ask for by name
+function drawMetaIcon(key, cx, cy, scale) {
+  const s = key.startsWith("relic:") ? RELIC_SPR[key.slice(6)] : key.startsWith("node:") ? NODE_SPR[key.slice(5)] : key === "dice" ? DICE : key === "sack" ? SACK : null;
+  if (!s) return false;
+  blit(s, Math.round(cx - s.w * scale / 2), Math.round(cy - s.h * scale / 2), { scale });
+  return true;
+}
+function toothCount(n, x, y, col = GOLD) { blit(TOOTH, x, y - 1); text(String(n), x + 8, y, col); return x + 8 + textW(String(n)); }
+
+// ---------------------------------------------------------------- in-game HUD pieces
+function drawMetaHUD() {
+  const port = portrait();
+  // gold teeth, left of the kill counter
+  const ks = String(P.kills), ts = String(P.teeth), tx = W - 11 - textW(ks) - 6 - textW(ts) - 8;
+  blit(TOOTH, tx, 13); text(ts, tx + 8, 14, G.teethPop > 0 ? WHITE : GOLD);
+  // relic row under the weapons
+  const keys = Object.keys(P.relics), max = port ? 8 : 12;
+  keys.slice(0, max).forEach((k, i) => blit(RELIC_SPR[k], 3 + i * 10, 29, { flash: P.relics[k] === 2 ? hx("#5a5068") : 0 }));
+  if (keys.length > max) text("+" + (keys.length - max), 3 + max * 10, 31, WHITE);
+  // hunger ring around HOOK; during a frenzy it shows the time left
+  const hb = HOOK_BTN(), R_ = hb.r + 3;
+  const fr = P.frenzy > 0, k = fr ? P.frenzy / P.frenzyDur : P.hunger;
+  const col = fr ? (Math.floor(G.t * 10) % 2 ? RED : WHITE) : k > 0.8 ? (Math.floor(G.t * 6) % 2 ? RED : hx("#ffc23a")) : hx("#ff7a2a");
+  for (let y = -R_ - 2; y <= R_ + 2; y++) for (let x = -R_ - 2; x <= R_ + 2; x++) {
+    const d = Math.hypot(x, y);
+    if (d < R_ - 0.5 || d > R_ + 1.5) continue;
+    const a = (Math.atan2(x, -y) + Math.PI * 2) % (Math.PI * 2) / (Math.PI * 2);
+    put(hb.x + x, hb.y + y, a < k ? col : hx("#2a1418"));
+  }
+  // FRENZY!
+  if (G.frenzyFx) {
+    const f = G.frenzyFx, y = port ? 104 : 58;
+    if (!(f.t > 1.1 && Math.floor(f.t * 14) % 2)) {
+      centered("FRENZY!", y, Math.floor(f.t * 12) % 2 ? RED : hx("#ff9a2a"), f.t < 0.07 ? 5 : 4);
+      centered("EAT EVERYTHING!", y + 24, PALE);
+    }
+  }
+  // the golden goblin: an arrow on the screen edge while it is off screen
+  const gg = G.enemies.find(e => e.T.golden && !e.dead);
+  if (gg) {
+    const [sx, sy] = worldToScreen(gg.x, gg.y - 6), m = 9;
+    if (sx < m || sx > W - m || sy < 40 || sy > H - m) {
+      const cx = W / 2, cy = H / 2, dx = sx - cx, dy = sy - cy;
+      const kk = Math.min((W / 2 - m) / (Math.abs(dx) || 1e-3), (H / 2 - m - 16) / (Math.abs(dy) || 1e-3));
+      const ax = cx + dx * kk, ay = cy + dy * kk, a = Math.atan2(dy, dx), ux = Math.cos(a), uy = Math.sin(a);
+      const L = new Layer();
+      poly(L, [[ax, ay], [ax - ux * 8 - uy * 5, ay - uy * 8 + ux * 5], [ax - ux * 8 + uy * 5, ay - uy * 8 - ux * 5]], Math.floor(G.t * 6) % 2 ? GOLD : WHITE);
+      L.draw();
+      blit(SACK, Math.round(ax - ux * 16 - 4), Math.round(ay - uy * 16 - 4));
+    }
+  }
+}
+
+// ---------------------------------------------------------------- screens
+function drawMetaScreen(m) {
+  UI_RECTS = [];
+  if (m === "map") drawRoad();
+  else if (m === "shop") drawShop();
+  else if (m === "node") drawNodeScreen();
+  else if (m === "relic") {
+    dim(0.6);
+    ctext(G.rewardKind === "den" ? "CHAMPION'S LOOT" : "CHOOSE A RELIC", portrait() ? 48 : 20, GOLD, 3);
+    drawCards(G.cards, portrait() ? 74 : 44);
+  }
+  drawMuteBtn();
+}
+// weapons (with level pips) and relics in one centred row, for the chapter-clear screen
+function drawLoadout(y) {
+  const ws = ownedWeapons(), rs = Object.keys(P.relics), w = ws.length * 10 + (rs.length ? 6 : 0) + rs.length * 10;
+  let x = Math.round((W - w) / 2);
+  for (const k of ws) {
+    blit(MINI_ICON[k], x, y);
+    for (let i = 0; i < P.w[k]; i++) put(x + 1 + i, y + 10, Object.keys(EVOS).some(e => P.evo[e] && EVOS[e].weapon === k) ? WHITE : GOLD);
+    x += 10;
+  }
+  if (rs.length) x += 6;
+  for (const k of rs) { blit(RELIC_SPR[k], x, y, { flash: P.relics[k] === 2 ? hx("#5a5068") : 0 }); x += 10; }
+  return y + 14;
+}
+// your teeth and relics, shown on every road screen
+function drawMetaFooter(y) {
+  const keys = Object.keys(P.relics);
+  const w = 16 + textW(String(P.teeth)) + (keys.length ? 8 + keys.length * 10 : 0), x0 = Math.round((W - w) / 2);
+  let x = toothCount(P.teeth, x0, y + 1) + 8;
+  for (const k of keys) { blit(RELIC_SPR[k], x, y - 1, { flash: P.relics[k] === 2 ? hx("#5a5068") : 0 }); x += 10; }
+}
+function drawRoad() {
+  const port = portrait();
+  dim(0.84);
+  let y = ctext("THE ROAD", port ? 16 : 6, GOLD, 3);
+  // six chapters on a line, the stop you stand at glowing between two of them
+  const n = CHAPTERS.length, x0 = port ? 16 : 40, step = (W - 2 * x0) / (n - 1), cy = y + 8;
+  for (let x = x0; x <= W - x0; x += 3) put(x, cy, hx("#5a4a3a"));
+  for (let i = 0; i < n; i++) {
+    const cx = Math.round(x0 + i * step), L = new Layer(), done = i <= G.ch;
+    disc(L, cx, cy, 5.5, hx(BIOMES[CHAPTERS[i].key].ground[done ? 1 : 3]));
+    L.draw(INK);
+    if (done) blit(SPR.icons.skull, cx - 3, cy - 3); else text(String(i + 1), cx - 1, cy - 2, INK);
+  }
+  const mx = Math.round(x0 + (G.ch + 0.5) * step), pr = 3 + (Math.floor(G.clock * 4) % 2);
+  for (let j = -pr; j <= pr; j++) for (let i = -(pr - Math.abs(j)); i <= pr - Math.abs(j); i++) put(mx + i, cy + j, GOLD);
+  y = cy + 11;
+  const nx = CHAPTERS[G.ch + 1];
+  y = cwrap("NEXT: " + nx.name + " - BOSS " + BOSSES[nx.boss].name, y, WHITE, 8) + 2;
+  y = ctext("CHOOSE YOUR PATH", y, PALE) + 1;
+  if (port) {
+    const w = W - 16, h = 42;
+    G.mapOpts.forEach((k, i) => drawNodeCard(k, 8, y + i * (h + 5), w, h, i, false));
+    y += G.mapOpts.length * (h + 5);
+  } else {
+    const w = 94, gap = 6, xx = Math.round((W - (3 * w + 2 * gap)) / 2);
+    G.mapOpts.forEach((k, i) => drawNodeCard(k, xx + i * (w + gap), y, w, 72, i, true));
+    y += 72;
+  }
+  drawMetaFooter(Math.min(H - 10, y + 6));
+}
+function drawNodeCard(k, x, y, w, h, i, tall) {
+  panel(x, y, w, h, NODE_COL[k]);
+  const N = NODES[k];
+  if (tall) {
+    drawMetaIcon("node:" + k, x + w / 2, y + 12, 2);
+    text(N.name, x + Math.round((w - textW(N.name)) / 2), y + 25, WHITE);
+    wrap(N.desc, Math.floor((w - 6) / 4)).slice(0, 5).forEach((l, j) => text(l, x + Math.round((w - textW(l)) / 2), y + 34 + j * 7, PALE));
+  } else {
+    drawMetaIcon("node:" + k, x + 14, y + h / 2, 2);
+    text(N.name, x + 30, y + 6, WHITE);
+    wrap(N.desc, Math.floor((w - 34) / 4)).slice(0, 3).forEach((l, j) => text(l, x + 30, y + 16 + j * 8, PALE));
+  }
+  uiRect(x, y, w, h, "node" + i);
+}
+function drawShop() {
+  const port = portrait(), S = G.shop;
+  dim(0.86);
+  let y = ctext("MEAT MARKET", port ? 16 : 5, GOLD, 3);
+  y = ctext("YOU HAVE " + P.teeth + " GOLD TEETH", y, WHITE) + 1;
+  const items = S.items;
+  if (port) {
+    const w = W - 16, h = 36;
+    items.forEach((it, i) => drawShopItem(it, 8, y + i * (h + 4), w, h, i));
+    y += items.length * (h + 4) + 2;
+    button((W - 80) / 2, y, 80, 16, "LEAVE", "leave", "grey");
+  } else {
+    const w = 150, h = 30, gap = 4, xx = Math.round((W - (2 * w + gap)) / 2);
+    items.forEach((it, i) => drawShopItem(it, xx + (i % 2) * (w + gap), y + Math.floor(i / 2) * (h + gap), w, h, i));
+    y += Math.ceil(items.length / 2) * (h + gap);
+    button((W - 80) / 2, Math.min(H - 18, y + 2), 80, 14, "LEAVE", "leave", "grey");
+  }
+}
+function drawShopItem(it, x, y, w, h, i) {
+  const afford = P.teeth >= it.price;
+  panel(x, y, w, h, it.sold ? hx("#3a3040") : it.rare ? hx("#c890ff") : afford ? GOLD : hx("#6a4a3a"));
+  if (!drawMetaIcon(it.icon, x + 12, y + h / 2, 2)) drawIcon(it.icon, x + 12, y + h / 2, 1);
+  text(it.title, x + 26, y + 5, it.sold ? DIM : WHITE);
+  wrap(it.desc, Math.floor((w - 60) / 4)).slice(0, 2).forEach((l, j) => text(l, x + 26, y + 14 + j * 7, it.sold ? DIM : PALE));
+  if (it.sold) text("SOLD", x + w - 22, y + 5, DIM);
+  else toothCount(it.price, x + w - 12 - textW(String(it.price)) - 6, y + 5, afford ? GOLD : RED);
+  if (!it.sold) uiRect(x, y, w, h, "buy" + i);
+}
+function drawNodeScreen() {
+  const port = portrait(), N = G.node;
+  dim(0.86);
+  let y = port ? 26 : 8;
+  drawMetaIcon("node:" + N.kind, W / 2, y + 10, 3);
+  y = ctext(N.title, y + 24, NODE_COL[N.kind] || GOLD, 2) + 4;
+  y = cwrap(N.text, y, WHITE, 8) + 6;
+  if (N.result) y = cwrap(N.result, y, GOLD, 8) + 8;
+  const bw = port ? W - 16 : 220;
+  N.options.forEach((o, i) => {
+    const ok = o.enabled !== false;
+    button((W - bw) / 2, y, bw, 16, o.label + (ok ? "" : " (CAN'T)"), "opt" + i, !ok ? "grey" : i === 0 ? "orange" : "grey");
+    y += 21;
+  });
+  drawMetaFooter(Math.min(H - 10, y + 6));
 }
 
 </script>
@@ -4377,7 +5040,7 @@ function drawWipe(dt) {
     for (let x = 0; x < W; x++) if (0.6 * (x / W + y / H) / 2 + 0.4 * B[x & 3] / 16 >= p) pix[row + x] = WIPE.img[row + x];
   }
 }
-const WIPE_IDS = new Set(["next", "retry", "new", "continue", "endless", "title", "again"]);
+const WIPE_IDS = new Set(["next", "retry", "new", "continue", "endless", "title", "again", "node0", "node1", "node2", "leave"]);
 function uiAction(id) {
   if (!id) return false;
   if (WIPE_IDS.has(id)) startWipe();
@@ -4388,7 +5051,11 @@ function uiAction(id) {
   if (id === "dash") { if (G.mode === "play") tryDash(); return true; }
   if (id.startsWith("card")) { chooseCard(+id.slice(4)); return true; }
   if (id === "reroll") { reroll(); return true; }
-  if (id === "next") { nextChapter(); return true; }
+  if (id === "next") { continueFromClear(); return true; }
+  if (id.startsWith("node")) { chooseNode(+id.slice(4)); return true; }
+  if (id.startsWith("buy")) { buyItem(+id.slice(3)); return true; }
+  if (id === "leave") { leaveNode(); return true; }
+  if (id.startsWith("opt") && !id.startsWith("opt:")) { pickNodeOption(+id.slice(3)); return true; }
   if (id === "retry") { retryChapter(); return true; }
   if (id === "store") { if (G.mode === "victory") G.endCancel = true; openStore(); return true; }
   if (id === "title" || id === "again") { if (G.mode === "victory") G.endCancel = true; goTitle(); return true; }
@@ -4453,9 +5120,15 @@ addEventListener("keydown", e => {
     if (e.code === "Space" || e.code === "KeyJ") hookNearest();
     if (e.code === "ShiftLeft" || e.code === "ShiftRight" || e.code === "KeyK") tryDash();
     if (e.code === "KeyP" || e.code === "Escape") uiAction("pause");
-  } else if (G.mode === "levelup" || G.mode === "reward") {
+  } else if (G.mode === "levelup" || G.mode === "reward" || G.mode === "relic") {
     if (["Digit1", "Digit2", "Digit3"].includes(e.code)) chooseCard(+e.code.slice(5) - 1);
     if (e.code === "KeyR") reroll();
+  } else if (G.mode === "map" && ["Digit1", "Digit2", "Digit3"].includes(e.code)) uiAction("node" + (+e.code.slice(5) - 1));
+  else if (G.mode === "shop") {
+    if (e.code.startsWith("Digit")) uiAction("buy" + (+e.code.slice(5) - 1));
+    if (e.code === "Escape" || e.code === "KeyL" || e.code === "Enter") uiAction("leave");
+  } else if (G.mode === "node" && ["Digit1", "Digit2", "Enter"].includes(e.code)) {
+    uiAction("opt" + (e.code === "Enter" ? 0 : +e.code.slice(5) - 1));
   } else if (G.mode === "intro" && (e.code === "Space" || e.code === "Enter")) setMode("play");
   else if (G.mode === "clear" && (e.code === "Space" || e.code === "Enter")) nextChapter();
   else if (G.mode === "pause" && (e.code === "KeyP" || e.code === "Escape")) uiAction("resume");
@@ -4534,6 +5207,12 @@ sfx = name => {
       noise(0.5, 0.2, 5000, 0.12, 1.5);
       break;
     case "heart": tone(58, 0.11, "sine", 0.35, 45); tone(52, 0.13, "sine", 0.28, 40, 0.15); break;
+    case "jingle": [1319, 1568, 1976, 2637].forEach((f, i) => tone(f, 0.09, "triangle", 0.06, null, i * 0.05)); noise(0.2, 0.06, 8000, 0.1, 2); break;
+    case "frenzy":
+      music.duck(1.2);
+      tone(90, 0.7, "sawtooth", 0.16, 45); noise(0.6, 0.3, 250, 0, 0.5);
+      [147, 220, 294].forEach(f => tone(f, 0.5, "sawtooth", 0.06, null, 0.12)); [294, 440, 587].forEach(f => tone(f, 0.6, "square", 0.035, null, 0.3));
+      break;
     case "burp": tone(110 + Math.random() * 30, 0.32, "sawtooth", 0.08, 60); noise(0.25, 0.12, 300, 0.02, 1); break;
     // stingers: short scored moments over a ducked music track
     case "bossintro":
@@ -4659,9 +5338,9 @@ function loop(now) {
       G.endT = (G.endT || 0) + dt;
       if (G.endT >= END_AUTO_OPEN && !G.endOpened) { G.endOpened = true; G.endCancel = true; autoOpenStore(); }
     }
-    if (BOTPLAY && (m === "levelup" || m === "reward" || m === "clear" || m === "dead")) {
+    if (BOTPLAY && ["levelup", "reward", "relic", "clear", "dead", "map", "shop", "node"].includes(m)) {
       botWait += dt;
-      if (botWait > 0.6) { botWait = 0; if (m === "clear") nextChapter(); else if (m === "dead") retryChapter(); else chooseCard(BOT.choose(G.cards)); }
+      if (botWait > 0.6) { botWait = 0; BOT.decide(); }
     }
     drawWorld();
     drawHUD();
