@@ -386,7 +386,7 @@ const FONT = {
   "!": "010010010000010", "/": "001001010100100", ":": "000010000010000", ".": "000000000000010",
   "-": "000000111000000", "+": "000010111010000", "?": "111001011000010", " ": "000000000000000",
   "%": "101001010100101", ",": "000000000010100", "'": "010010000000000",
-  ">": "100010001010100", "<": "001010100010001", "(": "010100100100010", ")": "010001001001010",
+  ">": "100010001010100", "<": "001010100010001", "(": "010100100100010", ")": "010001001001010", '"': "101101000000000",
 };
 // bigger text is drawn, not scaled: k = 2 is a 5x7 font; k = 3 and 4 are title letters grown from it by Scale2x / Scale3x
 // (smooth diagonals at single-pixel steps), shaded top to bottom, with a bevel, an outline and a drop shadow
@@ -404,10 +404,19 @@ const FONT5 = {
   ':': "00000001000000000000000000010000000", '-': "00000000000000001110000000000000000", '+': "00000001000010011111001000010000000", "'": "00100001000100000000000000000000000",
   '/': "00001000010001000100010001000010000", '%': "11001110010001000100010001001110011", '&': "01100100101010001000101011001001101", '>': "01000001000001000001000100010001000",
   '<': "00010001000100010000010000010000010", '=': "00000000001111100000111110000000000", '(': "00010001000100001000010000010000010", ')': "01000001000001000010000100010001000",
-  ' ': "00000000000000000000000000000000000",
+  ' ': "00000000000000000000000000000000000", '"': "01010010100000000000000000000000000",
 };
 const ADV = [0, 4, 6, 12, 17];
-const textW = (s, k = 1) => s.length * ADV[Math.min(4, k)] - (k >= 3 ? 2 : 1);
+// translation hook: identity here, i18nru.js swaps it in for the Russian build; text(), textW() and wrap() all go through it
+let loc = s => s, LANG = "en";
+// the 3x5 font is proportional (Latin glyphs are 3 wide, some Cyrillic ones 4-5), the bigger sizes are monospaced
+function rawW(s, k = 1) {
+  if (k >= 2) return s.length * ADV[Math.min(4, k)] - (k >= 3 ? 2 : 1);
+  let w = 0;
+  for (const ch of s) w += (FONT[ch] || FONT[" "]).length / 5 + 1;
+  return w * k - 1;
+}
+const textW = (s, k = 1) => rawW(loc(s), k);
 function scaleGlyph(g, w, h, n) {   // g: array of 0/1 rows; n = 2 (EPX) or 3 (AdvMAME3x)
   const at = (x, y) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : g[y][x]);
   const out = Array.from({ length: h * n }, () => new Array(w * n).fill(0));
@@ -441,25 +450,26 @@ function glyphOf(ch, k) {
   const key = ch + k;
   let g = GLYPHS.get(key);
   if (g) return g;
-  const src = FONT5[ch] || FONT5[" "], rows = [];
-  for (let y = 0; y < 7; y++) rows.push([...src.slice(y * 5, y * 5 + 5)].map(Number));
-  g = k >= 3 ? scaleGlyph(rows, 5, 7, k >= 4 ? 3 : 2) : rows;
+  const src = FONT5[ch] || FONT5[" "], rows = [];   // 7 rows, or 8 with a descender below the line
+  for (let y = 0; y < src.length / 5; y++) rows.push([...src.slice(y * 5, y * 5 + 5)].map(Number));
+  g = k >= 3 ? scaleGlyph(rows, 5, rows.length, k >= 4 ? 3 : 2) : rows;
   GLYPHS.set(key, g);
   return g;
 }
 function text(s, x, y, col, k = 1, outline = INK) {
+  s = loc(s);
   x = Math.round(x); y = Math.round(y);
   if (k >= 2) { bigText(s, x, y, col, k, outline); return; }
   const pts = [], set = new Set();
-  let n = 0;
+  let ox = 0;
   for (const ch of s) {
-    const g = FONT[ch] || FONT[" "];
-    for (let j = 0; j < 5; j++) for (let i = 0; i < 3; i++)
-      if (g[j * 3 + i] === "1") for (let dy = 0; dy < k; dy++) for (let dx = 0; dx < k; dx++) {
-        const a = x + n * 4 * k + i * k + dx, b = y + j * k + dy;
+    const g = FONT[ch] || FONT[" "], gw = g.length / 5;
+    for (let j = 0; j < 5; j++) for (let i = 0; i < gw; i++)
+      if (g[j * gw + i] === "1") for (let dy = 0; dy < k; dy++) for (let dx = 0; dx < k; dx++) {
+        const a = x + ox + i * k + dx, b = y + j * k + dy;
         pts.push(a, b); set.add(a * 1000 + b);
       }
-    n++;
+    ox += (gw + 1) * k;
   }
   if (outline) for (let i = 0; i < pts.length; i += 2) {
     const a = pts[i], b = pts[i + 1];
@@ -469,11 +479,10 @@ function text(s, x, y, col, k = 1, outline = INK) {
   for (let i = 0; i < pts.length; i += 2) put(pts[i], pts[i + 1], col);
 }
 function bigText(s, x, y, col, k, outline) {
-  const pts = [], set = new Set(), adv = ADV[Math.min(4, k)];
-  let n = 0, gh = 7;
+  const pts = [], set = new Set(), adv = ADV[Math.min(4, k)], gh = 7 * (k >= 4 ? 3 : k >= 3 ? 2 : 1);
+  let n = 0;
   for (const ch of s) {
     const g = glyphOf(ch, k);
-    gh = g.length;
     for (let j = 0; j < g.length; j++) for (let i = 0; i < g[j].length; i++) if (g[j][i]) {
       const a = x + n * adv + i, b = y + j;
       pts.push(a, b); set.add(a * 1000 + b);
@@ -495,11 +504,13 @@ function bigText(s, x, y, col, k, outline) {
   }
 }
 const centered = (s, y, col, k = 1) => text(s, Math.round((W - textW(s, k)) / 2), y, col, k);
+// maxChars counts 3x5 Latin letters; the line is measured in pixels so narrow and wide glyphs wrap right
 function wrap(s, maxChars) {
-  const out = [];
+  s = loc(s);
+  const out = [], maxW = maxChars * 4 - 1;
   let cur = "";
   for (const w of s.split(" ")) {
-    if ((cur + " " + w).trim().length > maxChars) { out.push(cur.trim()); cur = w; }
+    if (rawW((cur + " " + w).trim()) > maxW) { if (cur.trim()) out.push(cur.trim()); cur = w; }
     else cur += " " + w;
   }
   if (cur.trim()) out.push(cur.trim());
@@ -2113,7 +2124,7 @@ function retryChapter() {
   const r = Math.min(3, (G.revenge || 0) + 1), ch = G.ch;
   startChapter(ch, G.snap);
   G.revenge = r;
-  banner("REVENGE x" + r, RED, 2.4, "+" + r * 15 + "% DAMAGE, -" + r * 10 + "% DAMAGE TAKEN");
+  banner("REVENGE X" + r, RED, 2.4, "+" + r * 15 + "% DAMAGE, -" + r * 10 + "% DAMAGE TAKEN");
 }
 
 // ---------------------------------------------------------------- derived stats
@@ -5983,7 +5994,7 @@ let UI_RECTS = [];      // {x,y,w,h,id}
 let JOY = null;         // {ox,oy,x,y} while the move stick is held
 let MUTED = false;
 let INPUT_KIND = "touch";   // "keys" once the player uses the keyboard: hints then show WASD instead of a finger
-const STORE = "https://play.google.com/store/apps/details?id=com.multicastgames.butcher";
+const STORE = "https://play.google.com/store/apps/details?id=com.multicastgames.butcher" + (LANG === "ru" ? "&hl=ru" : "");
 // 7x7 loadout icons for the HUD
 const MINI_ICON = {
   cleaver: makeSprite(["WWWW...", "WwwW...", "WwKW...", "WwwWh..", "WWWW.h.", ".....h.", "......h"], { W: METAL[0], w: METAL[1], K: INK, h: HANDLE }, INK),
@@ -6100,13 +6111,15 @@ function drawHUD() {
     for (let i = 0; i < P.w[w]; i++) put(wx + 1 + i, 27, evo ? (Math.floor(G.t * 4) % 2 ? GOLD : WHITE) : GOLD);
     wx += ic.w + 2;
   }
-  let lx = 3;
-  const sy_ = Object.keys(P.relics).length ? 40 : 30;
-  if (G.revenge) { text("REVENGE X" + G.revenge, lx, sy_, RED); lx += textW("REVENGE X" + G.revenge) + 6; }
-  if (G.hard) { text("HARD", lx, sy_, hx("#ff8a8a")); lx += 22; }
-  if (G.endless) text("LOOP " + (G.loop + 1), lx, sy_, hx("#ff8a8a"));
+  let lx = 3, lend = 0;
+  const sy_ = Object.keys(P.relics).length ? 40 : 30, tag = (s, c, gap) => { text(s, lx, sy_, c); lend = lx + textW(s); lx = lend + gap; };
+  if (G.revenge) tag("REVENGE X" + G.revenge, RED, 6);
+  if (G.hard) tag("HARD", hx("#ff8a8a"), 7);
+  if (G.endless) tag("LOOP " + (G.loop + 1), hx("#ff8a8a"), 0);
   const [t, col] = phaseLabel(), chn = (G.ch + 1) + "-" + G.CH.name, bossUp = G.boss && G.boss.entering <= 0 && !G.boss.dying;
-  if (G.mode === "play" && !bossUp) { if (port) { centered(t, 40, col); centered(chn, 48, DIM); } else { centered(t, 3, col); centered(chn, 11, DIM); } }
+  // in portrait the phase label shares its row with the revenge / hard / loop tags; it steps down a row when they would touch
+  const py = sy_ === 40 && lend > (W - textW(t)) / 2 - 3 ? 48 : 40;
+  if (G.mode === "play" && !bossUp) { if (port) { centered(t, py, col); centered(chn, py + 8, DIM); } else { centered(t, 3, col); centered(chn, 11, DIM); } }
   drawPauseBtn(); drawMuteBtn(); drawCtaPill();
   const ks = String(P.kills);
   blit(SPR.icons.skull, W - 11 - textW(ks), 13);
@@ -6130,7 +6143,7 @@ function drawHUD() {
     else {
       ellipseRing(gx, gy, 16, 16, mix(WHITE, BLACK, 0.55 - a * 0.2), 3);
       ellipseRing(gx, gy, 4, 4, mix(WHITE, BLACK, 0.5));
-      text("DRAG", gx - 7, gy + 20, mix(WHITE, BLACK, 0.45));
+      text("DRAG", gx - Math.floor(textW("DRAG") / 2), gy + 20, mix(WHITE, BLACK, 0.45));
     }
   }
   for (const u of G.uiParts) {
@@ -6145,7 +6158,7 @@ function drawHUD() {
     const L = new Layer(); disc(L, JOY.ox + dx * k, JOY.oy + dy * k, 4, hx("#c8c0d0")); L.draw();
   }
   if (G.banner) {
-    const b = G.banner, k = b.t < 0.2 ? b.t / 0.2 : 1, y = Math.round((port ? 60 : 34) - (1 - k) * 12);
+    const b = G.banner, k = b.t < 0.2 ? b.t / 0.2 : 1, y = Math.round((port ? (G.mode === "play" && !bossUp ? py + 20 : 60) : 34) - (1 - k) * 12);
     if (!(b.t > b.life - 0.4 && Math.floor(b.t * 12) % 2)) {
       const kk = fitK(b.s, W - 8, 3);
       centered(b.s, y, b.col, kk);
@@ -6177,11 +6190,11 @@ function drawMuteBtn() {
 }
 // always-visible install button, as ad networks expect from a playable
 function drawCtaPill() {
-  const w = 30, x = W - 60, y = 2, on = Math.floor((G ? G.clock : 0) * 2) % 2;
+  const w = Math.max(30, textW("PLAY") + 12), x = W - 30 - w, y = 2, on = Math.floor((G ? G.clock : 0) * 2) % 2;
   rect(x - 1, y - 1, w + 2, 11, INK);
   rect(x, y, w, 9, on ? hx("#3fbf5a") : hx("#35a84e"));
   rect(x, y, w, 1, hx("#7ae88a"));
-  text("PLAY", x + 7, y + 2, WHITE);
+  text("PLAY", x + Math.floor((w - textW("PLAY")) / 2), y + 2, WHITE);
   uiRect(x - 2, 0, w + 4, 12, "store");
 }
 
@@ -6373,9 +6386,11 @@ const END_AUTO_OPEN = 9;
 function niceSrc(s) {
   if (s.startsWith("tele:")) s = s.slice(5);
   if (s.startsWith("shot:")) return "PROJECTILES";
-  const k = s.split(":")[0];
-  if (BOSSES[k]) return BOSSES[k].name + (s.includes(":") ? " " + s.split(":")[1].toUpperCase() : "");
+  // attack sources use short boss keys ("skel:rain", "liz:spit"); bare telegraph shapes are the boss's red zones
+  const [k, atk] = s.split(":"), bk = atk ? ({ skel: "skeleton", liz: "lizking" }[k] || k) : k;
+  if (BOSSES[bk]) return BOSSES[bk].name + (atk ? " " + atk.toUpperCase() : "");
   if (ETYPES[k]) return k.toUpperCase() + "S";
+  if (["band", "circle", "line", "ring", "vband"].includes(s)) return "RED ZONES";
   return s.toUpperCase();
 }
 function drawTitle(t, save, unlocks) {
@@ -6512,7 +6527,9 @@ function drawMetaScreen(m) {
 }
 // weapons (with level pips) and relics in one centred row, for the chapter-clear screen
 function drawLoadout(y) {
-  const ws = ownedWeapons(), rs = Object.keys(P.relics), w = ws.length * 10 + (rs.length ? 6 : 0) + rs.length * 10;
+  // a long endless run can own more relics than fit: they squeeze closer instead of running off the screen
+  const ws = ownedWeapons(), rs = Object.keys(P.relics), st = relicStep(rs.length, W - 8 - ws.length * 10 - 6);
+  const w = ws.length * 10 + (rs.length ? 6 : 0) + rs.length * st;
   let x = Math.round((W - w) / 2);
   for (const k of ws) {
     blit(MINI_ICON[k], x, y);
@@ -6520,15 +6537,16 @@ function drawLoadout(y) {
     x += 10;
   }
   if (rs.length) x += 6;
-  for (const k of rs) { blit(RELIC_SPR[k], x, y, { flash: P.relics[k] === 2 ? hx("#5a5068") : 0 }); x += 10; }
+  for (const k of rs) { blit(RELIC_SPR[k], x, y, { flash: P.relics[k] === 2 ? hx("#5a5068") : 0 }); x += st; }
   return y + 14;
 }
+const relicStep = (n, room) => n ? Math.max(4, Math.min(10, Math.floor(room / n))) : 10;
 // your teeth and relics, shown on every road screen
 function drawMetaFooter(y) {
-  const keys = Object.keys(P.relics);
-  const w = 16 + textW(String(P.teeth)) + (keys.length ? 8 + keys.length * 10 : 0), x0 = Math.round((W - w) / 2);
+  const keys = Object.keys(P.relics), tw = 16 + textW(String(P.teeth)), st = relicStep(keys.length, W - 8 - tw - 8);
+  const w = tw + (keys.length ? 8 + keys.length * st : 0), x0 = Math.round((W - w) / 2);
   let x = toothCount(P.teeth, x0, y + 1) + 8;
-  for (const k of keys) { blit(RELIC_SPR[k], x, y - 1, { flash: P.relics[k] === 2 ? hx("#5a5068") : 0 }); x += 10; }
+  for (const k of keys) { blit(RELIC_SPR[k], x, y - 1, { flash: P.relics[k] === 2 ? hx("#5a5068") : 0 }); x += st; }
 }
 function drawRoad() {
   const port = portrait();
@@ -6598,7 +6616,7 @@ function drawShopItem(it, x, y, w, h, i) {
   if (!drawMetaIcon(it.icon, x + 12, y + h / 2, 2)) drawIcon(it.icon, x + 12, y + h / 2, 1);
   text(it.title, x + 26, y + 5, it.sold ? DIM : WHITE);
   wrap(it.desc, Math.floor((w - 60) / 4)).slice(0, 2).forEach((l, j) => text(l, x + 26, y + 14 + j * 7, it.sold ? DIM : PALE));
-  if (it.sold) text("SOLD", x + w - 22, y + 5, DIM);
+  if (it.sold) text("SOLD", x + w - 7 - textW("SOLD"), y + 5, DIM);
   else toothCount(it.price, x + w - 12 - textW(String(it.price)) - 6, y + 5, afford ? GOLD : RED);
   if (!it.sold) uiRect(x, y, w, h, "buy" + i);
 }
@@ -6613,7 +6631,8 @@ function drawNodeScreen() {
   const bw = port ? W - 16 : 220;
   N.options.forEach((o, i) => {
     const ok = o.enabled !== false;
-    button((W - bw) / 2, y, bw, 16, o.label + (ok ? "" : " (CAN'T)"), "opt" + i, !ok ? "grey" : i === 0 ? "orange" : "grey");
+    const lab = o.label + (ok ? "" : " (CAN'T)");   // a long price drops the tag, the grey button says it anyway
+    button((W - bw) / 2, y, bw, 16, textW(lab) <= bw - 4 ? lab : o.label, "opt" + i, !ok ? "grey" : i === 0 ? "orange" : "grey");
     y += 21;
   });
   drawMetaFooter(Math.min(H - 10, y + 6));

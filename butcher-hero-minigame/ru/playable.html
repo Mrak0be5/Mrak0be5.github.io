@@ -1,11 +1,13 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="ad.size" content="width=320,height=480">
 <meta name="ad.orientation" content="portrait,landscape">
-<title>Butcher Hero — Pixel Rampage</title>
+<title>Butcher Hero — Пиксельная резня</title>
+<script src="mraid.js"></script>
+<script>window.BH_AD_BUILD = true;</script>
 <style>
   html, body { margin: 0; height: 100%; background: #12080c; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
   body { display: flex; align-items: center; justify-content: center; }
@@ -522,6 +524,305 @@ const easeIO = t => 3 * t * t - 2 * t * t * t;
 const rnd = (a, b) => a + Math.random() * (b - a);
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 function seeded(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
+
+</script>
+<script>
+// ---- i18nru.js
+"use strict";
+// Russian build. The game code stays English; every string is translated where it is drawn
+// (text / textW / wrap all go through loc). Loaded right after core.js.
+// Exact phrases live in RU, phrases with numbers and names are assembled by RU_PAT.
+LANG = "ru";
+const LOC_MISS = new Set(), LOC_CLASH = new Set();
+{
+  // ---- Cyrillic glyphs: letters shaped like Latin ones reuse them, the rest are drawn here
+  const same = { А: "A", В: "B", Е: "E", Ё: "E", К: "K", М: "M", Н: "H", О: "O", Р: "P", С: "C", Т: "T", Х: "X" };
+  for (const c in same) { FONT[c] = FONT[same[c]]; FONT5[c] = FONT5[same[c]]; }
+  Object.assign(FONT, {   // 3x5, rows of 3 (И Й Ц Ъ are 4 wide, Д Ж Ш Щ Ы Ю 5 wide; Й is a small й under its breve)
+    Б: "111100110101110", Г: "111100100100100", З: "110001010001110", Л: "011101101101101", П: "111101101101101",
+    У: "101101011001110", Ф: "010111101111010", Ч: "101101011001001", Ь: "100100110101110", Э: "110001011001110",
+    Я: "011101011101101",
+    Д: "0111001010010101111110001", И: "10011001101111011001", Й: "01100000100110111101", Ц: "10101010101011110001",
+    Ъ: "11000100011101010111",
+    Ж: "1010110101011101010110101", Ш: "1010110101101011010111111", Щ: "1010110101101011111100001",
+    Ы: "1000110001111011010111101", Ю: "1011110101111011010110111",
+  });
+  const big = {   // 5x7, one row per group; Д Ц Щ get an 8th row hanging below the line, or at the big sizes they read as А Ш
+    Б: "11111 10000 10000 11110 10001 10001 11110", Г: "11111 10000 10000 10000 10000 10000 10000",
+    Д: "01110 01010 01010 01010 01010 01010 11111 10001", Ж: "10101 10101 01110 00100 01110 10101 10101",
+    З: "01110 10001 00001 00110 00001 10001 01110", И: "10001 10001 10011 10101 11001 10001 10001",
+    Й: "01010 00100 10001 10011 10101 11001 10001", Л: "00111 01001 01001 01001 01001 01001 10001",
+    П: "11111 10001 10001 10001 10001 10001 10001", У: "10001 10001 10001 01111 00001 10001 01110",
+    Ф: "00100 01110 10101 10101 01110 00100 00100", Ц: "10010 10010 10010 10010 10010 10010 11111 00001",
+    Ч: "10001 10001 10001 01111 00001 00001 00001", Ш: "10101 10101 10101 10101 10101 10101 11111",
+    Щ: "10101 10101 10101 10101 10101 10101 11111 00001", Ъ: "11000 01000 01000 01110 01001 01001 01110",
+    Ы: "10001 10001 10001 11101 10011 10011 11101", Ь: "10000 10000 10000 11110 10001 10001 11110",
+    Э: "01110 10001 00001 00111 00001 10001 01110", Ю: "10010 10101 10101 11101 10101 10101 10010",
+    Я: "01111 10001 10001 01111 00101 01001 10001",
+  };
+  for (const c in big) FONT5[c] = big[c].replace(/ /g, "");
+
+  // ---- exact phrases
+  const BOSS_RU = {
+    "GOBLIN CHIEF": "ВОЖДЬ ГОБЛИНОВ", "SKELETON KING": "КОРОЛЬ СКЕЛЕТОВ", "YETI ALPHA": "ВОЖАК ЙЕТИ",
+    "FROST TROLL": "ЛЕДЯНОЙ ТРОЛЛЬ", "LIZARD KING": "КОРОЛЬ ЯЩЕРОВ", "SWAMP HYDRA": "БОЛОТНАЯ ГИДРА",
+    "BONE KNIGHT": "КОСТЯНОЙ РЫЦАРЬ", "DARK BUTCHER": "ТЕМНЫЙ МЯСНИК", "MAGMA KING": "КОРОЛЬ МАГМЫ",
+    "LAVA GOLEM": "ЛАВОВЫЙ ГОЛЕМ", "ALIEN COMMANDER": "КОМАНДИР ПРИШЕЛЬЦЕВ", "MOTHERSHIP": "КОРАБЛЬ-МАТКА",
+    "ALIEN OVERLORD": "ВЛАДЫКА ПРИШЕЛЬЦЕВ",
+  };
+  const ATK = {
+    SLAM: "УДАР", RAIN: "ДОЖДЬ", SPIKE: "ШИПЫ", STOMP: "ТОПОТ", SPIT: "ПЛЕВОК", BITE: "УКУС", VINE: "ЛОЗЫ",
+    WHIRL: "ВИХРЬ", BONE: "КОСТИ", SPIN: "ВРАЩЕНИЕ", HOOK: "КРЮК", CHOMP: "УКУС", CLEAVER: "ТЕСАКИ", JUMP: "ПРЫЖОК",
+    METEOR: "МЕТЕОРЫ", WAVE: "ВОЛНА", ROCK: "КАМНИ", BEAM: "ЛУЧ", TRACTOR: "ПРИТЯЖЕНИЕ", LASER: "ЛАЗЕР",
+    DEBRIS: "ОБЛОМКИ", CHARGE: "ТАРАН",
+  };
+  const RU = Object.assign({
+    // chapters
+    "AUTUMN FOREST": "ОСЕННИЙ ЛЕС", "FROZEN PEAKS": "ЛЕДЯНЫЕ ПИКИ", "RAIN JUNGLE": "ДЖУНГЛИ ЛИВНЕЙ",
+    "CURSED GRAVEYARD": "ПРОКЛЯТОЕ КЛАДБИЩЕ", "LAVA PITS": "ЛАВОВЫЕ ЯМЫ", "ALIEN DESERT": "ЧУЖАЯ ПУСТЫНЯ",
+    // weapons, passives and their levels
+    "CLEAVERS": "ТЕСАКИ", "CHAINED CLEAVERS SPIN AROUND YOU": "ТЕСАКИ НА ЦЕПЯХ КРУЖАТ ВОКРУГ ТЕБЯ",
+    "+1 CLEAVER ON A CHAIN": "+1 ТЕСАК НА ЦЕПИ", "+25% CLEAVER DAMAGE": "+25% УРОНА ТЕСАКОВ",
+    "CHAIN SWORD": "МЕЧ НА ЦЕПИ", "A SWORD ON A CHAIN BURSTS FROM YOUR BACK": "ИЗ СПИНЫ ВЫРЫВАЕТСЯ МЕЧ НА ЦЕПИ",
+    "+30% DAMAGE, SPINS FASTER, LONGER": "+30% УРОНА, КРУТИТСЯ БЫСТРЕЕ И ДОЛЬШЕ",
+    "SAW BLADE": "ДИСКОВАЯ ПИЛА", "THROWS A PIERCING SAW AT THE NEAREST ENEMY": "ПРОБИВНАЯ ПИЛА ЛЕТИТ В БЛИЖАЙШЕГО ВРАГА",
+    "THROWS TWO SAWS": "БРОСАЕТ ДВЕ ПИЛЫ", "+1 PIERCE, +20% DMG, FASTER": "+1 ПРОБИТИЕ, +20% УРОНА, БЫСТРЕЕ",
+    "BELLY SLAM": "УДАР ПУЗОМ", "BIG SHOCKWAVE AROUND YOU EVERY 3.5 SEC": "УДАРНАЯ ВОЛНА ВОКРУГ ТЕБЯ КАЖДЫЕ 3.5 С",
+    "BIGGER, HARDER, MORE OFTEN": "ШИРЕ, СИЛЬНЕЕ, ЧАЩЕ",
+    "GUT GRENADE": "ГРАНАТА ИЗ КИШОК", "LOBS EXPLODING GUTS AT ENEMIES": "ШВЫРЯЕТ ВО ВРАГОВ ВЗРЫВНЫЕ КИШКИ",
+    "+1 GRENADE PER THROW": "+1 ГРАНАТА ЗА БРОСОК", "+25% DAMAGE, BIGGER BLAST": "+25% УРОНА, ВЗРЫВ ШИРЕ",
+    "STENCH": "СМРАД", "YOUR SMELL HURTS EVERYONE NEAR": "ТВОЙ ЗАПАХ РАНИТ ВСЕХ ВОКРУГ",
+    "+30% DAMAGE, WIDER CLOUD": "+30% УРОНА, ОБЛАКО ШИРЕ",
+    "MEATY": "МЯСИСТЫЙ", "+20 MAX HP AND HEAL 20": "+20 МАКС. HP И ЛЕЧИТ 20",
+    "FAST FEET": "БЫСТРЫЕ НОГИ", "+10% MOVE SPEED": "+10% СКОРОСТИ",
+    "BUTCHER MIGHT": "МОЩЬ МЯСНИКА", "+15% DAMAGE FOR EVERYTHING": "+15% К ЛЮБОМУ УРОНУ",
+    "MEAT MAGNET": "МЯСНОЙ МАГНИТ", "+40% MEAT PICKUP RANGE": "+40% К РАДИУСУ СБОРА МЯСА",
+    "HOOK MASTER": "МАСТЕР КРЮКА", "-15% HOOK COOLDOWN, +25% HOOK DMG": "-15% ПЕРЕЗАРЯДКИ КРЮКА, +25% ЕГО УРОНА",
+    "GLUTTON": "ОБЖОРА", "EATING HEALS +6 AND GIVES +20% XP": "ЕДА ЛЕЧИТ +6 И ДАЕТ +20% ОПЫТА",
+    "REGEN": "РЕГЕНЕРАЦИЯ", "+0.5 HP EVERY SECOND": "+0.5 HP В СЕКУНДУ",
+    "IRON GUT": "ЖЕЛЕЗНОЕ БРЮХО", "-8% DAMAGE TAKEN": "-8% УРОНА ПО ТЕБЕ",
+    "BLOODY DASH": "КРОВАВЫЙ РЫВОК", "YOU CHARGE INTO CROWDS AND SLICE EVERYONE IN THE WAY": "ТАРАНИШЬ ТОЛПУ И РУБИШЬ ВСЕХ НА ПУТИ",
+    "-35% DASH COOLDOWN, HARDER SLICE": "-35% ПЕРЕЗАРЯДКИ РЫВКА, РУБИТ СИЛЬНЕЕ", "TWO DASH CHARGES": "ДВА ЗАРЯДА РЫВКА",
+    // evolutions
+    "RAZOR STORM": "БУРЯ ЛЕЗВИЙ", "6 HUGE CLEAVERS, +40% DAMAGE, FASTER": "6 ОГРОМНЫХ ТЕСАКОВ, +40% УРОНА, БЫСТРЕЕ",
+    "TWIN BLADES": "ДВОЙНЫЕ КЛИНКИ", "TWO CHAIN SWORDS FROM YOUR BACK": "ДВА МЕЧА НА ЦЕПЯХ ИЗ СПИНЫ",
+    "BOOMERANG SAWS": "ПИЛЫ-БУМЕРАНГИ", "3 SAWS THAT COME BACK AND NEVER STOP": "3 ПИЛЫ ЛЕТАЮТ ТУДА-ОБРАТНО БЕЗ ОСТАНОВКИ",
+    "EARTHQUAKE": "ЗЕМЛЕТРЯСЕНИЕ", "HUGE SLAMS THAT CRACK THE EARTH": "ОГРОМНЫЕ УДАРЫ РАСКАЛЫВАЮТ ЗЕМЛЮ",
+    "MEAT MORTAR": "МЯСНАЯ МОРТИРА", "EVERY BLAST SPLITS INTO 4 MORE": "КАЖДЫЙ ВЗРЫВ ДЕЛИТСЯ ЕЩЕ НА 4",
+    "PLAGUE": "ЧУМА", "HUGE ROT CLOUD, KILLS INSIDE HEAL YOU": "ОГРОМНОЕ ГНИЛОЕ ОБЛАКО, УБИЙСТВА В НЕМ ЛЕЧАТ",
+    "EVOLUTION": "ЭВОЛЮЦИЯ",
+    // popups and banners
+    "AUTO-DODGE!": "УВОРОТ!", "YOU GREW!": "ТЫ ВЫРОС!", "RAMPAGE!": "БУЙСТВО!", "MASSACRE!": "РЕЗНЯ!",
+    "BUTCHERY!": "БОЙНЯ!", "MEAT GRINDER!": "МЯСОРУБКА!", "UNSTOPPABLE!": "НЕУДЕРЖИМ!", "GODLIKE!": "БОГОПОДОБЕН!",
+    "GOD OF MEAT!": "БОГ МЯСА!", "BLOCKED!": "БЛОК!", "SECOND WIND!": "ВТОРОЕ ДЫХАНИЕ!",
+    "THE CHAIN APRON SAVED YOU": "ЦЕПНОЙ ФАРТУК СПАС ТЕБЯ", "SNACK!": "ПЕРЕКУС!", "HORDE!": "ОРДА!",
+    "MINI-BOSS!": "МИНИ-БОСС!", "STUN": "ОГЛУШЕН", "GOTCHA!": "ПОПАЛСЯ!", "EXECUTE!": "КАЗНЬ!", "HOOKED!": "НА КРЮКЕ!",
+    "BURP!": "РЫГ!", "EAT TO GROW & HEAL!": "ЕШЬ, РАСТИ И ЛЕЧИСЬ!", "FROZEN!": "ЗАМОРОЖЕН!", "CHOMP!": "ХРУМ!",
+    "ENRAGED!": "В ЯРОСТИ!", "MINI-BOSS DOWN!": "МИНИ-БОСС ПОВЕРЖЕН!", "BOSS DEFEATED!": "БОСС ПОВЕРЖЕН!",
+    "THE SHIP IS ANGRY": "КОРАБЛЬ В ЯРОСТИ", "IT'S GOING DOWN!": "ОН ПАДАЕТ!", "NEW WEAPON!": "НОВОЕ ОРУЖИЕ!",
+    "EVERYTHING HITS HARDER": "ВСЕ БЬЮТ СИЛЬНЕЕ", "HOW LONG CAN YOU EAT?": "СКОЛЬКО ТЫ СЪЕШЬ?",
+    "GOLDEN GOBLIN!": "ЗОЛОТОЙ ГОБЛИН!", "HOOK IT BEFORE IT ESCAPES!": "ЗАЦЕПИ, ПОКА НЕ СБЕЖАЛ!", "IT ESCAPED...": "СБЕЖАЛ...",
+    "FRENZY!": "БЕШЕНСТВО!", "EAT EVERYTHING!": "ЖРИ ВСЕХ!", "FRENZY OVER": "БЕШЕНСТВО ПРОШЛО",
+    "ELITE DEN!": "ЛОГОВО ЭЛИТЫ!", "3 CHAMPIONS ARE COMING": "ИДУТ 3 ЧЕМПИОНА", "CHAMPION!": "ЧЕМПИОН!",
+    "DEN CLEARED!": "ЛОГОВО ЗАЧИЩЕНО!", "YOU FLED!": "ТЫ СБЕЖАЛ!", "NO RELIC THIS TIME": "В ЭТОТ РАЗ БЕЗ РЕЛИКВИИ",
+    "TREASURE!": "СОКРОВИЩЕ!", "CHEST": "СУНДУК", "SKIN UNLOCKED: DARK BUTCHER": "ОТКРЫТ СКИН: ТЕМНЫЙ МЯСНИК",
+    // boss intros and rage lines
+    "RULER OF THE AUTUMN DEAD": "ВЛАДЫКА ОСЕННИХ МЕРТВЕЦОВ", "HE HATES WARM BLOOD": "ОН НЕНАВИДИТ ТЕПЛУЮ КРОВЬ",
+    "THREE HEADS, ONE APPETITE": "ТРИ ГОЛОВЫ, ОДИН АППЕТИТ", "YOUR EVIL TWIN": "ТВОЙ ЗЛОЙ БЛИЗНЕЦ",
+    "A WALKING VOLCANO": "ХОДЯЧИЙ ВУЛКАН", "THEY CAME FOR THE MEAT": "ОНИ ПРИЛЕТЕЛИ ЗА МЯСОМ",
+    "THE PILOT CRAWLS OUT OF THE WRECK": "ПИЛОТ ВЫПОЛЗАЕТ ИЗ ОБЛОМКОВ", "THE BONES REARRANGE": "КОСТИ ПЕРЕСОБРАЛИСЬ",
+    "THE ICE CRACKS UNDER HIS FEET": "ЛЕД ТРЕЩИТ ПОД ЕГО НОГАМИ", "THE HEADS GROW HUNGRIER": "ГОЛОВЫ ЕЩЕ ГОЛОДНЕЕ",
+    "FIVE CLEAVERS NOW": "ТЕПЕРЬ ПЯТЬ ТЕСАКОВ", "THE LAVA BOILS OVER": "ЛАВА ВЫКИПАЕТ",
+    "ALL WEAPONS ONLINE": "ВСЕ ОРУЖИЕ К БОЮ", "NO MORE GAMES": "ИГРЫ КОНЧИЛИСЬ",
+    // damage sources on the death screen
+    GOBLINS: "ГОБЛИНЫ", BRUTES: "ГРОМИЛЫ", ICES: "ЛЕДЯНЫЕ ГОБЛИНЫ", YETIS: "ЙЕТИ", LIZARDS: "ЯЩЕРЫ", PLANTS: "РАСТЕНИЯ",
+    SKELS: "СКЕЛЕТЫ", BATS: "ЛЕТУЧИЕ МЫШИ", IMPS: "БЕСЫ", SLIMES: "СЛИЗНИ", SLIMELETS: "СЛИЗНЯЧКИ", ALIENS: "ПРИШЕЛЬЦЫ",
+    DRONES: "ДРОНЫ", ARMOREDS: "ГОБЛИНЫ В БРОНЕ", ARCHERS: "ЛУЧНИКИ", GOLDENS: "ЗОЛОТЫЕ ГОБЛИНЫ", CRATES: "ЯЩИКИ",
+    PROJECTILES: "СНАРЯДЫ", PUDDLE: "ЛУЖИ", "RED ZONES": "КРАСНЫЕ ЗОНЫ",
+    // relics and curses
+    "PIG SNOUT": "СВИНОЙ ПЯТАЧОК", "MEAT PICKUP RANGE X2": "РАДИУС СБОРА МЯСА X2",
+    "CHAIN APRON": "ЦЕПНОЙ ФАРТУК", "SURVIVE ONE DEATH WITH HALF HP": "ПЕРЕЖИВИ ОДНУ СМЕРТЬ С ПОЛОВИНОЙ HP",
+    "BOTTOMLESS GUT": "БЕЗДОННОЕ БРЮХО", "THE HOOK SWALLOWS ELITES AT ANY HP": "КРЮК ГЛОТАЕТ ЭЛИТНЫХ ПРИ ЛЮБОМ HP",
+    "VAMPIRE FANG": "КЛЫК ВАМПИРА", "CRITS HEAL YOU (UP TO 3 HP A SECOND)": "КРИТЫ ЛЕЧАТ (ДО 3 HP В СЕКУНДУ)",
+    "HOT SAUCE": "ОСТРЫЙ СОУС", "EATING BREATHES FIRE AROUND YOU": "ЗА ЕДОЙ ТЫ ДЫШИШЬ ОГНЕМ",
+    "RUSTY HOOK": "РЖАВЫЙ КРЮК", "HOOK DAMAGE X2, IT CUTS ALL ON ITS WAY": "УРОН КРЮКА X2, РЕЖЕТ ВСЕХ НА ПУТИ",
+    "WHETSTONE": "ТОЧИЛО", "+25% CLEAVER AND SWORD DAMAGE": "+25% УРОНА ТЕСАКОВ И МЕЧА",
+    "GRANNY'S PIE": "БАБУШКИН ПИРОГ",
+    "LUCKY BONE": "СЧАСТЛИВАЯ КОСТЬ", "+5% CRIT CHANCE, +1 REROLL EACH CHAPTER": "+5% ШАНС КРИТА, +1 ПЕРЕБРОС ЗА ГЛАВУ",
+    "CHEF HAT": "ПОВАРСКОЙ КОЛПАК", "EATING HEALS TWICE AS MUCH": "ЕДА ЛЕЧИТ ВДВОЕ СИЛЬНЕЕ",
+    "WAR DRUM": "БОЕВОЙ БАРАБАН", "+25% DAMAGE WHILE YOUR KILL STREAK IS 25+": "+25% УРОНА ПРИ СЕРИИ УБИЙСТВ 25+",
+    "SPIKED COLLAR": "ОШЕЙНИК С ШИПАМИ", "-10% DAMAGE TAKEN, BITERS GET HURT BACK": "-10% УРОНА ПО ТЕБЕ, КУСАЧИЕ РАНЯТСЯ",
+    "HOURGLASS": "ПЕСОЧНЫЕ ЧАСЫ", "-30% DASH AND HOOK COOLDOWN": "-30% ПЕРЕЗАРЯДКИ РЫВКА И КРЮКА",
+    "GOLD JAW": "ЗОЛОТАЯ ЧЕЛЮСТЬ", "+50% GOLD TEETH": "+50% ЗОЛОТЫХ ЗУБОВ",
+    "POWDER KEG": "ПОРОХОВАЯ БОЧКА", "ELITES EXPLODE WHEN THEY DIE": "ЭЛИТНЫЕ ВЗРЫВАЮТСЯ ПРИ СМЕРТИ",
+    "GLUTTON CROWN": "КОРОНА ОБЖОРЫ", "HUNGER FILLS 50% FASTER": "ГОЛОД КОПИТСЯ НА 50% БЫСТРЕЕ",
+    "SEVEN-LEAGUE BOOTS": "САПОГИ-СКОРОХОДЫ", "+20% MOVE SPEED": "+20% СКОРОСТИ",
+    "SPARE MASK": "ЗАПАСНАЯ МАСКА", "BLOCKS ONE HIT EVERY 15 SEC": "БЛОКИРУЕТ УДАР РАЗ В 15 С",
+    "CURSED CLEAVER": "ПРОКЛЯТЫЙ ТЕСАК", "+50% DAMAGE, -25% MAX HP": "+50% УРОНА, -25% МАКС. HP",
+    "BLOOD PACT": "КРОВАВЫЙ ПАКТ", "FRENZY LASTS TWICE AS LONG": "БЕШЕНСТВО ДЛИТСЯ ВДВОЕ ДОЛЬШЕ",
+    "BUTCHER'S BAG": "СУМКА МЯСНИКА", "+1 WEAPON SLOT": "+1 СЛОТ ОРУЖИЯ",
+    "OGRE HEART": "СЕРДЦЕ ОГРА", "+100 MAX HP AND +1 HP EVERY SECOND": "+100 МАКС. HP И +1 HP В СЕКУНДУ",
+    "FRAGILE BONES": "ХРУПКИЕ КОСТИ", "-20% MAX HP": "-20% МАКС. HP", "THE SWARM": "РОЙ", "35% MORE MONSTERS": "НА 35% БОЛЬШЕ МОНСТРОВ",
+    "IRON BOSSES": "ЖЕЛЕЗНЫЕ БОССЫ", "BOSSES HAVE +30% HP": "У БОССОВ +30% HP",
+    "RUSTY CHAIN": "РЖАВАЯ ЦЕПЬ", "HOOK COOLDOWN +40%": "ПЕРЕЗАРЯДКА КРЮКА +40%",
+    // road nodes
+    "ELITE DEN": "ЛОГОВО ЭЛИТЫ", "FIGHT 3 CHAMPIONS. WIN A RELIC AND TEETH.": "ПОБЕДИ 3 ЧЕМПИОНОВ. НАГРАДА: РЕЛИКВИЯ И ЗУБЫ.",
+    "MEAT MARKET": "МЯСНОЙ РЫНОК", "SPEND GOLD TEETH ON RELICS AND UPGRADES.": "ТРАТЬ ЗОЛОТЫЕ ЗУБЫ НА РЕЛИКВИИ И УЛУЧШЕНИЯ.",
+    "BLOOD SHRINE": "КРОВАВЫЙ АЛТАРЬ", "TAKE A CURSE, GET A LEGENDARY RELIC.": "ПРИМИ ПРОКЛЯТИЕ, ПОЛУЧИ ЛЕГЕНДАРНУЮ РЕЛИКВИЮ.",
+    "STRANGER": "НЕЗНАКОМЕЦ", "SOMEONE IS WAITING ON THE ROAD...": "КТО-ТО ЖДЕТ НА ДОРОГЕ...",
+    "CAMPFIRE": "КОСТЕР", "HEAL 50% HP AND +1 REROLL.": "ЛЕЧИТ 50% HP И +1 ПЕРЕБРОС.",
+    "YOU ROAST A GOBLIN ON A STICK. +50% HP, +1 REROLL.": "ТЫ ЖАРИШЬ ГОБЛИНА НА ПАЛКЕ. +50% HP, +1 ПЕРЕБРОС.",
+    // market
+    "ONE WEAPON LEVEL": "+1 УРОВЕНЬ ОРУЖИЯ", "MEAT PIE": "МЯСНОЙ ПИРОГ", "HEAL TO FULL HP": "ПОЛНОЕ ЛЕЧЕНИЕ",
+    "LOADED DICE": "ШУЛЕРСКИЕ КОСТИ", "+2 REROLLS": "+2 ПЕРЕБРОСА", "FEAST": "ПИР",
+    "+30 MAX HP AND FULL HEAL": "+30 МАКС. HP И ПОЛНОЕ ЛЕЧЕНИЕ", "MEAT SNACK": "МЯСНОЙ ПЕРЕКУС", "HEAL 40 HP": "ЛЕЧИТ 40 HP",
+    "TWO LEVELS AT ONCE": "ДВА УРОВНЯ СРАЗУ", "SACK OF TEETH": "МЕШОК ЗУБОВ", "SOLD": "ПРОДАНО", "LEAVE": "УЙТИ",
+    // shrine and road events
+    "ACCEPT THE DEAL": "ПРИНЯТЬ СДЕЛКУ", "WALK AWAY": "УЙТИ",
+    "WANDERING COOK": "БРОДЯЧИЙ ПОВАР",
+    'A COOK STIRS A GIANT POT. "15 TEETH FOR A BOWL. IT MAKES YOU BIGGER."': 'ПОВАР МЕШАЕТ ОГРОМНЫЙ КОТЕЛ. "15 ЗУБОВ ЗА МИСКУ. ОТ НЕЕ РАСТУТ."',
+    "PAY 15 TEETH: +20 MAX HP, FULL HEAL": "15 ЗУБОВ: +20 МАКС. HP И ЛЕЧЕНИЕ",
+    "BONE DICE": "ИГРАЛЬНЫЕ КОСТИ",
+    'A GOBLIN SHAKES BONE DICE. "DOUBLE OR NOTHING, BIG BOY?"': 'ГОБЛИН ТРЯСЕТ КОСТИ. "ВСЕ ИЛИ НИЧЕГО, ТОЛСТЯК?"',
+    "BET HALF YOUR TEETH (50%: DOUBLE)": "СТАВКА: ПОЛОВИНА ЗУБОВ (50%: X2)",
+    "CLEAVER IN A STONE": "ТЕСАК В КАМНЕ",
+    "A BLOODY CLEAVER IS STUCK IN A ROCK. PULLING IT OUT WILL HURT.": "В СКАЛЕ ЗАСТРЯЛ КРОВАВЫЙ ТЕСАК. ВЫТАЩИТЬ ЕГО БУДЕТ БОЛЬНО.",
+    "PULL: +1 WEAPON LEVEL, -25% HP": "ТЯНУТЬ: +1 УРОВЕНЬ ОРУЖИЯ, -25% HP",
+    "HUNGRY DOG": "ГОЛОДНЫЙ ПЕС",
+    "A SKINNY DOG WITH SOMETHING SHINY IN ITS MOUTH LOOKS AT YOUR MEAT.": "ТОЩИЙ ПЕС С ЧЕМ-ТО БЛЕСТЯЩИМ В ЗУБАХ СМОТРИТ НА ТВОЕ МЯСО.",
+    "FEED IT 10 TEETH: IT GIVES A RELIC": "СКОРМИТЬ 10 ЗУБОВ: ОН ДАСТ РЕЛИКВИЮ",
+    "FIELD KITCHEN": "ПОЛЕВАЯ КУХНЯ", "AN ABANDONED KITCHEN. THE STOVE IS STILL HOT.": "ЗАБРОШЕННАЯ КУХНЯ. ПЛИТА ЕЩЕ ГОРЯЧАЯ.",
+    "EAT: HEAL 40%, START HUNGRY FOR BLOOD": "ПОЕСТЬ: ЛЕЧЕНИЕ 40%, ЖАЖДА КРОВИ", "PACK FOOD: +8 TEETH": "ВЗЯТЬ С СОБОЙ: +8 ЗУБОВ",
+    "DELICIOUS. +20 MAX HP.": "ОБЪЕДЕНИЕ. +20 МАКС. HP.", "THE DOG WAGS ITS TAIL.": "ПЕС ВИЛЯЕТ ХВОСТОМ.",
+    "FULL BELLY. YOUR FRENZY IS ONE BITE AWAY.": "БРЮХО ПОЛНО. ДО БЕШЕНСТВА ОДИН УКУС.", "CONTINUE": "ДАЛЬШЕ",
+    // in-game HUD and tutorial
+    "KILL THE MINI-BOSS": "УБЕЙ МИНИ-БОССА", "BOSS FIGHT": "БИТВА С БОССОМ", "GRAB THE CHEST!": "ХВАТАЙ СУНДУК!",
+    HARD: "ХАРДКОР", DRAG: "ВЕДИ", PLAY: "ИГРАТЬ",
+    "WASD OR ARROWS TO MOVE": "WASD ИЛИ СТРЕЛКИ - ДВИЖЕНИЕ", "DRAG ANYWHERE TO MOVE": "ВЕДИ ПАЛЬЦЕМ, ЧТОБЫ ИДТИ",
+    "WALK UP TO A GOBLIN - THE BUTCHER HOOKS AND EATS IT BY HIMSELF!": "ПОДОЙДИ К ГОБЛИНУ - МЯСНИК САМ ЗАЦЕПИТ И СЪЕСТ ЕГО!",
+    "EVERY MEAL FILLS THE RING AT YOUR FEET. FULL RING = FRENZY!": "КАЖДЫЙ ОБЕД НАПОЛНЯЕТ КОЛЬЦО У НОГ. ПОЛНОЕ КОЛЬЦО = БЕШЕНСТВО!",
+    // level-up cards and options
+    "NEW!": "НОВОЕ!", "+2 LEVELS": "+2 УРОВНЯ", LEGENDARY: "ЛЕГЕНДА", RELIC: "РЕЛИКВИЯ", "LEVEL UP!": "НОВЫЙ УРОВЕНЬ!",
+    "AUTO-PICK": "АВТОВЫБОР", "AUTO-PICK LEVELS": "АВТОПРОКАЧКА", "DAMAGE NUMBERS": "ЦИФРЫ УРОНА",
+    "MINI-BOSS LOOT": "ТРОФЕИ БОССА", "+1 REROLL": "+1 ПЕРЕБРОС",
+    // chapter intro, clear, death, pause, victory, title
+    "WASD OR ARROWS TO MOVE. HOOKING, EATING AND DODGING ARE AUTOMATIC": "WASD ИЛИ СТРЕЛКИ - ДВИЖЕНИЕ. КРЮК, ЕДА И УВОРОТЫ - САМИ",
+    "ONE FINGER: DRAG TO MOVE. HOOKING, EATING AND DODGING ARE AUTOMATIC": "ОДИН ПАЛЕЦ: ВЕДИ, ЧТОБЫ ИДТИ. КРЮК, ЕДА И УВОРОТЫ - САМИ",
+    "TAP TO START": "НАЖМИ, ЧТОБЫ НАЧАТЬ",
+    "CHAPTER CLEAR!": "ГЛАВА ПРОЙДЕНА", "BOSS DOWN IN -": "БОСС ПОВЕРЖЕН",
+    "+50% HP BEFORE THE NEXT CHAPTER": "+50% HP ПЕРЕД СЛЕДУЮЩЕЙ ГЛАВОЙ",
+    "YOU DIED": "ТЫ ПОГИБ", "RED ZONES HIT WHEN THEY FILL UP - STEP OUT!": "КРАСНЫЕ ЗОНЫ БЬЮТ, КОГДА ЗАПОЛНЯТСЯ - УХОДИ!",
+    "RETRY GIVES REVENGE: MORE DAMAGE, LESS PAIN": "ПОВТОР ДАЕТ МЕСТЬ: БОЛЬШЕ УРОНА, МЕНЬШЕ БОЛИ",
+    "RETRY CHAPTER": "ПЕРЕИГРАТЬ ГЛАВУ", "PLAY BUTCHER HERO": "ИГРАТЬ В BUTCHER HERO", MENU: "МЕНЮ",
+    PAUSED: "ПАУЗА", RESUME: "ПРОДОЛЖИТЬ",
+    "YOU ATE THE WORLD!": "ТЫ СЪЕЛ ЭТОТ МИР!", "THE REAL CARNAGE IS IN": "НАСТОЯЩАЯ РЕЗНЯ - В ИГРЕ",
+    "ON GOOGLE PLAY": "В GOOGLE PLAY", "PLAY NOW": "ИГРАТЬ СЕЙЧАС", "ENDLESS MODE": "БЕСКОНЕЧНЫЙ РЕЖИМ",
+    "UNLOCKED: HARD MODE, ENDLESS MODE, DARK BUTCHER SKIN": "ОТКРЫТО: ХАРДКОР, БЕСКОНЕЧНЫЙ РЕЖИМ, СКИН ТЕМНОГО МЯСНИКА",
+    "PIXEL RAMPAGE": "ПИКСЕЛЬНАЯ РЕЗНЯ", "6 CHAPTERS - 12 BOSSES - 30 MINUTES OF CARNAGE": "6 ГЛАВ - 12 БОССОВ - 30 МИНУТ РЕЗНИ",
+    "NEW RUN": "НОВАЯ ИГРА", "SKIN: DARK": "СКИН: ТЕМНЫЙ", "SKIN: CLASSIC": "СКИН: КЛАССИКА",
+    "WASD OR ARROWS TO MOVE - SPACE HOOK, SHIFT DASH (OPTIONAL)": "WASD ИЛИ СТРЕЛКИ - ДВИЖЕНИЕ, ПРОБЕЛ - КРЮК, SHIFT - РЫВОК (НЕ ОБЯЗАТЕЛЬНО)",
+    "ONE FINGER: DRAG TO MOVE, THE REST IS AUTOMATIC": "ОДИН ПАЛЕЦ: ВЕДИ, ЧТОБЫ ИДТИ. ОСТАЛЬНОЕ - САМО",
+    // road, relic and market screens
+    "CHAMPION'S LOOT": "ТРОФЕИ ЛОГОВА", "CHOOSE A RELIC": "ВЫБОР РЕЛИКВИИ", "THE ROAD": "ДОРОГА", "CHOOSE YOUR PATH": "ВЫБЕРИ ПУТЬ",
+  }, BOSS_RU);
+
+  // ---- phrases with numbers and names
+  const MISS = {};
+  const T = s => { const r = tr(s); if (r === null) throw MISS; return r; };
+  const pl = (n, one, few, many) => { n = Math.abs(n) % 100; const d = n % 10; return n > 10 && n < 20 ? many : d === 1 ? one : d >= 2 && d <= 4 ? few : many; };
+  const teeth = n => n + " " + pl(+n, "ЗУБ", "ЗУБА", "ЗУБОВ");
+  const gold = n => n + " " + pl(+n, "ЗОЛОТОЙ ЗУБ", "ЗОЛОТЫХ ЗУБА", "ЗОЛОТЫХ ЗУБОВ");
+  const ONOFF = { ON: "ВКЛ", OFF: "ВЫКЛ" };
+  const RU_PAT = [
+    [/^(\d+)-(.+)$/, m => m[1] + "-" + T(m[2])],
+    [/^\+(\d+) TEETH!$/, m => "+" + teeth(m[1]) + "!"],
+    [/^\+(\d+) TEETH\.$/, m => "+" + teeth(m[1]) + "."],
+    [/^\+(\d+) TEETH AND A RELIC$/, m => "+" + teeth(m[1]) + " И РЕЛИКВИЯ"],
+    [/^\+(\d+) GOLD TEETH$/, m => "+" + gold(m[1])],
+    [/^YOU HAVE (\d+) GOLD TEETH$/, m => "У ТЕБЯ " + gold(m[1])],
+    [/^YOU WIN (\d+) TEETH!$/, m => "ТЫ ВЫИГРАЛ " + teeth(m[1]) + "!"],
+    [/^YOU LOSE (\d+) TEETH\.$/, m => "ТЫ ПРОИГРАЛ " + teeth(m[1]) + "."],
+    [/^(\d+) KILL STREAK$/, m => m[1] + " " + pl(+m[1], "УБИЙСТВО", "УБИЙСТВА", "УБИЙСТВ") + " ПОДРЯД"],
+    [/^REVENGE X(\d+)$/, m => "МЕСТЬ X" + m[1]],
+    [/^\+(\d+)% DAMAGE, -(\d+)% DAMAGE TAKEN$/, m => "+" + m[1] + "% УРОНА, -" + m[2] + "% УРОНА ПО ТЕБЕ"],
+    [/^ENDLESS - LOOP (\d+)$/, m => "БЕЗ КОНЦА - КРУГ " + m[1]],
+    [/^LOOP (\d+) - CHAPTER (\d+) \/ (\d+)$/, m => "КРУГ " + m[1] + " - ГЛАВА " + m[2] + " / " + m[3]],
+    [/^LOOP (\d+)$/, m => "КРУГ " + m[1]],
+    [/^LV(\d+)$/, m => "УР" + m[1]],
+    [/^LV(\d+) \+(.+)$/, m => "УР" + m[1] + " +" + T(m[2])],
+    [/^LV (\d+)>(\d+)$/, m => "УР " + m[1] + ">" + m[2]],
+    [/^(.+) \(CAN'T\)$/, m => T(m[1]) + " (НЕЛЬЗЯ)"],
+    [/^(.+): (ON|OFF)$/, m => T(m[1]) + ": " + ONOFF[m[2]]],
+    [/^REROLL \((\d+)\)$/, m => "ПЕРЕБРОС (" + m[1] + ")"],
+    [/^CHAMPIONS LEFT: (\d+)$/, m => "ОСТАЛОСЬ ЧЕМПИОНОВ: " + m[1]],
+    [/^MINI-BOSS (\d+:\d+)$/, m => "МИНИ-БОСС " + m[1]],
+    [/^BOSS (\d+:\d+)$/, m => "БОСС " + m[1]],
+    [/^CHAPTER (\d+) \/ (\d+)$/, m => "ГЛАВА " + m[1] + " / " + m[2]],
+    [/^MINI-BOSS: (.+)$/, m => "МИНИ-БОСС: " + T(m[1])],
+    [/^BOSS: (.+?)( \+ \?\?\?)?$/, m => "БОСС: " + T(m[1]) + (m[2] || "")],
+    [/^BOSS DOWN IN (\d+)S$/, m => "БОСС ПОВЕРЖЕН ЗА " + m[1] + " С"],
+    [/^KILLS (\d+)   EATEN (\d+)$/, m => "УБИТО " + m[1] + "   СЪЕДЕНО " + m[2]],
+    [/^BEST STREAK (\d+)   LEVEL (\d+)$/, m => "ЛУЧШАЯ СЕРИЯ " + m[1] + "   УРОВЕНЬ " + m[2]],
+    [/^HP (\d+)\/(\d+)   TEETH (\d+)$/, m => "HP " + m[1] + "/" + m[2] + "   ЗУБЫ " + m[3]],
+    [/^NEXT: LOOP (\d+): (.+)$/, m => "ДАЛЕЕ: КРУГ " + m[1] + ": " + T(m[2])],
+    [/^NEXT: (.+) - BOSS (.+)$/, m => "ДАЛЕЕ: " + T(m[1]) + " - БОСС " + T(m[2])],
+    [/^NEXT: (.+)$/, m => "ДАЛЕЕ: " + T(m[1])],
+    [/^CHAPTER (\d+): (.+)$/, m => "ГЛАВА " + m[1] + ": " + T(m[2])],
+    [/^HURT MOST BY: (.+)$/, m => "ГЛАВНАЯ УГРОЗА: " + T(m[1])],
+    [new RegExp("^(" + Object.keys(BOSS_RU).join("|") + ") ([A-Z]+)$"), m => { if (!ATK[m[2]]) throw MISS; return BOSS_RU[m[1]] + " (" + ATK[m[2]] + ")"; }],
+    [/^CONTINUE CHAPTER (\d+)$/, m => "ПРОДОЛЖИТЬ: ГЛАВА " + m[1]],
+    [/^OPENING GOOGLE PLAY IN (\d+)\.\.\.$/, m => "ОТКРЫВАЕМ GOOGLE PLAY ЧЕРЕЗ " + m[1] + "..."],
+    [/^TIME (\S+)  LEVEL (\d+)  KILLS (\d+)  EATEN (\d+)  BEST STREAK (\d+)  DEATHS (\d+)$/,
+      m => "ВРЕМЯ " + m[1] + "  УРОВЕНЬ " + m[2] + "  УБИТО " + m[3] + "  СЪЕДЕНО " + m[4] + "  ЛУЧШАЯ СЕРИЯ " + m[5] + "  СМЕРТИ " + m[6]],
+    [/^FRENZIES (\d+)  RELICS (\d+)  GOLDEN GOBLINS (\d+)  TEETH (\d+)$/,
+      m => "БЕШЕНСТВА " + m[1] + "  РЕЛИКВИИ " + m[2] + "  ЗОЛОТЫЕ ГОБЛИНЫ " + m[3] + "  ЗУБЫ " + m[4]],
+    [/^THE ALTAR OFFERS ([^:]+): (.+)\. THE PRICE: (.+) \(([^()]+)\)\.$/,
+      m => "АЛТАРЬ ПРЕДЛАГАЕТ " + T(m[1]) + ": " + T(m[2]) + ". ЦЕНА: " + T(m[3]) + " (" + T(m[4]) + ")."],
+    [/^THE ALTAR DRINKS\. (.+) IS YOURS\.$/, m => "АЛТАРЬ ПЬЕТ КРОВЬ. ТЕПЕРЬ У ТЕБЯ: " + T(m[1]) + "."],
+    [/^(.+) LEVEL (\d+)! IT HURT\.$/, m => T(m[1]) + ": УРОВЕНЬ " + m[2] + "! БЫЛО БОЛЬНО."],
+    [/^THE DOG DROPS (.+)\.$/, m => "ПЕС РОНЯЕТ: " + T(m[1]) + "."],
+    [/^\+(\d+) MAX HP$/, m => "+" + m[1] + " МАКС. HP"],
+    [/^([^!]+)!$/, m => T(m[1]) + "!"],
+    [/^(.+) \+(\d+)$/, m => T(m[1]) + " +" + m[2]],
+  ];
+  // stays as is: brand name, HP / XP, single letters (WASD keys), multipliers
+  const KEEP = /^(HP|XP|BUTCHER HERO|[A-Z]|X\d+|[+-]?\d+(\.\d+)? ?(HP|XP))$/;
+  const LAT = /[A-Z]/, CYR = /[А-ЯЁ]/;
+  function tr(s) {
+    if (!LAT.test(s) || CYR.test(s)) return s;
+    if (Object.prototype.hasOwnProperty.call(RU, s)) return RU[s];
+    if (KEEP.test(s)) return s;
+    for (const [re, f] of RU_PAT) {
+      const m = re.exec(s);
+      if (m) try { return f(m); } catch (e) { if (e !== MISS) throw e; }
+    }
+    return null;
+  }
+  const CACHE = new Map(), PASS = new Set();
+  loc = s => {
+    if (typeof s !== "string" || !LAT.test(s) || CYR.test(s) || PASS.has(s)) return s;
+    let r = CACHE.get(s);
+    if (r !== undefined) return r;
+    r = tr(s);
+    if (r === null) { if (LOC_MISS.size < 200) LOC_MISS.add(s); r = s; }
+    if (CACHE.size > 5000) CACHE.clear();
+    CACHE.set(s, r);
+    return r;
+  };
+  // wrap translates the whole phrase and then splits it; Latin lines left after that
+  // (BUTCHER HERO, GOOGLE PLAY, or pieces of a phrase that has no translation) are drawn as they are
+  const wrap0 = wrap;
+  wrap = function (s, n) {
+    const out = wrap0(s, n);
+    for (const l of out) {
+      if (!LAT.test(l) || CYR.test(l) || PASS.has(l)) continue;
+      const t = tr(l);
+      if (t === null) PASS.add(l);
+      else if (t !== l) LOC_CLASH.add(l + "  <-  " + s);
+    }
+    return out;
+  };
+}
 
 </script>
 <script>
