@@ -20,15 +20,25 @@
 <body>
 <main>
   <h1>BUTCHER HERO · <b>HUNGRY</b></h1>
-  <p class="sub">Игровая версия, v3: бесконечный отъезд камеры, собранный в 3D из настоящих моделей, анимаций, эффектов, шрифта, логотипа и звука игры (ветка butcher/dev).</p>
-  <video src="./butcher-hero-hungry-game-v3.mp4" controls playsinline preload="metadata"></video>
+  <p class="sub">Игровая версия, v4: бесконечный отъезд камеры, собранный в 3D из настоящих моделей, анимаций, эффектов, шрифта, логотипа и звука игры (ветка butcher/dev).</p>
+  <video src="./butcher-hero-hungry-game-v4.mp4" controls playsinline preload="metadata"></video>
   <div class="links">
-    <a href="./butcher-hero-hungry-game-v3.mp4">Скачать MP4</a>
+    <a href="./butcher-hero-hungry-game-v4.mp4">Скачать MP4</a>
+    <a class="alt" href="./butcher-hero-hungry-game-v3.mp4">v3</a>
     <a class="alt" href="./butcher-hero-hungry-game-v2.mp4">v2</a>
     <a class="alt" href="./butcher-hero-hungry-game.mp4">v1</a>
     <a class="alt" href="../butcher-hero-hungry/">Нарисованная версия</a>
   </div>
-  <h2>Что нового в v3</h2>
+  <h2>Что нового в v4</h2>
+  <ul>
+    <li>Pudge бьёт настоящими ударами из игры: клипы атак CutR, PierceR и SmashR перенесены с DummyRig на его скелет. На каждом росте он приземляется клипом Landing</li>
+    <li>Мечник и копейщик появляются, как в игре: встают из-под земли. Враги вздрагивают от удара; у копейщика и рыцаря вторые варианты атаки и смерти</li>
+    <li>Медведь встаёт на дыбы перед ударом, голем стоит в своём игровом idle</li>
+    <li>Дракон влетает на скорости, поливает огнём сверху и кусает в полёте</li>
+    <li>Башня: Лич колдует (свет в ладонях), Краб щёлкает клешнями, Король викингов и Вампир атакуют на клипах пехоты игры. После рывка башни боссы падают в своих анимациях смерти</li>
+    <li>Звук: пролёт дракона, укус, заряд заклинания, щелчки клешней, враги встают из земли</li>
+  </ul>
+  <h2>Что было в v3</h2>
   <ul>
     <li>Камера отъехала: враги, оружие, башня, дракон и остров целиком в кадре</li>
     <li>Pudge играет телом: разворот плеч на ударе, откидывается на подтяге, выпад на ЧАВК, «пружина» на каждом росте</li>
@@ -51,8 +61,9 @@
   </ul>
   <h2>Из игры</h2>
   <ul>
-    <li>Pudge (Pudge_rig + клипы Mixamo игры), маска, цепи, легендарное оружие</li>
+    <li>Pudge (Pudge_rig; удары с DummyRig и клипы Mixamo игры, перенесённые на его скелет), маска, цепи, легендарное оружие</li>
     <li>Враги по тирам: Swordman → Spearman → Mounted Knight → Bear → Golem → Fire Dragon</li>
+    <li>Боссы башни: Король викингов (клипы TT infantry, как в игре), Лич, Вампир, Краб</li>
     <li>Arena CastleTower, IslandsLevel, Lowpoly Township, Minimap, Epic Toon FX</li>
     <li>Музыка: Devour OST — The Boss Fight; SFX игры: needle, devour, power-up, boss tower</li>
   </ul>
