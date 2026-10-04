@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Orc Armory — Байн и орчиха: детали, сборка, анимации</title>
-<link rel="stylesheet" href="style.css?v=c98906f1">
+<title>Orc Armory — просмотр модели</title>
+<link rel="stylesheet" href="style.css">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
@@ -13,145 +13,89 @@
 </script>
 </head>
 <body>
-<div id="view"></div>
-<nav id="parts"><div id="part-tabs"></div><div id="versions"></div></nav>
-<button id="edit-toggle" title="Выбрать предмет на персонаже и настроить его положение, поворот и размер">✎ Положение предметов</button>
+<div id="stage"></div>
 
-<div id="edit-panel" hidden>
-  <div class="edit-head"><b>Положение предметов</b><button id="edit-exit" title="Выйти (правки остаются на экране)">✕</button></div>
-  <p id="edit-sel" class="hint">Кликните по детали модели или выберите её здесь:</p>
-  <div id="edit-parts" class="grid"></div>
-  <div id="edit-add"><select id="edit-add-model" title="Любая модель из списка — добавится рядом с моделью"></select><button id="edit-add-btn">+ Добавить</button></div>
-  <div id="edit-tools" class="grid3">
-    <button data-tool="translate">Двигать<kbd>G</kbd></button>
-    <button data-tool="rotate">Вращать<kbd>R</kbd></button>
-    <button data-tool="scale">Масштаб<kbd>S</kbd></button>
-  </div>
-  <div id="edit-fields">
-    <p class="hint place-hint">Стороны — от лица персонажа. Тяните ползунок, вводите число или жмите −/+ (с Shift — шаг ×10). Двойной клик по названию — вернуть на место.</p>
-    <div id="place"></div>
-    <label class="check"><input type="checkbox" id="edit-mirror" checked> Пары левый/правый — зеркально</label>
-    <p class="hint">Мышью: тяните стрелки или кольца гизмо на модели.</p>
-  </div>
-  <button id="edit-motion" class="wide" hidden title="Персонаж в исходной позе, пока вы двигаете предметы. Здесь можно посмотреть правку в анимации">▶ Проверить в движении</button>
-  <div class="grid">
-    <button id="edit-raw">Как из Tripo (без деформации)</button>
-    <button id="edit-remove" title="Убрать добавленную деталь">Убрать деталь</button>
-    <button id="edit-reset">Сбросить деталь</button>
-    <button id="edit-reset-all">Сбросить всё</button>
-    <button id="edit-save" class="primary" title="Запомнить положение деталей (без скачивания файлов)">Сохранить <kbd>Ctrl+S</kbd></button>
-    <button id="edit-json" title="Скачать смещения предметов (см, градусы, %) в JSON">Скачать JSON</button>
-    <button id="edit-glb" title="Скачать модель с текущими правками">Скачать GLB</button>
-  </div>
-  <p id="edit-status" class="hint"></p>
-</div>
+<header id="topbar" class="glass">
+  <div class="brand"><span class="logo">◆</span><div><b>Orc Armory</b><small id="model-sub">загрузка…</small></div></div>
+  <div id="model-switch" class="seg"></div>
+  <div id="chips" class="chips"></div>
+</header>
 
-<aside id="panel">
-  <header>
-    <h1>Orc Armory</h1>
-    <p id="model-title"></p>
-    <p id="model-note"></p>
-  </header>
-
-  <section id="anim-box" hidden>
-    <h2>Анимация <small>клипы glTF</small></h2>
-    <div id="anim-clips" class="grid"></div>
-    <label class="range">Скорость <input type="range" id="anim-speed" min="0.1" max="2" step="0.05" value="1"> <span id="anim-speed-v">×1.00</span></label>
-    <div class="scrub"><button id="anim-pause" title="Пауза / продолжить (пробел)">⏸</button><input type="range" id="anim-scrub" min="0" max="1" step="0.001" value="0"><span id="anim-time">0.00 / 0.00 с</span></div>
-  </section>
-
-  <section id="asm-box" hidden>
-    <div id="asm-fit" hidden>
-      <h2>Подгонка вещей к телу</h2>
-      <label><input type="radio" name="fit" value="manual"> Ручная <small>(посадка рендерами + conform)</small></label>
-      <label><input type="radio" name="fit" value="wrap"> Blender: Shrinkwrap + Surface Deform</label>
-      <p class="hint">Те же меши, UV и текстуры, меняется только форма: в варианте Blender каждая вещь деформируется по клетке (Surface Deform), а клетку Shrinkwrap прижимает к коже с зазором 4 мм. Перья, когти и подвески едут вместе с вещью.</p>
-      <p class="hint" id="asm-fit-raw" hidden></p>
+<aside id="parts-panel" class="glass panel">
+  <div class="panel-head">
+    <h2>Части</h2>
+    <div class="head-actions">
+      <button id="all-on" class="ghost" title="Показать все части">Все</button>
+      <button id="all-off" class="ghost" title="Скрыть все части">Никого</button>
     </div>
-    <h2>Детали сборки</h2>
-    <div id="asm-parts" class="checks"></div>
-  </section>
+  </div>
+  <div id="groups" class="groups"></div>
+  <div id="totals" class="totals"></div>
+  <ul id="parts" class="parts"></ul>
+  <p class="hint">Полигонаж — как в Blender: квад = 1 полигон (числа граней записаны в модель при экспорте). Клик по названию — выделить, <span class="kbd">◎</span> — оставить одну, клик по модели — выбрать часть.</p>
+</aside>
 
+<aside id="view-panel" class="glass panel">
   <section>
-    <h2>Полигонаж</h2>
-    <table id="polys"></table>
-    <p id="polys-hint" class="hint"></p>
+    <h2>Режим <small>клавиши 1–8</small></h2>
+    <div id="modes" class="modes"></div>
+    <div id="mode-opts" class="opts"></div>
   </section>
-
-  <section>
-    <h2>Шейдер <small>клавиши 1–0, Q, W, A, H, D</small></h2>
-    <div id="modes" class="grid"></div>
+  <section id="anim-sec" hidden>
+    <h2>Анимация <small id="anim-time"></small></h2>
+    <div id="anims" class="anims"></div>
+    <div class="anim-ctl">
+      <button id="anim-play" title="Пауза / играть">❚❚</button>
+      <input type="range" id="anim-scrub" min="0" max="1" step="0.001" value="0" title="Кадр">
+    </div>
+    <label class="slider">Скорость <input type="range" id="anim-speed" min="0.1" max="2" step="0.05" value="1"><output id="anim-speed-out">1.00×</output></label>
   </section>
-
-  <section>
-    <h2>PBR-карты <small>в режиме PBR (1)</small></h2>
-    <div id="pbr-maps" class="maps"></div>
-    <p class="hint"><button id="pbr-all">Все</button> <button id="pbr-none">Ни одной</button></p>
-  </section>
-
   <section>
     <h2>Наложения</h2>
-    <label><input type="checkbox" id="wire-overlay"> Сетка поверх (E)</label>
-    <label id="disp-box" hidden>Дисплейсмент, усиление <input type="range" id="disp-exag" min="1" max="10" step="0.5" value="4"> <span id="disp-exag-v">×4</span></label>
-    <label><input type="checkbox" id="scale21" checked> Реальный масштаб (по детали)</label>
-    <label><input type="checkbox" id="ruler" checked> Линейка роста</label>
-    <label><input type="checkbox" id="grid-on" checked> Пол-сетка</label>
-    <label><input type="checkbox" id="autorotate"> Автоповорот (R)</label>
+    <label class="switch"><input type="checkbox" id="wire"><i></i>Сетка квадами <span class="kbd">W</span></label>
+    <label class="switch"><input type="checkbox" id="shadows" checked><i></i>Тень на полу</label>
+    <label class="switch"><input type="checkbox" id="floor" checked><i></i>Пол</label>
+    <label class="switch"><input type="checkbox" id="spin"><i></i>Автоповорот <span class="kbd">T</span></label>
   </section>
-
-  <section>
-    <h2>Камера</h2>
-    <div class="grid">
-      <button data-cam="front">Спереди</button>
-      <button data-cam="back">Сзади</button>
-      <button data-cam="left">Слева</button>
-      <button data-cam="right">Справа</button>
-      <button data-cam="face">Лицо</button>
-      <button data-cam="top">Сверху</button>
-      <button data-cam="three">3/4</button>
-      <button id="ortho">Орто: выкл</button>
-    </div>
-    <p class="hint">ЛКМ — вращать, ПКМ — сдвиг, колесо — зум, двойной клик — центр на точку.</p>
-  </section>
-
   <section>
     <h2>Свет</h2>
-    <label class="range">Окружение <input type="range" id="env" min="0" max="3" step="0.05" value="1"></label>
-    <label class="range">Ключевой свет <input type="range" id="key" min="0" max="5" step="0.05" value="1.5"></label>
-    <label class="range">Поворот света <input type="range" id="rot" min="0" max="360" step="1" value="35"></label>
-    <label class="range">Экспозиция <input type="range" id="exposure" min="0.2" max="3" step="0.05" value="1"></label>
-    <label class="range">Тонмаппинг
-      <select id="tonemap"><option value="neutral">Neutral</option><option value="agx">AgX</option><option value="aces">ACES</option><option value="none">Нет</option></select>
-    </label>
-    <label class="range">Фон
-      <select id="bg"><option value="#26282c">Тёмно-серый</option><option value="#808080">Серый 50%</option><option value="#f2f2f2">Белый</option><option value="#000000">Чёрный</option></select>
-    </label>
+    <label class="slider">Окружение <input type="range" id="env" min="0" max="2.5" step="0.05" value="1"><output></output></label>
+    <label class="slider">Солнце <input type="range" id="sun" min="0" max="4" step="0.05" value="1.6"><output></output></label>
+    <label class="slider">Экспозиция <input type="range" id="exposure" min="0.3" max="2.5" step="0.05" value="1"><output></output></label>
   </section>
-
   <section>
-    <h2>Статистика</h2>
-    <table id="stats"></table>
-  </section>
-
-  <section>
-    <h2>Текстуры</h2>
+    <h2>Текстуры <small id="tex-scope">все части</small></h2>
     <div id="textures" class="thumbs"></div>
-  </section>
-
-  <section>
-    <h2>Загружено в Tripo</h2>
-    <p id="tripo-info" class="hint"></p>
-    <div id="refs" class="thumbs"></div>
-  </section>
-
-  <section>
-    <button id="shot" class="wide">Скриншот PNG</button>
   </section>
 </aside>
 
-<div id="loading"><div id="bar"><i></i></div><span id="loading-text">Загрузка…</span></div>
-<div id="lightbox" hidden><img alt=""><canvas></canvas><span></span></div>
+<div id="part-card" class="glass card" hidden></div>
 
-<script type="module" src="app.js?v=33253c33"></script>
+<nav id="dock" class="glass">
+  <button data-cam="front" title="Спереди">Спереди</button>
+  <button data-cam="back" title="Сзади">Сзади</button>
+  <button data-cam="left" title="Слева">Слева</button>
+  <button data-cam="right" title="Справа">Справа</button>
+  <button data-cam="three" title="Три четверти">3/4</button>
+  <button data-cam="top" title="Сверху">Сверху</button>
+  <span class="sep"></span>
+  <button id="frame" title="Вписать видимые части (F)"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+  <button id="shot" title="Скриншот PNG"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
+  <button id="full" title="Во весь экран"><svg viewBox="0 0 24 24"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5"/></svg></button>
+</nav>
+
+<div id="loader"><div class="ring"></div><div id="load-text">Загрузка модели…</div><div class="bar"><i id="load-bar"></i></div></div>
+
+<div id="lightbox" hidden>
+  <div class="lb-top glass">
+    <b id="lb-title"></b>
+    <div id="lb-ch" class="seg"></div>
+    <button id="lb-close" class="ghost">✕</button>
+  </div>
+  <div id="lb-view"><canvas id="lb-canvas"></canvas></div>
+  <p class="lb-hint">Колесо — масштаб, перетаскивание — сдвиг, двойной клик — вписать.</p>
+</div>
+
+<script type="module" src="app.js"></script>
 </body>
 </html>
