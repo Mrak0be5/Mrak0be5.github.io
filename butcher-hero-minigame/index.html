@@ -19,6 +19,7 @@
 "use strict";
 let W = 320, H = 180;
 const HEADLESS = typeof document === "undefined";
+const PLAYABLE = typeof window !== "undefined" && !!window.BH_PLAYABLE;   // the separate ad playable: only the 1-hour run, no meta
 let screenCv = null, sctx = null, octx = null, frameImg = null, pix = new Uint32Array(W * H);
 function setView(w, h) {
   W = w; H = h;
@@ -1674,10 +1675,10 @@ function b3Sprite(rows, pal, olMap = B3_OLMAP) {
 }
 
 const B3_SK = "ABCDEF";
-const B3_SOCKETS = {
-  back:  { at: [[84,-432],[-84,-432],[-64,-344],[64,-344]],       vis: [1,1,1,1], z: [1,1,1,1],     dir: [[0.7,-0.7],[-0.7,-0.7],[-0.95,0.3],[0.95,0.3]] },
-  front: { at: [[150,-548],[-150,-548],[-184,-556],[184,-556]],   vis: [0,0,1,1], z: [-1,-1,1,1],   dir: [[0.35,-0.94],[-0.35,-0.94],[-0.3,0.95],[0.3,0.95]] },
-  side:  { at: [[-214,-430],[-238,-440],[-242,-322],[-220,-330]], vis: [1,0,0,1], z: [1,-1,-1,1],   dir: [[-0.9,-0.45],[-0.85,-0.55],[-0.95,0.3],[-1,0.1]] },
+const B3_SOCKETS = {   // 0/1 the upper pair, 2/3 the lower pair, 4/5 the middle pair (chains 5 and 6: left, right)
+  back:  { at: [[84,-432],[-84,-432],[-64,-344],[64,-344],[-78,-388],[78,-388]],           vis: [1,1,1,1,1,1], z: [1,1,1,1,1,1],       dir: [[0.7,-0.7],[-0.7,-0.7],[-0.95,0.3],[0.95,0.3],[-1,-0.1],[1,-0.1]] },
+  front: { at: [[150,-548],[-150,-548],[-184,-556],[184,-556],[-170,-552],[170,-552]],     vis: [0,0,1,1,0,0], z: [-1,-1,1,1,-1,-1],   dir: [[0.35,-0.94],[-0.35,-0.94],[-0.3,0.95],[0.3,0.95],[-0.9,-0.3],[0.9,-0.3]] },
+  side:  { at: [[-214,-430],[-238,-440],[-242,-322],[-220,-330],[-240,-381],[-217,-380]],  vis: [1,0,0,1,0,1], z: [1,-1,-1,1,-1,1],    dir: [[-0.9,-0.45],[-0.85,-0.55],[-0.95,0.3],[-1,0.1],[-0.95,-0.2],[-1,-0.15]] },
 };
 function b3Torso(k, view, breath, sock, cls) {
   const g = b3Grid(), up = breath ? -10 : 0, sh = p => [p[0], p[1] + (p[1] < -300 ? up : up * 0.5)];
@@ -1741,6 +1742,7 @@ function b3Torso(k, view, breath, sock, cls) {
         let bx = 0; while (bx < g.w - 1 && !B3_SK.includes(gAt(g, bx, ty))) bx++;
         if (bx > 0 && bx < g.w - 1) { put(["KI", "Hk", "KJ"], bx - 1, ty - 1, true); sockAt[i] = [bx - g.ox, ty - g.oy]; }
       }
+      sockAt[5] = [Math.round((sockAt[0][0] + sockAt[3][0]) / 2), Math.round((sockAt[0][1] + sockAt[3][1]) / 2)];   // the middle near chain: between the brackets
     }
   }
   const out = gOut(g);
@@ -2398,11 +2400,11 @@ function layoutButcher2(sx, sy, o) {
     sx, sy, k, Hd, hk, hx: hx_, hy: hy_, hax, hay, Cr, crx, cry, Hk, hkx, hky, armR, armL, handR: armR.hand, handL: armL.hand,
     clA, freeA: clvR ? "armL" : "armR", belly: [sx + bx + bellyDx, sy + by + bellyDy + Hr(-250 * k)], view, size, cls, hcls, o };
 }
-function butcherSockets(Lt, n = 4) {
+function butcherSockets(Lt, n = 6) {
   const T = Lt.T, V = B3_SOCKETS[Lt.view], flip = !!Lt.o.flipX, out = [];
   if (!T.sock || !V) return out;
   const ox = Lt.tx - T.ox, oy = Lt.ty - T.oy;        // the anchor (sx + bx, sy + by incl. bob, breath and lift)
-  for (let i = 0; i < Math.min(n | 0, 4); i++) {
+  for (let i = 0; i < Math.min(n | 0, T.sock.length); i++) {
     const x = ox + T.sock[i][0], y = oy + T.sock[i][1];
     out.push({ i, x: flip ? 2 * Lt.sx - x : x, y, vis: !!V.vis[i] && (Lt.view !== "front" || Lt.o.size >= 2), z: V.z[i], dx: (flip ? -1 : 1) * V.dir[i][0], dy: V.dir[i][1] });
   }
@@ -15468,7 +15470,7 @@ function goalProgress(n = 1) {
     banner("GOAL COMPLETE!", GOLD, 2.2, "A CHEST! THE MINI-BOSS IS COMING");
     dropChest(P.x + (P.x < AW / 2 ? 40 : -40), P.y + 4, false, "goal");
   } else {
-    banner("GOAL COMPLETE!", GOLD, 2.2, "+" + (10 + 2 * G.ch) + " TEETH AND A CHAPTER STAR");
+    banner("GOAL COMPLETE!", GOLD, 2.2, "+" + (10 + 2 * G.ch) + " TEETH" + (PLAYABLE ? "" : " AND A CHAPTER STAR"));
     teethDrop(P.x, P.y - 20, 10 + 2 * G.ch); G.vacuum = 2;
   }
 }
@@ -18406,44 +18408,44 @@ function heroGrowDraw(Lt, t, s) {
 <script>
 // ---- chains.js
 "use strict";
-const CH_ENABLE = true;                         // false: WEAPONS/UPG/EVOS untouched, updateChains returns -> sims == chbase0
+const CH_ENABLE = true;                         // false: WEAPONS/UPG/EVOS untouched, updateChains returns
 const CH_UNLOCK_T = 90, CH_CHEST_OFFER = false, CH_A2_FREE_SLOT = false;
 const CH_BACK_SLOT = true;                      // the chains ride on the back: their own slot on top of maxWeapons, the whole game
-const CH_BASE = 18, CH_LVL = 0.25, CH_FIRE_MUL = 1.05, CH_EVO_MUL = 1.3, CH_BOSS_K = 0.55, CH_BOSS_CAP = 2;
-const CH_CYC = [1.9, 1.8, 1.7, 1.6, 1.5], CH_CYC_EVO = 1.3;
-const CH_WIND = 0.10, CH_LASH = 0.12, CH_HOLD = 0.08, CH_RET = 0.22, CH_BUSY = 0.52, CH_GATE = 0.12;
-const CH_SKEWER = 6.0, CH_SKEWER_FIRST = 2.0, CH_BURST_FREEZE = 0.03, CH_TARGETS = 24, CH_LIGHT = true;
-const CH_HOVER_X = 34, CH_HOVER_Z = 50;
-const CH_N = [0, 1, 2, 3, 4, 4];
-const CH_SLOT = [[30, -12], [-30, -12], [-32, 10], [32, 10]];
-const CH_HOME = [-Math.PI / 4, -3 * Math.PI / 4, 3 * Math.PI / 4, Math.PI / 4];
-const CH_SIDE = [1, -1, -1, 1], CH_KB = [5, 5, 6, 3];
-const CHST = { REST: 0, WIND: 1, LASH: 2, HOLD: 3, RET: 4, SPROUT: 5, WAIT: 6 };
-const CH_SLACK = [1.06, 1.25, 1.0, 1.0, 1.1, 1.3, 1.06];      // rope slack by state
+const CH_MAX = 6;
+const CH_BASE = 18, CH_LVL = 0.12, CH_EVO_MUL = 1.25, CH_BOSS_K = 0.55, CH_BOSS_CAP = 2;
+const CH_CYC = [1.9, 1.85, 1.8, 1.75, 1.7, 1.65], CH_CYC_EVO = 1.4;
+const CH_WIND = 0.12, CH_LASH = 0.12, CH_HOLD = 0.08, CH_RET = 0.26, CH_BUSY = 0.58, CH_GATE = 0.10;
+const CH_HALO = 6.0, CH_HALO_FIRST = 2.0, CH_SPIN = 0.8, CH_SPIN_W = 2 * Math.PI * 1.7, CH_BURST_FREEZE = 0.03, CH_TARGETS = 24, CH_LIGHT = true;
+const CH_RANK_K = [0, 45, 170], CH_RANK_MUL = [1, 1.2, 1.45], CH_RANK_TAG = ["", " II", " III"];
+const CHST = { REST: 0, WIND: 1, LASH: 2, HOLD: 3, RET: 4, SPROUT: 5, WAIT: 6, SPIN: 7 };
+const CH_SLACK = [1.03, 1.16, 1.0, 1.0, 1.08, 1.2, 1.03, 1.02];      // rope slack by state
 const CH_PAIRS = [["cleaver", "sword"], ["slam", "grenade"], ["aura", "saw"]];   // weapons behind razor+twin, quake+mortar, plague+boomer
-const CH_DESC = [CH_BACK_SLOT ? "OWN BACK SLOT: A BLADED CHAIN LASHES" : "A BLADED CHAIN WHIPS OUT OF YOUR BACK", "+1 CHAIN, +25% DAMAGE", "+1 CHAIN, VIOLET BLADES, LONGER REACH",
-  "4TH CHAIN: A FULL SPIDER", "FIRE BLADES: EVERY LASH BURSTS"];
+const CH_BLADE = [
+  { name: "BUTCHER CLEAVER", slot: [30, -61], head: -0.9, arch: 7, R: 9, dmg: 1.0, cyc: 1.0, kb: 7, hr: 1 },
+  { name: "FLAME SWORD", slot: [-30, -61], head: Math.PI + 0.9, arch: 7, R: 10, dmg: 0.95, cyc: 1.0, kb: 4, hr: 0 },
+  { name: "FROST BLADE", slot: [-35, -15], head: Math.PI - 0.5, arch: 2, R: 10, dmg: 0.9, cyc: 1.0, kb: 3, hr: 0 },
+  { name: "THUNDER DAGGER", slot: [35, -15], head: 0.5, arch: 2, R: 8, dmg: 0.9, cyc: 1.0, kb: 3, hr: 0 },
+  { name: "VENOM FANG", slot: [-43, -38], head: Math.PI + 0.1, arch: 5, R: 8, dmg: 0.8, cyc: 0.8, kb: 2, hr: 2 },
+  { name: "HEADSMAN CLEAVER", slot: [43, -38], head: -0.1, arch: 5, R: 11, dmg: 1.35, cyc: 1.2, kb: 8, hr: 3 },
+];
+const CH_DESC = ["OWN BACK SLOT: A FLYING CLEAVER ON A CHAIN", "+FLAME SWORD: BURNS ALL AROUND THE HIT", "+FROST BLADE: FREEZES ENEMIES SOLID",
+  "+THUNDER DAGGER: LIGHTNING JUMPS ON", "+VENOM FANG: POISON, STRIKES FASTER", "+HEADSMAN CLEAVER: A CRUSHING SHOCKWAVE"];
 if (CH_ENABLE) {
   WEAPONS.push("chains");
-  UPG.chains = { name: "BACK CHAINS", max: 5, desc: l => CH_DESC[Math.min(4, l)] };
-  EVOS.spider = { name: "FROST SPIDER", weapon: "chains", passive: "hook", desc: "ICE FREEZES, ALL 4 CHAINS IMPALE AT ONCE" };
+  UPG.chains = { name: "BACK CHAINS", max: CH_MAX, desc: l => CH_DESC[Math.min(CH_MAX - 1, l)] };
+  EVOS.spider = { name: "BLADE HALO", weapon: "chains", passive: "hook", desc: "BLADES WHIRL IN A FIRE HALO, THEN ALL STAB" };
 }
 
-const chLv = () => P.w.chains | 0;
-const chTier = () => P.evo.spider ? 3 : chLv() >= 5 ? 2 : chLv() >= 3 ? 1 : 0;
-const chDmg = () => { const L = chLv(); return CH_BASE * (1 + CH_LVL * (L - 1)) * (L >= 5 ? CH_FIRE_MUL : 1) * (P.evo.spider ? CH_EVO_MUL : 1) * might(); };
-const chReach = () => (62 + 4 * Math.min(5, chLv())) * Math.sqrt(P.scale);
-const chCyc = () => P.evo.spider ? CH_CYC_EVO : CH_CYC[clamp(chLv() - 1, 0, 4)];
-const chHover = i => i < 2 && chTier() >= 2;
-const chHoverZ = () => CH_HOVER_Z * P.scale;
+const chLv = () => Math.min(CH_MAX, P.w.chains | 0);
+const chTier = () => P.evo.spider ? 3 : chLv() >= 5 ? 2 : chLv() >= 3 ? 1 : 0;   // kept for the harness / old callers
+const chRank = i => (P.chRk && P.chRk[i]) | 0;
+const chDmg = i => CH_BASE * (1 + CH_LVL * (chLv() - 1)) * CH_BLADE[i].dmg * CH_RANK_MUL[chRank(i)] * (P.evo.spider ? CH_EVO_MUL : 1) * might();
+const chReach = () => (62 + 4 * chLv()) * Math.sqrt(P.scale);
+const chCyc = i => (P.evo.spider ? CH_CYC_EVO : CH_CYC[clamp(chLv() - 1, 0, CH_MAX - 1)]) * CH_BLADE[i].cyc;
 const chOk = e => !e.dead && !e.grabbed && !e.T.heart && !(e.spawnT > 0);     // never the godheart, never a spawning enemy
-const chLinkPal = () => CH_PAL[chTier()].linkC;                               // render.js tints the sword chains with it
+const chLinkPal = () => CH_LNK;                                              // render.js tints the sword chains with it
 function chClampLen(x, y, m) { const d = Math.hypot(x, y); return d > m ? [x * m / d, y * m / d] : [x, y]; }
-function chIdeal(i, s) {
-  if (chHover(i)) return [P.x + (i ? -CH_HOVER_X : CH_HOVER_X) * s, P.y - 2 * s];
-  const [vx, vy] = chClampLen(P.chVx * 0.18, P.chVy * 0.18, 14);
-  return [P.x + CH_SLOT[i][0] * s + vx, P.y + CH_SLOT[i][1] * s + vy];
-}
+const chIdeal = (i, s) => [P.x + CH_BLADE[i].slot[0] * s, P.y + CH_BLADE[i].slot[1] * s];   // the hover point (in the air: y is screen-up)
 
 function chainsOpen() {
   if (G.ch > 0) return true;
@@ -18467,46 +18469,44 @@ function chBotAdj() {
 function updateChains(dt, b) {
   if (!CH_ENABLE) return;
   if (P.w.chains === undefined) P.w.chains = 0;              // a run restored from a pre-chains save
-  const L = P.w.chains | 0;
+  const L = chLv();
   if (P.chL === undefined || P.chCh !== G.ch || L < P.chL) chReset(L);
   if (L > P.chL) chainsGained(P.chL, L, false);
   if (!L) return;
   const s = Math.sqrt(P.scale);
   if (P.chGate > 0) P.chGate -= dt;
-  chFeet(dt, s);
-  if (P.evo.spider) chSkewerTick(dt, s);
-  for (const c of P.chC) chTick(c, dt, b, s);
+  chHoverTick(dt, s);
+  if (P.evo.spider) chHaloTick(dt, s);
+  for (const c of P.chC) { chTick(c, dt, b, s); if (c.rkT > 0) c.rkT -= dt; }
   if (P.chBurst > 0 && (P.chBurst -= dt) <= 0) chBurst();
+  if (P.chVen.length) chVenomTick(dt);
 }
 function chReset(L) {
-  Object.assign(P, { chL: 0, chCh: G.ch, chC: [], chSk: CH_SKEWER_FIRST, chBurst: 0, chImp: 0, chSkN: 0, chSkT: 0,
-    chGate: 0, chVx: 0, chVy: 0, chPx: P.x, chPy: P.y, chIdle: 0 });
+  Object.assign(P, { chL: 0, chCh: G.ch, chC: [], chSk: CH_HALO_FIRST, chBurst: 0, chImp: 0, chSkN: 0, chSkT: 0, chSpin: 0, chSpA: 0,
+    chGate: 0, chVx: 0, chVy: 0, chPx: P.x, chPy: P.y, chVen: [] });
+  if (!P.chK || P.chK.length !== CH_MAX) { P.chK = [0, 0, 0, 0, 0, 0]; P.chRk = [0, 0, 0, 0, 0, 0]; }   // the ranks stay for the whole run
   if (L > 0) chainsGained(0, L, true);                     // new chapter / restored run: sprout again, quietly
 }
 function chainsGained(from, to, quiet) {
-  const s = Math.sqrt(P.scale), n0 = P.chC.length, n1 = CH_N[to];
-  for (let i = n0; i < n1; i++) {
+  const s = Math.sqrt(P.scale), n0 = P.chC.length;
+  for (let i = n0; i < to; i++) {
     const [x, y] = chIdeal(i, s);
-    P.chC.push({ i, st: CHST.WAIT, t: 0.4 * (i - n0), next: CHST.SPROUT, cd: 0, x, y, z: 0, hz: 0, ox: x, oy: y, cx: x, cy: y,
-      fx: x, fy: y, sx0: x, sy0: y, step: 0, tx: x, ty: y, u: 0, a: Math.PI / 2, tgt: null, tb: -1, lay: 1, re: 0, sk: 0, hit: 0,
-      cdNext: undefined, quiet: quiet ? 1 : 0 });
+    P.chC.push({ i, st: CHST.WAIT, t: 0.35 * (i - n0), next: CHST.SPROUT, cd: 0, x, y, z: 0, hz: 0, vx: 0, vy: 0, ox: x, oy: y, cx: x, cy: y,
+      tx: x, ty: y, u: 0, a: CH_BLADE[i].head, tgt: null, tb: -1, lay: 1, re: 0, sk: 0, hit: 0, rkT: 0, cdNext: undefined, quiet: quiet ? 1 : 0 });
   }
   P.chL = to;
   if (quiet) return;
   if (from === 0 && G.clock >= 1) banner("NEW WEAPON!", GOLD, 2, "BACK CHAINS");
-  if (from < 3 && to >= 3) { popup("VIOLET CHAINS!", P.x, P.y - 44, CH_PAL[1].glowC, 1.2, 1.2); shockwave(P.x, P.y, 34, 2, 0.4, "#d08aff"); }
-  if (from < 5 && to >= 5) { popup("FIRE CHAINS!", P.x, P.y - 44, CH_PAL[2].glowC, 1.2, 1.2); shockwave(P.x, P.y, 40, 2, 0.4, "#ffa24a");
-    addVfx({ kind: "chrays", x: P.x, y: P.y - 20, life: 0.6, prio: 1 }); }
 }
 function chTick(c, dt, b, s) {
   switch (c.st) {
     case CHST.WAIT: if ((c.t -= dt) <= 0) { c.st = c.next; c.t = 0; } return;
     case CHST.SPROUT:
-      c.t += dt; [c.x, c.y] = chIdeal(c.i, s); c.fx = c.x; c.fy = c.y;
-      if (c.t >= 0.70) { c.st = CHST.REST; c.cd = 0.3; if (!c.quiet) chPlant(c); c.quiet = 0; }
+      c.t += dt; [c.x, c.y] = chIdeal(c.i, s); c.vx = c.vy = 0;
+      if (c.t >= 0.75) { c.st = CHST.REST; c.cd = 0.3; if (!c.quiet) chPlant(c); c.quiet = 0; }
       return;
     case CHST.REST: {
-      if ((c.cd -= dt) > 0 || P.chGate > 0) return;
+      if ((c.cd -= dt) > 0 || P.chGate > 0 || P.chSpin > 0) return;
       const T = chTarget(c, b, s);
       if (!T) { c.cd = 0.1 + 0.025 * c.i; return; }
       chAim(c, T); c.st = CHST.WIND; c.t = 0; c.re = 0; c.hit = 0; P.chGate = CH_GATE;
@@ -18516,11 +18516,26 @@ function chTick(c, dt, b, s) {
     case CHST.LASH: chLashTick(c, dt); return;
     case CHST.HOLD: c.t += dt; chFollow(c); if (c.t >= CH_HOLD && !c.sk) chRet(c); return;
     case CHST.RET: c.t += dt; chRetTick(c, s); return;
+    case CHST.SPIN: c.t += dt; return;                       // chHaloTick moves it
+  }
+}
+function chHoverTick(dt, s) {
+  const mx = P.x - P.chPx, my = P.y - P.chPy, tp = Math.hypot(mx, my) > 40; P.chPx = P.x; P.chPy = P.y;
+  if (tp) P.chVx = P.chVy = 0;
+  else if (dt > 0) { P.chVx += (mx / dt - P.chVx) * 0.25; P.chVy += (my / dt - P.chVy) * 0.25; }
+  const h = Math.min(dt, 1 / 30);
+  for (const c of P.chC) {
+    if (c.sk || c.st !== CHST.REST && !(c.st === CHST.WAIT && c.next !== CHST.SPROUT)) continue;   // halo stabs hold their orbit point
+    const [ix, iy] = chIdeal(c.i, s);
+    if (tp) { c.x = ix; c.y = iy; c.vx = c.vy = 0; continue; }
+    c.vx += ((ix - c.x) * 150 - c.vx * 17) * h; c.vy += ((iy - c.y) * 150 - c.vy * 17) * h;
+    c.x += c.vx * h; c.y += c.vy * h;
+    const [ox, oy] = chClampLen(c.x - ix, c.y - iy, 16 * s); c.x = ix + ox; c.y = iy + oy;
   }
 }
 function chAim(c, T) { c.tgt = T.e; c.tb = T.tb; c.tx = T.x; c.ty = T.y; c.lay = T.y < P.y - 4 ? -1 : 1; }
 function chTarget(c, b, s) {
-  const R = chReach(), hx_ = Math.cos(CH_HOME[c.i]), hy_ = Math.sin(CH_HOME[c.i]);
+  const R = chReach(), sl = CH_BLADE[c.i].slot, hl = Math.hypot(sl[0], sl[1] + 30) || 1, hx_ = sl[0] / hl, hy_ = (sl[1] + 30) / hl;
   let best = null, bs = Infinity, n = 0;
   for (const e of G.enemies) {
     if (!chOk(e) || e.T.crate) continue;                     // crates: incidental path hits only
@@ -18556,14 +18571,15 @@ function chTrack(c, b, s) {
 function chLost(c, b, s) {
   const T = !c.re && !c.sk && chTarget(c, b, s);
   if (T) { c.re = 1; chAim(c, T); return; }
-  if (c.sk) return;                                          // a skewer chain stabs where its target was
+  if (c.sk) return;                                          // a halo blade stabs where its target was
+  if (c.st === CHST.WIND) { c.st = CHST.REST; c.cd = 0.2; c.tgt = null; c.tb = -1; return; }   // still drawn back: just settle home
   chRet(c); c.cdNext = 0.2;
 }
 function chStartLash(c) {
   c.st = CHST.LASH; c.t = 0; c.u = 0;
-  c.ox = c.x; c.oy = c.y - c.z - c.hz; c.z = 0; c.hz = 0; c.step = 0;   // start from the drawn point: no hover/step pop
+  c.ox = c.x; c.oy = c.y; c.z = 0; c.hz = 0;
   const mx = (c.ox + c.tx) / 2, my = (c.oy + c.ty) / 2, dx = c.tx - c.ox, dy = c.ty - c.oy, d = Math.hypot(dx, dy) || 1,
-    k = 0.35 * d * CH_SIDE[c.i] * (c.sk ? 1.4 : 1);
+    k = 0.35 * d * (CH_BLADE[c.i].slot[0] > 0 ? 1 : -1) * (c.sk ? 1.4 : 1);
   c.cx = mx - dy / d * k; c.cy = my + dx / d * k;
 }
 const chBez = (c, u) => [(1 - u) * (1 - u) * c.ox + 2 * u * (1 - u) * c.cx + u * u * c.tx, (1 - u) * (1 - u) * c.oy + 2 * u * (1 - u) * c.cy + u * u * c.ty];
@@ -18571,40 +18587,70 @@ function chBezT(c, u) {
   const x = 2 * (1 - u) * (c.cx - c.ox) + 2 * u * (c.tx - c.cx), y = 2 * (1 - u) * (c.cy - c.oy) + 2 * u * (c.ty - c.cy), d = Math.hypot(x, y) || 1;
   return [x / d, y / d];
 }
+let CH_WHO = -1;                                     // the blade whose hit is being dealt (kill credit for the ranks)
 function chLashTick(c, dt) {
   if (c.tb < 0 && c.tgt && !c.tgt.dead && !c.tgt.grabbed) { c.tx = c.tgt.x; c.ty = c.tgt.y - c.tgt.h / 2; }
   const u0 = c.u; c.t += dt; c.u = Math.min(1, c.t / CH_LASH);
-  const D = chDmg(), kb = CH_KB[c.i], key = "chn" + c.i, fz = P.evo.spider ? 2 : 0;
+  const Bd = CH_BLADE[c.i], D = chDmg(c.i), key = "chn" + c.i, fz = c.i === 2 && chRank(2) >= 2 ? 2 : 0;
+  CH_WHO = c.i;
   for (let j = 0; j < 2; j++) {
-    const u = j ? c.u : (u0 + c.u) / 2, [x, y] = chBez(c, u), [ux, uy] = chBezT(c, u), r = u >= 1 ? 8 : 6;
+    const u = j ? c.u : (u0 + c.u) / 2, [x, y] = chBez(c, u), [ux, uy] = chBezT(c, u), r = (u >= 1 ? 8 : 6) + Bd.hr;
     c.x = x; c.y = y; c.a = Math.atan2(uy, ux);
     if (c.sk) continue;
-    let hit = chHit(x, y, r, key, 0.5, D, kb, ux, uy, fz) > 0;
+    let hit = chHit(x, y, r, key, 0.5, D, Bd.kb, ux, uy, fz) > 0;
     if (c.tb >= 0 && chBossHit(x, y, r, key, D * CH_BOSS_K, 0.5)) hit = true;
-    if (hit && !c.hit) { c.hit = 1; addVfx({ kind: "chhit", x, y, life: 0.22, a: c.a, tier: chTier() }); kick(0.6, c.a, 0.12); sfxThrottled("slash", 0.06); }
+    if (hit && !c.hit) { c.hit = 1; addVfx({ kind: "chhit", x, y, life: 0.22, a: c.a, el: c.i }); kick(c.i === 5 ? 1 : 0.6, c.a, 0.12); sfxThrottled("slash", 0.06); }
   }
+  CH_WHO = -1;
   if (c.u >= 1) chHoldIn(c);
 }
 const chBossHit = (x, y, r, key, dmg, cd) => !!G.boss && !((G.boss.hitCd[key] || 0) > 0) && hitsBoss(x, y, r, key, dmg, cd);
 function chHoldIn(c) {
   c.st = CHST.HOLD; c.t = 0;
-  const D = chDmg(), T = chTier();
-  addVfx({ kind: "chscar", x: c.x, y: c.y + (c.tb < 0 && c.tgt ? c.tgt.h / 2 : 0), life: 0.8, a: c.a, tier: T });   // at the feet: aim y is mid-body
+  const i = c.i, D = chDmg(i), rk = chRank(i), x = c.x, y = c.y, ex = c.tb < 0 ? c.tgt : null, foot = c.tb < 0 && c.tgt ? c.tgt.h / 2 : 0;
+  addVfx({ kind: "chscar", x, y: y + foot, life: 0.8, a: c.a, el: i });   // at the feet: aim y is mid-body
   if (c.sk) { chImpale(c, D); return; }
-  if (T === 2) { chHit(c.x, c.y, 12, "chf" + c.i, 0.5, 0.4 * D, 2, undefined, undefined, 1, c.tgt); emitBits(c.x, c.y, 4, 5, { ramp: CH_PAL[2].smearC, sp: [20, 50], life: [0.2, 0.4], vz: [10, 30], g: 80 }); }
-  if (T === 3) { chHit(c.x, c.y, 14, "chi" + c.i, 0.5, 0.5 * D, 2, undefined, undefined, 1 | 2, c.tgt); emitBits(c.x, c.y, 4, 5, { ramp: CH_PAL[3].smearC, sp: [20, 50], life: [0.2, 0.4], vz: [10, 30], g: 120 }); }
+  CH_WHO = i;
+  switch (i) {
+    case 0:   // CLEAVER: ranks II+ cleave everyone next to the target
+      if (rk >= 1) { chHit(x, y, 10 + 2 * rk, "chc", 0.5, (rk >= 2 ? 0.5 : 0.35) * D, 4, undefined, undefined, 1, ex);
+        emitBits(x, y, 4, 4, { ramp: CHE.steel, sp: [30, 60], life: [0.15, 0.3], vz: [10, 30], g: 120 }); }
+      break;
+    case 1:   // FLAME: a fire burst round the hit
+      chHit(x, y, 12 + 2 * rk, "chf", 0.5, [0.4, 0.5, 0.6][rk] * D, 2, undefined, undefined, 1, ex);
+      addVfx({ kind: "chflame", x, y: y + foot, life: 0.45, r: 12 + 2 * rk });
+      emitBits(x, y, 4, 4 + rk, { ramp: CHE.fireS, sp: [20, 50], life: [0.25, 0.45], vz: [20, 50], g: 60 });
+      break;
+    case 2:   // FROST: the target freezes (hard at III); II+ ice shards root the ones round it
+      if (ex) chFreeze(ex, rk >= 2);
+      if (rk >= 1) chHit(x, y, 10 + 2 * rk, "chi", 0.5, 0.3 * D, 1, undefined, undefined, 1 | 2, ex);
+      addVfx({ kind: "chfrost", x, y: y + foot, life: 0.6, n: 4 + rk });
+      break;
+    case 3:   // THUNDER: lightning jumps on to 1 / 2 / 3 more enemies
+      chZap(x, y, 1 + rk, 0.45 * D, ex);
+      break;
+    case 4:   // VENOM: the target is poisoned (ticks of 0.22 / 0.26 / 0.3 D every 0.4 s)
+      if (ex && !ex.dead) chVenom(ex, 3 + rk, [0.22, 0.26, 0.3][rk] * D);
+      break;
+    case 5:   // HEADSMAN: a crushing shockwave
+      chHit(x, y, 18 + 3 * rk, "chx", 0.5, [0.5, 0.6, 0.7][rk] * D, 6, undefined, undefined, 1, ex);
+      shockwave(x, y + foot, 22 + 4 * rk, 2, 0.35, "#d8dde6"); kick(1, Math.PI / 2, 0.15);
+      emitBits(x, y + foot, 0, 6, { ramp: CH_DUST, sp: [20, 50], life: [0.25, 0.45], vz: [20, 40], g: 140 });
+      break;
+  }
+  CH_WHO = -1;
 }
 function chFollow(c) {
   if (c.tb >= 0 || !c.tgt || c.tgt.dead) return;
   const dx = c.tgt.x - c.x, dy = c.tgt.y - c.tgt.h / 2 - c.y, d = Math.hypot(dx, dy);
   if (d > 0.01) { const m = Math.min(2, d) / d; c.x += dx * m; c.y += dy * m; }
 }
-function chRet(c) { c.st = CHST.RET; c.t = 0; c.ox = c.x; c.oy = c.y; c.sk = 0; c.hit = 0; }
+function chRet(c) { c.st = CHST.RET; c.t = 0; c.ox = c.x; c.oy = c.y; c.sk = 0; c.hit = 0; c.ra = c.a; }
 function chRetTick(c, s) {
-  const [ix, iy] = chIdeal(c.i, s), k = easeOut(Math.min(1, c.t / CH_RET));
-  c.x = lerp(c.ox, ix, k); c.y = lerp(c.oy, iy, k); c.hz = chHover(c.i) ? chHoverZ() * k : 0;   // hover rises back in step
-  if (c.t >= CH_RET) { c.st = CHST.REST; c.fx = ix; c.fy = iy; c.step = 0; c.z = 0;
-    c.cd = c.cdNext !== undefined ? c.cdNext : chCyc() - CH_BUSY; c.cdNext = undefined; c.tgt = null; c.tb = -1; }
+  const [ix, iy] = chIdeal(c.i, s), kt = Math.min(1, c.t / CH_RET), k = kt * kt * (3 - 2 * kt);   // = the drawn RET ease
+  c.x = lerp(c.ox, ix, k); c.y = lerp(c.oy, iy, k);
+  if (c.t >= CH_RET) { c.st = CHST.REST; c.vx = c.vy = 0;
+    c.cd = c.cdNext !== undefined ? c.cdNext : chCyc(c.i) - CH_BUSY; c.cdNext = undefined; c.tgt = null; c.tb = -1; }
 }
 function chHit(x, y, r, key, cd, dmg, kb, ux, uy, opt = 0, ex = null) {
   let n = 0;
@@ -18617,6 +18663,7 @@ function chHit(x, y, r, key, cd, dmg, kb, ux, uy, opt = 0, ex = null) {
     let kx = ux, ky = uy;
     if (ux === undefined) { const a = Math.atan2(ey - y, e.x - x); kx = Math.cos(a); ky = Math.sin(a); }
     hurtEnemy(e, dmg, kx * k, ky * k, !!(opt & 1));
+    if (e.dead) chCredit();
     if (opt & 6) chFreeze(e, !!(opt & 4));
     n++;
   }
@@ -18629,15 +18676,69 @@ function chFreeze(e, strong) {   // a root: e.stun stops walking/shooting/chargi
   e.stun = Math.max(e.stun || 0, t);
   if (G.vfx.length < 48) addVfx({ kind: "chice", x: e.x, y: e.y, e, life: t });
 }
-function chPlant(c) {
-  const D = chDmg(), T = chTier();
-  chHit(c.x, c.y, 12, "chs", 0.5, D, 6);
-  addVfx({ kind: "chring", x: c.x, y: c.y, life: 0.3, tier: T });
-  emitBits(c.x, c.y, 0, 6, { ramp: CH_PAL[T].smearC, sp: [20, 40], life: [0.2, 0.4], vz: [20, 40], g: 120 });
-  kick(0.8, Math.PI / 2, 0.15); sfx("weapon");
-  popup("NEW CHAIN!", c.x, c.y - 10, CH_PAL[T].glowC, 1, 0.9);
+function chZap(x, y, n, dmg, ex) {
+  const s = Math.sqrt(P.scale), hit = new Set(ex ? [ex] : []);
+  let px = x, py = y;
+  for (let j = 0; j < n; j++) {
+    let best = null, bd = 46 * s;
+    for (const e of G.enemies) {
+      if (hit.has(e) || !chOk(e) || e.T.crate) continue;
+      const d = Math.hypot(e.x - px, e.y - e.h / 2 - py);
+      if (d < bd) { bd = d; best = e; }
+    }
+    if (!best) break;
+    hit.add(best);
+    const qx = best.x, qy = best.y - best.h / 2;
+    if (G.vfx.length < 56) addVfx({ kind: "chzap", x: px, y: py, x1: qx, y1: qy, life: 0.2, seed: (j * 7 + Math.round(px)) & 255 });
+    hurtEnemy(best, dmg, 0, 0, true);
+    if (best.dead) chCredit();
+    else if (chRank(3) >= 2) chFreeze(best, false);     // III: the shock locks them up for a moment
+    px = qx; py = qy;
+  }
+  if (hit.size > (ex ? 1 : 0)) sfxThrottled("hit", 0.08);
 }
-function chSkTargets(s) {
+function chVenom(e, n, d) {
+  for (const v of P.chVen) if (v.e === e) { v.n = Math.max(v.n, n); v.d = Math.max(v.d, d); return; }
+  if (P.chVen.length < 40) P.chVen.push({ e, n, d, t: 0.4 });
+}
+function chVenomTick(dt) {
+  CH_WHO = 4;
+  for (let j = P.chVen.length - 1; j >= 0; j--) {
+    const v = P.chVen[j];
+    if (v.e.dead || v.n <= 0) { P.chVen.splice(j, 1); continue; }
+    if ((v.t -= dt) > 0) continue;
+    v.t = 0.4; v.n--;
+    hurtEnemy(v.e, v.d, 0, 0, true);
+    if (v.e.dead) chCredit();
+    emitBits(v.e.x, v.e.y - v.e.h * 0.6, 0, 2, { ramp: CHE.venS, sp: [6, 14], life: [0.3, 0.5], vz: [12, 24], g: -10, a: -Math.PI / 2, cone: 1.6 });
+  }
+  CH_WHO = -1;
+}
+function chCredit() {
+  const i = CH_WHO;
+  if (i < 0 || !P.chK) return;
+  const k = ++P.chK[i], r = P.chRk[i];
+  if (r < 2 && k >= CH_RANK_K[r + 1]) {
+    P.chRk[i] = r + 1;
+    const c = P.chC && P.chC.find(o => o.i === i);
+    if (c) {
+      c.rkT = 0.7;
+      popup(CH_BLADE[i].name + CH_RANK_TAG[r + 1] + "!", c.x, c.y - 12, CH_EL[i].glow, 1.1, 1.1);
+      addVfx({ kind: "chrank", x: c.x, y: c.y, life: 0.6, el: i, rk: r + 1, prio: 1 });
+    }
+    sfx("levelup");
+  }
+}
+function chPlant(c) {   // a new blade lands in its slot: a clang ring, a shove, its name
+  const D = chDmg(c.i);
+  CH_WHO = c.i; chHit(c.x, c.y + 20, 14, "chs", 0.5, D, 6); CH_WHO = -1;
+  addVfx({ kind: "chring", x: c.x, y: c.y, life: 0.35, el: c.i });
+  addVfx({ kind: "chrank", x: c.x, y: c.y, life: 0.5, el: c.i, rk: 1, prio: 1 });
+  emitBits(c.x, c.y, 0, 6, { ramp: CH_EL[c.i].smear, sp: [20, 40], life: [0.2, 0.4], vz: [20, 40], g: 120 });
+  kick(0.8, Math.PI / 2, 0.15); sfx("weapon");
+  popup(CH_BLADE[c.i].name + "!", c.x, c.y - 12, CH_EL[c.i].glow, 1, 0.9);
+}
+function chSkTargets(s, max) {
   const R = chReach(), b = belly(), L = [];
   for (const e of G.enemies) {
     if (!chOk(e) || e.T.crate) continue;
@@ -18645,93 +18746,107 @@ function chSkTargets(s) {
     if (d <= R + e.r) { L.push({ e, tb: -1, x: e.x, y: e.y - e.h / 2, d }); if (L.length >= CH_TARGETS) break; }
   }
   const B = G.boss;
-  if (B && !B.dying && !(B.entering > 0) && !B.untouchable) bossCircles(B).forEach((q, k) => {   // the skewer is exempt from the cap
+  if (B && !B.dying && !(B.entering > 0) && !B.untouchable) bossCircles(B).forEach((q, k) => {   // the halo is exempt from the cap
     const dx = q.x - b[0], dy = q.y - b[1], d = Math.hypot(dx, dy), m = d > R ? R / d : 1;
     if (d - q.r <= R) L.push({ e: B, tb: k, x: b[0] + dx * m, y: b[1] + dy * m, d: Math.max(1, d - q.r) });
   });
   const n = L.filter(t => t.tb < 0).length, byD = (p, q) => p.d - q.d;   // distinct enemies first, boss circles fill the rest
-  return L.slice(0, n).sort(byD).concat(L.slice(n).sort(byD)).slice(0, 4);
+  return L.slice(0, n).sort(byD).concat(L.slice(n).sort(byD)).slice(0, max);
 }
-function chSkewerTick(dt, s) {
+const chSpinR = s => 40 * s;
+function chHaloTick(dt, s) {
+  if (P.chSpin > 0) {
+    const t = CH_SPIN - P.chSpin, D = chDmg(0), cx = P.x, cy = P.y - 26 * s, C = P.chC.filter(c => c.st === CHST.SPIN), n = C.length;
+    P.chSpA += CH_SPIN_W * dt * Math.min(1, t / 0.2 + 0.25);
+    C.forEach((c, k) => {
+      const a = P.chSpA + 2 * Math.PI * k / n, e = easeOut(Math.min(1, c.t / 0.18)), r = chSpinR(s) * (0.92 + 0.08 * Math.sin(t * 9 + k));
+      const ox = cx + Math.cos(a) * r, oy = cy + Math.sin(a) * r * 0.62;
+      c.x = lerp(c.ox, ox, e); c.y = lerp(c.oy, oy, e); c.a = Math.atan2(Math.sin(a) * 0.62, Math.cos(a));
+      if (e < 1) return;
+      CH_WHO = c.i;
+      chHit(c.x, c.y, 9, "chh", 0.2, 0.35 * D, 3, -Math.sin(a), Math.cos(a), 1);
+      if (c.i < CH_BOSS_CAP) chBossHit(c.x, c.y, 9, "chh" + c.i, 0.35 * D * CH_BOSS_K, 0.3);
+      CH_WHO = -1;
+    });
+    if ((P.chSpin -= dt) <= 0) {
+      P.chSpin = 0;
+      const T = chSkTargets(s, 6);
+      if (!T.length) { for (const c of C) { chRet(c); c.cdNext = 0.3; } P.chSk = 0.5; return; }
+      P.chImp = 0; P.chSkN = C.length; P.chSkT = 0;
+      C.forEach((c, k) => { chAim(c, T[k % T.length]); c.sk = 1; c.hit = 0; c.re = 0; c.st = CHST.WAIT; c.t = 0.035 * k; c.next = CHST.WIND; });
+      sfx("whoosh");
+    }
+    return;
+  }
   if (P.chC.some(c => c.sk)) { if ((P.chSkT += dt) > 0.6 && !(P.chBurst > 0)) P.chBurst = 0.01; return; }
   if ((P.chSk -= dt) > 0) return;
-  const T = chSkTargets(s), C = P.chC.filter(c => c.st !== CHST.SPROUT && !(c.st === CHST.WAIT && c.next === CHST.SPROUT));
-  if (!T.length || !C.length) { P.chSk = 0.25; return; }
-  P.chImp = 0; P.chSkN = C.length; P.chSkT = 0;
-  C.forEach((c, k) => { chAim(c, T[k % T.length]); c.sk = 1; c.hit = 0; c.re = 0; c.st = CHST.WAIT; c.t = 0.05 * k; c.next = CHST.WIND; });
+  const C = P.chC.filter(c => c.st !== CHST.SPROUT && !(c.st === CHST.WAIT && c.next === CHST.SPROUT));
+  if (!C.length || !chSkTargets(s, 1).length) { P.chSk = 0.25; return; }
+  P.chSpin = CH_SPIN; P.chSpA = Math.atan2(C[0].y - P.y + 26 * s, C[0].x - P.x);
+  for (const c of C) { c.st = CHST.SPIN; c.t = 0; c.ox = c.x; c.oy = c.y; c.sk = 0; c.tgt = null; c.tb = -1; }
+  addVfx({ kind: "chwhirl", x: P.x, y: P.y, life: CH_SPIN + 0.15, prio: 1 });
+  sfx("charge");
 }
 function chImpale(c, D) {
+  CH_WHO = c.i;
   chHit(c.x, c.y, 8, "chk" + c.i, 0.5, 1.5 * D, 0, undefined, undefined, 4);
   if (c.tb >= 0) chBossHit(c.x, c.y, 8, "chk" + c.i, 1.5 * D * CH_BOSS_K, 0.5);
+  CH_WHO = -1;
   if (++P.chImp >= P.chSkN && !(P.chBurst > 0)) P.chBurst = 0.15;
 }
 function chBurst() {
   P.chBurst = 0;
-  const D = chDmg(); let cx = 0, cy = 0, n = 0;
+  let cx = 0, cy = 0, n = 0;
   for (const c of P.chC) if (c.sk) {
-    chHit(c.x, c.y, 28, "chkb", 0.5, 1.2 * D, 8, undefined, undefined, 2 | 4);
-    if (c.tb >= 0) chBossHit(c.x, c.y, 20, "chkb", 1.2 * D * CH_BOSS_K, 0.5);
+    const D = chDmg(c.i);
+    CH_WHO = c.i;
+    chHit(c.x, c.y, 24, "chkb", 0.5, 1.0 * D, 8, undefined, undefined, 2);
+    if (c.tb >= 0) chBossHit(c.x, c.y, 20, "chkb", 1.0 * D * CH_BOSS_K, 0.5);
+    CH_WHO = -1;
+    addVfx({ kind: "chring", x: c.x, y: c.y, life: 0.35, el: c.i });
     cx += c.x; cy += c.y; n++;
-    chRet(c); c.cdNext = chCyc();
+    chRet(c); c.cdNext = chCyc(c.i);
   }
-  P.chSk = CH_SKEWER; P.chImp = 0; P.chSkT = 0;
+  P.chSk = CH_HALO; P.chImp = 0; P.chSkT = 0;
   if (!n) return;
   cx /= n; cy /= n;
   G.freeze = Math.max(G.freeze || 0, CH_BURST_FREEZE);
-  shockwave(cx, cy, 40, 2, 0.4, "#8ef0ff");
-  emitBits(cx, cy, 6, 14, { ramp: CH_PAL[3].smearC, sp: [40, 90], life: [0.3, 0.5], vz: [20, 50], g: 140, size: 2 });
+  shockwave(cx, cy, 40, 2, 0.4, "#ffa24a");
+  emitBits(cx, cy, 6, 14, { ramp: CHE.fireS, sp: [40, 90], life: [0.3, 0.5], vz: [20, 50], g: 140, size: 2 });
   addVfx({ kind: "chburst", x: cx, y: cy, life: 0.5, prio: 1 });
   kick(1.2, 0); sfx("crit");
 }
-function chFeet(dt, s) {
-  const mx = P.x - P.chPx, my = P.y - P.chPy; P.chPx = P.x; P.chPy = P.y;
-  if (Math.hypot(mx, my) > 40) {
-    P.chVx = P.chVy = 0;
-    for (const c of P.chC) if (c.st === CHST.REST) { [c.x, c.y] = chIdeal(c.i, s); c.fx = c.x; c.fy = c.y; c.step = 0; c.z = 0; c.hz = chHover(c.i) ? chHoverZ() : 0; }
-    return;
-  }
-  if (dt > 0) { P.chVx += (mx / dt - P.chVx) * 0.25; P.chVy += (my / dt - P.chVy) * 0.25; }
-  P.chIdle = P.moving ? 0 : P.chIdle + dt;
-  const busy = [0, 0], ep = Math.min(1, dt * 20), ez = Math.min(1, dt * 10);
-  for (const c of P.chC) if (c.step > 0) busy[c.i & 1] = 1;
-  for (const c of P.chC) {
-    if (c.st !== CHST.REST) continue;
-    const [ix, iy] = chIdeal(c.i, s);
-    if (chHover(c.i)) {                                       // scorpion tail: eased point + logic height (no draw-only offset)
-      c.x += (ix - c.x) * ep; c.y += (iy - c.y) * ep; c.fx = c.x; c.fy = c.y; c.z = 0; c.step = 0;
-      c.hz += clamp((chHoverZ() - c.hz) * ez, -210 * dt, 210 * dt); continue;   // eased, capped at 3.5 px per 1/60 s (the post-sprout rise)
-    }
-    if (c.step > 0) {
-      c.step = Math.max(0, c.step - dt); const k = 1 - c.step / 0.14;
-      c.x = lerp(c.sx0, c.fx, k); c.y = lerp(c.sy0, c.fy, k); c.z = 6 * s * Math.sin(Math.PI * k);
-      if (!c.step) { c.z = 0; emitBits(c.x, c.y, 0, 2, { ramp: CH_DUST, sp: [8, 18], life: [0.2, 0.3], a: -Math.PI / 2, cone: Math.PI }); }
-      continue;
-    }
-    const off = Math.hypot(ix - c.x, iy - c.y), far = off > 12 * s, home = P.chIdle > 0.5 && off > 1;
-    if ((far || home) && !busy[(c.i & 1) ^ 1]) {
-      c.sx0 = c.x; c.sy0 = c.y; c.fx = ix + (far ? P.chVx * 0.14 : 0); c.fy = iy + (far ? P.chVy * 0.14 : 0); c.step = 0.14; busy[c.i & 1] = 1;
-    }
-  }
-}
-function chainsEvo() {   // applyCard evo line, key "spider": the cine pillar (ages through the cine), the first skewer 2 s later
-  addVfx({ kind: "chpillar", x: P.x, y: P.y, life: 1.6, cine: true, prio: 1 });
-  if (P.chL !== undefined) P.chSk = CH_SKEWER_FIRST;
+function chainsEvo() {   // applyCard evo line, key "spider": the cine fire halo (ages through the cine), the first whirl 2 s later
+  addVfx({ kind: "chhalo", x: P.x, y: P.y, life: 1.6, cine: true, prio: 1 });
+  if (P.chL !== undefined) P.chSk = CH_HALO_FIRST;
 }
 
-const CH_PAL = [
-  { blade: ["#f0ffd0", "#b8e880", "#6ac04a", "#3a8a3a", "#1f5a36"], cube: ["#b070e0", "#7a3aa8", "#4a1a6a"],
-    link: ["#e4f0d8", "#a8b8a0", "#6a7a6a", "#3a4a40"], glow: "#b8e880", smear: ["#f0ffd0", "#b8e880", "#6ac04a"] },   // 0 GREEN (L1-2)
-  { blade: ["#ffffff", "#f8d0f4", "#e090e8", "#a050c8", "#5a2a7a"], cube: ["#d08aff", "#9a4ad0", "#5a2a7a"],
-    link: ["#e8dcf0", "#b0a0c0", "#76688c", "#4a3c5c"], glow: "#e090e8", smear: ["#ffffff", "#f8d0f4", "#e090e8"] },   // 1 VIOLET (L3-4)
-  { blade: ["#ffffff", "#fff2a0", "#ffa24a", "#e8701e", "#a8400e"], cube: ["#ff6a3a", "#d0283a", "#8a1428"],
-    link: ["#fff2a0", "#c8a080", "#8a5a48", "#5a2e24"], glow: "#ffa24a", smear: ["#fff8c0", "#ffa24a", "#e8701e"] },   // 2 FIRE (L5)
-  { blade: ["#ffffff", "#d8ecff", "#8ab8f0", "#4a78c8", "#2a3a78"], cube: ["#d8ecff", "#8ab8f0", "#4a78c8"],
-    link: ["#ffffff", "#b8d4ec", "#7a98b8", "#4a5a78"], glow: "#8ef0ff", smear: ["#ffffff", "#d8ecff", "#8ef0ff"] },   // 3 ICE (evo)
-].map(p => ({ bladeC: p.blade.map(v => hxRaw(v)), cubeC: p.cube.map(v => hxRaw(v)),
-  linkC: p.link.map(v => hxRaw(v)), glowC: hxRaw(p.glow), smearC: p.smear.map(v => hxRaw(v)) }));
-const CH_DUST = [hxRaw("#c8b8a0"), hxRaw("#8a7c6e")], CH_WRAP = [hxRaw("#d0283a"), hxRaw("#8a1428")];
-const CHK = { white: hxRaw("#ffffff"), ice1: hxRaw("#d8ecff"), ice2: hxRaw("#8ef0ff"), scar: hxRaw("#3a2a2a"),
-  f0: hxRaw("#ffa24a"), f1: hxRaw("#e8701e"), f2: hxRaw("#a8400e"), ember: hxRaw("#fff2a0") };
+const CHH = a => a.map(v => hxRaw(v));
+const CHE = {
+  steel: CHH(["#ffffff", "#e2e8f0", "#b4bfcc", "#8290a2", "#56627a", "#363e52"]),
+  dark: CHH(["#dce2ea", "#a0aabb", "#727c8e", "#4e5668", "#343a4c", "#20242f"]),
+  wood: CHH(["#c08850", "#8a5230", "#5a321c"]),
+  gold: CHH(["#fffbd0", "#ffe066", "#f0b030", "#b87818", "#704410"]),
+  fire: CHH(["#ffffff", "#fff6a0", "#ffd040", "#ff9a20", "#e8581a", "#a02a10"]),
+  ice: CHH(["#ffffff", "#dcfcff", "#9af2ff", "#52c8ec", "#2a84c4", "#1a4a86"]),
+  ven: CHH(["#fff0fc", "#ffb0ec", "#ff6ad6", "#d03ec0", "#8a2296", "#4a1458"]),
+  red: CHH(["#e83a4a", "#a81c30", "#6a0e1e"]),
+  teal: CHH(["#4a9a9a", "#2a6a72", "#163e48"]),
+  purp: CHH(["#8a5ab8", "#5a3488", "#341a58"]),
+  blood: CHH(["#d8203a", "#8a0c1a"]),
+  fireS: CHH(["#fff8c0", "#ffb040", "#e8581a"]), venS: CHH(["#ffb0ec", "#ff6ad6", "#8a2296"]),
+};
+const CH_EL = [
+  { smear: CHH(["#ffffff", "#e2e8f0", "#b4bfcc"]), glow: hxRaw("#e2f0ff"), link: CHH(["#ffffff", "#c8d8ec", "#7a90b0", "#3a4a68"]) },
+  { smear: CHH(["#fff8c0", "#ffb040", "#e8581a"]), glow: hxRaw("#ffa02a"), link: CHH(["#fff2a0", "#ffb04a", "#c8602a", "#6a2a14"]) },
+  { smear: CHH(["#ffffff", "#9af2ff", "#52c8ec"]), glow: hxRaw("#8ef0ff"), link: CHH(["#ffffff", "#b8ecff", "#6ab0d8", "#2a5a88"]) },
+  { smear: CHH(["#ffffff", "#fff050", "#f0b030"]), glow: hxRaw("#ffe04a"), link: CHH(["#fffbd0", "#ffd24a", "#b88420", "#6a4410"]) },
+  { smear: CHH(["#ffd8f6", "#ff6ad6", "#a83ab0"]), glow: hxRaw("#ff6ad6"), link: CHH(["#ffd8f6", "#e070d0", "#9a3aa0", "#4a1858"]) },
+  { smear: CHH(["#e8ecf2", "#d8203a", "#8a0c1a"]), glow: hxRaw("#ff4a4a"), link: CHH(["#f0c0c0", "#b04048", "#6a1a24", "#3a0c14"]) },
+];
+const CH_LNK = CHH(["#e8ecf2", "#a8b0bc", "#6a7484", "#3c4450"]);
+const CH_DUST = CHH(["#c8b8a0", "#8a7c6e"]);
+const CHK = { white: hxRaw("#ffffff"), scar: hxRaw("#3a2a2a"), ember: hxRaw("#fff2a0") };
 
 const CH_ORI = new Map();
 function chOriSpr(key, ux, uy, R, fn) {
@@ -18760,72 +18875,172 @@ function chRing(cx, cy, rx, ry, col) {
 }
 
 const CH_BFN = {};
-let CH_LIT = -1;                                    // +1/-1: which local b side faces the light for the bin being built
-function chBladeFn(tier, R) {
-  const id = tier + "|" + R;
+const chTri = x => 1 - 2 * Math.abs(x - Math.floor(x) - 0.5) * 2;   // a triangle wave -1..1
+function chBladeFn(i, R) {
+  const id = i + "|" + R;
   if (CH_BFN[id]) return CH_BFN[id];
-  const p = CH_PAL[tier].bladeC;
-  return CH_BFN[id] = (a, b) => {                   // a: along the heading (the convex cutting edge leads), b: across
-    const r = Math.hypot(a, b), bl = b * CH_LIT;    // bl > 0: the lit side
-    if (r > R || Math.hypot(a + 0.62 * R, b) <= 1.08 * R)   // outside the crescent (horn tips at a ~ -0.18R, |b| ~ 0.98R)
-      return tier === 1 && r <= R && r > R - 1.2 && a < -0.18 * R && a > -0.45 * R && bl < 0 ? p[3] : 0;   // violet barb: the outer rim runs on past the shadow-side horn, attached
-    if (r > R - 1) return p[bl > 0 ? 0 : 1];        // the cutting rim: white-ish on the lit side, pale on the other
-    return p[Math.min(4, 1 + Math.floor((R - r) / (R * 0.35)) + (bl < -0.3 * R ? 1 : 0))];
-  };
+  const S = CHE.steel, Dk = CHE.dark, Wd = CHE.wood, Au = CHE.gold, F = CHE.fire, I = CHE.ice, V = CHE.ven, Rd = CHE.red, Bl = CHE.blood;
+  const T = a => (a + R) / (2 * R), ab = Math.abs;
+  const fns = [
+    (a, b) => {   // 0 BUTCHER CLEAVER: a wooden grip with brass rivets, a square steel slab, a hang hole, a honed edge
+      const t = T(a), sp = -0.26 * R, ed = 0.52 * R;
+      if (t < 0.06) return ab(b) <= 1 ? (ab(b) < 0.5 && t > 0.025 ? 0 : Dk[2]) : 0;
+      if (t < 0.31) {
+        if (ab(b) > 0.12 * R + 0.6) return 0;
+        if ((ab(t - 0.13) < 0.03 || ab(t - 0.24) < 0.03) && ab(b) < 0.6) return Au[1];
+        return Wd[b < -0.3 ? 0 : b < 0.6 ? 1 : 2];
+      }
+      if (t < 0.36) return ab(b) <= 0.18 * R + 0.6 ? (b < 0 ? Dk[2] : Dk[3]) : 0;
+      if (b < sp || b > ed) return 0;
+      const kx = R - 0.24 * R, ky = ed - 0.24 * R;
+      if (a > kx && b > ky && Math.hypot(a - kx, b - ky) > 0.24 * R) return 0;                 // the rounded front corner
+      if (a > R - 1.2 && b < sp + 1.2) return 0;
+      if (R >= 9 && Math.hypot(a - 0.62 * R, b - (sp + 0.25 * R)) < 0.1 * R + 0.55) return 0;   // the hang hole
+      if (b > ed - 1.1) return S[0];
+      if (b > ed - 0.2 * R) return S[1];
+      if (b < sp + 1) return S[4];
+      if (ab(a - b * 0.9 - 0.15 * R) < 0.7) return S[1];                                        // a diagonal sheen
+      if (b > ed - 0.36 * R && h32(Math.round(a * 3), Math.round(b * 3)) < 0.1) return Bl[1];     // old blood by the edge
+      return b < 0.08 * R ? S[2] : S[3];
+    },
+    (a, b) => {   // 1 FLAME SWORD: a gold pommel with a ruby, a red-wrapped grip, a curled gold guard, a blade of fire
+      const t = T(a);
+      if (t < 0.07) return ab(b) <= 1.3 ? (ab(b) < 0.6 ? Rd[0] : Au[2]) : 0;
+      if (t < 0.27) return ab(b) <= 0.8 ? ((Math.round(a * 1.4) & 1) ? Rd[0] : Rd[1]) : 0;
+      if (t < 0.33) return ab(b) <= 0.38 * R ? (b < 0 ? Au[1] : Au[2]) : 0;
+      if (t < 0.38 && ab(b) <= 0.38 * R && ab(b) >= 0.26 * R) return Au[3];                     // the curled guard tips
+      const u = (t - 0.33) / 0.67;
+      let w = 0.2 * R * (u < 0.72 ? 1 - 0.18 * u : (1 - u) / 0.28 * 0.87) + 0.45;
+      w += 0.07 * R * Math.sin(u * 15 + (b > 0 ? 1.7 : 0)) * u;                                  // the flame-licked edges
+      if (ab(b) > w) return 0;
+      const e = ab(b) / w;
+      if (u < 0.06) return F[4];
+      if (e < 0.28) return F[0];
+      if (e < 0.55) return F[1];
+      if (e < 0.8) return F[2];
+      return b < 0 ? F[3] : F[4];
+    },
+    (a, b) => {   // 2 FROST BLADE: a teal grip, a crystal guard, a jagged ice blade with a saw-tooth edge and facets
+      const t = T(a);
+      if (t < 0.08) return ab(b) <= 1.1 ? I[3] : 0;
+      if (t < 0.28) return ab(b) <= 0.8 ? ((Math.round(a * 1.4) & 1) ? CHE.teal[0] : CHE.teal[1]) : 0;
+      if (t < 0.33) return ab(b) <= 0.34 * R ? (b < 0 ? I[3] : I[4]) : 0;
+      const u = (t - 0.33) / 0.67, taper = Math.min(1, (1 - u) / 0.22);
+      const top = -0.16 * R * (1 - 0.5 * u) * taper - 0.3, tooth = (u * 5.5) % 1, bot = (0.12 * R + 0.2 * R * (1 - tooth)) * (1 - 0.45 * u) * taper + 0.3;
+      if (b < top || b > bot) return 0;
+      if (b > bot - 1) return tooth < 0.4 ? I[0] : I[1];
+      if (b < top + 1) return I[3];
+      const fc = Math.floor((a - b * 1.6) / (0.28 * R)) & 1;                                      // the facets
+      return b < 0.05 * R ? (fc ? I[1] : I[2]) : (fc ? I[2] : I[3]);
+    },
+    (a, b) => {   // 3 THUNDER DAGGER: a dark grip, winged gold guard, a gold leaf blade with a white bolt down its spine
+      const t = T(a);
+      if (t < 0.08) return ab(b) <= 0.9 ? Au[2] : 0;
+      if (t < 0.32) return ab(b) <= 0.75 ? ((Math.round(a * 1.4) & 1) ? CHE.purp[1] : CHE.purp[2]) : 0;
+      if (t < 0.40) return ab(b) <= 0.44 * R * (1 - (t - 0.32) / 0.08 * 0.45) ? (b < 0 ? Au[1] : Au[3]) : 0;
+      const u = (t - 0.40) / 0.60, w = 0.3 * R * Math.pow(Math.sin(Math.PI * Math.min(1, u * 0.62 + 0.38)), 0.85) + 0.35;
+      if (ab(b) > w) return 0;
+      const zz = 0.13 * R * chTri(u * 2.6);
+      if (u > 0.04 && u < 0.86 && ab(b - zz) < 0.6) return CHK.white;
+      if (ab(b) > w - 0.9) return b < 0 ? Au[0] : Au[3];
+      return ab(b) / w < 0.5 ? Au[1] : Au[2];
+    },
+    (a, b) => {   // 4 VENOM FANG: a purple grip, a curved pink fang bending up, a pale vein, a hot pink edge
+      const t = T(a);
+      if (t < 0.08) return ab(b) <= 1 ? (ab(b) < 0.5 ? V[2] : CHE.purp[1]) : 0;
+      if (t < 0.30) return ab(b) <= 0.75 ? ((Math.round(a * 1.4) & 1) ? CHE.purp[0] : V[4]) : 0;
+      if (t < 0.35) return ab(b) <= 0.3 * R ? V[4] : 0;
+      const u = (t - 0.35) / 0.65, bb = b + 0.42 * R * u * u, wt = 0.13 * R * (1 - u) + 0.35, wb = 0.22 * R * (1 - Math.pow(u, 1.4)) + 0.35;
+      if (bb < -wt || bb > wb) return 0;
+      if (bb > wb - 1) return V[0];
+      if (ab(bb) < 0.45 && u < 0.75) return V[1];
+      if (bb > 0) return V[2];
+      return bb > -wt + 1 ? V[3] : V[4];
+    },
+    (a, b) => {   // 5 HEADSMAN CLEAVER: an iron ring, a banded haft, a huge dark slab with a bellied edge, a notch, blood
+      const t = T(a);
+      if (t < 0.07) return ab(b) <= 1.5 ? (ab(b) < 0.6 && t > 0.025 ? 0 : Dk[2]) : 0;
+      if (t < 0.30) {
+        if (ab(b) > 0.1 * R + 0.6) return 0;
+        if (ab(t - 0.13) < 0.025 || ab(t - 0.25) < 0.025) return Dk[1];
+        return Wd[b < -0.3 ? 0 : b < 0.6 ? 1 : 2];
+      }
+      if (t < 0.35) return ab(b) <= 0.22 * R ? (b < 0 ? Dk[2] : Dk[3]) : 0;
+      const u = (t - 0.35) / 0.65, sp = -0.3 * R, ed = 0.48 * R + 0.14 * R * Math.sin(Math.PI * u);
+      if (b < sp || b > ed) return 0;
+      const kx = R - 0.2 * R, ky = ed - 0.2 * R;
+      if (a > kx && b > ky && Math.hypot(a - kx, b - ky) > 0.2 * R) return 0;
+      if (a > R - 1.4 && b < sp + 1.4) return 0;
+      if (ab(u - 0.56) < 0.05 && b > ed - 0.12 * R * (1 - ab(u - 0.56) / 0.05)) return 0;          // the notch
+      if (b > ed - 1.1) return u > 0.18 && u < 0.78 && h32(Math.round(a * 2), 77) < 0.45 ? Bl[0] : Dk[0];
+      if (b > ed - 0.22 * R) return u > 0.2 && u < 0.7 && h32(Math.round(a * 2), Math.round(b * 2)) < 0.3 ? Bl[1] : Dk[1];
+      if (b < sp + 1) return Dk[4];
+      if (Math.hypot(a - (-0.35 * R + 0.3 * 1.3 * R), b - 0.05 * R) < 0.13 * R + 0.5 && Math.hypot(a - (-0.35 * R + 0.39 * R), b - 0.05 * R) > 0.13 * R - 0.6) return Dk[4];   // the stamped ring
+      if (ab(a - b * 0.9 - 0.1 * R) < 0.7) return Dk[1];
+      return b < 0.1 * R ? Dk[2] : Dk[3];
+    },
+  ];
+  return CH_BFN[id] = fns[i];
 }
-function chOri(tier, R, ux, uy) {                   // the same heading bin as chOriSpr
-  const q = (Math.round(Math.atan2(uy, ux) * 16 / Math.PI) + 32) & 31, a0 = q * Math.PI / 16, cx = Math.cos(a0), cy = Math.sin(a0);
-  CH_LIT = (cx < -1e-6 ? -1 : 1) * (cy - cx) >= 0 ? 1 : -1;
-  return chOriSpr("chb" + tier + "r" + R, ux, uy, R, chBladeFn(tier, R));
-}
+const chBladeR = (i, sq, crowd) => Math.min(14, Math.round(CH_BLADE[i].R * sq) + (chRank(i) >= 2 ? 1 : 0) - (crowd ? 1 : 0));
+const chBlade = (i, R, ux, uy) => chOriSpr("chb" + i + "r" + R, ux, uy, R, chBladeFn(i, R));
 
-const CHAINS_MINI = makeSprite([".LLLLL.", "LlvvvlL", "Lv.U.vL", "L.uuu.L", "...r...", "...M...", "...m..."],
-  { L: hxRaw("#b8e880"), l: hxRaw("#6ac04a"), v: hxRaw("#3a8a3a"), U: hxRaw("#d08aff"), u: hxRaw("#9a4ad0"), r: hxRaw("#d0283a"), M: METAL[1], m: METAL[3] }, INK);
+const CHAINS_MINI = makeSprite(["SS...yY", "SsS.yY.", ".SSgy..", "..gg...", ".rhh...", "r..h...", "....S.."],
+  { Y: hxRaw("#fff6a0"), y: hxRaw("#ff9a20"), g: hxRaw("#f0b030"), s: hxRaw("#e2e8f0"), S: hxRaw("#8290a2"), r: hxRaw("#d0283a"), h: hxRaw("#8a5230") }, INK);
 if (CH_ENABLE) SPR.icons.chains = CHAINS_MINI;   // hud drawIcon's fallback blits SPR.icons[key] centred by s.w/2, s.h/2 (9x9 with the outline)
-const CHAINS_ART = [".......WWW....", ".......LLLW...", "........llLW..", ".......M.vlLW.", "......MuM.vlW.", ".....kuMukvlLW",
-  "......uuu.vlW.", ".......u.vlLW.", ".....rR.vlLW..", "...uMu.LLLW...", "..s.u.WWW.....", "Ss............"];   // 12x14, ICP letters
+const CHAINS_ART = ["...........YW.", "SSSs......YOY.", "SwwSs....YOo..", "SwkwSs..YOo...", "SWwwwSsYOo....", ".SWwwSgOo.....",
+  "..SWwggo......", "...SgghT......", "...rr.hT......", "..qr...hT.....", ".s.k...k.s....", "s...k.s...k.s."];   // 12x14, ICP letters: cleaver x flame sword on chains
 
 const CH_POST = [];                                 // front smear / fx pixels: x, y, colour triples, painted after the front layer
-const CH_GEM = ["..x..", ".ccc.", "xcCcx", ".ccc.", "..x.."];
 const CH_GHOST = [0.12, 0.24, 0.35], CH_GW = [2, 1.5, 1];
-const chSg = i => i === 0 || i === 3 ? 1 : -1;      // the slot's x sign
 function chNorm(x, y) { const d = Math.hypot(x, y) || 1; return [x / d, y / d]; }
 function chAngLerp(a, b, k) { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return a + d * k; }
-function chPillarK() {                              // the live evo cine pillar: its k, or -1
-  for (const v of G.vfx) if (v.kind === "chpillar" && v.t >= 0 && v.t < v.life) return v.t / v.life;
+function chCineK() {                                // the live evo cine halo: its k, or -1
+  for (const v of G.vfx) if (v.kind === "chhalo" && v.t >= 0 && v.t < v.life) return v.t / v.life;
   return -1;
 }
 function chainsDraw(Lt, sx, sy, bx, by, s, wb, wf, crowd, play, view, flipX) {
   CH_POST.length = 0;
   const C = P.chC; if (!C || !C.length || P.dying) return;
-  const pil = chPillarK(), sq = Math.sqrt(P.scale);                             // sq: the logic factor; s only via Lt/T.sock
-  const tier = pil >= 0 && pil < 0.6 && P.evo.spider ? 2 : chTier(), pal = CH_PAL[tier], ice = pil >= 0 && pil < 0.6 ? pil / 0.6 : 0;   // the cine: fire until k 0.6, frost creeping up the links
-  const R = Math.min(11, Math.round([6, 7, 8, 9][tier] * sq)) - (crowd ? 1 : 0);
-  const So = butcherSockets(Lt, 4);                                             // So[i] is chain i's socket
+  const cine = chCineK(), sq = Math.sqrt(P.scale), So = butcherSockets(Lt, 6);
+  const out = (back, x, y, col) => back ? put(x, y, col) : CH_POST.push(x, y, col);
+  if (P.evo.spider && !crowd) chHaloArcs(sx, sy, sq, out, P.chSpin > 0 ? 1 : cine >= 0 ? 0.6 + 0.4 * Math.sin(Math.PI * cine) : 0.35);
   for (const c of C) {
-    if ((c.st === CHST.WAIT && c.next === CHST.SPROUT) || (c.st === CHST.SPROUT && c.t < 0.10)) continue;
-    const so = So[c.i], root = so ? [so.x, so.y] : [sx + chSg(c.i) * 6 * sq, sy - 30 * sq];
-    const E = chEndPose(c, root, so, sx, sy, sq, R, pil);                       // §6.4: {x, y, ux, uy, arch, footY|null, rear}
-    const pts = rope("chr" + c.i, root, chRingPt(E, R), 12, CH_SLACK[c.st]);
-    if (E.arch) for (let j = 1; j < 11; j++) pts[j][1] -= E.arch * Math.sin(Math.PI * j / 11);   // the spider knee
-    const Lroot = so && so.z < 0 ? wb : wf, Lrest = chRestLayer(c, E, view, so, wb, wf), act = c.st === CHST.LASH || c.st === CHST.HOLD;   // §6.5
-    if (crowd) { drawRope(Lroot, pts.slice(0, 6), pal.linkC); drawRope(Lrest, pts.slice(5), pal.linkC); }
-    else chLinks(pts, 5, Lroot, Lrest, pal.linkC, c.st === CHST.LASH ? c.u : -1, ice);
-    chGem(Lrest, E, R, tier, crowd);
-    chStampBlade(Lrest, chOri(tier, R, E.ux, E.uy), E, R, E.footY, pal.bladeC, (tier === 2 && act) || (pil >= 0.6 && pil < 0.75));
-    if (c.st === CHST.LASH && !crowd) chSmear(c, pal, c.lay < 0, sx, sy);       // back: put() now (under the body); front: CH_POST
-    if (tier >= 2 && act && !crowd) chTierFx(E, R, tier, c.i, Lrest === wb);   // crowd: no undimmed embers / shards
+    if ((c.st === CHST.WAIT && c.next === CHST.SPROUT) || (c.st === CHST.SPROUT && c.t < 0.08)) continue;
+    const B = CH_BLADE[c.i], rk = chRank(c.i), R = chBladeR(c.i, sq, crowd), el = CH_EL[c.i];
+    const so = So[c.i], root = so ? [so.x, so.y] : [sx + (B.slot[0] > 0 ? 6 : -6) * sq, sy - 30 * sq];
+    const E = chEndPose(c, root, so, sx, sy, sq, R, cine);                       // {x, y, ux, uy, arch}
+    const ring = [E.x - E.ux * (R + 2), E.y - E.uy * (R + 2)];
+    const pts = rope("chr" + c.i, root, ring, 12, CH_SLACK[c.st]);
+    if (E.arch) for (let j = 1; j < 11; j++) pts[j][1] -= E.arch * Math.sin(Math.PI * j / 11);   // the chain bows up out of his back
+    const act = c.st === CHST.LASH || c.st === CHST.HOLD, fr = view !== "back", Lrest = chLayer(c, view, so, wb, wf), back = Lrest === wb;
+    const Lroot = fr || (so && so.z < 0) ? wb : wf, Llink = fr && !act ? wb : Lrest, lp = rk >= 2 ? el.link : CH_LNK;
+    if (crowd) { drawRope(Lroot, pts.slice(0, 6), lp); drawRope(Llink, pts.slice(5), lp); }
+    else chLinks(pts, 5, Lroot, Llink, lp, c.st === CHST.LASH ? c.u : -1, rk >= 1 ? el.glow : 0, c.i);
+    chPommel(Lrest, ring, E, R, rk, el, crowd);
+    const S = chBlade(c.i, R, E.ux, E.uy);
+    chStampBlade(Lrest, S, E, R, c.i, rk, c.rkT > 0 ? c.rkT : 0, act || c.st === CHST.SPIN);
+    if (crowd) continue;
+    if (c.st === CHST.LASH) chSmear(c, el.smear, c.lay < 0, sx, sy);           // back: put() now (under the body); front: CH_POST
+    if (c.st === CHST.SPIN) chSpinTrail(c, el.smear, sx, sy, sq, out);
+    if (rk >= 2 || c.rkT > 0) chAura(S, E, R, el.glow, c.i, (x, y, col) => out(back, x, y, col));
+    chElemFx(c, E, R, rk, act, (x, y, col) => out(back, x, y, col));
   }
 }
 function chainsPost() {   // a stale buffer (run ended mid-lash, no chains now) is dropped, never painted
   if (!(P && P.w && P.w.chains > 0)) { CH_POST.length = 0; return; }
   for (let i = 0; i < CH_POST.length; i += 3) put(CH_POST[i], CH_POST[i + 1], CH_POST[i + 2]);
 }
+function chLayer(c, view, so, wb, wf) {
+  if (c.st === CHST.WIND || c.st === CHST.LASH || c.st === CHST.HOLD || c.st === CHST.RET) return c.lay < 0 && view !== "back" ? wb : wf;
+  if (c.st === CHST.SPIN) return Math.sin(Math.atan2(c.y - P.y + 26 * Math.sqrt(P.scale), c.x - P.x)) < 0 ? wb : wf;   // the far half of the whirl
+  return view === "front" || (view === "side" && so && so.z < 0) ? wb : wf;
+}
 const CH_DRAWN = new WeakMap(), CH_BLEND = 0.16, CH_DCAP = 3.9;
-function chEndPose(c, root, so, sx, sy, sq, R, pil) {
-  const E = chEndPoseRaw(c, root, so, sx, sy, sq, R, pil), wx = E.x - sx + P.x, wy = E.y - sy + P.y;
+function chEndPose(c, root, so, sx, sy, sq, R, cine) {
+  const E = chEndPoseRaw(c, root, so, sx, sy, sq, R, cine), wx = E.x - sx + P.x, wy = E.y - sy + P.y;
   let m = CH_DRAWN.get(c);
-  const raw = pil >= 0 || c.st === CHST.LASH || c.st === CHST.HOLD || c.st === CHST.SPROUT;
+  const raw = cine >= 0 || c.st === CHST.LASH || c.st === CHST.HOLD || c.st === CHST.SPROUT || c.st === CHST.SPIN || c.st === CHST.RET || c.sk;   // fast flights + halo stabs: drawn as is
   if (!m || raw || G.t < m.t || G.t - m.t > 0.1) {
     CH_DRAWN.set(c, { x: wx, y: wy, t: G.t, px: P.x, py: P.y, st: c.st, bx: 0, by: 0, bt: 0 });
     return E;
@@ -18838,118 +19053,116 @@ function chEndPose(c, root, so, sx, sy, sq, R, pil) {
     else if (m.bt > 0) m.bt = Math.max(0, m.bt - dtE);
     const k = m.bt / CH_BLEND, f = k * k * (3 - 2 * k), tx = wx + m.bx * f, ty = wy + m.by * f;
     const dx = tx - m.x, dy = ty - m.y, d = Math.hypot(dx, dy), cap = Math.max(CH_DCAP, hm + 0.5) * Math.min(3, dtE * 60);
-    const st = d <= 1.5 ? d : Math.min(cap, Math.max(1.5 * Math.min(1, dtE * 60), 0.35 * d * Math.min(1, dtE * 60)));   // eases into the raw pose
+    const st = d <= 1.5 ? d : Math.min(cap, Math.max(1.5 * Math.min(1, dtE * 60), 0.35 * d * Math.min(1, dtE * 60)));
     if (st < d) { m.x += dx * st / d; m.y += dy * st / d; } else { m.x = tx; m.y = ty; }
     m.t = G.t; m.px = P.x; m.py = P.y; m.st = c.st;
   }
-  const ex = m.x - P.x + sx, ey = m.y - P.y + sy;
-  return { x: ex, y: ey, ux: E.ux, uy: E.uy, arch: E.arch, footY: E.footY === null ? null : Math.round(E.footY + ey - E.y), rear: E.rear };
+  return { x: m.x - P.x + sx, y: m.y - P.y + sy, ux: E.ux, uy: E.uy, arch: E.arch };
 }
-function chEndPoseRaw(c, root, so, sx, sy, sq, R, pil) {
-  const sg = chSg(c.i), hov = chHover(c.i), raise = 0.45 * R, gx = sx + c.x - P.x, gy = sy + c.y - P.y - c.z;   // gy: the foot, with the step arc
-  const py = gy - c.hz, bob = Math.round(Math.sin(G.t * 4 + c.i) * 1.5), restH = chNorm(sg, hov ? 0.35 : 0.25);
-  const rest = () => {
-    if (hov) return { x: gx, y: py + bob, ux: restH[0], uy: restH[1], arch: 6 * sq, footY: null, rear: 1 };   // the scorpion tail
-    let y = py - raise; const ph = (G.t + 1.1 * c.i) % 4.5;
-    if (P.chIdle > 0.5 && ph < 0.12) y -= 2 * sq * Math.sin(Math.PI * ph / 0.12);   // the idle tap
-    return { x: gx, y, ux: restH[0], uy: restH[1], arch: 14 * sq, footY: c.z > 0.5 ? null : Math.round(gy), rear: 0 };   // only the lower horn sinks in
-  };
+function chRestA(c) {
+  return CH_BLADE[c.i].head + 0.1 * Math.sin(G.t * 1.9 + c.i * 2.3) + clamp(-(c.vx || 0) * 0.004 - P.chVx * 0.0015, -0.35, 0.35) * (CH_BLADE[c.i].slot[0] > 0 ? 1 : -1);
+}
+function chEndPoseRaw(c, root, so, sx, sy, sq, R, cine) {
+  const B = CH_BLADE[c.i], sg = B.slot[0] > 0 ? 1 : -1, gx = sx + c.x - P.x, gy = sy + c.y - P.y;
+  const bob = Math.sin(G.t * 2.6 + c.i * 1.7) * 1.6 * sq, arch = B.arch * sq;
   let E;
   switch (c.st) {
-    case CHST.SPROUT: {
-      const dx = so ? so.dx : sg * 0.7, dy = so ? so.dy : -0.7, L = 18 * sq;
-      if (c.t < 0.45) { const k = (c.t - 0.10) / 0.35; E = { x: root[0] + dx * L * k, y: root[1] + dy * L * k, ux: dx, uy: dy, arch: 0, footY: null, rear: 0 }; break; }
-      const k = Math.min(1, (c.t - 0.45) / 0.25), F = rest(), a = chAngLerp(Math.atan2(dy, dx), Math.atan2(F.uy, F.ux), k);   // arcs over and stabs down
-      E = { x: lerp(root[0] + dx * L, F.x, k), y: lerp(root[1] + dy * L, F.y, k) - 10 * sq * Math.sin(Math.PI * k), ux: Math.cos(a), uy: Math.sin(a),
-        arch: F.arch * k, footY: k >= 1 ? F.footY : null, rear: 0 };
+    case CHST.SPROUT: {   // out of the socket, a double spin up into the slot, a little drop onto it
+      const dx = so ? so.dx : sg * 0.7, dy = so ? so.dy : -0.7, L = 14 * sq, a0 = Math.atan2(dy, dx), ra = chRestA(c);
+      if (c.t < 0.35) { const k = easeOut((c.t - 0.08) / 0.27); E = { x: root[0] + dx * L * k, y: root[1] + dy * L * k - 6 * sq * k, ux: dx, uy: dy, arch: 0 }; break; }
+      const k = Math.min(1, (c.t - 0.35) / 0.32), e = k * k * (3 - 2 * k), a = chAngLerp(a0, ra, e) + sg * 4 * Math.PI * (1 - e) * (1 - e);
+      const x0 = root[0] + dx * L, y0 = root[1] + dy * L - 6 * sq, over = k < 1 ? -8 * sq * Math.sin(Math.PI * k) : 0;
+      E = { x: lerp(x0, gx, e), y: lerp(y0, gy + bob, e) + over, ux: Math.cos(a), uy: Math.sin(a), arch: arch * e };
+      if (c.t > 0.67) { const d = (c.t - 0.67) / 0.08; E.y += 2 * sq * Math.sin(Math.PI * Math.min(1, d)); }   // the clang dip
       break;
     }
-    case CHST.WIND: {
-      const k = Math.min(1, c.t / CH_WIND), w = Math.sin(Math.PI * k);
-      const x = lerp(gx, root[0], 0.25 * w), y = lerp(py, root[1], 0.25 * w) - 6 * sq * w - (hov ? -bob : raise) * (1 - k);   // the rest raise eases out
-      const [ux, uy] = chNorm(sx + c.tx - P.x - x, sy + c.ty - P.y - y);
-      E = { x, y, ux, uy, arch: (hov ? 6 : 14) * sq * (1 - k), footY: null, rear: 0 };
+    case CHST.WIND: {   // pulled back toward the socket and up, turning to aim, a tremble at full draw
+      const k = Math.min(1, c.t / CH_WIND), w = Math.sin(Math.PI * 0.5 * k), tr = k > 0.6 ? (Math.floor(G.t * 60) & 1 ? 1 : -1) * 0.6 : 0;
+      const x = lerp(gx, root[0], 0.3 * w) + tr, y = lerp(gy + bob * (1 - k), root[1], 0.3 * w) - 7 * sq * w;
+      const [tx, ty] = chNorm(sx + c.tx - P.x - x, sy + c.ty - P.y - y), a = chAngLerp(chRestA(c), Math.atan2(ty, tx), easeOut(k));
+      E = { x, y, ux: Math.cos(a), uy: Math.sin(a), arch: arch * (1 - k) };
       break;
     }
-    case CHST.LASH: case CHST.HOLD: E = { x: gx, y: py, ux: Math.cos(c.a), uy: Math.sin(c.a), arch: 0, footY: null, rear: 0 }; break;
-    case CHST.RET: {   // drawn with smoothstep (peak speed 1.5x the mean, not easeOut's 3x); same end points as the logic
-      const kt = Math.min(1, c.t / CH_RET), k = kt * kt * (3 - 2 * kt), a = chAngLerp(c.a, Math.atan2(restH[1], restH[0]), k), [ix, iy] = chIdeal(c.i, sq);
-      const rx = sx + lerp(c.ox, ix, k) - P.x, ry = sy + lerp(c.oy, iy, k) - P.y - (hov ? chHoverZ() * k : 0);
-      E = { x: rx, y: hov ? ry + bob * k : ry - raise * k, ux: Math.cos(a), uy: Math.sin(a), arch: (hov ? 6 : 14) * sq * k, footY: !hov && k > 0.85 ? Math.round(ry) : null, rear: 0 };
+    case CHST.LASH: case CHST.HOLD: case CHST.SPIN: E = { x: gx, y: gy, ux: Math.cos(c.a), uy: Math.sin(c.a), arch: 0 }; break;
+    case CHST.RET: {   // home with a full spin, eased (smoothstep: no snap at either end)
+      const kt = Math.min(1, c.t / CH_RET), k = kt * kt * (3 - 2 * kt), [ix, iy] = chIdeal(c.i, sq);
+      const a = chAngLerp(c.ra !== undefined ? c.ra : c.a, chRestA(c), k) - sg * 2 * Math.PI * k;
+      E = { x: sx + lerp(c.ox, ix, k) - P.x, y: sy + lerp(c.oy, iy, k) - P.y + bob * k - 5 * sq * Math.sin(Math.PI * k), ux: Math.cos(a), uy: Math.sin(a), arch: arch * k };
       break;
     }
-    default: E = rest();                            // REST, and WAIT in a skewer queue
+    default: { const a = chRestA(c); E = { x: gx, y: gy + bob, ux: Math.cos(a), uy: Math.sin(a), arch }; }   // REST, and WAIT in a halo queue
   }
-  if (pil >= 0 && pil < 0.78) {                     // the evo cine: rear up over him, then slam down to the rest pose
-    const rx = root[0] + sg * 14 * sq, ry = root[1] - (24 + 10 * Math.min(1, pil / 0.6)) * sq, [ux, uy] = chNorm(sg * 0.35, -1);
-    if (pil < 0.75) E = { x: rx, y: ry, ux, uy, arch: 6 * sq, footY: null, rear: 1 };
-    else { const k = (pil - 0.75) / 0.03, [vx, vy] = chNorm(lerp(ux, E.ux, k), lerp(uy, E.uy, k));
-      E = { x: lerp(rx, E.x, k), y: lerp(ry, E.y, k), ux: vx, uy: vy, arch: E.arch, footY: null, rear: 1 }; }
+  if (cine >= 0 && cine < 0.85) {                   // the evo cine: they rise into a ring over his head and whirl, then drop home
+    const n = P.chC.length, k = c.i / n, a = 2 * Math.PI * k + cine * 2 * Math.PI * 2.2, rise = Math.min(1, cine / 0.2), e = rise * rise * (3 - 2 * rise);
+    const rx = sx + Math.cos(a) * 30 * sq, ry = sy - 40 * sq + Math.sin(a) * 12 * sq;
+    const [ux, uy] = chNorm(Math.cos(a), Math.sin(a) * 0.4 - 0.6);
+    if (cine < 0.72) E = { x: lerp(E.x, rx, e), y: lerp(E.y, ry, e), ux, uy, arch: 0 };
+    else { const d = (cine - 0.72) / 0.13, f = d * d; E = { x: lerp(rx, E.x, f), y: lerp(ry, E.y, f), ux: lerp(ux, E.ux, f), uy: lerp(uy, E.uy, f), arch: E.arch * f }; }
   }
   return E;
 }
-const chRingPt = (E, R) => [E.x - E.ux * (6 - 0.1 * R), E.y - E.uy * (6 - 0.1 * R)];   // the rope ends at the ring behind the gem
-function chRestLayer(c, E, view, so, wb, wf) {
-  if (E.rear) return view === "side" ? (so && so.z < 0 ? wb : wf) : view === "front" && c.i >= 2 ? wf : wb;   // hover/rear (cine: front 2/3 keep wf)
-  if (c.st === CHST.WIND || c.st === CHST.LASH || c.st === CHST.HOLD || c.st === CHST.RET) return c.lay < 0 ? wb : wf;   // latched at wind-up
-  return c.i < 2 ? wb : wf;                         // north feet behind him, south feet in front
-}
-function chLinks(pts, nRoot, Lroot, Lrest, pal, pulse, ice) {
+function chLinks(pts, nRoot, Lroot, Lrest, pal, pulse, glow, i) {
   const S = [];
   let carry = 0;
-  for (let i = 0; i + 1 < pts.length; i++) {
-    const [x0, y0] = pts[i], [x1, y1] = pts[i + 1], d = Math.hypot(x1 - x0, y1 - y0);
+  for (let j = 0; j + 1 < pts.length; j++) {
+    const [x0, y0] = pts[j], [x1, y1] = pts[j + 1], d = Math.hypot(x1 - x0, y1 - y0);
     if (d < 1e-3) continue;
     const ux = (x1 - x0) / d, uy = (y1 - y0) / d;
     let t = carry;
-    for (; t < d; t += 3) S.push(x0 + ux * t, y0 + uy * t, ux, uy, i < nRoot ? 1 : 0);
+    for (; t < d; t += 3) S.push(x0 + ux * t, y0 + uy * t, ux, uy, j < nRoot ? 1 : 0);
     carry = t - d;
   }
-  const n = S.length / 5, pj = pulse >= 0 ? Math.floor(pulse * n) & ~1 : -1, i0 = ice > 0 ? Math.floor(n * (1 - ice)) : n, IC = CH_PAL[3].linkC;
+  const n = S.length / 5, pj = pulse >= 0 ? Math.floor(pulse * n) & ~1 : -1, f = Math.floor(G.t * 16) + i * 5;
   for (let j = 0; j < n; j++) {
-    const x = Math.round(S[j * 5]), y = Math.round(S[j * 5 + 1]), L = S[j * 5 + 4] ? Lroot : Lrest, p = j >= i0 ? IC : pal;
+    const x = Math.round(S[j * 5]), y = Math.round(S[j * 5 + 1]), L = S[j * 5 + 4] ? Lroot : Lrest;
+    const spark = glow && (j + f) % 9 === 0, top = j === pj ? CHK.white : spark ? glow : pal[0];
     if (j % 2 === 0) {
-      for (let k = -1; k <= 1; k++) { L.set(x + k, y - 1, j === pj ? CHK.white : p[0]); L.set(x + k, y + 1, p[2]); }
-      L.set(x - 1, y, p[1]); L.set(x + 1, y, p[1]);
+      for (let k = -1; k <= 1; k++) { L.set(x + k, y - 1, top); L.set(x + k, y + 1, pal[2]); }
+      L.set(x - 1, y, pal[1]); L.set(x + 1, y, spark ? glow : pal[1]);
     } else {
       const bx = Math.round(S[j * 5] + S[j * 5 + 2]), by = Math.round(S[j * 5 + 1] + S[j * 5 + 3]);
-      L.set(x, y, p[1]); L.set(bx, by, p[1]); L.set(x, y + 1, p[2]); L.set(bx, by + 1, p[2]);
+      L.set(x, y, spark ? glow : pal[1]); L.set(bx, by, pal[1]); L.set(x, y + 1, pal[2]); L.set(bx, by + 1, pal[2]);
     }
   }
 }
-function chGem(L, E, R, tier, crowd) {
-  const ux = E.ux, uy = E.uy, cc = CH_PAL[tier].cubeC, lc = CH_PAL[tier].linkC, at = t => [Math.round(E.x + ux * t), Math.round(E.y + uy * t)];
-  if (!crowd) {
-    const [rx, ry] = at(0.1 * R - 6);
-    for (let k = -1; k <= 1; k++) { L.set(rx + k, ry - 1, lc[1]); L.set(rx + k, ry + 1, lc[3]); }
-    L.set(rx - 1, ry, lc[1]); L.set(rx + 1, ry, lc[3]);
-  }
-  for (const [t, c] of [[0.1 * R - 4, CH_WRAP[1]], [0.1 * R - 3, CH_WRAP[0]]])
-    for (let k = -1; k <= 1; k++) L.set(Math.round(E.x + ux * t - uy * k), Math.round(E.y + uy * t + ux * k), c);
-  const [gx, gy] = at(0.1 * R);
-  for (let j = 0; j < 5; j++) for (let i = 0; i < 5; i++) {
-    const ch = CH_GEM[j][i];
-    if (ch !== ".") L.set(gx - 2 + i, gy - 2 + j, ch === "C" ? cc[0] : ch === "c" ? cc[1] : cc[2]);
-  }
+function chPommel(L, ring, E, R, rk, el, crowd) {
+  const rx = Math.round(ring[0]), ry = Math.round(ring[1]), lc = rk >= 2 ? el.link : CH_LNK;
+  if (!crowd) { for (let k = -1; k <= 1; k++) { L.set(rx + k, ry - 1, lc[1]); L.set(rx + k, ry + 1, lc[3]); } L.set(rx - 1, ry, lc[1]); L.set(rx + 1, ry, lc[3]); }
+  if (rk < 1) return;
+  const gx = Math.round(E.x - E.ux * (R - 1)), gy = Math.round(E.y - E.uy * (R - 1)), c0 = rk >= 2 ? el.glow : CHE.gold[1], c1 = rk >= 2 ? el.link[2] : CHE.gold[3];
+  L.set(gx, gy - 1, c0); L.set(gx - 1, gy, c0); L.set(gx + 1, gy, c1); L.set(gx, gy + 1, c1);
+  L.set(gx, gy, rk >= 2 && Math.floor(G.t * 4) & 1 ? CHK.white : c0);
 }
-function chStampBlade(L, S, E, R, footY, p, flick) {
-  const x0 = Math.round(E.x) - R - 1, y0 = Math.round(E.y) - R - 1, f = Math.floor(G.t * 12);
-  for (let y = 0; y < S.h; y++) {
-    const yy = y0 + y;
-    if (footY !== null && yy > footY) break;
-    for (let x = 0; x < S.w; x++) {
-      const i = y * S.w + x, c = S.d[i];
-      if (!c || S.ol[i]) continue;
-      L.set(x0 + x, yy, flick && c === p[1] && h32(x0 + x + f, yy) < 0.5 ? p[0] : c);   // the hot / frosted rim flickers
+function chStampBlade(L, S, E, R, i, rk, rkT, hot) {
+  const x0 = Math.round(E.x) - R - 1, y0 = Math.round(E.y) - R - 1, f = Math.floor(G.t * 12), F = CHE.fire, I = CHE.ice, Au = CHE.gold;
+  const flick = i === 1 || ((hot || rk >= 2) && (i === 2 || i === 3)), white = rkT > 0.5 || (rkT > 0 && Math.floor(rkT * 20) & 1);
+  for (let y = 0; y < S.h; y++) for (let x = 0; x < S.w; x++) {
+    const j = y * S.w + x;
+    let c = S.d[j];
+    if (!c || S.ol[j]) continue;
+    if (white) c = CHK.white;
+    else if (flick) {
+      const r = h32(x0 + x + f, y0 + y - f);
+      if (i === 1) { if (c === F[1] && r < 0.35) c = F[0]; else if (c === F[2] && r < 0.3) c = F[1]; else if (c === F[3] && r < 0.25) c = F[2]; }
+      else if (i === 2) { if ((c === I[2] || c === I[1]) && r < 0.06) c = CHK.white; }
+      else if (c === Au[2] && r < 0.15) c = Au[1];
     }
+    L.set(x0 + x, y0 + y, c);
   }
 }
-function chSmear(c, pal, back, sx, sy) {
+function chAura(S, E, R, col, i, out) {
+  const x0 = Math.round(E.x) - R - 1, y0 = Math.round(E.y) - R - 1, f = Math.floor(G.t * 10) + i;
+  for (let y = 0; y < S.h; y++) for (let x = 0; x < S.w; x++) {
+    const j = y * S.w + x;
+    if (S.ol[j] && BAYER[(y + f) & 3][(x + (f >> 2)) & 3] < 7) out(x0 + x, y0 + y, col);
+  }
+}
+function chSmear(c, ramp, back, sx, sy) {
   const ox = sx - P.x, oy = sy - P.y;
   for (let g = 0; g < 3; g++) {
     const u = c.u - CH_GHOST[g];
     if (u < 0) break;
-    const col = pal.smearC[g], w = CH_GW[g];
+    const col = ramp[g], w = CH_GW[g];
     for (let j = -3; j <= 3; j++) {
       const uu = clamp(u + j * 0.015, 0, 1), [x, y] = chBez(c, uu), [tx, ty] = chBezT(c, uu);
       for (let k = 0; k < (w > 1 && (w >= 2 || !(j & 1)) ? 2 : 1); k++) {
@@ -18959,19 +19172,90 @@ function chSmear(c, pal, back, sx, sy) {
     }
   }
 }
-function chTierFx(E, R, tier, i, back) {
-  const f = Math.floor(G.t * 12), cx = Math.round(E.x), cy = Math.round(E.y), out = (x, y, col) => back ? put(x, y, col) : CH_POST.push(x, y, col);
-  if (tier === 2) { for (let j = 0; j < 2; j++) out(cx + Math.floor(h32(j + 4 * i, f) * 2 * R) - R, cy - 2 - (f + 3 * j) % 6, j ? CHK.f0 : CHK.ember); return; }
-  for (let j = 0; j < 3; j++) {
-    const a = h32(j + 4 * i, f >> 1) * 2 * Math.PI, d = R + 1 + Math.floor(h32(f >> 1, j + 9) * 3);
-    out(cx + Math.round(Math.cos(a) * d), cy + Math.round(Math.sin(a) * d), j ? CHK.ice1 : CHK.white);
+function chSpinTrail(c, ramp, sx, sy, sq, out) {
+  const cx = sx, cy = sy - 26 * sq, r = chSpinR(sq), a0 = Math.atan2((c.y - P.y + 26 * sq) / 0.62, c.x - P.x);
+  for (let j = 1; j < 18; j++) {
+    const a = a0 - j * 0.07, x = Math.round(cx + Math.cos(a) * r), y = Math.round(cy + Math.sin(a) * r * 0.62), col = ramp[Math.min(2, j / 6 | 0)];
+    if (j > 10 && BAYER[y & 3][x & 3] < (j - 10) * 2) continue;
+    out(Math.sin(a) < 0, x, y, col);
+    if (j < 8) out(Math.sin(a) < 0, x, y - 1, col);
   }
-  const mx = cx + (f % 3) - 1, my = cy + Math.ceil(R * 0.6) + 1;
-  out(BAYER[my & 3][mx & 3] < 8 ? mx : mx + 1, my, CHK.ice2);
+}
+function chHaloArcs(sx, sy, sq, out, k) {
+  const cx = sx, cy = sy - 26 * sq, F = CHE.fire, n = 26, rr = (36 + 6 * k) * sq;
+  for (let arc = 0; arc < 2; arc++) {
+    const h = G.t * (2 + 4 * k) + arc * Math.PI;
+    for (let j = 0; j < n; j++) {
+      const a = h - j * 0.075, r = rr + 2 * Math.sin(G.t * 3 + j * 0.4 + arc), x = Math.round(cx + Math.cos(a) * r), y = Math.round(cy + Math.sin(a) * r * 0.5 - j * 0.12 * sq);
+      const q = j / n, col = q < 0.12 ? F[1] : q < 0.35 ? F[2] : q < 0.65 ? F[3] : F[4];
+      if (BAYER[y & 3][x & 3] >= 16 * (1 - q * 0.9) * k + 0.5) continue;
+      const back = Math.sin(a) < 0;
+      out(back, x, y, col);
+      if (q < 0.5 * k) out(back, x, y - 1, q < 0.2 ? F[0] : col);
+    }
+  }
+}
+function chElemFx(c, E, R, rk, act, out) {
+  const f = Math.floor(G.t * 12), cx = E.x, cy = E.y, ux = E.ux, uy = E.uy, at = (t, b) => [Math.round(cx + ux * t - uy * b), Math.round(cy + uy * t + ux * b)];
+  switch (c.i) {
+    case 0: case 5: {   // the steel ones: a glint sweeping hilt -> tip every 2.4 s; the headsman drips blood
+      const ph = (G.t + c.i * 0.9) % 2.4;
+      if (ph < 0.3) { const [x, y] = at(lerp(-0.3 * R, R, ph / 0.3), 0.1 * R); out(x, y, CHK.white); out(x + 1, y, CHE.steel[1]); out(x, y - 1, CHE.steel[1]); }
+      if (c.i === 5) { const dp = (G.t * 0.9 + 0.3) % 1.6; if (dp < 0.8) { const [x, y] = at(0.4 * R, 0.5 * R); out(x, y + Math.round(dp * 10), CHE.blood[0]); } }
+      if (rk >= 1 && c.i === 0 && (f + 3) % 11 === 0) { const [x, y] = at(R, 0.45 * R); out(x + 1, y, CHK.white); }
+      return;
+    }
+    case 1: {   // FLAME: tongues licking up off both edges, embers rising
+      const nn = 4 + 2 * rk + (act ? 3 : 0), F = CHE.fire;
+      for (let j = 0; j < nn; j++) {
+        const t = lerp(-0.25 * R, R, h32(j * 7 + c.i, f >> 1)), sd = j & 1 ? 1 : -1, [x, y] = at(t, sd * 0.25 * R), hgt = (f + j * 5) % 6;
+        out(x, y - hgt, hgt < 2 ? F[1] : hgt < 4 ? F[3] : F[4]);
+        if (hgt < 3) out(x, y - hgt - 1, F[2]);
+      }
+      return;
+    }
+    case 2: {   // FROST: twinkles round the blade, a cold mist dripping under it
+      for (let j = 0; j < 2 + rk; j++) {
+        const ph = (f + j * 4) % 8;
+        if (ph > 3) continue;
+        const a = h32(j + 11 * c.i, (f + j * 4) >> 3) * 2 * Math.PI, d = R * 0.5 + h32(j, (f >> 3) + 5) * R * 0.6, x = Math.round(cx + Math.cos(a) * d), y = Math.round(cy + Math.sin(a) * d);
+        out(x, y, ph === 1 ? CHK.white : CHE.ice[1]);
+        if (ph === 1) { out(x - 1, y, CHE.ice[2]); out(x + 1, y, CHE.ice[2]); out(x, y - 1, CHE.ice[2]); out(x, y + 1, CHE.ice[2]); }
+      }
+      const mx = Math.round(cx) + (f % 5) - 2, my = Math.round(cy) + Math.ceil(R * 0.4) + 1 + ((f >> 1) % 3);
+      if (BAYER[my & 3][mx & 3] < 8) out(mx, my, CHE.ice[2]);
+      return;
+    }
+    case 3: {   // THUNDER: a crackle off the tip every few frames (rank III: down the chain too)
+      const per = act ? 2 : 6 - rk;
+      if (f % per > 1) return;
+      const bolt = (x0, y0, n, seed) => {
+        let x = x0, y = y0;
+        for (let j = 0; j < n; j++) {
+          const a = h32(seed, j + f) * 2 * Math.PI;
+          for (let k = 0; k < 2; k++) { x += Math.round(Math.cos(a)); y += Math.round(Math.sin(a)); out(x, y, k ? CHE.gold[1] : CHK.white); }
+        }
+      };
+      const [tx, ty] = at(R, 0); bolt(tx, ty, 3 + rk, 13);
+      if (rk >= 1) { const [hx_, hy_] = at(-0.2 * R, 0.3 * R); bolt(hx_, hy_, 2, 29); }
+      return;
+    }
+    case 4: {   // VENOM: a drop gathering at the tip and falling, a bubble rising off the fang
+      const ph = (G.t * 1.2 + 0.4) % 1, [tx, ty] = at(R - 1, 0.1 * R), V = CHE.ven;
+      if (ph < 0.45) out(tx, ty + 1, ph < 0.25 ? V[2] : V[1]);
+      else { const d = Math.round((ph - 0.45) * (ph - 0.45) * 60); out(tx, ty + 1 + d, V[2]); if (d > 1) out(tx, ty + d, V[3]); }
+      for (let j = 0; j < rk + 1; j++) {
+        const bp = (G.t * 0.8 + j * 0.37) % 1, [bx_, by_] = at(lerp(0, R, h32(j, 3)), -0.2 * R);
+        out(bx_ + (Math.floor(bp * 6) & 1), by_ - Math.round(bp * 8), bp > 0.8 ? V[0] : V[1]);
+      }
+      return;
+    }
+  }
 }
 
-VFX.chhit = (v, k) => {   // a white X and 4 sparks off the lash heading
-  const [sx, sy] = worldToScreen(v.x, v.y), sm = CH_PAL[v.tier | 0].smearC, fade = k > 0.5 ? (k - 0.5) * 32 : 0;
+const chFade = k => k > 0.5 ? (k - 0.5) * 32 : 0;
+VFX.chhit = (v, k) => {   // a white X and 4 sparks off the lash heading, in the blade's colours
+  const [sx, sy] = worldToScreen(v.x, v.y), sm = CH_EL[v.el | 0].smear, fade = chFade(k);
   const pt = (x, y, c) => { if (!fade || BAYER[y & 3][x & 3] >= fade) put(x, y, c); };
   for (const [dx, dy] of [[0, 0], [-1, -1], [1, 1], [-1, 1], [1, -1]]) pt(sx + dx, sy + dy, CHK.white);
   const d = 2 + Math.round(easeOut(k) * 6);
@@ -18980,66 +19264,112 @@ VFX.chhit = (v, k) => {   // a white X and 4 sparks off the lash heading
     pt(x, y, sm[j % 3]); pt(Math.round(x + ux), Math.round(y + uy), sm[Math.min(2, j % 3 + 1)]);
   }
 };
-VFX.chscar = (v, k) => {  // a gash in the ground along the lash, shrinking 7 -> 3 px (fire: glowing, then cooling)
-  const [sx, sy] = worldToScreen(v.x, v.y), n = Math.round(7 - 4 * k), ux = Math.cos(v.a), uy = Math.sin(v.a);
-  const c = v.tier === 2 ? (k < 0.35 ? CHK.f0 : k < 0.7 ? CHK.f1 : CHK.f2) : CHK.scar;
+VFX.chscar = (v, k) => {  // a gash in the ground along the lash: the flame's glows and cools, the frost's is pale, the headsman's is long
+  const [sx, sy] = worldToScreen(v.x, v.y), el = v.el | 0, n = Math.round((el === 5 ? 11 : 7) - 4 * k), ux = Math.cos(v.a), uy = Math.sin(v.a), F = CHE.fire;
+  const c = el === 1 ? (k < 0.35 ? F[2] : k < 0.7 ? F[3] : F[5]) : el === 2 ? (k < 0.5 ? CHE.ice[1] : CHE.ice[3]) : el === 4 ? CHE.ven[4] : CHK.scar;
   for (let j = 0; j < n; j++) {
     const t = j - (n - 1) / 2, x = Math.round(sx + ux * t), y = Math.round(sy + uy * t * 0.5);
     put(x, y, c);
     if (Math.abs(t) < n / 2 - 1) put(x, y + 1, c);
   }
 };
-VFX.chring = (v, k) => {  // the plant ring
-  const [sx, sy] = worldToScreen(v.x, v.y), rx = 6 + 10 * easeOut(k), g = CH_PAL[v.tier | 0].glowC;
+VFX.chring = (v, k) => {  // the clang ring of a blade landing in its slot / of a halo stab
+  const [sx, sy] = worldToScreen(v.x, v.y), rx = 6 + 12 * easeOut(k), g = CH_EL[v.el | 0].glow;
   chRing(sx, sy, rx, rx * 0.5, i => k > 0.6 && i & 1 ? 0 : g);
 };
-VFX.chburst = (v, k) => { // the skewer burst: ice shards out, a frost ring, a white core
-  const [sx, sy] = worldToScreen(v.x, v.y), e = easeOut(k), rx = 30 * e;
-  if (rx >= 1) chRing(sx, sy, rx, rx * 0.6, i => k > 0.6 && i % 3 === 0 ? 0 : CHK.ice2);
-  for (let j = 0; j < 8; j++) {
-    const a = h32(j, 31) * Math.PI * 2, ux = Math.cos(a), uy = Math.sin(a) * 0.6, d = 4 + 24 * e, x = sx + ux * d, y = sy + uy * d;
-    put(Math.round(x), Math.round(y), CHK.white); put(Math.round(x - ux * 1.5), Math.round(y - uy * 1.5), CHK.ice1);
+VFX.chrank = (v, k) => {  // a rank-up / a new blade: 10 rays and two rings in its colour round a white core
+  const [sx, sy] = worldToScreen(v.x, v.y), e = easeOut(k), g = CH_EL[v.el | 0].glow, sm = CH_EL[v.el | 0].smear, L = 8 + (10 + 4 * (v.rk | 0)) * e;
+  for (let j = 0; j < 10; j++) {
+    const a = j * Math.PI / 5 + 0.3, ux = Math.cos(a), uy = Math.sin(a);
+    for (let d = Math.round(L * 0.45); d <= L; d++) {
+      const x = Math.round(sx + ux * d), y = Math.round(sy + uy * d);
+      if (k > 0.55 && BAYER[y & 3][x & 3] < (k - 0.55) * 36) continue;
+      put(x, y, d < L * 0.7 ? sm[0] : g);
+    }
+  }
+  if (e * 18 >= 1) chRing(sx, sy, 18 * e, 18 * e, i => k > 0.6 && i % 3 ? 0 : g);
+  if (k < 0.25) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) put(sx + dx, sy + dy, CHK.white);
+};
+VFX.chflame = (v, k) => { // the flame burst: tongues of fire leaping up in a ring round the hit
+  const [sx, sy] = worldToScreen(v.x, v.y), r = v.r || 12, F = CHE.fire, up = Math.sin(Math.PI * Math.min(1, k * 1.4));
+  for (let j = 0; j < 9; j++) {
+    const a = j / 9 * 2 * Math.PI + 0.3, d = r * (0.4 + 0.6 * easeOut(Math.min(1, k * 2))), bx = Math.round(sx + Math.cos(a) * d), by = Math.round(sy + Math.sin(a) * d * 0.5);
+    const h = Math.round((4 + 4 * h32(j, 5)) * up);
+    for (let y = 0; y < h; y++) { const q = y / Math.max(1, h); put(bx + (y > h / 2 && (j + y) & 1 ? 1 : 0), by - y, q < 0.3 ? F[3] : q < 0.7 ? F[2] : F[1]); }
+  }
+  if (k < 0.2) for (let dy = -1; dy <= 1; dy++) for (let dx = -2; dx <= 2; dx++) put(sx + dx, sy + dy, F[0]);
+};
+VFX.chfrost = (v, k) => { // ice spikes bursting out of the ground round the hit, then crumbling
+  const [sx, sy] = worldToScreen(v.x, v.y), I = CHE.ice, n = v.n || 4, g = k < 0.2 ? k / 0.2 : 1, fade = k > 0.6 ? (k - 0.6) * 40 : 0;
+  for (let j = 0; j < n; j++) {
+    const a = j / n * 2 * Math.PI + 0.5, d = 4 + 4 * h32(j, 9), bx = Math.round(sx + Math.cos(a) * d), by = Math.round(sy + Math.sin(a) * d * 0.5), h = Math.round((5 + 4 * h32(j, 2)) * g);
+    for (let y = 0; y < h; y++) {
+      const X = bx, Y = by - y;
+      if (fade && BAYER[Y & 3][X & 3] < fade) continue;
+      put(X, Y, y === h - 1 ? CHK.white : y > h / 2 ? I[1] : I[3]);
+      if (y < h / 2) put(X + 1, Y, I[4]);
+    }
+  }
+};
+VFX.chzap = (v, k) => {   // a lightning bolt between two points, re-jagged every 2 frames, a white core in a gold body
+  const [x0, y0] = worldToScreen(v.x, v.y), [x1, y1] = worldToScreen(v.x1, v.y1), f = Math.floor(G.t * 30) >> 1, n = 6, fade = k > 0.5 ? (k - 0.5) * 32 : 0;
+  let px = x0, py = y0;
+  const dx = x1 - x0, dy = y1 - y0, d = Math.hypot(dx, dy) || 1, nx = -dy / d, ny = dx / d;
+  for (let j = 1; j <= n; j++) {
+    const off = j < n ? (h32(v.seed + j, f) - 0.5) * 8 : 0, qx = x0 + dx * j / n + nx * off, qy = y0 + dy * j / n + ny * off;
+    const m = Math.max(1, Math.round(Math.hypot(qx - px, qy - py)));
+    for (let s = 0; s <= m; s++) {
+      const x = Math.round(lerp(px, qx, s / m)), y = Math.round(lerp(py, qy, s / m));
+      if (fade && BAYER[y & 3][x & 3] < fade) continue;
+      put(x, y, CHK.white); put(x, y + 1, CHE.gold[1]);
+    }
+    px = qx; py = qy;
+  }
+};
+VFX.chburst = (v, k) => { // the halo's burst: shards of all six colours out, a fire ring, a white core
+  const [sx, sy] = worldToScreen(v.x, v.y), e = easeOut(k), rx = 32 * e;
+  if (rx >= 1) chRing(sx, sy, rx, rx * 0.6, i => k > 0.6 && i % 3 === 0 ? 0 : i & 1 ? CHE.fire[2] : CHE.fire[3]);
+  for (let j = 0; j < 12; j++) {
+    const a = h32(j, 31) * Math.PI * 2, ux = Math.cos(a), uy = Math.sin(a) * 0.6, d = 4 + 26 * e, x = sx + ux * d, y = sy + uy * d, sm = CH_EL[j % 6].smear;
+    put(Math.round(x), Math.round(y), sm[0]); put(Math.round(x - ux * 1.5), Math.round(y - uy * 1.5), sm[1]);
   }
   if (v.t < 0.1) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) put(sx + dx, sy + dy, CHK.white);
 };
-VFX.chice = (v, k) => {   // a rooted enemy: a frost cap and a dither of ice over its body
+VFX.chice = (v, k) => {   // a frozen enemy: a frost cap and a dither of ice over its body
   const e = v.e;
   if (!e || e.dead) return;
   const [sx, sy] = worldToScreen(e.x, e.y), h = Math.max(4, Math.round(e.h || 10)), r = Math.max(2, Math.round((e.r || 6) * 0.7)), top = sy - h;
   const n = 3 + Math.floor(h32(v.x | 0, v.y | 0) * 3), f = Math.floor(G.t * 8);
-  for (let y = top + 1; y < sy; y++) for (let x = sx - r; x <= sx + r; x++) if (BAYER[(y + f) & 3][x & 3] < 2) put(x, y, CHK.ice2);
-  for (let j = 0; j < n; j++) put(sx - (n >> 1) + j, top, CHK.ice1);
+  for (let y = top + 1; y < sy; y++) for (let x = sx - r; x <= sx + r; x++) if (BAYER[(y + f) & 3][x & 3] < 2) put(x, y, CHE.ice[2]);
+  for (let j = 0; j < n; j++) put(sx - (n >> 1) + j, top, CHE.ice[1]);
 };
-VFX.chrays = (v, k) => {  // FIRE CHAINS!: 8 rays
-  const [sx, sy] = worldToScreen(v.x, v.y), L = 10 + 14 * easeOut(k);
-  for (let j = 0; j < 8; j++) {
-    const a = j * Math.PI / 4 + 0.2, ux = Math.cos(a), uy = Math.sin(a);
-    for (let d = Math.round(L * 0.35); d <= L; d++) {
-      const x = Math.round(sx + ux * d), y = Math.round(sy + uy * d);
-      if (k > 0.6 && BAYER[y & 3][x & 3] < (k - 0.6) * 40) continue;
-      put(x, y, d < L * 0.65 ? CHK.ember : CHK.f0);
-    }
-  }
+VFX.chwhirl = (v, k) => { // the whirl's ground ring: a fire ellipse under the spinning blades, rays as it ends
+  const [sx, sy] = worldToScreen(P.x, P.y), sq = Math.sqrt(P.scale), r = chSpinR(sq) * Math.min(1, k * 5), F = CHE.fire;
+  if (r >= 2) chRing(sx, sy, r, r * 0.45, (i, x, y) => (i + Math.floor(G.t * 30)) % 4 === 0 ? 0 : BAYER[y & 3][x & 3] < 10 ? F[3] : F[4]);
 };
-VFX.chpillar = (v, k) => {   // the FROST SPIDER cine: a frost pillar, 8 rays, the ground ring as the blades slam down
-  const [sx, sy] = worldToScreen(v.x, v.y), sq = Math.sqrt(P.scale), H = Math.round(60 * sq * Math.min(1, k / 0.3)), w = Math.max(2, Math.round(lerp(6 * sq, 2, k)));
-  const fade = k > 0.8 ? (k - 0.8) * 80 : 0, x0 = -(w >> 1), mid = x0 + (w - 1) / 2;
+VFX.chhalo = (v, k) => {  // the BLADE HALO cine: a column of fire, a spinning ring of flame over his head, the ground ring as they drop
+  const [sx, sy] = worldToScreen(v.x, v.y), sq = Math.sqrt(P.scale), F = CHE.fire, H = Math.round(64 * sq * Math.min(1, k / 0.25)), fade = k > 0.8 ? (k - 0.8) * 80 : 0;
+  const w = Math.max(2, Math.round(lerp(7 * sq, 2, k))), x0 = -(w >> 1), mid = x0 + (w - 1) / 2, f = Math.floor(G.t * 20);
   for (let y = 0; y < H; y++) for (let x = x0; x < x0 + w; x++) {
-    const X = sx + x, Y = sy - y, e = Math.abs(x - mid) / (w / 2);
+    const X = sx + x + (((y + f) >> 2) & 1), Y = sy - y, e = Math.abs(x - mid) / (w / 2);
     if (fade && BAYER[Y & 3][X & 3] < fade) continue;
-    put(X, Y, e < 0.34 ? CHK.white : e < 0.7 ? CHK.ice1 : CHK.ice2);
+    put(X, Y, e < 0.34 ? F[0] : e < 0.7 ? F[1] : F[3]);
   }
-  const L = lerp(12, 30, k), cy = sy - Math.round(20 * sq);
-  for (let j = 0; j < 8; j++) {
-    const a = h32(j, 7) * Math.PI * 2, ux = Math.cos(a), uy = Math.sin(a);
-    for (let d = 6; d <= L; d++) put(Math.round(sx + ux * d), Math.round(cy + uy * d), d < L * 0.6 ? CHK.white : CHK.ice2);
+  const cy = sy - Math.round(40 * sq), rr = 30 * sq;
+  for (let j = 0; j < 60; j++) {
+    const a = j / 60 * 2 * Math.PI + k * 14, x = Math.round(sx + Math.cos(a) * rr), y = Math.round(cy + Math.sin(a) * rr * 0.4), q = (j % 20) / 20;
+    if (k > 0.72 || (fade && BAYER[y & 3][x & 3] < fade)) continue;
+    put(x, y, q < 0.3 ? F[1] : q < 0.6 ? F[2] : F[4]);
   }
-  if (k >= 0.75) { const rx = 30 * easeOut((k - 0.75) / 0.25); if (rx >= 1) chRing(sx, sy, rx, rx * 0.5, i => i & 1 ? CHK.ice1 : CHK.ice2); }
+  if (k >= 0.72) { const rx = 34 * easeOut((k - 0.72) / 0.28); if (rx >= 1) chRing(sx, sy, rx, rx * 0.5, i => i & 1 ? F[2] : F[3]); }
 };
 if (CH_ENABLE && CH_LIGHT) LIGHT_SRC.push(add => {
-  if (!P || P.dying || !P.chC || chTier() < 2) return;
-  const col = CH_PAL[chTier()].glowC;
-  for (const c of P.chC) if (c.st === CHST.LASH || c.st === CHST.HOLD) add(c.x, c.y, 18, col, 0.35);
+  if (!P || P.dying || !P.chC) return;
+  for (const c of P.chC) {
+    const lit = c.st === CHST.LASH || c.st === CHST.HOLD || c.st === CHST.SPIN;
+    if (lit) add(c.x, c.y, 18, CH_EL[c.i].glow, 0.35);
+    else if (c.i === 1 && c.st === CHST.REST) add(c.x, c.y, 14 + 2 * chRank(1), CH_EL[1].glow, 0.2);   // the flame sword always burns
+  }
 });
 
 </script>
@@ -20368,7 +20698,7 @@ function drawHUD() {
   }
   const streakOn = G.streak >= 10, moonOn = G.moon > 0;
   let rcolX = W;
-  if (streakOn || moonOn) {
+  if ((streakOn || moonOn) && !(PLAYABLE && G.mode === "clear")) {   // the playable's clear card owns that corner
     const sy = HUD_RB + 11, sk = G.streakPop > 0 ? 2 : 1, ss = "X" + G.streak, nx = streakOn ? nextStreakTier() : null;
     const ns = nx && STREAK_PAY[nx[0]] ? nx[0] + ": " + STREAK_PAY[nx[0]] : "", ic = UI_ICON.moon, ms = moonOn ? String(Math.ceil(G.moon)) : "";
     const my = streakOn ? sy + (ns ? 21 : 15) : sy, mw = moonOn ? textW(ms) + 2 + (ic ? ic.w : 0) : 0;
@@ -20426,7 +20756,7 @@ const w=uMin(B.mini?90:120,W-60),x=uR((W-w)/2),y=H-9,nw=textW(B.name),nx=x+uR((w
   drawMetaHUD();
   drawGoalArrows();
   drawStreak(port);
-  drawTutorial();
+  if (!PLAYABLE || G.mode === "play" || G.mode === "intro") drawTutorial();   // no move / eat hints under the playable's cards
   drawChestWhite();
   drawStoreCta();
 }
@@ -20561,9 +20891,9 @@ function drawScreen() {
     dim(0.55);
     ctextTop("LEVEL UP!", port ? 48 : 20, GOLD, 3, { slam: G.menuT });
     const y = drawCards(G.cards, port ? 74 : 44) + (port ? 10 : 8);
-    const bw = 76, x0 = port ? (W - bw) / 2 : W / 2 - bw - 4;
+    const bw = 76, x0 = PLAYABLE || port ? (W - bw) / 2 : W / 2 - bw - 4;
     if (G.rerolls > 0) button(x0, y, bw, 14, "REROLL (" + G.rerolls + ")", "reroll", "grey");
-    button(port ? x0 : W / 2 + 4, port ? y + 20 : y, bw, 14, "AUTO-PICK: " + (G.opts.auto ? "ON" : "OFF"), "opt:auto", "grey");
+    if (!PLAYABLE) button(port ? x0 : W / 2 + 4, port ? y + 20 : y, bw, 14, "AUTO-PICK: " + (G.opts.auto ? "ON" : "OFF"), "opt:auto", "grey");
     drawMuteBtn(); drawStoreCta();
     return;
   }
@@ -20628,6 +20958,7 @@ if(t<0.4)for(let j=y;j<y+vh;j++)for(let i=vx;i<vx+vw;i++)if(BAYER[j&3][i&3]>=16*
   if (m === "dead") {
     UI_RECTS = [];
     dim(0.62, hx("#3a0008"));
+    if (PLAYABLE) { drawDeadPB(port); drawMuteBtn(); drawStoreCta(); return; }
     let y = drawDeadTitle(port ? 50 : 24) + 6;
     const top = Object.entries(G.stats.hits).sort((a, b) => b[1] - a[1])[0];
     y = cwrap("CHAPTER " + (G.ch + 1) + ": " + G.CH.name, y, WHITE);
@@ -20649,6 +20980,7 @@ if(t<0.4)for(let j=y;j<y+vh;j++)for(let i=vx;i<vx+vw;i++)if(BAYER[j&3][i&3]>=16*
   if (m === "pause") {
     UI_RECTS = [];
     dim(0.62);
+    if (PLAYABLE) { drawPausePB(port); drawMuteBtn(); drawStoreCta(); return; }
     const y = slamTitle("PAUSED", port ? 50 : 22, WHITE, 3, G.menuT, { noShine: true }) + (port ? 8 : 5);
     stack(y, [
       ["RESUME", "resume", "green", 16],
@@ -20674,6 +21006,7 @@ function drawEndCard() {
   UI_RECTS = [];
   const port = portrait(), s = G.stats, title = G.ch >= ACT2 ? "YOU ATE THE GOD!" : "YOU ATE THE WORLD!";
   const stats = "TIME " + fmt(s.time) + "  LEVEL " + P.lvl + "  KILLS " + s.kills + "  EATEN " + s.devours + "  DEATHS " + s.deaths;
+  if (PLAYABLE) { dim(0.92); if (port) drawEndCardPB(title, stats); else drawEndCardPBL(title, stats); drawMuteBtn(); drawStoreCta(); return; }
   dim(0.8);
   if (!port) { drawEndCardL(title, stats); return; }
   let y = 4;
@@ -20726,9 +21059,92 @@ function drawEndCardL(title, stats) {
   if (!G.endCancel) { const c = "OPENING " + STORE_NAME + " IN " + uMax(0, Math.ceil(END_AUTO_OPEN - (G.endT || 0))) + "..."; text(c, uR(cx - textW(c) / 2), y + 45, DIM); }
   drawMuteBtn(); drawStoreCta();
 }
+const PB_BW = new Map();
+function pbWrap(s, maxW = W - 8) {
+  s = loc(s);
+  const key = maxW + "|" + s;
+  let best = PB_BW.get(key);
+  if (best) return best;
+  const ws = s.split(" "), go = mw => { const out = []; let cur = ""; for (const w of ws) { const t = cur ? cur + " " + w : w; if (cur && rawW(t) > mw) { out.push(cur); cur = w; } else cur = t; } if (cur) out.push(cur); return out; };
+  best = go(maxW);
+  for (let mw = maxW - 1, n = best.length; n > 1 && mw > 8; mw--) { const o = go(mw); if (o.length > n) break; best = o; }
+  if (PB_BW.size > 200) PB_BW.clear();
+  PB_BW.set(key, best);
+  return best;
+}
+const pbText = (s, y, col, maxW = W - 12, cx = W / 2) => { for (const l of pbWrap(s, maxW)) { text(l, uR(cx - rawW(l) / 2), y, col); y += 8; } return y; };
+function pbPairs(s, maxW) { const out = []; for (const p of loc(s).split("  ")) { const t = out.length ? out[out.length - 1] + "  " + p : null; if (t !== null && rawW(t) <= maxW) out[out.length - 1] = t; else out.push(p); } return out; }
+function drawDeadPB(port) {
+  const top = Object.entries(G.stats.hits).sort((a, b) => b[1] - a[1])[0], hurt = top && top[0] !== "?" ? "HURT MOST BY: " + niceSrc(top[0]) : null;
+  const chs = "CHAPTER " + (G.ch + 1) + ": " + G.CH.name, tip = deathHint(top && top[0]), rev = "RETRY GIVES REVENGE: MORE DAMAGE, LESS PAIN";
+  const L = s => pbWrap(s, W - 12).length * 8, kT = fitK(loc("YOU DIED"), W - 8, 4);
+  const bh = 5 * kT + 3 + 6 + L(chs) + (G.deathBoss ? 17 : 0) + (hurt ? L(hurt) : 0) + L(tip) + 2 + L(rev) + (port ? 10 + 36 : 7 + 18);
+  let y = drawDeadTitle(uMax(HUD_RB + 12, uR((H - bh) / 2))) + 6;
+  y = pbText(chs, y, WHITE);
+  if (G.deathBoss) y = drawDeadBar(y);
+  if (hurt) y = pbText(hurt, y, PALE);
+  y = pbText(tip, y, DIM) + 2;
+  y = pbText(rev, y, hx("#ff8a8a")) + (port ? 10 : 7);
+  if (port) stack(y, [["RETRY CHAPTER", "retry", "orange", 16], STORE_ITEM], 130, 15, 4);
+  else { button(W / 2 - 96, y, 92, 18, "RETRY CHAPTER", "retry", "orange", 1, 0, uiStag(G.menuT, 0)); button(W / 2 + 4, y, 92, 18, "DOWNLOAD", "store", "green", 2, 16, uiStag(G.menuT, 1)); }
+}
+function drawPausePB(port) {
+  const g = port ? 8 : 6, bh = 18 + g + 18 + 5 + 18;
+  const y = slamTitle("PAUSED", uMax(HUD_RB + 12, uR((H - bh) / 2)), WHITE, 3, G.menuT, { noShine: true }) + g;
+  stack(y, [["RESUME", "resume", "green", 18], ["DOWNLOAD", "store", "green", 18, 2, 16]], 130, 18, 5);
+}
+function pbStoreBtn(x, y0, w, h0) {
+  const pulse = uiStorePulse(), bh = h0 + pulse * 2, sy = y0 - pulse, hp = uiHandPhase();
+  UIFX.fake = hp >= 0.15 && hp < 0.25 ? "store" : null;
+  const rx = button(x, sy, w, bh, "DOWNLOAD", "store", "green", 3, 30);
+  UIFX.fake = null;
+  if (pulse === 2) uiStoreHalo(x, sy, w, bh);
+  uiStoreShine(x, sy, w, bh);
+  uiTapHand(rx + 2, sy + (bh >> 1), hp);
+}
+const PB_TOWER = "THE GOD SPOKE OF A TOWER... IT IS IN";
+function drawEndCardPB(title, stats) {
+  const sl = pbPairs(stats, W - 8), tl = pbWrap(PB_TOWER), kT = fitK(loc(title), W - 8, 3), kB = fitK(loc("BUTCHER HERO"), W - 8, 3);
+  const BH = 24, sy = H - 12 - BH, body = (5 * kT + 3) + 1 + sl.length * 8 + tl.length * 8 + 1 + (5 * kB + 3) + 3 + 50;
+  const ah = clamp(sy - 8 - body - 36, 80, 132), spare = uMax(0, sy - (4 + ah + 4) - body), g1 = uR(spare * 0.4);
+  let y = 4;
+  drawFinaleArt(finT(), 0, y, W, ah, -20); rect(0, y + ah, W, 1, INK);
+  rectA(W - 30, HUD_RB - 3, 30, 15, hx("#0a0408"), 0.6); if (G) uiConfetti(G.endT || 0);
+  y += ah + 4;
+  y = ctextTop(title, y, GOLD, 3, { slam: G.menuT, col: uiShim, noShine: 1 }) + 1;
+  for (const l of sl) { centered(l, y, WHITE); y += 8; }
+  y += g1;
+  for (const l of tl) { centered(l, y, PALE); y += 8; }
+  y = ctext("BUTCHER HERO", y + 1, GOLD, 3) + 3;
+  drawDoorsRow(y, END_DOOR_K);
+  pbStoreBtn((W - 150) / 2, sy, 150, BH);
+}
+function drawEndCardPBL(title, stats) {
+  const LW = 150, RX = 158, RW = W - RX - 4, cx = RX + RW / 2, DH = 40, dy = H - 14 - DH;
+  let y = ctextTop(title, 2, GOLD, 2, { maxDrop: 4, left: 4, slam: G.menuT, col: uiShim, noShine: 1 }) - 1;
+  const ah = dy - 5 - y;
+  rect(3, y - 1, LW + 2, ah + 2, INK); drawFinaleArt(finT(), 4, y, LW, ah); if (G) uiConfetti(G.endT || 0, y);
+  drawDoorsRow(dy, END_DOOR_K, 44, DH, 9, 4 + LW / 2);
+  const rows = loc(stats).split("  ").map(p => { const i = p.lastIndexOf(" "); return [p.slice(0, i), p.slice(i + 1)]; });
+  const TW = uMin(RW - 16, 120), tx = uR(cx - TW / 2);
+  let ry = HUD_RB + 12;
+  for (const [a, b] of rows) {
+    const aw = rawW(a), bw = rawW(b);
+    text(a, tx, ry, PALE); text(b, tx + TW - bw, ry, WHITE);
+    for (let x = tx + aw + 3; x < tx + TW - bw - 3; x += 2) put(x, ry + 4, DIM);
+    ry += 9;
+  }
+  const BH = 24, sy = dy + uR((DH + 10 - BH) / 2), tl = pbWrap(PB_TOWER, RW), kB = fitK(loc("BUTCHER HERO"), RW, 3);
+  const mid = tl.length * 8 + 1 + 5 * kB + 3;
+  let my = ry + uMax(2, uR((sy - ry - mid) / 2));
+  for (const l of tl) { text(l, uR(cx - rawW(l) / 2), my, PALE); my += 8; }
+  text("BUTCHER HERO", uR(cx - textW("BUTCHER HERO", kB) / 2), my + 1, GOLD, kB);
+  pbStoreBtn(RX, sy, RW, BH);
+}
 const END_AUTO_OPEN = 9;
 const finT = () => G.finT === undefined ? G.endT || 0 : G.finT;
 function drawChapterStars(y) {
+  if (PLAYABLE) { drawTowerTeaser(); return y; }
   if (G.endless || G.starsNow === undefined) return y;
   const mt = G.menuT || 0, x0 = uR(W / 2 - 27), sy = y + 4, S = typeof STAR_ICON !== "undefined" && STAR_ICON.on && STAR_ICON.on.w ? STAR_ICON : null;
   let sh = 0;
@@ -20756,6 +21172,11 @@ uiBurst(cx,cy,ts-0.12,8,17+i,{life:0.4,v:70,drag:5,g:120,c0:PALE,c1:GOLD,c2:GOLD
   const miss = [0, 1, 2].find(i => !((G.starsNow >> i) & 1));
   y = sy + 17;
   if (miss !== undefined) y = ctext("NEXT STAR: " + (miss === 2 && G.CH.goal ? "COMPLETE THE GOAL" : STAR_TIPS[miss]), y, DIM, 1, uiC01((mt - 0.46) / 0.08));
+  drawTowerTeaser();
+  return y;
+}
+function drawTowerTeaser() {
+  const mt = G.menuT || 0;
   if (G.ch === 2 && G.bossTime) {
     const k = clamp((mt - 0.6) / 1.2, 0, 1) * (mt < 4 ? 1 : uMax(0, 1 - (mt - 4) / 0.6));
     if (k > 0) {
@@ -20766,7 +21187,6 @@ uiBurst(cx,cy,ts-0.12,8,17+i,{life:0.4,v:70,drag:5,g:120,c0:PALE,c1:GOLD,c2:GOLD
       if (k > 0.5) { uiRect(dx, dy - 9, dw, dh + 11, "store"); button(bx, dy + dh + 3, bw, 18, "DOWNLOAD", "store", "green", 2, 16); }
     }
   }
-  return y;
 }
 const SRC_NAMES = { puddle: "PUDDLES", "ship:volley": "CANNON VOLLEYS", "womb:clench": "THE STOMACH", acid: "ACID", keg: "POWDER KEGS", explosive: "EXPLODING ELITES", "kraken:whirl": "THE WHIRLPOOL" };
 const FOE_PL = { lizard: "LIZARDMEN", antibody: "ANTIBODIES", yeti: "YETIS", plant: "MAN-EATERS", skel: "SKELETONS", slimelet: "SLIMELETS" };
@@ -20973,7 +21393,7 @@ function drawRoad(){
   const port=portrait(),T=G.menuT,ch=G.ch,V=hx("#d08aff"),Q=hx("#3a2a40");
   dim(.84);
   let y=ctextTop("THE ROAD",port?12:4,GOLD,3,{slam:T});
-  const n=CHAPTERS.length,x0=port?13:38,step=(W-2*x0)/(n-1),cy=y+8,a2=G.interDone||PROFILE.act2,sk=ch<3&&!(typeof UNLOCKS!=="undefined"&&UNLOCKS.dark),
+  const n=CHAPTERS.length,x0=port?13:38,step=(W-2*x0)/(n-1),cy=y+8,a2=G.interDone||PROFILE.act2,sk=!PLAYABLE&&ch<3&&!(typeof UNLOCKS!=="undefined"&&UNLOCKS.dark),
     ax=x0+ch*step,h=.1+ch*.03,q=uMax(0,T-h)/.25,f=q%1,p=uiC01((f-.2)/.8),air=q<2,sq=air?f<.2&&T>h:q<2.24,mx=uR(air?ax+step/4*((q|0)+easeIO(p)):ax+step/2);
   for(let x=x0;x<=W-x0;x+=3)put(x,cy,x>=ax&&x<=mx?GOLD:hx("#5a4a3a"));
   for(let i=0;i<n;i++){
@@ -20983,7 +21403,7 @@ function drawRoad(){
     L.draw(i===ACT2?RED:INK);
     if(t<.1)continue;
     if(done){blit(SPR.icons.skull,cx-3,cy-3);if(T%2<.2&&i===uF(T/2)%(ch+1))put(cx-2,cy-2,GOLD)}else if(hid)text("?",cx-1,cy-2,DIM);else{const s=String(i+1);text(s,cx-uF(textW(s)/2),cy-2,INK)}
-    for(let k=0;k<3;k++)put(cx-2+k*2,cy+7,(PROFILE.stars[i]||0)>>k&1?GOLD:Q);
+    if(!PLAYABLE)for(let k=0;k<3;k++)put(cx-2+k*2,cy+7,(PROFILE.stars[i]||0)>>k&1?GOLD:Q);
     if(i===3&&sk&&uF(G.clock*3)%2){put(cx,cy-8,V);put(cx-1,cy-9,V);put(cx+1,cy-9,V);put(cx,cy-10,WHITE)}
   }
   if(T>h)for(let i=-2;i<3;i++)if(mx+i+cy&1)put(mx+i,cy+3,INK);
@@ -22508,17 +22928,17 @@ function markBook(kind, key) {
   const B = PROFILE.book[kind];
   if (!B || B[key]) return;
   B[key] = 1; profileDirty = true;
-  if (kind !== "foe" && G && G.mode === "play" && P) popup("NEW IN THE BOOK!", P.x, P.y - 74 * P.scale, hx("#8af0ff"), 1, 1.4);
+  if (kind !== "foe" && G && G.mode === "play" && P) popup(PLAYABLE ? "" : "NEW IN THE BOOK!", P.x, P.y - 74 * P.scale, hx("#8af0ff"), 1, 1.4);
 }
 const RANKS = [[0, "APPRENTICE", ""], [300, "CUTTER", "GOLDEN HOOK"], [1000, "BUTCHER", "RED CHAINS"], [2500, "MEAT LORD", "GOLD MASK"], [6000, "GOD OF MEAT", "CRIMSON AURA"]];
 const rankOf = n => RANKS.reduce((r, [k], i) => (n >= k ? i : r), 0);
-const myRank = () => rankOf(PROFILE.eaten);
+const myRank = () => PLAYABLE ? 0 : rankOf(PROFILE.eaten);
 function addEaten() {
   PROFILE.eaten++; profileDirty = true;
   const r = rankOf(PROFILE.eaten);
   if (r > PROFILE.rankSeen) {
     PROFILE.rankSeen = r;
-    if (G && P) { banner("RANK UP: " + RANKS[r][1] + "!", GOLD, 2.4, "UNLOCKED: " + RANKS[r][2]); sfx("fanfare"); }
+    if (G && P && !PLAYABLE) { banner("RANK UP: " + RANKS[r][1] + "!", GOLD, 2.4, "UNLOCKED: " + RANKS[r][2]); sfx("fanfare"); }
   }
 }
 function chapterStars() {
@@ -22737,11 +23157,11 @@ function drawEvoHint(h, x, y, w) {
 "use strict";
 
 const Q = new URLSearchParams(location.search);
-const BOTPLAY = Q.has("bot"), SPEED = +(Q.get("speed") || 1), NO_REDIRECT = Q.has("noredirect") || BOTPLAY;
-const AUTO_STORE = !NO_REDIRECT && !window.BH_AD_BUILD;
+const BOTPLAY = Q.has("bot"), SPEED = PLAYABLE ? Math.min(8, Math.max(0.25, +Q.get("speed") || 1)) : +(Q.get("speed") || 1), NO_REDIRECT = Q.has("noredirect") || BOTPLAY;
+const AUTO_STORE = !NO_REDIRECT && !window.BH_AD_BUILD && !PLAYABLE;
 const SAVE_KEY = "bhpx_save_v1", OPT_KEY = "bhpx_opts_v1", UNL_KEY = "bhpx_unlocks_v1", PROF_KEY = "bhpx_profile_v1";
 let keys = {}, lastT = 0, titleT = 0, botWait = 0, pointers = new Map();
-const kv = {
+const kv = PLAYABLE ? { get: (k, d) => d, set() { } } : {
   get(k, d) { try { const v = JSON.parse(localStorage.getItem(k)); return v === null || v === undefined ? d : v; } catch (e) { return d; } },
   set(k, v) { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch (e) { } },
 };
@@ -22752,9 +23172,9 @@ saveProgress = (idx, snap) => kv.set(SAVE_KEY, idx < 0 ? null : { ch: idx, snap 
 const loadSave = () => kv.get(SAVE_KEY, null);
 profileLoad(kv.get(PROF_KEY, null));
 const saveProfile = () => { if (profileDirty) { profileDirty = false; kv.set(PROF_KEY, PROFILE); } };
-onMode = () => saveProfile();
-setInterval(saveProfile, 15000);
+if (!PLAYABLE) { onMode = () => saveProfile(); setInterval(saveProfile, 15000); }
 onVictory = () => {
+  if (PLAYABLE) { G.unlockMsg = ""; G.endT = 0; G.finT = 0; G.endCancel = true; G.endOpened = true; return; }
   const fresh = !UNLOCKS.won;
   PROFILE.wins++; profileDirty = true; saveProfile();
   UNLOCKS.won = true; UNLOCKS.dark = true; kv.set(UNL_KEY, UNLOCKS);
@@ -22762,6 +23182,7 @@ onVictory = () => {
   G.endT = 0; G.finT = 0; G.endCancel = !AUTO_STORE; G.endOpened = false;
 };
 onUnlock = k => {
+  if (PLAYABLE) return;
   if (k === "dark" && !UNLOCKS.dark) { UNLOCKS.dark = true; kv.set(UNL_KEY, UNLOCKS); popup("SKIN UNLOCKED: DARK BUTCHER", P.x, P.y - 70, hx("#c890ff"), 1, 2.5); }
 };
 function openStore() {
@@ -22782,9 +23203,12 @@ function autoOpenStore() {
   if (window.mraid || window.ExitApi || window.dapi || window.FbPlayableAd || typeof window.install === "function") openStore();
   else location.href = STORE;
 }
+let adHidden = false;
+const adViewable = () => { try { return !window.mraid || !mraid.isViewable || !!mraid.isViewable(); } catch (e) { return true; } };
 if (window.mraid && mraid.addEventListener) {
   try {
     mraid.addEventListener("viewableChange", v => {
+      if (PLAYABLE) adHidden = !v;
       if (!v && G && G.mode === "play") uiAction("pause");
       if (audio) { if (v) audio.resume(); else audio.suspend(); }
     });
@@ -22820,7 +23244,7 @@ function toArt(e) {
 function hitRectAt(p) { for (let i = UI_RECTS.length - 1; i >= 0; i--) { const r = UI_RECTS[i]; if (p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h) return r; } return null; }
 function hitRect(p) { const r = hitRectAt(p); return r ? r.id : null; }
 function newGame(ch = 0, snap = null) {
-  newRun({ god: Q.has("god"), opts: OPTS });
+  newRun({ god: !PLAYABLE && Q.has("god"), opts: OPTS });
   startChapter(ch, snap);
 }
 let WIPE = null;
@@ -22836,8 +23260,10 @@ function drawWipe(dt) {
   }
 }
 const WIPE_IDS = new Set(["next", "retry", "new", "continue", "endless", "title", "again", "node0", "node1", "node2", "leave"]);
+const PB_OFF = /^(title|again|endless|new|continue|book|bback|locked)$|^(opt|btab|bsel):/;
 function uiAction(id) {
   if (!id) return false;
+  if (PLAYABLE && PB_OFF.test(id)) return false;
   if (WIPE_IDS.has(id)) {
     const pr = UIFX.press;
     if (pr && pr.id === id && UIFX.t - pr.t0 < 0.1) pressPaint(pr);
@@ -22884,7 +23310,7 @@ function uiAction(id) {
 screenCv.addEventListener("pointerdown", e => {
   e.preventDefault();
   unlockAudio();
-  TOUCHED = true;
+  TOUCHED = true; adHidden = false;
   if (e.pointerType !== "mouse") INPUT_KIND = "touch";
   const p = toArt(e);
   const hit = hitRectAt(p), id = hit ? hit.id : null;
@@ -22942,7 +23368,7 @@ screenCv.addEventListener("pointercancel", e => { storeArm.delete(e.pointerId); 
 addEventListener("keydown", e => {
   keys[e.code] = true;
   unlockAudio();
-  TOUCHED = true;
+  TOUCHED = true; adHidden = false;
   if (/^(Key[WASD]|Arrow)/.test(e.code)) INPUT_KIND = "keys";
   if (G.mode === "play") {
     if (e.code === "Space" || e.code === "KeyJ") hookNearest();
@@ -22959,7 +23385,7 @@ addEventListener("keydown", e => {
     uiAction("opt" + (e.code === "Enter" ? 0 : +e.code.slice(5) - 1));
   } else if (G.mode === "intro" && (e.code === "Space" || e.code === "Enter")) setMode("play");
   else if (G.mode === "interlude" && (e.code === "Space" || e.code === "Enter") && !menuFresh()) interludeTap();
-  else if (G.mode === "clear" && (e.code === "Space" || e.code === "Enter")) nextChapter();
+  else if (G.mode === "clear" && (e.code === "Space" || e.code === "Enter")) { if (PLAYABLE) uiAction("next"); else nextChapter(); }
   else if (G.mode === "pause" && (e.code === "KeyP" || e.code === "Escape")) uiAction("resume");
   else if (G.mode === "book" && (e.code === "Escape" || e.code === "Backspace")) uiAction("bback");
   else if (G.mode === "book" && /^Arrow/.test(e.code)) { const n = bookEntries(G.bookTab).length; G.bookSel = (G.bookSel + (e.code === "ArrowRight" ? 1 : e.code === "ArrowLeft" ? -1 : e.code === "ArrowDown" ? 8 : -8) + n) % n; }
@@ -23124,7 +23550,8 @@ music = {
 };
 
 function goTitle() {
-  newRun({ god: Q.has("god"), opts: OPTS });
+  if (PLAYABLE) { newGame(0); return; }
+  newRun({ god: !PLAYABLE && Q.has("god"), opts: OPTS });
   prepChapter(0);
   G.mode = "title"; titleT = 0;
   P.x = AW / 2; P.y = AH / 2 + 10;
@@ -23173,7 +23600,8 @@ const VSYNC = [1 / 60, 1 / 120, 1 / 90, 1 / 144, 1 / 75, 1 / 30];
 function loop(now) {
   let fdt = Math.max(0, Math.min(0.05, (now - (lastT || now)) / 1000));
   for (const r of VSYNC) if (Math.abs(fdt - r) < 0.0015) { fdt = r; break; }
-  const dt = fdt * SPEED;
+  if (adHidden && adViewable()) adHidden = false;
+  const dt = adHidden ? 0 : fdt * SPEED;
   lastT = now;
   G.frameDt = dt;
   const m = G.mode;
@@ -23193,9 +23621,10 @@ function loop(now) {
       for (let i = 0; i < n; i++) { if (BOTPLAY) BOT.act(); update(dt / n); if (G.mode !== "play") break; }
     } else G.clock += dt;
     if (G.mode !== m && AUTO_WIPE.has(G.mode)) startWipe(0.35);
-    if (m === "intro") { G.introT = (G.introT || 0) + dt; if (G.introT > (BOTPLAY ? 1.5 : window.BH_AD_BUILD ? 3 : 60)) setMode("play"); }
+    if (m === "intro") { G.introT = (G.introT || 0) + dt; if (G.introT > (BOTPLAY ? 1.5 : window.BH_AD_BUILD || PLAYABLE ? 3 : 60)) setMode("play"); }
     if (m === "victory") G.finT = (G.finT || 0) + dt;
-    if (m === "victory" && !G.endCancel) {
+    if (m === "victory" && PLAYABLE) G.endT = G.finT;   // playable: no countdown, but confetti + title shimmer still run
+    if (m === "victory" && !G.endCancel && !PLAYABLE) {
       G.endT = (G.endT || 0) + dt;
       if (G.endT >= END_AUTO_OPEN && !G.endOpened) { G.endOpened = true; G.endCancel = true; autoOpenStore(); }
     }
@@ -23217,7 +23646,8 @@ function loop(now) {
 }
 function boot() {
   applyOrientation();
-  if (window.BH_AD_BUILD && !BOTPLAY) newGame(0); else goTitle();
+  if (PLAYABLE && window.mraid) adHidden = !adViewable();
+  if (PLAYABLE || (window.BH_AD_BUILD && !BOTPLAY)) newGame(0); else goTitle();
   requestAnimationFrame(loop);
 }
 if (window.mraid && mraid.getState && mraid.getState() === "loading") mraid.addEventListener("ready", boot);
