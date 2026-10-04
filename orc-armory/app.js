@@ -16,7 +16,8 @@ const CHARACTERS = [
   { id: 'cascadeur', label: 'Cascadeur', title: 'Орчиха-воительница', sub: 'AutoPhysics Cascadeur · ровные тайминги · физика v2', file: 'models/orc-outfit-anim-rigfix6.glb', bytes: 0 },
   ] },
   { id: 'tauren', name: 'Таурен', title: 'Байн, тауренша', note: 'риг · 10 анимаций', avatar: 'avatars/tauren.webp', models: [
-  { id: 'baine', label: 'Риг + анимации', title: 'Байн, тауренша', sub: 'риг Blender · 4 своих клипа + 6 анимаций орка', file: '../orc-viewer/models/baine-rigged.glb', bytes: 16242532 },
+  { id: 'baine-fit', label: 'Броня по фигуре', title: 'Байн, тауренша', sub: 'броня подогнана по телу (shrinkwrap) · без булавы · 10 анимаций', file: 'models/baine-fit-rigged.glb', bytes: 14577364 },
+  { id: 'baine', label: 'До подгонки', title: 'Байн, тауренша', sub: 'риг Blender · 4 своих клипа + 6 анимаций орка', file: '../orc-viewer/models/baine-rigged.glb', bytes: 16242532 },
   ] },
 ];
 const query = new URLSearchParams(location.search);
@@ -698,7 +699,7 @@ addEventListener('resize', resize);
 resize();
 // ---------- animation ----------
 const ANIM_LABELS = { idle: 'Стойка', walk: 'Ходьба', run: 'Бег', slash: 'Удар', cheer: 'Победа', rig_test: 'Тест рига',
-  Idle: 'Стойка', Walk: 'Шаг', Attack: 'Удар булавой', Roar: 'Рёв',
+  Idle: 'Стойка', Walk: 'Шаг', Attack: 'Удар', Roar: 'Рёв',
   OrcIdle: 'Стойка орка', OrcWalk: 'Ходьба орка', OrcRun: 'Бег орка', OrcSlash: 'Удар орка', OrcCheer: 'Победа орка', OrcRigTest: 'Тест рига' };
 const ANIM_ORDER = ['idle', 'walk', 'run', 'slash', 'cheer', 'rig_test', 'Idle', 'Walk', 'Attack', 'Roar', 'OrcIdle', 'OrcWalk', 'OrcRun', 'OrcSlash', 'OrcCheer', 'OrcRigTest'];
 const anim = { mixer: null, clips: [], action: null, playing: true, speed: 1 };
