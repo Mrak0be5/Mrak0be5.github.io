@@ -19939,7 +19939,7 @@ function drawCineText(c, t, full) {
   const evo = c.kind === "evo", rage = c.kind === "rage", sup = evo && c.sub === "SUPER EVOLUTION";
   const title = loc(c.title), n = [...title].length, lines = c.sub ? wrap(c.sub, uF((W - 8) / 4)) : [];
   const tight = fitK(title, W - 8, 3) < 3 && textW(title, 3) - (n - 1) <= W - 8 ? 1 : 0, kk = tight ? 3 : fitK(title, W - 8, 3);
-  const lineGap = evo ? 3 : 5, blockH = 5 * kk + (lines.length ? lineGap + lines.length * 7 : 0), y = H - full + uR((full - blockH) / 2);
+  const lineGap = evo ? 3 : 5, blockH = 5 * kk + (lines.length ? lineGap + lines.length * 7 : 0), y = uR((full - blockH) / 2);
   const dz = 1 - uiC01((t - (c.dur - 0.45)) / 0.2);
   if (dz <= 0.02) return;
   const dith = dz < 1 ? dz : undefined, tw = textW(title, kk) - tight * (n - 1), land = uiCineTitleSlam(c);
@@ -20045,7 +20045,7 @@ function drawEvoCine(c) {
     const len = 30 + 60 * easeOut(uiC01((t - 0.05) / 0.25)), ang = (sup ? -0.8 : 0.5) * t;
     uiRays(cx, cy, ang, sup ? 16 : 12, 8, len, PALE, UI_EVO.gold, [cx, cy + 4, hr, hr], sup ? RED : 0);
   }
-  const key = uiEvoIconKey(c), spr = key ? uiIconSprite(key) : null, top = portrait() ? 26 : CTA_H;
+  const key = uiEvoIconKey(c), spr = key ? uiIconSprite(key) : null, top = portrait() ? 40 : 30;
   let ix = cx, iy = cy - uR((50 * hs + 16) * zk);
   if (cy - 50 * hs - 32 < top + 2) { ix = uMin(W - 18, cx + uR((62 * hs + 22) * zk)); iy = uMax(top + 18, cy - uR(36 * zk)); }
   if (t >= 0.3 && t < 0.6) { const r = 16 + 12 * easeOut((t - 0.3) / 0.3); ellipseRing(ix, iy, r, r, GOLD, 2, uF(t * 30) % 2); }
@@ -20487,7 +20487,7 @@ function ctext(s, y, col, k = 1, a = 1) {
   if (a >= 1) centered(s, y, col, k); else if (a > 0) text(s, uR((W - textW(s, k)) / 2), y, col, k, INK, { dither: a });
   return y + 5 * k + 3;
 }
-function topZones() { const c = ctaRect(); return [[c.x - 8, 0, W, CTA_H + 3], [W - 28, HUD_RB, W, HUD_RB + 10]]; }
+function topZones() { return [[W - 28, HUD_RB, W, HUD_RB + 10]]; }   // mute + pause (the store CTA sits in the bottom-right corner)
 function clearOfTop(x, y, w, h) { return topZones().every(([x0, y0, x1, y1]) => x + w + 1 <= x0 || x >= x1 + 1 || y + h + 1 <= y0 || y >= y1 + 1); }
 function ctextTop(s, y, col, k = 1, o = {}) {
   k = fitK(s, W - 8, k);
@@ -20509,9 +20509,15 @@ function stack(y, items, w = 110, h = 15, gap = 5, T = G.menuT) {
   for (const it of items) { if (!it) continue; button((W - w) / 2, y, w, it[3] || h, it[0], it[1], it[2], it[4] || 1, it[5] || 0, uiStag(T, j++)); y += (it[3] || h) + gap; }
   return y;
 }
-const STORE_ITEM = ["DOWNLOAD", "store", "green", 16, 2, 16];
-const CTA_H = 18;
-function ctaRect() { const bw = textW("DOWNLOAD", 2) + 10; return { x: W - 20 - bw, y: 1, w: bw, h: 16 }; }
+const CTA_H = 18;   // the HUD's top band: the second row (mute, pause, kills) starts under it
+const CTA_K = 3, CTA_BH = 24, CTA_IS = 28, CTA_BAND = CTA_IS + 3;
+function ctaRect() { const bw = textW("DOWNLOAD", CTA_K) + 14; return { x: W - CTA_IS - 6 - bw, y: H - 2 - CTA_BH, w: bw, h: CTA_BH }; }
+function ctaZone() { const b = ctaRect(); return { x: b.x - 2, y: H - CTA_BAND, w: W - b.x + 2, h: CTA_BAND }; }   // its tap rect; keep the rest out of it
+function ctaDodge(w, h, y, minY = y, x = uR((W - w) / 2)) {
+  const z = ctaZone(), ly = z.y - 2 - h;
+  if (y + h < z.y || x + w < z.x) return [x, y];
+  return ly >= minY || z.x < w + 8 ? [x, ly] : [uR((z.x - w) / 2), y];
+}
 function drawStoreCta() {
   const b = ctaRect(), t = G ? G.clock : 0, glow = 0.5 + 0.5 * Math.sin(t * 3.2);
   const C = BTN_COLORS.green;
@@ -20520,9 +20526,9 @@ function drawStoreCta() {
   if (glow > 0.55) rect(b.x + 1, b.y, b.w - 2, 1, hx("#b8e880"));
   const p = (t % 3) / 0.7;
 if(p<1)for(let j=2;j<b.h-2;j++){const sx=uR(b.x-8+p*(b.w+16)-j/2);for(let i=0;i<4;i++)if(sx+i>=b.x&&sx+i<b.x+b.w)put(sx+i,b.y+j,mix(pix[(b.y+j)*W+sx+i],WHITE,i===1||i===2?0.45:0.25));}
-  text("DOWNLOAD", b.x + uR((b.w - textW("DOWNLOAD", 2)) / 2), b.y + 4, WHITE, 2);
-  drawStoreIcon(W - 17, 1, 16);
-  uiRect(b.x - 2, 0, W - b.x + 2, CTA_H, "store");
+  text("DOWNLOAD", b.x + uR((b.w - textW("DOWNLOAD", CTA_K)) / 2), b.y + 5, WHITE, CTA_K);
+  drawStoreIcon(W - CTA_IS - 2, H - CTA_IS - 2, 30);
+  const z = ctaZone(); uiRect(z.x, z.y, z.w, z.h, "store");
 }
 const STORE_TWIN_PAL = {
   k: hx("#5e4e66"), K: hx("#24101a"), Y: hx("#ffe04a"), y: hx("#f0b030"), P: hx("#fff2a0"), W: hx("#ffffff"), R: hx("#d0283a"), r: hx("#8a1428"), O: hx("#ff5a4a"),
@@ -20616,14 +20622,14 @@ function drawIcon(key, cx, cy, scale = 2) {
 
 function drawCineBars() {
   const c = G.cine, port = portrait(), t = uMax(0, c.t), full = port ? 40 : 30;
-  const k = uMax(0, uMin(1, t / 0.25, (c.dur - t) / 0.25)), top = uR(k * (port ? 26 : CTA_H)), bh = uR(k * full);
+  const k = uMax(0, uMin(1, t / 0.25, (c.dur - t) / 0.25)), top = uR(k * full), bh = uR(k * (CTA_BAND + 2));
   if (c.kind === "evo") drawEvoCine(c);
   const sh = uiCineShake(c, t), tb = top + sh, by = H - bh + sh;
   rect(0, 0, W, tb, BLACK); rect(0, by, W, H - by, BLACK);
   uiBarLines(0, tb, t, 3); uiBarLines(by, H - by, t, 5);
   if (tb > 2) rect(0, tb - 1, W, 1, UI_CINE.dark);
   if (H - by > 2) rect(0, by, W, 1, UI_CINE.dark);
-  if (bh >= full - 1) drawCineText(c, t, full);
+  if (top >= full - 1) drawCineText(c, t, full);
 }
 function phaseLabel() {
   if (G.phase === "den") { const n = denLeft(); return [n ? "CHAMPIONS LEFT: " + n : "DEN CLEARED!", GOLD]; }
@@ -20680,7 +20686,7 @@ function drawHUD() {
   if (G.mode === "play" && !bossUp) {
     if (port) { centered(t, py, col); centered(chn, py + 8, DIM); }
     else {
-      const L0 = 14 + bw + 8 + 3 + textW(String(Math.ceil(P.hp))) + 7, R0 = ctaRect().x - 4;
+      const L0 = 14 + bw + 8 + 3 + textW(String(Math.ceil(P.hp))) + 7, R0 = W - 4;
       const at = (s, y, c) => { const w = textW(s); text(s, w > R0 - L0 ? uR((W - w) / 2) : clamp(uR((W - w) / 2), L0, R0 - w), y, c); };
       at(t, 3, col); at(textW(chn) > R0 - L0 && G.phase === "waveB" && goalLive() ? goalTxt() : chn, 11, DIM);
     }
@@ -20719,7 +20725,8 @@ function drawHUD() {
   const roomText = (s, y, col, k) => text(s, uR((roomW - textW(s, k)) / 2), y, col, k);
   const B = G.boss;
   if (B && B.entering <= 0) {
-const w=uMin(B.mini?90:120,W-60),x=uR((W-w)/2),y=H-9,nw=textW(B.name),nx=x+uR((w-nw)/2),p0=uMin(x,nx)-4,p1=uMax(x+w,nx+nw)+4;
+    const z = ctaZone(), w = uMin(B.mini ? 90 : 120, W - 60), nw = textW(B.name), side = z.x - 8 >= uMax(w, nw) + 8;
+const x=uR(((side?z.x:W)-w)/2),y=side?H-9:z.y-9,nx=x+uR((w-nw)/2),p0=uMin(x,nx)-4,p1=uMax(x+w,nx+nw)+4;
     if (!UIFX.bossSeen.has(B)) UIFX.bossSeen.set(B, UIFX.t);
     const bt = UIFX.t ? UIFX.t - UIFX.bossSeen.get(B) : 9, bk = B.hp / B.maxHp * easeOut(uiC01(bt / 0.6)), bf = x + uR(w * clamp(bk, 0, 1));
     rectA(p0, y - 11, p1 - p0, 17, UI_SHADE, 0.5);
@@ -20891,10 +20898,10 @@ function drawScreen() {
     UI_RECTS = [];
     dim(0.55);
     ctextTop("LEVEL UP!", port ? 48 : 20, GOLD, 3, { slam: G.menuT });
-    const y = drawCards(G.cards, port ? 74 : 44) + (port ? 10 : 8);
-    const bw = 76, x0 = PLAYABLE || port ? (W - bw) / 2 : W / 2 - bw - 4;
+    const y = drawCards(G.cards, port ? 74 : 40) + (port ? 10 : 6);
+    const bw = 76, x0 = PLAYABLE ? (W - bw) / 2 : W / 2 - bw - 4;
     if (G.rerolls > 0) button(x0, y, bw, 14, "REROLL (" + G.rerolls + ")", "reroll", "grey");
-    if (!PLAYABLE) button(port ? x0 : W / 2 + 4, port ? y + 20 : y, bw, 14, "AUTO-PICK: " + (G.opts.auto ? "ON" : "OFF"), "opt:auto", "grey");
+    if (!PLAYABLE) button(W / 2 + 4, y, bw, 14, "AUTO-PICK: " + (G.opts.auto ? "ON" : "OFF"), "opt:auto", "grey");
     drawMuteBtn(); drawStoreCta();
     return;
   }
@@ -20931,8 +20938,8 @@ if(t<0.4)for(let j=y;j<y+vh;j++)for(let i=vx;i<vx+vw;i++)if(BAYER[j&3][i&3]>=16*
     if (G.CH.goal) y = cwrap("GOAL: " + GOALS[G.CH.goal].hint, y, GOLD) + 6;
     if (G.ch === 0 && !G.endless) y = cwrap(INPUT_KIND === "keys" ? "WASD OR ARROWS TO MOVE. HOOKING, EATING AND DODGING ARE AUTOMATIC" :
       "ONE FINGER: DRAG TO MOVE. HOOKING, EATING AND DODGING ARE AUTOMATIC", y, DIM) + 6;
-    const ts = "TAP TO START", tw = textW(ts), tx = uR((W - tw) / 2), tc = mix(WHITE, DIM, 0.5 + 0.5 * Math.sin(t * 4)), cf = uF(t * 4) % 2;
-    text(ts, tx, y + 6, tc); text(">", tx - 7 + cf, y + 6, tc); text("<", tx + tw + 3 - cf, y + 6, tc);
+    const ts = "TAP TO START", tw = textW(ts), [ax, ty] = ctaDodge(tw + 14, 5, y + 6), tx = ax + 7, tc = mix(WHITE, DIM, 0.5 + 0.5 * Math.sin(t * 4)), cf = uF(t * 4) % 2;
+    text(ts, tx, ty, tc); text(">", tx - 7 + cf, ty, tc); text("<", tx + tw + 3 - cf, ty, tc);
     uiRect(0, 16, W, H - 16, "start");
     drawMuteBtn(); drawStoreCta();
     return;
@@ -20952,7 +20959,8 @@ if(t<0.4)for(let j=y;j<y+vh;j++)for(let i=vx;i<vx+vw;i++)if(BAYER[j&3][i&3]>=16*
     const nxt = G.ch === ACT2 - 1 && !G.interDone && !G.endless ? "???" : G.ch + 1 < CHAPTERS.length ? CHAPTERS[G.ch + 1].name : "LOOP " + (G.loop + 2) + ": " + CHAPTERS[0].name;
     y = cwrap("NEXT: " + nxt, y, GOLD, 9, ra(7));
     y = cwrap("+50% HP BEFORE THE NEXT CHAPTER", y, GREEN, 9, ra(8));
-    button(W / 2 - 40, uMax(y + 6, H - 36), 80, 16, "CONTINUE", "next", "green");
+    const [nx, ny] = ctaDodge(80, 16, uMax(y + 6, H - 36), y + 6);
+    button(nx, ny, 80, 16, "CONTINUE", "next", "green");
     drawMuteBtn(); drawStoreCta();
     return;
   }
@@ -20968,11 +20976,11 @@ if(t<0.4)for(let j=y;j<y+vh;j++)for(let i=vx;i<vx+vw;i++)if(BAYER[j&3][i&3]>=16*
     y = cwrap(deathHint(top && top[0]), y, DIM) + 2;
     y = cwrap("RETRY GIVES REVENGE: MORE DAMAGE, LESS PAIN", y, hx("#ff8a8a")) + 4;
     y = drawAlmost(y, 5) + (port ? 6 : 3);
-    if (port) stack(y, [["RETRY CHAPTER", "retry", "orange"], STORE_ITEM, ["MENU", "title", "grey", 13]], 120);
+    if (port) stack(y, [["RETRY CHAPTER", "retry", "orange"], ["MENU", "title", "grey", 13]], 120);
     else {
-      button(W / 2 - 122, y, 88, 16, "RETRY CHAPTER", "retry", "orange", 1, 0, uiStag(G.menuT, 0));
-      button(W / 2 - 30, y, 88, 16, "DOWNLOAD", "store", "green", 2, 16, uiStag(G.menuT, 1));
-      button(W / 2 + 62, y, 60, 16, "MENU", "title", "grey", 1, 0, uiStag(G.menuT, 2));
+      const [rx, ry] = ctaDodge(152, 16, y);
+      button(rx, ry, 88, 16, "RETRY CHAPTER", "retry", "orange", 1, 0, uiStag(G.menuT, 0));
+      button(rx + 92, ry, 60, 16, "MENU", "title", "grey", 1, 0, uiStag(G.menuT, 1));
     }
     drawMuteBtn(); drawStoreCta();
     return;
@@ -20989,7 +20997,6 @@ if(t<0.4)for(let j=y;j<y+vh;j++)for(let i=vx;i<vx+vw;i++)if(BAYER[j&3][i&3]>=16*
       ["AUTO-PICK LEVELS: " + (G.opts.auto ? "ON" : "OFF"), "opt:auto", "grey"],
       ["THE BOOK", "book", "grey"],
       ["RETRY CHAPTER", "retry", "orange"],
-      STORE_ITEM,
       ["MENU", "title", "grey", 13],
     ], 130, 15, port ? 6 : 3);
     drawMuteBtn(); drawStoreCta();
@@ -21007,7 +21014,7 @@ function drawEndCard() {
   UI_RECTS = [];
   const port = portrait(), s = G.stats, title = G.ch >= ACT2 ? "YOU ATE THE GOD!" : "YOU ATE THE WORLD!";
   const stats = "TIME " + fmt(s.time) + "  LEVEL " + P.lvl + "  KILLS " + s.kills + "  EATEN " + s.devours + "  DEATHS " + s.deaths;
-  if (PLAYABLE) { dim(0.92); if (port) drawEndCardPB(title, stats); else drawEndCardPBL(title, stats); drawMuteBtn(); drawStoreCta(); return; }
+  if (PLAYABLE) { dim(0.92); if (port) drawEndCardPB(title, stats); else drawEndCardPBL(title, stats); drawMuteBtn(); return; }
   dim(0.8);
   if (!port) { drawEndCardL(title, stats); return; }
   let y = 4;
@@ -21033,7 +21040,7 @@ function drawEndCard() {
   else y += 2;
   const by = uMin(y, H - 15);
   button(W / 2 - bw2 - 3, by, bw2, 13, "ENDLESS MODE", "endless", "red", 1, 0, uiStag(G.menuT, 0)); button(W / 2 + 3, by, bw2, 13, "MENU", "title", "grey", 1, 0, uiStag(G.menuT, 1));
-  drawMuteBtn(); drawStoreCta();
+  drawMuteBtn();
 }
 function drawEndCardL(title, stats) {
   const LW = 150, RX = 158, RW = W - RX - 4, cx = RX + RW / 2;
@@ -21058,7 +21065,7 @@ function drawEndCardL(title, stats) {
   const ew = uMin(RW - 4 - 40, uMax(bw2, textW("ENDLESS MODE") + 16));
   button(RX, y + 28, ew, 13, "ENDLESS MODE", "endless", "red", 1, 0, uiStag(G.menuT, 0)); button(RX + ew + 4, y + 28, RW - ew - 4, 13, "MENU", "title", "grey", 1, 0, uiStag(G.menuT, 1));
   if (!G.endCancel) { const c = "OPENING " + STORE_NAME + " IN " + uMax(0, Math.ceil(END_AUTO_OPEN - (G.endT || 0))) + "..."; text(c, uR(cx - textW(c) / 2), y + 45, DIM); }
-  drawMuteBtn(); drawStoreCta();
+  drawMuteBtn();
 }
 const PB_BW = new Map();
 function pbWrap(s, maxW = W - 8) {
@@ -21079,20 +21086,20 @@ function drawDeadPB(port) {
   const top = Object.entries(G.stats.hits).sort((a, b) => b[1] - a[1])[0], hurt = top && top[0] !== "?" ? "HURT MOST BY: " + niceSrc(top[0]) : null;
   const chs = "CHAPTER " + (G.ch + 1) + ": " + G.CH.name, tip = deathHint(top && top[0]), rev = "RETRY GIVES REVENGE: MORE DAMAGE, LESS PAIN";
   const L = s => pbWrap(s, W - 12).length * 8, kT = fitK(loc("YOU DIED"), W - 8, 4);
-  const bh = 5 * kT + 3 + 6 + L(chs) + (G.deathBoss ? 17 : 0) + (hurt ? L(hurt) : 0) + L(tip) + 2 + L(rev) + (port ? 10 + 36 : 7 + 18);
+  const bh = 5 * kT + 3 + 6 + L(chs) + (G.deathBoss ? 17 : 0) + (hurt ? L(hurt) : 0) + L(tip) + 2 + L(rev) + (port ? 10 + 16 : 7 + 18);
   let y = drawDeadTitle(uMax(HUD_RB + 12, uR((H - bh) / 2))) + 6;
   y = pbText(chs, y, WHITE);
   if (G.deathBoss) y = drawDeadBar(y);
   if (hurt) y = pbText(hurt, y, PALE);
   y = pbText(tip, y, DIM) + 2;
   y = pbText(rev, y, hx("#ff8a8a")) + (port ? 10 : 7);
-  if (port) stack(y, [["RETRY CHAPTER", "retry", "orange", 16], STORE_ITEM], 130, 15, 4);
-  else { button(W / 2 - 96, y, 92, 18, "RETRY CHAPTER", "retry", "orange", 1, 0, uiStag(G.menuT, 0)); button(W / 2 + 4, y, 92, 18, "DOWNLOAD", "store", "green", 2, 16, uiStag(G.menuT, 1)); }
+  if (port) stack(y, [["RETRY CHAPTER", "retry", "orange", 16]], 130, 15, 4);
+  else { const [rx, ry] = ctaDodge(92, 18, y); button(rx, ry, 92, 18, "RETRY CHAPTER", "retry", "orange", 1, 0, uiStag(G.menuT, 0)); }
 }
 function drawPausePB(port) {
-  const g = port ? 8 : 6, bh = 18 + g + 18 + 5 + 18;
+  const g = port ? 8 : 6, bh = 18 + g + 18;
   const y = slamTitle("PAUSED", uMax(HUD_RB + 12, uR((H - bh) / 2)), WHITE, 3, G.menuT, { noShine: true }) + g;
-  stack(y, [["RESUME", "resume", "green", 18], ["DOWNLOAD", "store", "green", 18, 2, 16]], 130, 18, 5);
+  stack(y, [["RESUME", "resume", "green", 18]], 130, 18, 5);
 }
 function pbStoreBtn(x, y0, w, h0) {
   const pulse = uiStorePulse(), bh = h0 + pulse * 2, sy = y0 - pulse, hp = uiHandPhase();
@@ -21182,7 +21189,7 @@ function drawTowerTeaser() {
     const k = clamp((mt - 0.6) / 1.2, 0, 1) * (mt < 4 ? 1 : uMax(0, 1 - (mt - 4) / 0.6));
     if (k > 0) {
       const bw = textW("DOWNLOAD", 2) + 16 + 3 + 8, port = portrait(), dw = port ? 54 : 58, dh = port ? 40 : 42;
-      const bx = W - 4 - bw, dx = uR(bx + (bw - dw) / 2), dy = port ? H - 105 : 41, cap = "BOSS TOWER";
+      const bx = W - 4 - bw, dx = uR(bx + (bw - dw) / 2), dy = port ? ctaZone().y - 43 - dh : 41, cap = "BOSS TOWER";   // portrait: over CONTINUE
       text(cap, uR(dx + (dw - textW(cap)) / 2), dy - 8, mix(DIM, GOLD, k));
       drawDoor("tower", dx, dy, dw, dh, k);
       if (k > 0.5) { uiRect(dx, dy - 9, dw, dh + 11, "store"); button(bx, dy + dh + 3, bw, 18, "DOWNLOAD", "store", "green", 2, 16); }
@@ -21224,27 +21231,26 @@ function drawTitle(t, save, unlocks) {
   y = cwrap("11 CHAPTERS - 22 BOSSES - 60 MINUTES OF CARNAGE", y, PALE) + 2;
   const main = [["NEW RUN", "new", "orange", 16]];
   if (save) main.push(["CONTINUE CHAPTER " + (save.ch + 1), "continue", "green"]);
-  if (port) { drawRankRow(y + 2); y = stack(180, main, 124, 14, 4, t); }
+  if (port) { drawRankRow(y + 2); y = stack(178, main, 124, 14, 3, t); }
   let sj = port ? main.length : 0;
   const won = unlocks && unlocks.won, extra = [["THE BOOK", "book", "grey"]];
   extra.push(won ? ["HARD: " + (unlocks.hard ? "ON" : "OFF"), "opt:hard", unlocks.hard ? "red" : "grey"] : ["HARD: BEAT THE MEAT GOD", "locked", "grey", 0, 1]);
   if (!won) extra.push(["ENDLESS: BEAT THE MEAT GOD", "locked", "grey", 0, 1]);
   extra.push(unlocks && unlocks.dark ? ["SKIN: " + (unlocks.skin === "dark" ? "DARK" : "CLASSIC"), "opt:skin", "grey"] : ["DARK SKIN: BEAT YOUR TWIN", "locked", "grey", 0, 1]);
-  extra.push(["DOWNLOAD", "store", "green", 0, 0, 16]);
   const lockBtn = (x, yy, w, h, it) => {
     const d = uiStag(t, sj++);
     button(x, yy, w, h, it[0], it[1], it[2], it[5] ? 2 : 1, it[5] || 0, d);
     if (it[4]) lockIcon(x + d + uR((w - textW(it[0])) / 2) - 9, yy + uR((h - 7) / 2));
   };
-  if (port) { for (const it of extra) { if (it[5]) y++; lockBtn((W - 140) / 2, y, 140, it[5] ? 16 : 13, it); y += it[5] ? 19 : 16; } }
+  if (port) { for (const it of extra) { lockBtn((W - 140) / 2, y, 140, 13, it); y += 15; } }
   else {
     lockBtn(8, 80, 92, 16, main[0]); lockBtn(W - 100, 80, 92, 16, main[1] || extra.shift());
-    drawRankRow(112);
+    drawRankRow(100);
     const cols = 2, bw = 140, gap = 6, x0 = uR((W - (cols * bw + gap)) / 2), rows = [];
     for (let i = 0; i < extra.length; i += cols) rows.push(extra.slice(i, i + cols));
     let e = 0, end = 0;
     for (const row of rows) { const tall = row.some(it => it[5]); if (tall) e++; end = e + (tall ? 16 : 13); e += tall ? 19 : 15; }
-    let ry = uMax(122, 169 - end);
+    let ry = uMax(110, 138 - end);
     for (const row of rows) {
       const tall = row.some(it => it[5]);
       if (tall) ry++;
@@ -21252,7 +21258,7 @@ function drawTitle(t, save, unlocks) {
       ry += tall ? 19 : 15;
     }
   }
-  cwrap(INPUT_KIND === "keys" ? "WASD OR ARROWS TO MOVE - SPACE HOOK, SHIFT DASH (OPTIONAL)" : "ONE FINGER: DRAG TO MOVE, THE REST IS AUTOMATIC", H - (port ? 18 : 9), DIM);
+  cwrap(INPUT_KIND === "keys" ? "WASD OR ARROWS TO MOVE - SPACE HOOK, SHIFT DASH (OPTIONAL)" : "ONE FINGER: DRAG TO MOVE, THE REST IS AUTOMATIC", port ? y + 2 : 142, DIM, 7);
   drawMuteBtn(); drawStoreCta();
 }
 
@@ -21386,7 +21392,8 @@ function drawLoadout(y) {
 const relicStep = (n, room) => n ? uMax(4, uMin(10, uF(room / n))) : 10;
 function drawMetaFooter(y) {
   const keys = Object.keys(P.relics), tw = 16 + textW(String(P.teeth)), st = relicStep(keys.length, W - 8 - tw - 8);
-  const w = tw + (keys.length ? 8 + keys.length * st : 0), x0 = uR((W - w) / 2);
+  const w = tw + (keys.length ? 8 + keys.length * st : 0), [x0, yy] = ctaDodge(w, 9, y);
+  y = yy;
   let x = toothCount(P.teeth, x0, y + 1) + 8;
   for (const k of keys) { blit(relicSpr(k), x, y - 1, { flash: P.relics[k] === 2 ? hx("#5a5068") : 0 }); x += st; }
 }
@@ -21410,7 +21417,7 @@ function drawRoad(){
   if(T>h)for(let i=-2;i<3;i++)if(mx+i+cy&1)put(mx+i,cy+3,INK);
   T>h&&blit(UI_HEAD,mx-4-sq,uR(cy-6+(air?-5*Math.sin(Math.PI*p):sq?0:-(uF(T*4)&1)))+2*sq,sq?{sx:1.2,sy:.8}:{});
   y=cy+11;
-  const nx=CHAPTERS[ch+1],bh=port?46:34,bw=port?54:60,bx=port?8:24,tx=bx+bw+6,left=n-ch-1;
+  const nx=CHAPTERS[ch+1],bh=port?46:30,bw=port?54:60,bx=port?8:24,tx=bx+bw+6,left=n-ch-1;
   panel(bx,y,bw,bh,RED,hx("#140a10"));
   drawBossShadow(nx.boss,bx+bw/2,y+bh-2,bw-4,bh-4);
   let ty=y+1;
@@ -21419,7 +21426,7 @@ function drawRoad(){
   if(sk&&ty<y+bh-4)text("CH.4 HIDES A SKIN",tx,ty,V);
   y=ctext("CHOOSE YOUR PATH",y+bh+3,PALE)+1;
   if(port){G.mapOpts.forEach((k,i)=>drawNodeCard(k,8,y+i*47,W-16,42,i));y+=G.mapOpts.length*47}
-  else{const xx=uR((W-294)/2);G.mapOpts.forEach((k,i)=>drawNodeCard(k,xx+i*100,y,94,72,i,1));y+=72}
+  else{const xx=uR((W-294)/2);G.mapOpts.forEach((k,i)=>drawNodeCard(k,xx+i*100,y,94,64,i,1));y+=64}
   drawMetaFooter(uMin(H-10,y+6))}
 const NODE_REWARD = { elite: () => "RELIC + " + (12 + 3 * G.ch) + " TEETH", shop: () => "RELICS FROM " + (36 + 8 * G.ch) + " TEETH", shrine: () => "LEGENDARY FOR A CURSE",
   event: () => "ONE OF 5 STRANGERS", rest: () => "+" + uR(P.maxHp * 0.5) + " HP, +1 REROLL" };
@@ -21427,7 +21434,7 @@ function drawNodeCard(k,X,y,w,h,i,tall){
   uiRect(X,y,w,h,"node"+i);
   const T=G.menuT,d=uiStag(T,i),N=NODES[k],rw=NODE_REWARD[k](),c=NODE_COL[k],b=uR(Math.sin(T*7.54+i*2)),s=(T-1-i*.4)%4,C=(l,yy,col)=>text(l,X+uR((w-textW(l))/2),yy,col);
   if(d>=W)return;tall?y+=Math.abs(d):X+=d;panel(X,y,w,h,c);
-  if(tall){drawMetaIcon("node:"+k,X+w/2,y+12+b,2);C(N.name,y+25,WHITE);wrap(N.desc,uF((w-6)/4)).slice(0,3).forEach((l,j)=>C(l,y+34+j*7,PALE));wrap(rw,uF((w-6)/4)).slice(0,2).forEach((l,j)=>C(l,y+h-15+j*7,GOLD))}
+  if(tall){const q=h<72?-2:0;drawMetaIcon("node:"+k,X+w/2,y+12+q+b,2);C(N.name,y+25+q*2,WHITE);wrap(N.desc,uF((w-6)/4)).slice(0,3).forEach((l,j)=>C(l,y+34+q*3+j*7,PALE));wrap(rw,uF((w-6)/4)).slice(0,2).forEach((l,j)=>C(l,y+h-15+j*7,GOLD))}
   else{drawMetaIcon("node:"+k,X+14,y+h/2+b,2);text(N.name,X+30,y+6,WHITE);wrap(N.desc,uF((w-34)/4)).slice(0,2).forEach((l,j)=>text(l,X+30,y+15+j*7,PALE));text(rw,X+30,y+h-9,GOLD)}
   if(s>=0&&s<.6&&typeof cardSheen=="function")cardSheen(X+1,y+1,w-2,h-2,c,s)}
 function drawShop() {
@@ -21437,12 +21444,14 @@ function drawShop() {
   const hy = y, n = S.items.length, B = UIFX.buy;
   y = ctext("YOU HAVE " + rollNum("shopTeeth", P.teeth) + " GOLD TEETH", y, WHITE) + 1;
   if (port) {
-    S.items.forEach((it, i) => drawShopItem(it, 8, y + i * 40, W - 16, 36, i));
-    button((W - 80) / 2, y + n * 40 + 2, 80, 16, "LEAVE", "leave", "grey");
+    const st = uMin(40, uF((ctaZone().y - 20 - y) / n));   // LEAVE stays over the corner CTA
+    S.items.forEach((it, i) => drawShopItem(it, 8, y + i * st, W - 16, st - 3, i));
+    button((W - 80) / 2, y + n * st + 2, 80, 16, "LEAVE", "leave", "grey");
   } else {
     const xx = uR((W - 304) / 2);
     S.items.forEach((it, i) => drawShopItem(it, xx + i % 2 * 154, y + uF(i / 2) * 34, 150, 30, i));
-    button((W - 80) / 2, uMin(H - 18, y + Math.ceil(n / 2) * 34 + 2), 80, 14, "LEAVE", "leave", "grey");
+    const ey = y + Math.ceil(n / 2) * 34 + 2, [lx, ly] = ctaDodge(80, 14, uMin(H - 18, ey), ey);
+    button(lx, ly, 80, 14, "LEAVE", "leave", "grey");
   }
   if (B && B.x) for (let j = 0; j < 6; j++) { const p = (UIFX.t - B.t0 - j * .03) / .3; if (p > 0 && p < 1) blit(TOOTH, uR(W / 2 - 3 + (B.x - W / 2 + 3) * easeIO(p)), uR(hy + (B.y - hy) * p - 14 * Math.sin(Math.PI * p))); }
 }
@@ -22886,7 +22895,7 @@ function drawInterlude() {
     rect(0, ay - 1, W, 1, INK); rect(0, ay + ah, W, 1, INK);
     let y = ay + ah + (port ? 14 : 8);
     INTER_TEXT[I.i].forEach((l, j) => { y = cwrap(l, y, j ? WHITE : (I.i === 2 ? RED : PALE), 8) + 2; });
-    if (uF(G.clock * 2) % 2 === 0) ctext("TAP", H - 10, DIM);
+    if (uF(G.clock * 2) % 2 === 0) { const [tx, ty] = ctaDodge(textW("TAP"), 5, H - 10); text("TAP", tx, ty, DIM); }
     uiRect(0, 0, W, H, "inter");
     drawMuteBtn(); drawStoreCta();
     return;
@@ -22898,9 +22907,8 @@ function drawInterlude() {
   y += port ? 10 : 3;
   y = ctext("MORE IN BUTCHER HERO:", y, PALE) + 2;
   y = drawDoorsRow(y, 0) + (port ? 12 : 5);
-  const bw = uMax(port ? 84 : 100, textW("DOWNLOAD", 2) + 16 + 3 + 4), by = uMin(y, H - 24);
-  button(W / 2 - bw - 3, by, bw, 18, "DOWNLOAD", "store", "green", 2, 16);
-  button(W / 2 + 3, by, bw, 18, "TO ACT II", "inter_go", "red");
+  const bw = port ? 84 : 100, [bx, by] = ctaDodge(bw, 18, uMin(y, H - 24));
+  button(bx, by, bw, 18, "TO ACT II", "inter_go", "red");
   drawMuteBtn(); drawStoreCta();
 }
 const DOORS = [["tower", "BOSS TOWER"], ["lands", "NEW LANDS"], ["camp", "CAMP"]];
@@ -23104,7 +23112,7 @@ function drawBook() {
   });
   y += 18;
   const list = bookEntries(G.bookTab), s = 18, cols = uF((W - 12) / (s + 2)), x0 = uR((W - (cols * (s + 2) - 2)) / 2);
-  const rowsMax = port ? 10 : 4, perPage = cols * rowsMax, page = uF((G.bookSel || 0) / perPage);
+  const rowsMax = port ? 8 : 3, perPage = cols * rowsMax, page = uF((G.bookSel || 0) / perPage);
   list.slice(page * perPage, page * perPage + perPage).forEach((e, j) => {
     const i = page * perPage + j, x = x0 + (j % cols) * (s + 2), yy = y + uF(j / cols) * (s + 2);
     bookCell(e, x, yy, s, i === G.bookSel);
@@ -23117,7 +23125,7 @@ function drawBook() {
   }
   const e = list[G.bookSel] || list[0];
   if (e) {
-    const ph = uMin(port ? 96 : 60, port ? H - y - 26 : H - y - 22);
+    const ph = uMin(port ? 96 : 60, ctaZone().y - (port ? 20 : 2) - (y + 2));   // over BACK (portrait) / the corner CTA
     panel(6, y + 2, W - 12, ph, e.known ? GOLD : hx("#5e4e66"));
     let yy = y + 6, tx = 12;
     if (e.kind === "boss" || e.kind === "foe") {
@@ -23131,7 +23139,8 @@ function drawBook() {
     text(e.known || e.kind === "evo" ? bookName(e) : "???", tx, yy, e.known ? WHITE : DIM); yy += 9;
     for (const l of bookDetail(e)) for (const ll of wrap(l, uF((W - tx - 10) / 4))) { if (yy > y + ph - 6) break; text(ll, tx, yy, e.known ? PALE : DIM); yy += 7; }
   }
-  button(W / 2 - 30, H - (port ? 20 : 17), 60, 14, "BACK", "bback", "grey");
+  const [bx, by] = ctaDodge(60, 14, H - (port ? 20 : 17));
+  button(bx, by, 60, 14, "BACK", "bback", "grey");
   drawMuteBtn(); drawStoreCta();
 }
 function evoHint(c) {
@@ -23317,7 +23326,7 @@ screenCv.addEventListener("pointerdown", e => {
   const hit = hitRectAt(p), id = hit ? hit.id : null;
   const pressed = () => { if (hit && id !== "hook" && id !== "dash" && !String(id).startsWith("card")) UIFX.press = { id, x: hit.x, y: hit.y, w: hit.w, h: hit.h, t0: UIFX.t }; };
   if (id === "store") {
-    if (G.mode !== "play" && menuFresh() && hit.y !== 0) return;
+    if (G.mode !== "play" && menuFresh() && !(hit.x === ctaZone().x && hit.y === ctaZone().y)) return;   // the corner CTA is always live
     pressed();
     storeArm.set(e.pointerId, hit);
     try { screenCv.setPointerCapture(e.pointerId); } catch (err) { }
