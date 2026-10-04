@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orc Armory — просмотр модели</title>
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="stage"></div>
+
+<header id="topbar" class="glass">
+  <div class="brand"><span class="logo">◆</span><div><b>Orc Armory</b><small id="model-sub">загрузка…</small></div></div>
+  <div id="model-switch" class="seg"></div>
+  <div id="chips" class="chips"></div>
+</header>
+
+<aside id="parts-panel" class="glass panel">
+  <div class="panel-head">
+    <h2>Части</h2>
+    <div class="head-actions">
+      <button id="all-on" class="ghost" title="Показать все части">Все</button>
+      <button id="all-off" class="ghost" title="Скрыть все части">Никого</button>
+    </div>
+  </div>
+  <div id="groups" class="groups"></div>
+  <div id="totals" class="totals"></div>
+  <ul id="parts" class="parts"></ul>
+  <p class="hint">Полигонаж — как в Blender: квад = 1 полигон (числа граней записаны в модель при экспорте). Клик по названию — выделить, <span class="kbd">◎</span> — оставить одну, клик по модели — выбрать часть.</p>
+</aside>
+
+<aside id="view-panel" class="glass panel">
+  <section>
+    <h2>Режим <small>клавиши 1–8</small></h2>
+    <div id="modes" class="modes"></div>
+    <div id="mode-opts" class="opts"></div>
+  </section>
+  <section id="anim-sec" hidden>
+    <h2>Анимация <small id="anim-time"></small></h2>
+    <div id="anims" class="anims"></div>
+    <div class="anim-ctl">
+      <button id="anim-play" title="Пауза / играть">❚❚</button>
+      <input type="range" id="anim-scrub" min="0" max="1" step="0.001" value="0" title="Кадр">
+    </div>
+    <label class="slider">Скорость <input type="range" id="anim-speed" min="0.1" max="2" step="0.05" value="1"><output id="anim-speed-out">1.00×</output></label>
+  </section>
+  <section>
+    <h2>Наложения</h2>
+    <label class="switch"><input type="checkbox" id="wire"><i></i>Сетка квадами <span class="kbd">W</span></label>
+    <label class="switch"><input type="checkbox" id="shadows" checked><i></i>Тень на полу</label>
+    <label class="switch"><input type="checkbox" id="floor" checked><i></i>Пол</label>
+    <label class="switch"><input type="checkbox" id="spin"><i></i>Автоповорот <span class="kbd">T</span></label>
+  </section>
+  <section>
+    <h2>Свет</h2>
+    <label class="slider">Окружение <input type="range" id="env" min="0" max="2.5" step="0.05" value="1"><output></output></label>
+    <label class="slider">Солнце <input type="range" id="sun" min="0" max="4" step="0.05" value="1.6"><output></output></label>
+    <label class="slider">Экспозиция <input type="range" id="exposure" min="0.3" max="2.5" step="0.05" value="1"><output></output></label>
+  </section>
+  <section>
+    <h2>Текстуры <small id="tex-scope">все части</small></h2>
+    <div id="textures" class="thumbs"></div>
+  </section>
+</aside>
+
+<div id="part-card" class="glass card" hidden></div>
+
+<nav id="dock" class="glass">
+  <button data-cam="front" title="Спереди">Спереди</button>
+  <button data-cam="back" title="Сзади">Сзади</button>
+  <button data-cam="left" title="Слева">Слева</button>
+  <button data-cam="right" title="Справа">Справа</button>
+  <button data-cam="three" title="Три четверти">3/4</button>
+  <button data-cam="top" title="Сверху">Сверху</button>
+  <span class="sep"></span>
+  <button id="frame" title="Вписать видимые части (F)"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+  <button id="shot" title="Скриншот PNG"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
+  <button id="full" title="Во весь экран"><svg viewBox="0 0 24 24"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5"/></svg></button>
+</nav>
+
+<div id="loader"><div class="ring"></div><div id="load-text">Загрузка модели…</div><div class="bar"><i id="load-bar"></i></div></div>
+
+<div id="lightbox" hidden>
+  <div class="lb-top glass">
+    <b id="lb-title"></b>
+    <div id="lb-ch" class="seg"></div>
+    <button id="lb-close" class="ghost">✕</button>
+  </div>
+  <div id="lb-view"><canvas id="lb-canvas"></canvas></div>
+  <p class="lb-hint">Колесо — масштаб, перетаскивание — сдвиг, двойной клик — вписать.</p>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
