@@ -16,7 +16,7 @@ const CHARACTERS = [
   { id: 'cascadeur', label: 'Cascadeur', title: 'Орчиха-воительница', sub: 'AutoPhysics Cascadeur · ровные тайминги · физика v2', file: 'models/orc-outfit-anim-rigfix6.glb', bytes: 0 },
   ] },
   { id: 'tauren', name: 'Таурен', title: 'Байн, тауренша', note: 'риг · 10 анимаций', avatar: 'avatars/tauren.webp', models: [
-  { id: 'baine-fit', label: 'Броня по фигуре', title: 'Байн, тауренша', sub: 'броня подогнана по телу (shrinkwrap) · без булавы · 10 анимаций', file: 'models/baine-fit2-rigged.glb', bytes: 14711284 },
+  { id: 'baine-fit', label: 'Броня по фигуре', title: 'Байн, тауренша', sub: 'броня подогнана по телу (shrinkwrap) · без булавы · 10 анимаций', file: 'models/baine-fit3-rigged.glb', bytes: 14711852 },
   { id: 'baine', label: 'До подгонки', title: 'Байн, тауренша', sub: 'риг Blender · 4 своих клипа + 6 анимаций орка', file: '../orc-viewer/models/baine-rigged.glb', bytes: 16242532 },
   ] },
 ];
@@ -79,7 +79,8 @@ scene.add(root);
 const GEAR = { Pauldron: 'Наплечник', Bracer: 'Наруч', Boot: 'Ботинок', Shoulder: 'Наплечник', Glove: 'Наруч' };
 const NAMED = { Orc_Base: ['Тело', '', 'Тело'], Skirt_T: ['Юбка', '', 'Юбка'],
   Body: ['Тело', '', 'Тело'], Head: ['Голова', '', 'Тело'], Tail: ['Хвост', '', 'Тело'], Hair: ['Волосы', '', 'Волосы'], Horns: ['Рога', '', 'Волосы'],
-  Chest: ['Нагрудник', '', 'Броня'], Belt: ['Пояс', '', 'Броня'], Legs: ['Набедренная повязка', '', 'Броня'], Weapon: ['Булава', '', 'Оружие'] };
+  Chest: ['Нагрудник', '', 'Броня'], Belt: ['Пояс', '', 'Броня'], Legs: ['Набедренная повязка', '', 'Броня'], Weapon: ['Булава', '', 'Оружие'],
+  Collar: ['Ошейник', '', 'Броня'] };
 const COLORS = ['#ff7a45', '#ffd166', '#5ad28c', '#4cc9f0', '#7b8cff', '#c77dff', '#ff5d8f', '#2ec4b6', '#f4a261', '#e9c46a'];
 function describe(name) {
   if (NAMED[name]) { const [n, side, group] = NAMED[name]; return { name: n, side, group }; }
