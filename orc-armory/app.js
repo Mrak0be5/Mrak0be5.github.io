@@ -6,14 +6,23 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-const MODELS = [
+// characters: each has an avatar and its own list of model variants (?c=<character>&m=<variant>)
+const CHARACTERS = [
+  { id: 'orc', name: 'Орк', title: 'Орчиха-воительница', note: '5 ригов · 6 анимаций', avatar: 'avatars/orc.webp', models: [
   { id: 'rig', label: 'Риг: исходный', title: 'Орчиха-воительница', sub: 'риг Tripo + 6 анимаций', file: 'models/orc-outfit-anim.glb', bytes: 28996340 },
   { id: 'rigfix', label: 'Риг: исправленный', title: 'Орчиха-воительница', sub: 'копия с исправленными весами', file: 'models/orc-outfit-anim-rigfix.glb', bytes: 28996340 },
   { id: 'rigfix2', label: 'Риг: + кости', title: 'Орчиха-воительница', sub: 'кости наплечников, повязок и волос', file: 'models/orc-outfit-anim-rigfix2.glb', bytes: 0 },
   { id: 'rigfix3', label: 'Риг: + физика', title: 'Орчиха-воительница', sub: 'новая юбка · физика ткани, меха, волос и подвесок', file: 'models/orc-outfit-anim-rigfix5.glb', bytes: 0 },
   { id: 'cascadeur', label: 'Cascadeur', title: 'Орчиха-воительница', sub: 'AutoPhysics Cascadeur · ровные тайминги · физика v2', file: 'models/orc-outfit-anim-rigfix6.glb', bytes: 0 },
+  ] },
+  { id: 'tauren', name: 'Таурен', title: 'Байн, тауренша', note: 'риг · 10 анимаций', avatar: 'avatars/tauren.webp', models: [
+  { id: 'baine', label: 'Риг + анимации', title: 'Байн, тауренша', sub: 'риг Blender · 4 своих клипа + 6 анимаций орка', file: '../orc-viewer/models/baine-rigged.glb', bytes: 16242532 },
+  ] },
 ];
-const MODEL = MODELS.find((m) => m.id === new URLSearchParams(location.search).get('m')) || MODELS[0];
+const query = new URLSearchParams(location.search);
+const CHAR = CHARACTERS.find((c) => c.id === query.get('c')) || CHARACTERS.find((c) => c.models.some((m) => m.id === query.get('m'))) || CHARACTERS[0];
+const MODELS = CHAR.models;
+const MODEL = MODELS.find((m) => m.id === query.get('m')) || MODELS[0];
 const $ = (s) => document.querySelector(s);
 const fmt = (n) => Math.round(n).toLocaleString('ru-RU');
 const kfmt = (n) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 100000 ? 0 : 1)}k` : `${n}`);
@@ -66,13 +75,20 @@ const root = new THREE.Group();
 scene.add(root);
 
 // ---------- parts ----------
-const GEAR = { Pauldron: 'Наплечник', Bracer: 'Наруч', Boot: 'Ботинок' };
-const NAMED = { Orc_Base: ['Тело', '', 'Тело'], Skirt_T: ['Юбка', '', 'Юбка'] };
+const GEAR = { Pauldron: 'Наплечник', Bracer: 'Наруч', Boot: 'Ботинок', Shoulder: 'Наплечник', Glove: 'Наруч' };
+const NAMED = { Orc_Base: ['Тело', '', 'Тело'], Skirt_T: ['Юбка', '', 'Юбка'],
+  Body: ['Тело', '', 'Тело'], Head: ['Голова', '', 'Тело'], Tail: ['Хвост', '', 'Тело'], Hair: ['Волосы', '', 'Волосы'], Horns: ['Рога', '', 'Волосы'],
+  Chest: ['Нагрудник', '', 'Броня'], Belt: ['Пояс', '', 'Броня'], Legs: ['Набедренная повязка', '', 'Броня'], Weapon: ['Булава', '', 'Оружие'] };
 const COLORS = ['#ff7a45', '#ffd166', '#5ad28c', '#4cc9f0', '#7b8cff', '#c77dff', '#ff5d8f', '#2ec4b6', '#f4a261', '#e9c46a'];
 function describe(name) {
   if (NAMED[name]) { const [n, side, group] = NAMED[name]; return { name: n, side, group }; }
   let m = /^(Pauldron|Bracer|Boot)_T_([RL])$/.exec(name);
   if (m) return { name: GEAR[m[1]], side: m[2] === 'R' ? 'правый' : 'левый', group: 'Броня' };
+  m = /^(Shoulder|Glove|Boot)_([RL])$/.exec(name);                // tauren gear (Baine)
+  if (m) {
+    const f = m[1] === 'Boot';                                     // «манжета» is feminine
+    return { name: f ? 'Манжета копыта' : GEAR[m[1]], side: m[2] === 'R' ? (f ? 'правая' : 'правый') : (f ? 'левая' : 'левый'), group: 'Броня' };
+  }
   m = /^Hair_(\d+)/.exec(name);
   if (m) return { name: 'Волосы', side: '', group: 'Волосы' };
   return { name, side: '', group: 'Прочее' };
@@ -591,9 +607,10 @@ async function load() {
     const b = document.createElement('button');
     b.textContent = m.label;
     b.classList.toggle('on', m === MODEL);
-    b.onclick = () => { if (m !== MODEL) location.search = `?m=${m.id}`; };
+    b.onclick = () => { if (m !== MODEL) location.search = `?c=${CHAR.id}&m=${m.id}`; };
     sw.append(b);
   }
+  sw.style.display = MODELS.length > 1 ? '' : 'none';
   $('#chips').innerHTML = [[fmt(total.polys), 'полигонов'], [fmt(total.quads), 'квадов'], [fmt(total.verts), 'верш.'], [parts.length, 'частей'], [texCount, 'текстур'],
     [`${(buf.byteLength / 1048576).toFixed(1)} МБ`, 'GLB'], [`${size.y.toFixed(2)} м`, 'рост']].map(([v, l]) => `<span class="chip"><b>${v}</b> ${l}</span>`).join('');
   buildParts();
@@ -603,7 +620,29 @@ async function load() {
   sun.target.position.set(0, size.y / 2, 0);
   frame(false, VIEWS.front);
   $('#loader').classList.add('done');
+  window.armory.ready = true;
 }
+
+// ---------- character picker ----------
+function buildCharacters() {
+  const box = $('#chars');
+  box.innerHTML = '';
+  for (const c of CHARACTERS) {
+    const b = document.createElement('button');
+    b.className = 'char';
+    b.classList.toggle('on', c === CHAR);
+    b.title = c === CHAR ? `Сейчас открыт: ${c.name} (${c.title})` : `Открыть персонажа: ${c.name} (${c.title})`;
+    b.innerHTML = `<span class="ava" data-letter="${c.name[0]}"><img src="${c.avatar}" alt=""></span><span class="char-txt"><b>${c.name}</b><small>${c.note}</small></span>`;
+    b.querySelector('img').onerror = (e) => e.target.remove();
+    b.onclick = () => { if (c !== CHAR) location.search = `?c=${c.id}`; };
+    box.append(b);
+  }
+  const logo = $('.logo');
+  logo.innerHTML = `<img src="${CHAR.avatar}" alt="">`;
+  logo.classList.add('ava-logo');
+  logo.querySelector('img').onerror = () => { logo.textContent = '◆'; logo.classList.remove('ava-logo'); };
+}
+buildCharacters();
 
 // ---------- controls ----------
 buildModes();
@@ -613,7 +652,7 @@ $('#shot').onclick = () => {
   renderer.render(scene, camera);
   const a = document.createElement('a');
   a.href = renderer.domElement.toDataURL('image/png');
-  a.download = `orc-armory-${state.mode}.png`;
+  a.download = `orc-armory-${CHAR.id}-${state.mode}.png`;
   a.click();
 };
 $('#full').onclick = () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen());
@@ -658,8 +697,10 @@ function resize() {
 addEventListener('resize', resize);
 resize();
 // ---------- animation ----------
-const ANIM_LABELS = { idle: 'Стойка', walk: 'Ходьба', run: 'Бег', slash: 'Удар', cheer: 'Победа', rig_test: 'Тест рига' };
-const ANIM_ORDER = ['idle', 'walk', 'run', 'slash', 'cheer', 'rig_test'];
+const ANIM_LABELS = { idle: 'Стойка', walk: 'Ходьба', run: 'Бег', slash: 'Удар', cheer: 'Победа', rig_test: 'Тест рига',
+  Idle: 'Стойка', Walk: 'Шаг', Attack: 'Удар булавой', Roar: 'Рёв',
+  OrcIdle: 'Стойка орка', OrcWalk: 'Ходьба орка', OrcRun: 'Бег орка', OrcSlash: 'Удар орка', OrcCheer: 'Победа орка', OrcRigTest: 'Тест рига' };
+const ANIM_ORDER = ['idle', 'walk', 'run', 'slash', 'cheer', 'rig_test', 'Idle', 'Walk', 'Attack', 'Roar', 'OrcIdle', 'OrcWalk', 'OrcRun', 'OrcSlash', 'OrcCheer', 'OrcRigTest'];
 const anim = { mixer: null, clips: [], action: null, playing: true, speed: 1 };
 const clock = new THREE.Clock();
 function setupAnimations(g, clips) {
@@ -673,7 +714,7 @@ function setupAnimations(g, clips) {
     const b = document.createElement('button');
     b.dataset.clip = c.name;
     b.innerHTML = `<span>${ANIM_LABELS[c.name] || c.name}</span><small>${c.duration.toFixed(1)} с</small>`;
-    if (c.name === 'rig_test') b.classList.add('test');
+    if (c.name === 'rig_test' || c.name === 'OrcRigTest') b.classList.add('test');
     b.onclick = () => playClip(c.name);
     box.append(b);
   }
@@ -691,7 +732,7 @@ function setupAnimations(g, clips) {
     updAnimUI();
   };
   sec.hidden = false;
-  playClip(anim.clips.find((c) => c.name === 'idle') ? 'idle' : anim.clips[0].name);
+  playClip((anim.clips.find((c) => c.name === 'idle' || c.name === 'Idle') || anim.clips[0]).name);
 }
 function playClip(name) {
   if (anim.action) anim.action.stop();
@@ -729,5 +770,6 @@ function loop(now) {
   renderer.render(scene, camera);
 }
 renderer.setAnimationLoop(loop);
-window.armory = { state, parts, applyMode, select, frame, refreshParts, setMode: (m) => { state.mode = m; applyMode(); }, anim, playClip };
+window.armory = { state, parts, applyMode, select, frame, refreshParts, setMode: (m) => { state.mode = m; applyMode(); }, anim, playClip,
+  character: CHAR.id, model: MODEL.id, THREE, renderer, scene, camera, controls, root, floor, catcher, ring };
 load().catch((err) => { $('#load-text').textContent = `Ошибка: ${err.message}`; console.error(err); });
