@@ -16,7 +16,7 @@ const CHARACTERS = [
   { id: 'cascadeur', label: 'Cascadeur', title: 'Орчиха-воительница', sub: 'AutoPhysics Cascadeur · ровные тайминги · физика v2', file: 'models/orc-outfit-anim-rigfix6.glb', bytes: 0 },
   ] },
   { id: 'tauren', name: 'Таурен', title: 'Байн, тауренша', note: 'риг · 10 анимаций', avatar: 'avatars/tauren.webp', models: [
-  { id: 'baine-fit', label: 'Броня по фигуре', title: 'Байн, тауренша', sub: 'броня подогнана по телу (shrinkwrap) · без булавы · 10 анимаций', file: 'models/baine-fit3-rigged.glb', bytes: 14711852 },
+  { id: 'baine-fit', label: 'Броня по фигуре', title: 'Байн, тауренша', sub: 'броня подогнана по телу (shrinkwrap) · без булавы · 10 анимаций', file: 'models/baine-fit4-rigged.glb', bytes: 14711852 },
   { id: 'baine', label: 'До подгонки', title: 'Байн, тауренша', sub: 'риг Blender · 4 своих клипа + 6 анимаций орка', file: '../orc-viewer/models/baine-rigged.glb', bytes: 16242532 },
   ] },
 ];
