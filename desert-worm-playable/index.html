@@ -534,7 +534,7 @@ function blitRot(s, cx, cy, ang, o = {}) {
 (() => {
   const f3 = {
     "А": "010101111101101", "Б": "111100110101110", "В": "110101110101110", "Г": "111100100100100",
-    "Д": "01110101010111111001", "Е": "111100110100111", "Ё": "101111110100111", "Ж": "1010110101011101010110101",
+    "Д": "0111001010010101111110001", "Е": "111100110100111", "Ё": "101111110100111", "Ж": "1010110101011101010110101",
     "З": "110001010001110", "И": "10011001101111011001", "Й": "01101001101111011001", "К": "101101110101101",
     "Л": "011101101101101", "М": "1000111011101011000110001", "Н": "101101111101101", "О": "111101101101111",
     "П": "111101101101101", "Р": "110101110100100", "С": "111100100100111", "Т": "111010010010010",
@@ -582,8 +582,8 @@ function blitRot(s, cx, cy, ang, o = {}) {
 
 const L10N = {
   ru: {
-    q_hunt: "СЪЕШЬ {0}", q_deliver: "ДОСТАВИТЬ НА БАЗУ", q_upgrade_attack: "СДЕЛАЙТЕ УЛУЧШЕНИЕ АТАКА", q_damage: "НАНЕСИ УРОН",
-    q_any_upgrade: "КУПИТЕ ЛЮБОЕ УЛУЧШЕНИЕ", q_gold: "ЗАРАБОТАЙ ЗОЛОТО", q_zone_upgrade: "УЛУЧШИ ЗОНУ",
+    q_hunt: "СЪЕШЬ {0}", q_deliver: "ОТНЕСИ ДОБЫЧУ НА БАЗУ", q_upgrade_attack: "УЛУЧШИ АТАКУ", q_damage: "НАНЕСИ УРОН",
+    q_any_upgrade: "КУПИ УЛУЧШЕНИЯ", q_gold: "ЗАРАБОТАЙ ЗОЛОТО", q_zone_upgrade: "УЛУЧШИ ЗОНУ",
     n_chicken: "КУРИЦА", n_chicken_black: "ЧЁРНАЯ КУРИЦА", n_cow: "КОРОВА", n_pig: "СВИНЬЯ", n_farmer: "ФЕРМЕР",
     n_tank_green: "ЗЕЛЁНЫЙ ТАНК", n_cowboy: "КОВБОЙ", n_cow_brown: "БУРАЯ КОРОВА", n_pig_black: "ЧЁРНАЯ СВИНЬЯ",
     n_pig_silver: "СЕРЕБРЯНАЯ СВИНЬЯ", n_builder: "СТРОИТЕЛЬ", n_cowboy_revolver: "КОВБОЙ С РЕВОЛЬВЕРОМ",
@@ -593,14 +593,14 @@ const L10N = {
     na_pig_silver: "СЕРЕБРЯНУЮ СВИНЬЮ", na_builder: "СТРОИТЕЛЯ", na_cowboy_revolver: "КОВБОЯ С РЕВОЛЬВЕРОМ",
     na_militia: "ОПОЛЧЕНЦА", na_tank_yellow: "ЖЁЛТЫЙ ТАНК",
     u_attack: "АТАКА", ud_attack: "НАНОСИ БОЛЬШЕ УРОНА", u_capacity: "ОБЪЁМ ЖИВОТА", ud_capacity: "НОСИ БОЛЬШЕ РЕСУРСОВ",
-    u_speed: "СКОРОСТЬ", ud_speed: "ДВИГАЙСЯ БЫСТРЕЕ", u_radius: "РАДИУС АТАКИ", ud_radius: "БОЛЬШЕ ДАЛЬНОСТЬ АТАКИ",
-    u_multi: "МУЛЬТИ-ЦЕЛЬ", ud_multi: "БОЛЬШЕ ЦЕЛЕЙ ЗА РАЗ", u_health: "ЗДОРОВЬЕ", ud_health: "БОЛЬШЕ ЗДОРОВЬЯ",
+    u_speed: "СКОРОСТЬ", ud_speed: "ДВИГАЙСЯ БЫСТРЕЕ", u_radius: "РАДИУС АТАКИ", ud_radius: "КУСАЙ ДАЛЬШЕ",
+    u_multi: "МУЛЬТИ-ЦЕЛЬ", ud_multi: "КУСАЙ НЕСКОЛЬКИХ СРАЗУ", u_health: "ЗДОРОВЬЕ", ud_health: "БОЛЬШЕ ЗДОРОВЬЯ",
     u_regen: "РЕГЕНЕРАЦИЯ", ud_regen: "ВОССТАНАВЛИВАЙ HP",
     training: "ТРЕНИРОВКА", lab: "ЛАБОРАТОРИЯ", upgrade_btn: "УЛУЧШИТЬ", max: "МАКС", levelup: "ПОВЫШЕНИЕ УРОВНЯ",
-    grew: "ТЫ ВЫРОС!", tap_continue: "НАЖМИТЕ, ЧТОБЫ ПРОДОЛЖИТЬ", defeat: "ПОРАЖЕНИЕ", revive_q: "ВЫ ХОТИТЕ ВОЗРОДИТЬСЯ?",
-    revive_warn: "ЕСЛИ ВЫ СДАДИТЕСЬ, ВЫ ПОТЕРЯЕТЕ ВСЁ {0}!", revive_gold: "НАКОПЛЕННОЕ ЗОЛОТО",
+    grew: "ТЫ ВЫРОС!", tap_continue: "НАЖМИ, ЧТОБЫ ПРОДОЛЖИТЬ", defeat: "ПОРАЖЕНИЕ", revive_q: "ХОЧЕШЬ ВОЗРОДИТЬСЯ?",
+    revive_warn: "ЕСЛИ СДАШЬСЯ, ПОТЕРЯЕШЬ ВСЁ {0}!", revive_gold: "НАКОПЛЕННОЕ ЗОЛОТО",
     revive30: "ВОССТАНОВИТЬ 30% HP", revive100: "ВОССТАНОВИТЬ 100% HP", give_up: "СДАТЬСЯ",
-    unlock_at: "РАЗБЛОК НА", level_n: "УРОВЕНЬ {0}", belly_full: "НЕДОСТАТОЧНО МЕСТА В ЖИВОТЕ\nОСВОБОДИТЕ НА БАЗЕ!",
+    unlock_at: "ОТКРОЕТСЯ НА", level_n: "УРОВЕНЬ {0}", belly_full: "ЖИВОТ ПОЛОН! НЕСИ НА БАЗУ",
     mission_complete: "ЗАДАНИЕ ВЫПОЛНЕНО!", drag: "ВЕДИ ПАЛЬЦЕМ", zone_up: "УЛУЧШЕНИЯ ЗОНЫ", gold_drop: "+10% ЗОЛОТА",
     gold_drop_d: "БОЛЬШЕ ЗОЛОТА С ВРАГОВ ЗОНЫ", gate_open: "ПРОХОД ОТКРЫТ!", play: "ИГРАТЬ", continue: "ПРОДОЛЖИТЬ",
     demo_done: "ДЕМО ПРОЙДЕНО", deposit: "СДАНО", bought: "КУПЛЕНО",
@@ -3117,13 +3117,14 @@ const pr_col = {
   red:hx('#b5342a'), redL:hx('#e05040'), redD:hx('#8a2020'), blue:hx('#3e5c8a'), blueL:hx('#4a77b4'), blueD:hx('#1a2848'),
   pink:hx('#e8a0a0'), pinkL:hx('#ffd0d0'), pinkS:hx('#c87080'), pinkD:hx('#8a4a5a'),
   chestnut:hx('#9c5f2e'), chestnutL:hx('#d8955a'), chestnutD:hx('#5c3a20'), straw:hx('#d4b483'),
+  orange:hx('#e07a2a'), orangeL:hx('#f8a850'), orangeD:hx('#a04a1a'), strawL:hx('#f2dc9a'), strawD:hx('#a8844a'),
   gold:hx('#f0b030'), goldL:hx('#fff2a0'), goldD:hx('#b07a1a'), cyan:hx('#8fc8e8')
 };
 const pr_roster = {
   chicken:{w:7,h:7,animal:true,leftover:[]}, pig:{w:12,h:9,animal:true,leftover:[]},
   sheep:{w:13,h:10,animal:true,leftover:[]}, dog:{w:11,h:8,animal:true,leftover:[]},
   cow:{w:18,h:13,animal:true,leftover:[]},
-  farmer:{w:9,h:15,shirt:'red',pants:'blue',hat:'strawhat',tool:'pitchfork',leftover:['strawhat','pitchfork']},
+  farmer:{w:9,h:15,shirt:'orange',pants:'blue',hat:'strawhat',tool:'pitchfork',leftover:['strawhat','pitchfork']},
   horse:{w:20,h:15,animal:true,leftover:['horseshoe']},
   prospector:{w:10,h:14,shirt:'blue',pants:'leather',hat:'prospectorhat',tool:'goldpan',leftover:['prospectorhat','goldpan']},
   cowboy:{w:10,h:16,shirt:'straw',pants:'blue',hat:'stetson',tool:'revolver',muzzle:[10,-8],leftover:['stetson','revolver']},
@@ -3167,8 +3168,8 @@ function pr_hat(B,name,x,y) {
     else B.r(x-1,y-3,1,3,C.goldL);
     return;
   }
-  const dark=name==='strawhat', gray=name==='prospectorhat';
-  const base=dark?C.leather:gray?C.gray:C.straw, hi=dark?C.leatherL:gray?C.woolD:C.cream, sh=dark?C.leatherD:gray?C.dark:C.leather;
+  const straw=name==='strawhat', gray=name==='prospectorhat';   // the real farmer wears a light straw hat
+  const base=straw?C.straw:gray?C.gray:C.straw, hi=straw?C.strawL:gray?C.woolD:C.cream, sh=straw?C.strawD:gray?C.dark:C.leather;
   B.r(x-3,y-2,6,2,base);B.r(x-2,y-3,4,1,hi);B.p(x-2,y-2,hi);
   B.r(x-3,y-1,6,1,sh);B.r(x-4,y,9,1,base);B.p(x-4,y-1,hi);B.p(x+4,y-1,sh);
   if(name==='stetson'||name==='sheriffhat'){B.p(x-5,y-1,base);B.p(x+5,y-1,base);}
@@ -6417,8 +6418,11 @@ function gm_worm(dt) {
   const regen = gm_stat("regen"); if (regen > 0 && w.hp < w.maxHp) w.hp = Math.min(w.maxHp, w.hp + regen * dt * .2);
   w.biteCd -= dt;
   if (w.biteCd <= 0) {
-    const tg = G.prey.filter(p => !p.dead && p.hp > 0 && p.state !== "suck" && gm_zoneOpen(p.def.zone) && dist(w.x, w.y, p.x, p.y) < w.atkR + p.r * .5)
-      .sort((a, b) => dist(w.x, w.y, a.x, a.y) - dist(w.x, w.y, b.x, b.y)).slice(0, w.multi);
+    const ok = p => !p.dead && p.hp > 0 && p.state !== "suck" && gm_zoneOpen(p.def.zone) && dist(w.x, w.y, p.x, p.y) < w.atkR + p.r * .5;
+    const tg = (w.targets || []).filter(ok).slice(0, w.multi);
+    if (tg.length < w.multi) tg.push(...G.prey.filter(p => ok(p) && !tg.includes(p))
+      .sort((a, b) => dist(w.x, w.y, a.x, a.y) - dist(w.x, w.y, b.x, b.y)).slice(0, w.multi - tg.length));
+    w.targets = tg;
     if (tg.length) {
       w.biteCd = BAL.biteCd; w.bite = 1; w.chomp = 0; w.maw = 1; gm_sfx("bite");
       for (const p of tg) gm_hurtPrey(p, w.attack);
@@ -6449,7 +6453,7 @@ function gm_hurtPrey(p, dmg) {
   if (p.dead || p.hp <= 0) return;
   const real = Math.min(p.hp, dmg); p.hp -= dmg; p.flash = .12; p.dmgT = 0; G.stats.damage += real; gm_questEvent("damage", real);
   gm_fx("hit", p.x, p.y - 3); floatText(String(Math.round(dmg)), p.x + gm_rand(-4, 4), p.y - p.r * 2 - 4, WHITE, {style: "dmg"});
-  const c = p.def.combat; if (c && !c.passive) p.aggro = 6; else p.flee = 2.5;
+  const c = p.def.combat; if (c && !c.passive) p.aggro = 6; // passive prey has no fear in zones 0-1 (isFearful=False)
   if (p.hp <= 0) gm_killPrey(p);
 }
 function gm_killPrey(p) {
@@ -6498,7 +6502,7 @@ function gm_preyAttack(p) {
   }
 }
 function gm_hurtWorm(dmg, src) {
-  const w = G.worm; if (G.mode !== "play" || w.dead || !(dmg > 0)) return;
+  const w = G.worm; if (G.mode !== "play" || w.dead || !(dmg > 0) || w.grace > 0) return;
   w.hp = Math.max(0, w.hp - dmg); w.hurt = BAL.worm.hurtI; G.flash = {col: RED, k: .25};
   floatText("-" + Math.round(dmg), w.x, w.y - 14, RED, {style: "dmg"}); gm_sfx("hurt"); shake(2, .15);
   if (w.hp <= 0) gm_die();
@@ -6512,7 +6516,7 @@ function revive(k) {
   if (G.mode !== "revive") return false;
   const w = G.worm;
   if (k >= 1) {if (G.gems < BAL.reviveGems) {gm_sfx("deny"); return false;} G.gems -= BAL.reviveGems;}
-  w.hp = Math.max(1, Math.round(w.maxHp * k)); w.dead = 0; w.hurt = 2; gm_mode("play"); gm_fx("burst", w.x, w.y); gm_sfx("levelup"); return true;
+  w.hp = Math.max(1, Math.round(w.maxHp * k)); w.dead = 0; w.hurt = w.grace = 3; gm_mode("play"); gm_fx("burst", w.x, w.y); gm_sfx("levelup"); return true;
 }
 function giveUp() {
   if (G.mode !== "revive") return false;
@@ -6538,7 +6542,7 @@ function gm_preyAI(dt) {
     const leash = Math.max(d.area[0], d.area[1]) + 25 * GM_M;
     const far = dist(p.x, p.y, p.home.x, p.home.y) > leash;
     if (c && c.inc && p.aggro <= 0 && dd > c.range * GM_M * 1.3) p.inc = 0; // incremental damage resets out of combat
-    if (c && !c.passive && canSee && !far && (p.aggro > 0 || (c.aggr && dd < c.aggro * GM_M))) {
+    if (c && !c.passive && canSee && !far && !(w.grace > 0) && (p.aggro > 0 || (c.aggr && dd < c.aggro * GM_M))) {
       p.aggro = Math.max(p.aggro, 1); const rng = c.range * GM_M + w.r + p.r * .5;
       if (dd > rng * .85) {tx = w.x; ty = w.y; sp = d.spd[1] || d.spd[0]; state = "run";}
       else {sp = 0; state = c.ranged || c.boss ? "aim" : "idle"; p.aim = angTo(p.x, p.y, w.x, w.y); p.face = Math.cos(p.aim) >= 0 ? 1 : -1;}
@@ -6710,7 +6714,7 @@ function gm_zoneBuilding(dt) {
 }
 
 function gm_common(dt) {
-  const w = G.worm; w.t += dt; w.hurt = Math.max(0, w.hurt - dt); w.chomp += dt; w.spawn += dt; w.erupt += dt;
+  const w = G.worm; w.t += dt; w.hurt = Math.max(0, w.hurt - dt); w.grace = Math.max(0, (w.grace || 0) - dt); w.chomp += dt; w.spawn += dt; w.erupt += dt;
   for (const b of w.bulges) b.p += dt * .9; w.bulges = w.bulges.filter(b => b.p < 1);
   if (G.msg) {G.msg.t -= dt; if (G.msg.t <= 0) G.msg = null;}
   G.flash.k = Math.max(0, G.flash.k - dt * 1.5);
@@ -7125,7 +7129,7 @@ function hu_mmPt(wx, wy, w) {
 function hu_mmIn(p, m = 0) { return p[0] >= HU_MM.x + m && p[0] < HU_MM.x + HU_MM.w - m && p[1] >= HU_MM.y + m && p[1] < HU_MM.y + HU_MM.h - m; }
 function hu_minimap() {
   const w = G.worm || {x: 0, y: 0, ang: 0}, {x: X0, y: Y0, w: MW, h: MH, k} = HU_MM;
-  const cWalk = WHITE, cWalk1 = hx("#f5f0e0"), cBlock = hx("#ece8e4"), cEdge = hx("#c8c4c8");
+  const cWalk = hx("#f6e8c4"), cWalk1 = hx("#eedcb0"), cBlock = hx("#d6bc8c"), cEdge = hx("#ae8e5c");   // sandy, like the desert below
   const C = (typeof MAP !== "undefined" && MAP.C) || 4;
   for (let j = 0; j < MH; j++) for (let i = 0; i < MW; i++) {
     if ((i === MW - 1 && j === MH - 1) || (i >= MW - 2 && j === MH - 1) || (i === MW - 1 && j >= MH - 2)) continue;
@@ -7329,8 +7333,9 @@ function hu_rightColumn(t) {
 function hu_lockWidget(t) {
   const L = G.lockNear;
   if (!L) return;
-  const x = 1, y = 146;
-  text(T("unlock_at"), x, y, WHITE, 1);
+  const x = 1, y = 146, head = T("unlock_at");
+  hu_rrectA(0, y - 1, textW(head, 1) + 5, 8, hx("#1a1028"), 0.65);
+  text(head, 3, y, WHITE, 1);
   const s = spriteCache("hu:lockbig", 15, 15, () => {
     const g1 = hx("#6e6878"), g2 = hx("#4a4050"), g3 = hx("#2a2230");
     for (let yy = 0; yy < 15; yy++) for (let xx = 0; xx < 15; xx++) {
@@ -7346,13 +7351,13 @@ function hu_lockWidget(t) {
   const pulse = Math.sin(t * 3) > 0.9 ? 1 : 0;
   blit(s, x + 1, y + 7 - pulse);
   const lab = T("level_n", L.level);
-  hu_rrectA(0, y + 24, textW(lab, 1) + 4, 8, hx("#1a1028"), 0.65);
-  text(lab, 2, y + 25, WHITE, 1);
+  hu_rrectA(0, y + 24, textW(lab, 1) + 5, 8, hx("#1a1028"), 0.65);
+  text(lab, 3, y + 25, WHITE, 1);
 }
 
 function hu_wormBars(t) {
   const w = G.worm;
-  if (!w || G.mode === "levelup" || (w.dead && G.mode !== "revive")) return;
+  if (!w || G.mode !== "play" || w.dead) return;   // windows (level-up, revive, end card) cover the world
   const cap = w.bellyCap || 1, n = w.bellyN || 0, full = n >= cap;
   let x = clamp(SX(w.x) - 22, 10, W - 46), y = clamp(SY(w.y) + 34, 30, H - 46);
   if (full) x += Math.round(Math.sin(t * 40) * (Math.sin(t * 3) > 0 ? 1 : 0));
@@ -7476,11 +7481,17 @@ function hu_toast(t) {
   const raw = m.text != null ? String(m.text) : T(m.key);
   const lines = raw.split("\n");
   const age = hu_age(m), pop = age < 0.18 ? age / 0.18 : 1, fade = m.t != null && m.t < 0.3 ? Math.max(0, m.t / 0.3) : 1;
+  const warn = m.key === "belly_full";
+  if (warn) {
+    const s = lines[0], tw = textW(s, 1), bw = tw + 10, x = (W - bw) >> 1, y = 30 - Math.round((1 - pop) * 4);
+    hu_rrectA(x, y, bw, 10, hx("#3a0f14"), 0.85 * fade);
+    text(s, x + 5, y + 2, hu_C.redHi, 1, INK, fade < 1 ? {dither: fade} : null);
+    return;
+  }
   const k = lines.every(s => textW(s, 2) <= W - 8) ? 2 : 1, lh = k === 2 ? 10 : 7;
   const h = lines.length * lh + 6, y = 104 - Math.round((1 - pop) * 6);
   rectA(0, y, W, h, hx("#1a1028"), 0.7 * fade);
   rectA(0, y, W, 1, hu_C.amber, 0.6 * fade); rectA(0, y + h - 1, W, 1, hu_C.amber, 0.6 * fade);
-  const warn = m.key === "belly_full";
   lines.forEach((s, i) => {
     const col = warn ? (i === 0 ? hu_C.redHi : WHITE) : i === 0 ? hu_C.amber : WHITE;
     text(s, Math.round((W - textW(s, k)) / 2), y + 3 + i * lh, col, k, INK, fade < 1 ? {dither: fade} : null);
@@ -7701,6 +7712,15 @@ function hu_drawCard(i, id, t) {
   }
   const pressed = HU_UI.press && HU_UI.press.id === id && !HU_UI.press.cancel;
   hu_btn(br, q.max ? T("max") : T("upgrade_btn"), q.afford && !q.max ? "green" : "grey", {k: 1, pressed});
+  if (hu_tutUpg() === id && !pressed) blit(hu_handSprite(), br[0] + br[2] - 10, br[1] + 7 + Math.round(Math.abs(Math.sin(t * 5)) * 3));
+}
+function hu_tutUpg() {
+  const q = G.quest;
+  if (!q || (q.kind !== "upgrade_attack" && q.kind !== "any_upgrade") || !(G.unlock && G.unlock.upgrades)) return null;
+  if (q.kind === "upgrade_attack") return hu_upgInfo("attack").afford ? "attack" : null;
+  let best = null, bc = 1e18;
+  for (const id of hu_upgIds()) { const i = hu_upgInfo(id); if (i.afford && !i.max && i.cost < bc) { bc = i.cost; best = id; } }
+  return best;
 }
 function hu_drawUpgrades(t) {
   hu_dim(0.35);
@@ -7922,6 +7942,11 @@ function hu_handSprite() {
   }, INK);
 }
 function hu_drawTutorial(t) {
+  if (G.mode === "play" && G.tutorial !== "move" && hu_tutUpg() && !(G.input && G.input.down)) {
+    const r = HU_R.upgrades;
+    blit(hu_handSprite(), r[0] + 6, r[1] + 13 + Math.round(Math.abs(Math.sin(t * 5)) * 3));
+    return;
+  }
   if (G.tutorial !== "move" || G.mode !== "play") return;
   if (G.input && G.input.down) return;
   const cx = 37, cy = 299, a = t * 2.2;
