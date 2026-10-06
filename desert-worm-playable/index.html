@@ -6405,7 +6405,7 @@ function gm_worm(dt) {
   const w = G.worm, c = G.ctrl, mag = Math.min(1, Math.hypot(c.ax, c.ay));
   w.moving = mag > .08 ? 1 : 0;
   if (w.moving) {
-    const aim = Math.atan2(c.ay, c.ax); w.ang += clamp(gm_angle(aim - w.ang), -BAL.worm.turn * dt, BAL.worm.turn * dt);
+    w.ang = Math.atan2(c.ay, c.ax);   // the head goes exactly where the player points, no turning arc
     const sp = w.speed * Math.max(.35, mag);
     const r = w.r * .6, x0 = w.x, y0 = w.y;
     const ok = (x, y) => {const l = Math.hypot(x - x0, y - y0) || 1; return gm_canWorm(x, y) && gm_canWorm(x + (x - x0) / l * r, y + (y - y0) / l * r);};
@@ -6743,21 +6743,7 @@ function gm_step(dt) {
 function continueAfterEnd() {if (G.mode === "end") gm_mode("play");}
 function gm_cameraTick(dt) {
   const w = G.worm; if (!w) return; const cam = G.cam;
-  const look = w.moving ? 14 : 0, x = w.x + Math.cos(w.ang) * look, y = w.y + Math.sin(w.ang) * look;
-  const tx = clamp(x - W / 2, 0, MAP.W - W), ty = clamp(y - H * .52, 0, MAP.H - H);
-  if (!Number.isFinite(cam.fx)) {cam.fx = tx; cam.fy = ty;}
-  const px = cam.x, py = cam.y, pfx = cam.fx, pfy = cam.fy;
-  const k = 1 - Math.exp(-dt * 7); cam.fx = lerp(cam.fx, tx, k); cam.fy = lerp(cam.fy, ty, k);
-  if (!Number.isFinite(cam.ox)) {cam.ox = Math.round(cam.fx - w.x); cam.oy = Math.round(cam.fy - w.y);}
-  const ox = cam.fx - w.x, oy = cam.fy - w.y;
-  if (Math.abs(ox - cam.ox) >= 1) cam.ox = Math.round(ox); if (Math.abs(oy - cam.oy) >= 1) cam.oy = Math.round(oy);
-  cam.x = Math.round(w.x) + cam.ox; cam.y = Math.round(w.y) + cam.oy;
-  const mx = MAP.W - W, my = MAP.H - H;
-  if (cam.fx < .5 || cam.fx > mx - .5) {cam.x = Math.round(cam.fx); cam.ox = cam.x - Math.round(w.x);}
-  if (cam.fy < .5 || cam.fy > my - .5) {cam.y = Math.round(cam.fy); cam.oy = cam.y - Math.round(w.y);}
-  if ((cam.x - px) * (cam.fx - pfx) < 0) {cam.x = px; cam.ox = px - Math.round(w.x);}
-  if ((cam.y - py) * (cam.fy - pfy) < 0) {cam.y = py; cam.oy = py - Math.round(w.y);}
-  cam.x = clamp(cam.x, 0, MAP.W - W); cam.y = clamp(cam.y, 0, MAP.H - H);
+  cam.x = cam.fx = clamp(Math.round(w.x) - W / 2, 0, MAP.W - W); cam.y = cam.fy = clamp(Math.round(w.y) - Math.round(H * .52), 0, MAP.H - H);
 }
 function update(dt) {try {gm_step(dt);} finally {gm_cameraTick(clamp(Number.isFinite(dt) ? dt : 0, 0, BAL.dtMax));}}
 
@@ -6943,6 +6929,8 @@ function botThink(dt) {
   if ((t.why === "full" || t.why === "heal" || t.why === "deliver") && dist(w.x, w.y, t.x, t.y) < 6) ax = ay = 0;
   if (dist(w.x, w.y, BOT.lx, BOT.ly) < .2) BOT.stuck += dt; else BOT.stuck = 0; BOT.lx = w.x; BOT.ly = w.y;
   if (BOT.stuck > 1 && l > 10) {const a = gm_rand(0, 6.28); ax = Math.cos(a); ay = Math.sin(a); BOT.fieldT = 0;}
+  if (ax || ay) {const m = Math.hypot(ax, ay), want = Math.atan2(ay, ax), a = Number.isFinite(BOT.ang) ? BOT.ang + clamp(gm_angle(want - BOT.ang), -7.5 * dt, 7.5 * dt) : want;
+    BOT.ang = a; ax = Math.cos(a) * m; ay = Math.sin(a) * m;}
   G.ctrl.ax = ax; G.ctrl.ay = ay; BOT.why = t.why;
 }
 
