@@ -6300,7 +6300,8 @@ function gm_angle(a) {return Math.atan2(Math.sin(a), Math.cos(a));}
 function gm_fx(kind, x, y, o = {}) {if (typeof fx === "function") try {return fx(kind, x, y, o);} catch (e) {} return null;}
 function gm_sfx(name, o) {if (typeof sfx === "function" && !G.muted) sfx(name, o);}
 function gm_mode(mode) {G.mode = mode; G.modeT = 0;}
-function shake(px, sec) {G.shake.px = Math.max(G.shake.px || 0, px); G.shake.t = Math.max(G.shake.t || 0, sec); G.shake.life = G.shake.t;}
+function shake(px, sec) {return;   // no screen shake: players found it unpleasant
+  G.shake.px = Math.max(G.shake.px || 0, px); G.shake.t = Math.max(G.shake.t || 0, sec); G.shake.life = G.shake.t;}
 function floatText(s, x, y, col = WHITE, o = {}) {
   const t = {s: String(s), text: String(s), x, y, y0: y, col, k: o.k || 1, life: o.life || 1.05, rise: o.rise === undefined ? 18 : o.rise, style: o.style || "dmg", t: 0};
   G.texts.push(t); if (G.texts.length > 40) G.texts.shift(); return t;
@@ -6745,8 +6746,18 @@ function gm_cameraTick(dt) {
   const look = w.moving ? 14 : 0, x = w.x + Math.cos(w.ang) * look, y = w.y + Math.sin(w.ang) * look;
   const tx = clamp(x - W / 2, 0, MAP.W - W), ty = clamp(y - H * .52, 0, MAP.H - H);
   if (!Number.isFinite(cam.fx)) {cam.fx = tx; cam.fy = ty;}
+  const px = cam.x, py = cam.y, pfx = cam.fx, pfy = cam.fy;
   const k = 1 - Math.exp(-dt * 7); cam.fx = lerp(cam.fx, tx, k); cam.fy = lerp(cam.fy, ty, k);
-  cam.x = Math.round(cam.fx); cam.y = Math.round(cam.fy);
+  if (!Number.isFinite(cam.ox)) {cam.ox = Math.round(cam.fx - w.x); cam.oy = Math.round(cam.fy - w.y);}
+  const ox = cam.fx - w.x, oy = cam.fy - w.y;
+  if (Math.abs(ox - cam.ox) >= 1) cam.ox = Math.round(ox); if (Math.abs(oy - cam.oy) >= 1) cam.oy = Math.round(oy);
+  cam.x = Math.round(w.x) + cam.ox; cam.y = Math.round(w.y) + cam.oy;
+  const mx = MAP.W - W, my = MAP.H - H;
+  if (cam.fx < .5 || cam.fx > mx - .5) {cam.x = Math.round(cam.fx); cam.ox = cam.x - Math.round(w.x);}
+  if (cam.fy < .5 || cam.fy > my - .5) {cam.y = Math.round(cam.fy); cam.oy = cam.y - Math.round(w.y);}
+  if ((cam.x - px) * (cam.fx - pfx) < 0) {cam.x = px; cam.ox = px - Math.round(w.x);}
+  if ((cam.y - py) * (cam.fy - pfy) < 0) {cam.y = py; cam.oy = py - Math.round(w.y);}
+  cam.x = clamp(cam.x, 0, MAP.W - W); cam.y = clamp(cam.y, 0, MAP.H - H);
 }
 function update(dt) {try {gm_step(dt);} finally {gm_cameraTick(clamp(Number.isFinite(dt) ? dt : 0, 0, BAL.dtMax));}}
 
