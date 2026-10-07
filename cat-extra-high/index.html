@@ -68,7 +68,7 @@ html, body { margin: 0; height: 100%; background: #0b0907; overflow: hidden; tou
   })();
   var b = 'Build/';
   // GitHub refuses files over 100 MB: a big data file is published as parts and glued back into a Blob here
-  var parts = ['WebGL.data.unityweb.part0', 'WebGL.data.unityweb.part1', 'WebGL.data.unityweb.part2'], dataSize = 249783046, share = parts.length ? 0.85 : 0;
+  var parts = ['WebGL.data.unityweb.part0', 'WebGL.data.unityweb.part1'], dataSize = 171483569, share = parts.length ? 0.85 : 0;
   function setP(p) { fill.style.width = Math.round(p * 100) + '%'; pct.textContent = 'загрузка ' + Math.round(p * 100) + '%'; }
   function loadData() {
     if (!parts.length) return Promise.resolve(b + 'WebGL.data.unityweb');
