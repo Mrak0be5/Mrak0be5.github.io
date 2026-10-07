@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="roborock-public-entry" content="20261007">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#f6f5f0">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <title>Roborock · Домашний пульт</title>
+  <style>
+    :root { color-scheme: light; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #252832; background: #f6f5f0; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; min-height: 100svh; display: grid; place-items: center; padding: 28px 20px; }
+    main { width: min(100%, 440px); }
+    .brand { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 0 0 28px; }
+    .brand-mark { display: grid; place-items: center; width: 39px; height: 39px; border-radius: 12px; background: #8055d9; color: #fff; }
+    .brand-mark svg { width: 24px; height: 24px; }
+    .brand-name { font-size: 23px; font-weight: 750; letter-spacing: -.7px; }
+    .brand-sub { display: block; margin-top: 2px; color: #898391; font-size: 9px; font-weight: 550; letter-spacing: 1.5px; }
+    .card { padding: 38px 32px 30px; border: 1px solid #e9e6ec; border-radius: 22px; background: #fff; box-shadow: 0 12px 44px #29213806; text-align: center; }
+    .robot { width: 100px; height: 100px; margin: 0 auto 26px; border: 1px solid #dddde3; border-radius: 50%; background: linear-gradient(145deg, #fff, #f2f2f4); box-shadow: inset 0 0 0 7px #fafafa, 0 8px 12px #25283208; position: relative; }
+    .robot::before { content: ""; width: 29px; height: 29px; position: absolute; top: 18px; left: 34px; border: 4px solid #e0dfe4; border-radius: 50%; background: #c8c4d1; }
+    .robot::after { content: ""; width: 28px; height: 7px; position: absolute; bottom: 14px; left: 35px; border-radius: 4px; background: #3e3b46; }
+    h1 { margin: 0 0 12px; font-size: 25px; line-height: 1.3; letter-spacing: -.7px; }
+    .intro { margin: 0; color: #78727f; font-size: 14px; line-height: 1.65; }
+    .button { display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; margin: 25px 0 0; padding: 15px 18px; border: 1px solid #8055d9; border-radius: 11px; background: #8055d9; color: #fff; text-decoration: none; font-size: 14px; font-weight: 650; min-height: 49px; }
+    .button:hover { background: #7045c7; border-color: #7045c7; }
+    .button:focus-visible { outline: 3px solid #b69ce6; outline-offset: 4px; }
+    .help { margin: 19px 0 0; color: #918a99; font-size: 11px; line-height: 1.7; }
+    footer { padding: 20px 12px 0; color: #a29ba9; text-align: center; font-size: 10px; line-height: 1.6; }
+    @media (max-width: 380px) { .card { padding: 30px 22px 25px; } h1 { font-size: 23px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="brand" aria-label="Roborock, домашний пульт">
+      <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="9" r="2"/><path d="M9 17h6"/></svg></span>
+      <span class="brand-name">roborock<span class="brand-sub">ДОМАШНИЙ ПУЛЬТ</span></span>
+    </div>
+    <section class="card" aria-labelledby="page-title">
+      <div class="robot" aria-hidden="true"></div>
+      <h1 id="page-title">Открываем твой пульт</h1>
+      <p class="intro">Управление уборкой, комнатами<br>и настройками пылесоса.</p>
+      <a class="button" id="open-dashboard" href="https://retain-arts-nissan-tear.trycloudflare.com/" rel="noreferrer">Открыть пульт <span aria-hidden="true">→</span></a>
+      <p class="help">Если пульт не открывается, домашний компьютер<br>может быть выключен или без интернета.</p>
+    </section>
+    <footer>Для входа потребуется пароль.</footer>
+  </main>
+  <script>
+    (() => {
+      const address = document.getElementById("open-dashboard").getAttribute("href");
+      try {
+        const gateway = new URL(address);
+        if (gateway.protocol === "https:") window.location.replace(gateway.href);
+      } catch (_) {
+        document.getElementById("page-title").textContent = "Пульт временно недоступен";
+        const button = document.getElementById("open-dashboard");
+        button.removeAttribute("href");
+        button.setAttribute("aria-disabled", "true");
+        button.textContent = "Подключение готовится";
+      }
+    })();
+  </script>
+</body>
+</html>
