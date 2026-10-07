@@ -48,7 +48,7 @@ html, body { margin: 0; height: 100%; background: #0b0907; overflow: hidden; tou
   window.addEventListener('error', function (e) { showErr(String(e.message || e)); });
   var b = 'Build/';
   // GitHub refuses files over 100 MB: a big data file is published as parts and glued back into a Blob here
-  var parts = ['WebGL.data.unityweb.part0', 'WebGL.data.unityweb.part1', 'WebGL.data.unityweb.part2', 'WebGL.data.unityweb.part3'], dataSize = 327658649, share = parts.length ? 0.85 : 0;
+  var parts = ['WebGL.data.unityweb.part0', 'WebGL.data.unityweb.part1', 'WebGL.data.unityweb.part2', 'WebGL.data.unityweb.part3'], dataSize = 328086206, share = parts.length ? 0.85 : 0;
   function setP(p) { fill.style.width = Math.round(p * 100) + '%'; pct.textContent = 'загрузка ' + Math.round(p * 100) + '%'; }
   function loadData() {
     if (!parts.length) return Promise.resolve(b + 'WebGL.data.unityweb');
@@ -77,6 +77,7 @@ html, body { margin: 0; height: 100%; background: #0b0907; overflow: hidden; tou
     productName: 'CAT_EXTRA_HIGH',
     productVersion: 'MB8',
     devicePixelRatio: dpr,
+    autoSyncPersistentDataPath: true,   // persistentDataPath (/idbfs: hero profile, save) -> IndexedDB, survives reloads
     cacheControl: function (url) { return url.indexOf('blob:') === 0 ? 'no-store' : 'must-revalidate'; },
     showBanner: function (msg, type) { if (type === 'error') showErr(msg); else console.warn('[web] ' + msg); }
   };
