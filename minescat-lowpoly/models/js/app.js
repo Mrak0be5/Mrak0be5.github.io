@@ -26,6 +26,11 @@ const CLIP_RU = {
   Sway: 'Покачивание', Pulse: 'Импульс', Yaw: 'Поворот стрелки', Run: 'Бег', Walk: 'Шаг', SwingHammer: 'Удар молотом', Swing: 'Удар',
   Mine: 'Добыча', Attack: 'Атака', Hit: 'Получил удар', Die: 'Гибель', Death: 'Гибель', Victory: 'Победа', Jump: 'Прыжок',
   Dig: 'Копает', Carry: 'Несёт', Celebrate: 'Радость', Stun: 'Оглушён', Spawn: 'Появление', Taunt: 'Дразнит',
+  ClimbDown: 'Спуск по верёвке', Found: 'Находка', HeroConfirm: 'Выбран героем', HeroSelectBoy: 'Выбор: Барсик',
+  HeroSelectGirl: 'Выбор: Муся', HitReact: 'Получил удар', Interact: 'Взаимодействие', PortalEnter: 'Вход в портал',
+  PortalExit: 'Выход из портала', Respawn: 'Возрождение', RunHeavy: 'Бег с грузом', SwingPickaxe: 'Удар киркой',
+  UnloadOre: 'Выгрузка руды', Telegraph: 'Замах', Laser: 'Лазер', RageStep: 'Ярость', Roar: 'Рык', Board: 'Заколачивание',
+  Enter: 'Вход', Exit: 'Выход', Open: 'Открыть', Collect: 'Сбор', ProcessStart: 'Старт переработки', ProcessDone: 'Готово',
 };
 const STAGE_RU = ['Целый', 'Трещина 1', 'Трещина 2', 'Трещина 3'];
 
@@ -168,16 +173,48 @@ function instantiate(a, g, own) {
     if (own) o.geometry = o.geometry.clone();
     meshes.push(o);
   });
-  const inst = { a, root, meshes, own, animations: g.animations || [], touched: new Set(), glowed: new Set(), stage: 0 };
+  const inst = { a, root, meshes, own, ownGeo: own, animations: g.animations || [], touched: new Set(), glowed: new Set(), stage: 0 };
   applyView(inst);
   return inst;
+}
+// the game's look: cats wear Hat_Miner on the Head_Hat bone (lamp lens on), upright in model space, tilted back 12 deg
+const HAT_ID = 'Hat_Miner';
+async function hatFor(a) {
+  const h = a.fur && state.byId.get(HAT_ID);
+  if (!h) return null;
+  try { return await getGltf(h); } catch (e) { LP.errors.push('hat: ' + e.message); return null; }
+}
+function attachHat(inst, g) {
+  const bone = g && nodeByName(inst.root, 'Head_Hat');
+  if (!bone) return null;
+  const hat = g.scene.clone(true);
+  hat.name = '__hat';
+  hat.traverse((o) => {
+    if (!o.isMesh) return;
+    o.material = makeMat((o.material && o.material.name) || 'M_Palette', true);
+    o.castShadow = true; o.receiveShadow = true;
+    o.geometry = o.geometry.clone();
+    o.userData.hatMesh = true;
+    inst.meshes.push(o);
+  });
+  const off = nodeByName(hat, 'Lens_Off');
+  if (off) off.visible = false;
+  inst.root.updateMatrixWorld(true);
+  const bq = bone.getWorldQuaternion(new THREE.Quaternion()), rq = inst.root.getWorldQuaternion(new THREE.Quaternion());
+  hat.quaternion.copy(bq.invert().multiply(rq)).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -12 * DEG));
+  const bs = bone.getWorldScale(new THREE.Vector3()), rs = inst.root.getWorldScale(new THREE.Vector3());
+  hat.scale.set(rs.x / (bs.x || 1), rs.y / (bs.y || 1), rs.z / (bs.z || 1));
+  bone.add(hat);
+  inst.own = true;     // hat geometry is a private clone: dispose it with the instance
+  inst.hat = hat;
+  return hat;
 }
 function disposeInst(inst) {
   if (!inst) return;
   inst.root.removeFromParent();
   for (const m of inst.meshes) {
     m.material.dispose();
-    if (inst.own) m.geometry.dispose();
+    if (inst.own && (m.userData.hatMesh || inst.ownGeo !== false)) m.geometry.dispose();
   }
   inst.root.traverse((o) => { if (o.userData.socketMarker) { o.geometry.dispose(); o.material.dispose(); } });
 }
@@ -347,7 +384,15 @@ function buildClips(inst) {
   const add = (key, fn, note) => list.push({ key, label: clipLabel(key), fn, note: note || 'процедурно, по описанию клипа из props.json' });
   const X = new THREE.Vector3(1, 0, 0), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
 
-  for (const c of inst.animations) list.push({ key: c.name, label: clipLabel(c.name), clip: c, note: 'клип из FBX (скелетная анимация)' });
+  // real FBX clips in the art lane's order (manifest clips), loop flags from <Rig>.clips.json
+  const mc = new Map((a.clips || []).map((c, i) => [c.name, Object.assign({ i }, c)]));
+  const real = inst.animations.slice().sort((x, y) => ((mc.get(x.name) || { i: 99 }).i - (mc.get(y.name) || { i: 99 }).i));
+  for (const c of real) {
+    const m = mc.get(c.name) || {};
+    const once = m.loop === false;
+    list.push({ key: c.name, label: clipLabel(c.name), clip: c, once,
+      note: 'клип из FBX (скелетная анимация' + (once ? ', разовый: повтор с паузой' : ', цикл') + ')' });
+  }
 
   if (/^Portal_/.test(a.id) && r.spin) {
     const sw = N(r.spin[0]);
@@ -576,19 +621,67 @@ function makeStage(shadowSize) {
   };
   return st;
 }
-function fitStage(st, camera, box, controls, tight) {
+// viewer framing (fix r1 W15): the 8 bbox corners, seen from the default orbit elevation at FIT_AZ azimuths, must stay inside
+// |ndc x| <= lim.x and |ndc y| <= lim.y; the smallest such distance is found by bisection (the old bounding-sphere fit used the
+// vertical fov only, so in the portrait phone stage wide or long models, e.g. the 0.08 x 0.22 m peg, ran off the sides).
+const FIT_AZ = 24;
+const orbitDir = (az, el) => new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el));
+function boxCorners(box) {
+  const out = [];
+  for (let i = 0; i < 8; i++) out.push(new THREE.Vector3(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z));
+  return out;
+}
+// worst |ndc| / lim over the corners for a camera at distance d from c along the orbit (az, el); Infinity = a corner behind the eye
+const _cam = new THREE.PerspectiveCamera();
+const _v = new THREE.Vector3();
+function fitWorst(camera, corners, c, d, el, lim, azs) {
+  _cam.fov = camera.fov; _cam.aspect = camera.aspect; _cam.near = 1e-4; _cam.far = 1e4;
+  const tv = Math.tan((camera.fov * DEG) / 2), th = tv * camera.aspect;
+  let w = 0;
+  for (const az of azs) {
+    _cam.position.copy(c).addScaledVector(orbitDir(az, el), d);
+    _cam.lookAt(c);
+    _cam.updateMatrixWorld(true);
+    const inv = _cam.matrixWorldInverse;
+    for (const p of corners) {
+      _v.copy(p).applyMatrix4(inv);
+      const z = -_v.z;
+      if (z <= 1e-6) return Infinity;
+      w = Math.max(w, Math.abs(_v.x / (z * th)) / lim.x, Math.abs(_v.y / (z * tv)) / lim.y);
+    }
+  }
+  return w;
+}
+function fitDistance(camera, box, c, r, lim) {
+  const corners = boxCorners(box);
+  const azs = Array.from({ length: FIT_AZ }, (_, k) => CAM_AZ + (k * 2 * Math.PI) / FIT_AZ);
+  const half = Math.min((camera.fov * DEG) / 2, Math.atan(Math.tan((camera.fov * DEG) / 2) * camera.aspect));
+  let lo = r * 0.2, hi = (r / Math.sin(half * Math.min(lim.x, lim.y))) * 1.5;
+  for (let k = 0; k < 8 && fitWorst(camera, corners, c, hi, CAM_EL, lim, azs) > 1; k++) hi *= 1.6;
+  for (let k = 0; k < 28; k++) {
+    const m = 0.5 * (lo + hi);
+    if (fitWorst(camera, corners, c, m, CAM_EL, lim, azs) > 1) lo = m; else hi = m;
+  }
+  return hi;
+}
+// usable share of the stage half-width / half-height: 56 css px side lanes for the prev / next buttons, 7 % top / bottom
+function fitLimits(w, h) {
+  const lx = w > 0 ? (w / 2 - 56) / (w / 2) : 0.86;
+  return { x: Math.min(0.88, Math.max(0.5, lx)), y: 0.86 };
+}
+function fitStage(st, camera, box, controls, tight, lim) {
   const sphere = box.getBoundingSphere(new THREE.Sphere());
   const r = Math.max(sphere.radius, 0.05);
   const c = sphere.center;
-  const d = (r / Math.sin((camera.fov * DEG) / 2)) * (tight ? 0.98 : 1.12);
-  const dir = new THREE.Vector3(Math.sin(CAM_AZ) * Math.cos(CAM_EL), Math.sin(CAM_EL), Math.cos(CAM_AZ) * Math.cos(CAM_EL));
+  const d = lim ? fitDistance(camera, box, c, r, lim) : (r / Math.sin((camera.fov * DEG) / 2)) * (tight ? 0.98 : 1.12);
+  const dir = orbitDir(CAM_AZ, CAM_EL);
   camera.position.copy(c).addScaledVector(dir, d);
   camera.near = d / 50; camera.far = d * 30;
   camera.updateProjectionMatrix();
   camera.lookAt(c);
   if (controls) {
     controls.target.copy(c);
-    controls.minDistance = r * 0.7; controls.maxDistance = d * 4;
+    controls.minDistance = Math.min(r * 0.7, d * 0.5); controls.maxDistance = d * 4;
     controls.update();
   }
   st.r = r;
@@ -628,7 +721,9 @@ function initThumbs() {
 }
 async function renderThumb(a) {
   const g = await getGltf(a);
+  const hg = await hatFor(a);
   const inst = instantiate(a, g, false);
+  attachHat(inst, hg);
   const clips = buildClips(inst);
   const dc = defaultClip(inst, clips);
   timeU.value = 0.6;
@@ -668,8 +763,23 @@ function catName(id) {
   const c = (state.man.categories || []).find((x) => x[0] === id);
   return c ? c[1] : id;
 }
+function tabsFade() {
+  const nav = $('#tabs');
+  const max = nav.scrollWidth - nav.clientWidth;
+  const more = nav.scrollLeft < max - 2;
+  nav.classList.toggle('fl', nav.scrollLeft > 2);
+  nav.classList.toggle('fr', more);
+  $('#tabsmore').hidden = !more;
+}
+function initTabs() {
+  const nav = $('#tabs');
+  nav.addEventListener('scroll', tabsFade, { passive: true });
+  window.addEventListener('resize', tabsFade);
+  $('#tabsmore').addEventListener('click', () => nav.scrollBy({ left: Math.max(120, nav.clientWidth * 0.7), behavior: 'smooth' }));
+}
 function buildTabs() {
   const nav = $('#tabs');
+  const keep = nav.scrollLeft;
   nav.textContent = '';
   const cats = [['all', 'Все'], ...state.man.categories];
   for (const [id, name] of cats) {
@@ -681,6 +791,8 @@ function buildTabs() {
     b.addEventListener('click', () => { state.tab = id; buildTabs(); buildGrid(); });
     nav.append(b);
   }
+  nav.scrollLeft = keep;
+  tabsFade();
 }
 function card(a) {
   const c = el('button', 'card');
@@ -738,7 +850,7 @@ function buildGrid() {
 }
 
 // ---------- viewer ----------
-const V = { open: false, inst: null, clips: [], clip: null, clipT0: 0, t: 0, opts: { rotate: true, concept: false, dark: false, wire: false, sockets: false }, token: 0 };
+const V = { open: false, inst: null, clips: [], clip: null, clipT0: 0, t: 0, opts: { rotate: true, hat: true, concept: false, dark: false, wire: false, sockets: false }, token: 0 };
 function initViewer() {
   const canvas = $('#vcanvas');
   V.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
@@ -774,8 +886,11 @@ function resizeViewer() {
   const box = $('#vstage').getBoundingClientRect();
   if (!box.width || !box.height) return;
   V.renderer.setSize(box.width, box.height, false);
+  const was = V.camera.aspect;
   V.camera.aspect = box.width / box.height;
   V.camera.updateProjectionMatrix();
+  // the framing depends on the stage shape (fix r1 W15): refit after a real change (rotation, window resize)
+  if (V.inst && V.framedAspect && Math.abs(V.camera.aspect / V.framedAspect - 1) > 0.02) frameViewer();
 }
 function step(d) {
   const ids = state.shown.length ? state.shown : state.assets.map((a) => a.id);
@@ -791,6 +906,8 @@ function syncToggles() {
   const a = state.byId.get(V.id);
   const cb = document.querySelector('.toggles .chip[data-opt="concept"]');
   if (cb) cb.hidden = !(a && a.concept);
+  const hb = document.querySelector('.toggles .chip[data-opt="hat"]');
+  if (hb) hb.hidden = !(V.inst && V.inst.hat);
 }
 function toggleOpt(k, val) {
   if (k === 'reset') { if (V.inst) frameViewer(); return; }
@@ -809,6 +926,7 @@ function applyOpts() {
   if (V.inst) {
     for (const m of V.inst.meshes) m.material.wireframe = V.opts.wire;
     V.inst.root.traverse((o) => { if (o.userData.socketMarker) o.visible = V.opts.sockets; });
+    if (V.inst.hat) V.inst.hat.visible = V.opts.hat;
   }
 }
 function addSocketMarkers(inst, r) {
@@ -828,7 +946,10 @@ function addSocketMarkers(inst, r) {
 }
 function frameViewer() {
   const box = visibleBox(V.inst.root);
-  fitStage(V.stage, V.camera, box, V.controls, false);
+  const sb = $('#vstage').getBoundingClientRect();
+  fitStage(V.stage, V.camera, box, V.controls, false, fitLimits(sb.width, sb.height));
+  V.framedAspect = V.camera.aspect;
+  V.framedBox = box;
 }
 async function openViewer(id) {
   const a = state.byId.get(id);
@@ -852,10 +973,12 @@ async function openViewer(id) {
     LP.errors.push('open ' + id + ': ' + e.message);
     return;
   }
+  const hg = await hatFor(a);
   if (token !== V.token) return;
   disposeInst(V.inst);
   if (V.inst && V.inst.mixer) V.inst.mixer.stopAllAction();
   const inst = instantiate(a, g, !!a.fur);
+  attachHat(inst, hg);
   V.inst = inst;
   V.stage.scene.add(inst.root);
   if (inst.animations.length) inst.mixer = new THREE.AnimationMixer(inst.root);
@@ -891,10 +1014,13 @@ function setClip(key) {
   resetAll(inst);
   V.clip = c;
   V.clipT0 = V.t;
+  V.holdUntil = 0;
   if (c.clip && inst.mixer) {
     const act = inst.mixer.clipAction(c.clip);
-    act.reset().setLoop(THREE.LoopRepeat, Infinity).play();
-  }
+    if (c.once) { act.reset().setLoop(THREE.LoopOnce, 1); act.clampWhenFinished = true; act.play(); }
+    else act.reset().setLoop(THREE.LoopRepeat, Infinity).play();
+    V.act = act;
+  } else V.act = null;
   document.querySelectorAll('#vclips .chip').forEach((b) => b.classList.toggle('on', b.dataset.key === c.key));
   $('#vnote').textContent = c.note ? 'Анимация «' + c.label + '»: ' + c.note + '.' : '';
 }
@@ -980,7 +1106,7 @@ function fillPanel(a, inst) {
       const b = el('button', 'chip' + (inst && inst.fur === f.id ? ' on' : ''));
       b.dataset.fur = f.id;
       const s = el('span', 'sw');
-      s.style.background = f.swatch;
+      s.style.background = f.colors && f.colors.length > 1 ? `linear-gradient(135deg, ${f.colors.join(', ')})` : f.swatch;
       b.append(s, document.createTextNode(f.name));
       b.addEventListener('click', () => setFur(f.id));
       fw.append(b);
@@ -998,7 +1124,14 @@ function loop() {
   const inst = V.inst;
   if (inst) {
     const ct = V.t - V.clipT0;
-    if (inst.mixer) inst.mixer.update(dt);
+    if (inst.mixer) {
+      inst.mixer.update(dt);
+      // one-shot clips (Death, Swing..): hold the last pose 0.8 s, then replay
+      if (V.act && V.clip && V.clip.once && !V.act.isRunning()) {
+        if (!V.holdUntil) V.holdUntil = V.t + 0.8;
+        else if (V.t > V.holdUntil) { V.holdUntil = 0; V.act.reset().play(); }
+      }
+    }
     if (V.clip && V.clip.fn) V.clip.fn(ct);
   }
   V.controls.update(dt);
@@ -1015,6 +1148,39 @@ LP.setFur = (id) => setFur(id);
 LP.setStage = (s) => setStage(s);
 LP.setOpt = (k, v) => toggleOpt(k, v);
 LP.setTab = (t) => { state.tab = t; buildTabs(); buildGrid(); };
+// fix r1 W15: projected bbox of the open model at n orbit azimuths (current distance / elevation / target): worst margin to the
+// stage edges in css px (l/r/t/b), and to the prev/next button lanes (56 px each side)
+LP.fitCheck = (n = 12) => {
+  if (!V.inst || !V.framedBox) return null;
+  const sb = $('#vstage').getBoundingClientRect();
+  const W = sb.width, H = sb.height, c = V.controls.target;
+  const off = V.camera.position.clone().sub(c);
+  const d = off.length(), el = Math.asin(off.y / d), az0 = Math.atan2(off.x, off.z);
+  const corners = boxCorners(V.framedBox);
+  const cam = V.camera.clone();
+  let l = 1e9, r = 1e9, t = 1e9, b = 1e9;
+  for (let k = 0; k < n; k++) {
+    cam.position.copy(c).addScaledVector(orbitDir(az0 + (k * 2 * Math.PI) / n, el), d);
+    cam.lookAt(c);
+    cam.updateMatrixWorld(true);
+    for (const p of corners) {
+      const q = p.clone().project(cam);
+      const x = ((q.x + 1) / 2) * W, y = ((1 - q.y) / 2) * H;
+      l = Math.min(l, x); r = Math.min(r, W - x); t = Math.min(t, y); b = Math.min(b, H - y);
+    }
+  }
+  const size = V.framedBox.getSize(new THREE.Vector3());
+  const R = (v) => Math.round(v);
+  return { stage: [R(W), R(H)], size: [+size.x.toFixed(3), +size.y.toFixed(3), +size.z.toFixed(3)], d: +d.toFixed(3),
+    margin: { l: R(l), r: R(r), t: R(t), b: R(b) }, minEdge: R(Math.min(l, r, t, b)), minLane: R(Math.min(l, r) - 56) };
+};
+LP.orbit = (deg) => {
+  const c = V.controls.target, off = V.camera.position.clone().sub(c);
+  off.applyAxisAngle(new THREE.Vector3(0, 1, 0), deg * DEG);
+  V.camera.position.copy(c).add(off);
+  V.camera.lookAt(c);
+  V.controls.update();
+};
 LP.probe = () => {
   // share of non-background pixels and their mean / near-black share, from the viewer canvas
   const c = V.renderer.domElement;
@@ -1057,6 +1223,7 @@ async function boot() {
       (pend ? ` · ещё ${pend} в работе` : '') + (dubai ? ` · сборка ${dubai}` : '');
     initThumbs();
     initViewer();
+    initTabs();
     buildTabs();
     buildGrid();
     LP.ready = true;

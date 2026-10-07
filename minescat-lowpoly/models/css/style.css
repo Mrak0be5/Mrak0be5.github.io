@@ -21,8 +21,18 @@ button { font: inherit; color: inherit; }
 .top-in { max-width: 1400px; margin: 0 auto; padding: 14px 18px 6px; }
 h1 { margin: 0; font-size: clamp(19px, 2.6vw, 28px); font-weight: 750; letter-spacing: .2px; }
 .stats { margin: 4px 0 0; color: var(--dim); font-size: 13.5px; }
-.tabs { max-width: 1400px; margin: 0 auto; padding: 6px 14px 10px; display: flex; gap: 6px; overflow-x: auto;
-  scrollbar-width: none; }
+.nw { white-space: nowrap; }
+.tabs-wrap { position: relative; max-width: 1400px; margin: 0 auto; }
+.tabs { padding: 6px 14px 10px; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+/* fix r1 W14: a scrollable tab row fades at the edge that has more tabs behind it; the arrow scrolls on */
+.tabs.fr { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 64px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 64px), transparent); }
+.tabs.fl { -webkit-mask-image: linear-gradient(to right, transparent, #000 40px); mask-image: linear-gradient(to right, transparent, #000 40px); }
+.tabs.fl.fr { -webkit-mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 64px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 64px), transparent); }
+.tabs-more { position: absolute; right: 4px; top: 1px; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 50%;
+  background: rgba(30, 32, 39, .92); color: var(--accent2); font-size: 26px; line-height: 1; padding: 0 0 3px 2px; cursor: pointer; }
+.tabs-more:hover { border-color: var(--accent); }
+.tabs-more[hidden] { display: none; }
 .tabs::-webkit-scrollbar { display: none; }
 .tab { flex: 0 0 auto; border: 1px solid var(--line); background: var(--bg2); border-radius: 999px; padding: 6px 13px;
   cursor: pointer; white-space: nowrap; }
@@ -69,7 +79,7 @@ h1 { margin: 0; font-size: clamp(19px, 2.6vw, 28px); font-weight: 750; letter-sp
 .v-hint { position: absolute; left: 12px; bottom: 10px; right: 12px; color: rgba(40, 28, 10, .72); font-size: 12px;
   pointer-events: none; text-shadow: 0 1px 0 rgba(255, 240, 210, .4); }
 .viewer.dark .v-hint { color: rgba(220, 220, 230, .55); text-shadow: none; }
-.v-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 42px; height: 64px; border: 0; border-radius: 10px;
+.v-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 64px; border: 0; border-radius: 10px;
   background: rgba(15, 15, 20, .45); color: #fff; font-size: 34px; line-height: 1; cursor: pointer; }
 .v-nav:hover { background: rgba(15, 15, 20, .7); }
 .v-nav.prev { left: 10px; }
@@ -83,10 +93,10 @@ h1 { margin: 0; font-size: clamp(19px, 2.6vw, 28px); font-weight: 750; letter-sp
 .v-concept[hidden] { display: none; }
 
 .v-panel { position: relative; background: var(--bg2); border-left: 1px solid var(--line); overflow-y: auto; padding: 16px 16px 24px; }
-.v-close { position: absolute; top: 10px; right: 10px; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line);
-  background: var(--card); cursor: pointer; font-size: 16px; }
+.v-close { position: absolute; top: 8px; right: 8px; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line);
+  background: var(--card); cursor: pointer; font-size: 18px; }
 .v-close:hover { border-color: var(--accent); }
-.v-panel h2 { margin: 2px 44px 6px 0; font-size: 21px; line-height: 1.2; }
+.v-panel h2 { margin: 2px 52px 6px 0; font-size: 21px; line-height: 1.2; }
 .badges { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
 .badges .tag { font-size: 11.5px; background: #353846; }
 .badges .tag.pilot { background: #3c5cbe; }
@@ -116,7 +126,7 @@ h1 { margin: 0; font-size: clamp(19px, 2.6vw, 28px); font-weight: 750; letter-sp
   .viewer { grid-template-columns: 1fr; grid-template-rows: 56vh 1fr; }
   .v-panel { border-left: 0; border-top: 1px solid var(--line); padding: 12px 12px 30px; }
   .v-hint { display: none; }
-  .v-nav { width: 36px; height: 52px; font-size: 28px; }
+  .v-nav { width: 44px; height: 56px; font-size: 30px; }
   .v-concept { width: 34%; }
   .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; padding: 12px; }
 }

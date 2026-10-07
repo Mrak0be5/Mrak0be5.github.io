@@ -1,6 +1,6 @@
 {
  "version": 1,
- "built_utc": "2026-10-07T08:59:29Z",
+ "built_utc": "2026-10-07T20:24:08Z",
  "categories": [
   [
    "chars",
@@ -36,25 +36,44 @@
    "id": "ginger",
    "name": "Рыжий",
    "base": 80,
-   "swatch": "#F07E12"
+   "swatch": "#FD9213",
+   "colors": [
+    "#FD9213",
+    "#E4590A",
+    "#FEE9BE"
+   ]
   },
   {
    "id": "grey_tabby",
    "name": "Полосатый",
    "base": 85,
-   "swatch": "#8E7F73"
+   "swatch": "#A6978A",
+   "colors": [
+    "#A6978A",
+    "#57443B",
+    "#F9DFB6"
+   ]
   },
   {
    "id": "calico",
    "name": "Трёхцветный",
    "base": 90,
-   "swatch": "#F3E9CE"
+   "swatch": "#FEF6DC",
+   "colors": [
+    "#FEF6DC",
+    "#ED7518",
+    "#604C44"
+   ]
   },
   {
    "id": "tuxedo",
    "name": "Чёрно-белый",
    "base": 96,
-   "swatch": "#3A3540"
+   "swatch": "#4A4352",
+   "colors": [
+    "#4A4352",
+    "#FFFBF2"
+   ]
   }
  ],
  "palette": {
@@ -242,7 +261,7 @@
     25,
     "#D64B10",
     "#FCB458",
-    0.15,
+    0.0,
     "copper_ore"
    ],
    [
@@ -895,6 +914,20 @@
     "#FEE9BE",
     0.25,
     "fur_face_lit"
+   ],
+   [
+    119,
+    "#5CF140",
+    "#5CF140",
+    0.0,
+    "heal_green"
+   ],
+   [
+    120,
+    "#2B2731",
+    "#4A4352",
+    0.0,
+    "rock_void"
    ]
   ]
  },
@@ -907,12 +940,12 @@
    "folder": "Characters",
    "fbx": "Characters/CatBoy",
    "glb": "glb/CatBoy.glb",
-   "bytes": 70192,
-   "tris": 1848,
+   "bytes": 480324,
+   "tris": 1332,
    "parts": [
     {
      "name": "CatBoy_Body",
-     "tris": 1512,
+     "tris": 560,
      "mats": [
       "M_Palette"
      ],
@@ -921,36 +954,432 @@
      "parent": "CatRig",
      "bbox": [
       [
-       -0.4987,
-       -0.3996,
-       0.0
+       -0.5474,
+       -0.2688,
+       0.002
       ],
       [
-       0.4928,
-       0.5123,
-       1.3
+       0.5474,
+       0.2207,
+       1.2044
       ]
      ]
     },
     {
-     "name": "CatBoy_Helmet",
-     "tris": 336,
+     "name": "CatBoy_Brow_L",
+     "tris": 4,
      "mats": [
       "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       0.1265,
+       -0.2661,
+       0.9279
+      ],
+      [
+       0.2202,
+       -0.2131,
+       0.967
+      ]
+     ]
+    },
+    {
+     "name": "CatBoy_Brow_R",
+     "tris": 4,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       -0.2202,
+       -0.2659,
+       0.928
+      ],
+      [
+       -0.1264,
+       -0.2131,
+       0.967
+      ]
+     ]
+    },
+    {
+     "name": "CatBoy_Eye_Closed_L",
+     "tris": 8,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       0.1106,
+       -0.2676,
+       0.8028
+      ],
+      [
+       0.2332,
+       -0.2076,
+       0.859
+      ]
+     ]
+    },
+    {
+     "name": "CatBoy_Eye_Closed_R",
+     "tris": 8,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       -0.2331,
+       -0.2676,
+       0.8029
+      ],
+      [
+       -0.1105,
+       -0.2076,
+       0.859
+      ]
+     ]
+    },
+    {
+     "name": "CatBoy_Eye_Dead_L",
+     "tris": 8,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       0.1114,
+       -0.2612,
+       0.788
+      ],
+      [
+       0.22,
+       -0.1919,
+       0.8899
+      ]
+     ]
+    },
+    {
+     "name": "CatBoy_Eye_Dead_R",
+     "tris": 8,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       -0.2197,
+       -0.2606,
+       0.788
+      ],
+      [
+       -0.1113,
+       -0.1917,
+       0.8901
+      ]
+     ]
+    },
+    {
+     "name": "CatBoy_Eye_Happy_L",
+     "tris": 8,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       0.1058,
+       -0.2609,
+       0.8115
+      ],
+      [
+       0.2291,
+       -0.1994,
+       0.871
+      ]
+     ]
+    },
+    {
+     "name": "CatBoy_Eye_Happy_R",
+     "tris": 8,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       -0.229,
+       -0.2608,
+       0.8115
+      ],
+      [
+       -0.1057,
+       -0.1993,
+       0.8711
+      ]
+     ]
+    },
+    {
+     "name": "CatBoy_Eye_Open_L",
+     "tris": 52,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       0.0926,
+       -0.2705,
+       0.7654
+      ],
+      [
+       0.2403,
+       -0.181,
+       0.9225
+      ]
+     ]
+    },
+    {
+     "name": "CatBoy_Eye_Open_R",
+     "tris": 52,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       -0.2402,
+       -0.2703,
+       0.7654
+      ],
+      [
+       -0.0926,
+       -0.1809,
+       0.9227
+      ]
+     ]
+    },
+    {
+     "name": "CatBoy_Eye_Ouch_L",
+     "tris": 8,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       0.1233,
+       -0.2577,
+       0.7851
+      ],
+      [
+       0.222,
+       -0.1904,
+       0.8885
+      ]
+     ]
+    },
+    {
+     "name": "CatBoy_Eye_Ouch_R",
+     "tris": 8,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       -0.2217,
+       -0.2576,
+       0.7852
+      ],
+      [
+       -0.1232,
+       -0.1903,
+       0.8887
+      ]
+     ]
+    },
+    {
+     "name": "CatBoy_Fur",
+     "tris": 548,
+     "mats": [
+      "M_Palette_FurGinger"
      ],
      "uvs": 1,
      "skinned": true,
      "parent": "CatRig",
      "bbox": [
       [
-       -0.4063,
-       -0.3532,
-       0.8626
+       -0.4922,
+       -0.2731,
+       0.1727
       ],
       [
-       0.4067,
-       0.4191,
-       1.256
+       0.5157,
+       0.3947,
+       1.248
+      ]
+     ]
+    },
+    {
+     "name": "CatBoy_Mouth_Flat",
+     "tris": 4,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       -0.0355,
+       -0.2601,
+       0.733
+      ],
+      [
+       0.0353,
+       -0.2383,
+       0.749
+      ]
+     ]
+    },
+    {
+     "name": "CatBoy_Mouth_Grit",
+     "tris": 8,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       -0.058,
+       -0.2625,
+       0.722
+      ],
+      [
+       0.058,
+       -0.2392,
+       0.748
+      ]
+     ]
+    },
+    {
+     "name": "CatBoy_Mouth_O",
+     "tris": 6,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       -0.0226,
+       -0.2458,
+       0.7075
+      ],
+      [
+       0.0226,
+       -0.2237,
+       0.7525
+      ]
+     ]
+    },
+    {
+     "name": "CatBoy_Mouth_Open",
+     "tris": 10,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       -0.045,
+       -0.26,
+       0.712
+      ],
+      [
+       0.045,
+       -0.2237,
+       0.752
+      ]
+     ]
+    },
+    {
+     "name": "CatBoy_Mouth_Smile",
+     "tris": 8,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       -0.0539,
+       -0.2605,
+       0.729
+      ],
+      [
+       0.0537,
+       -0.2383,
+       0.7591
+      ]
+     ]
+    },
+    {
+     "name": "CatBoy_Whiskers",
+     "tris": 12,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       -0.2225,
+       -0.2509,
+       0.718
+      ],
+      [
+       0.2225,
+       -0.2097,
+       0.7819
       ]
      ]
     }
@@ -958,46 +1387,149 @@
    "sockets": [],
    "bones": 29,
    "rig": "CatRig",
-   "clips": [],
+   "clips": [
+    {
+     "name": "Idle",
+     "frames": 61,
+     "file": "CatRig@Idle.fbx",
+     "loop": true
+    },
+    {
+     "name": "Run",
+     "frames": 13,
+     "file": "CatRig@Run.fbx",
+     "loop": true
+    },
+    {
+     "name": "RunHeavy",
+     "frames": 17,
+     "file": "CatRig@RunHeavy.fbx",
+     "loop": true
+    },
+    {
+     "name": "SwingHammer",
+     "frames": 41,
+     "file": "CatRig@SwingHammer.fbx",
+     "loop": false
+    },
+    {
+     "name": "SwingPickaxe",
+     "frames": 31,
+     "file": "CatRig@SwingPickaxe.fbx",
+     "loop": false
+    },
+    {
+     "name": "HitReact",
+     "frames": 13,
+     "file": "CatRig@HitReact.fbx",
+     "loop": false
+    },
+    {
+     "name": "Death",
+     "frames": 31,
+     "file": "CatRig@Death.fbx",
+     "loop": false
+    },
+    {
+     "name": "Respawn",
+     "frames": 31,
+     "file": "CatRig@Respawn.fbx",
+     "loop": false
+    },
+    {
+     "name": "Interact",
+     "frames": 25,
+     "file": "CatRig@Interact.fbx",
+     "loop": false
+    },
+    {
+     "name": "UnloadOre",
+     "frames": 31,
+     "file": "CatRig@UnloadOre.fbx",
+     "loop": false
+    },
+    {
+     "name": "PortalEnter",
+     "frames": 25,
+     "file": "CatRig@PortalEnter.fbx",
+     "loop": false
+    },
+    {
+     "name": "PortalExit",
+     "frames": 25,
+     "file": "CatRig@PortalExit.fbx",
+     "loop": false
+    },
+    {
+     "name": "HeroSelectGirl",
+     "frames": 91,
+     "file": "CatRig@HeroSelectGirl.fbx",
+     "loop": true
+    },
+    {
+     "name": "HeroSelectBoy",
+     "frames": 91,
+     "file": "CatRig@HeroSelectBoy.fbx",
+     "loop": true
+    },
+    {
+     "name": "HeroConfirm",
+     "frames": 61,
+     "file": "CatRig@HeroConfirm.fbx",
+     "loop": false
+    },
+    {
+     "name": "ClimbDown",
+     "frames": 21,
+     "file": "CatRig@ClimbDown.fbx",
+     "loop": true
+    },
+    {
+     "name": "Found",
+     "frames": 46,
+     "file": "CatRig@Found.fbx",
+     "loop": false
+    }
+   ],
    "materials": [
-    "M_Palette"
+    "M_Palette",
+    "M_Palette_FurGinger"
    ],
    "cells": [
     15,
-    28,
     35,
     36,
     37,
     38,
     39,
-    40,
     41,
     42,
     43,
     44,
-    48,
     80,
     81,
+    82,
+    83,
     84
    ],
    "fur": true,
    "bbox": [
     [
-     -0.4987,
-     -0.3996,
-     0.0
+     -0.5474,
+     -0.2731,
+     0.002
     ],
     [
-     0.4928,
-     0.5123,
-     1.3
+     0.5474,
+     0.3947,
+     1.248
     ]
    ],
    "concept": "barsik",
    "view": null,
    "anim": null,
-   "pilot_tag": true,
-   "pilot_copy": true,
+   "pilot_tag": false,
+   "pilot_copy": false,
    "props": null
   },
   {
@@ -1008,12 +1540,12 @@
    "folder": "Characters",
    "fbx": "Characters/CatGirl",
    "glb": "glb/CatGirl.glb",
-   "bytes": 72712,
-   "tris": 1894,
+   "bytes": 482396,
+   "tris": 1364,
    "parts": [
     {
      "name": "CatGirl_Body",
-     "tris": 1510,
+     "tris": 592,
      "mats": [
       "M_Palette"
      ],
@@ -1022,36 +1554,432 @@
      "parent": "CatRig",
      "bbox": [
       [
-       -0.4987,
-       -0.3996,
-       0.0
+       -0.5474,
+       -0.2688,
+       0.002
       ],
       [
-       0.4928,
-       0.5123,
-       1.3
+       0.5474,
+       0.2207,
+       1.2044
       ]
      ]
     },
     {
-     "name": "CatGirl_Helmet",
-     "tris": 384,
+     "name": "CatGirl_Brow_L",
+     "tris": 4,
      "mats": [
       "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       0.1265,
+       -0.2661,
+       0.9279
+      ],
+      [
+       0.2202,
+       -0.2131,
+       0.967
+      ]
+     ]
+    },
+    {
+     "name": "CatGirl_Brow_R",
+     "tris": 4,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       -0.2202,
+       -0.2659,
+       0.928
+      ],
+      [
+       -0.1264,
+       -0.2131,
+       0.967
+      ]
+     ]
+    },
+    {
+     "name": "CatGirl_Eye_Closed_L",
+     "tris": 8,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       0.1106,
+       -0.2676,
+       0.8028
+      ],
+      [
+       0.2332,
+       -0.2076,
+       0.859
+      ]
+     ]
+    },
+    {
+     "name": "CatGirl_Eye_Closed_R",
+     "tris": 8,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       -0.2331,
+       -0.2676,
+       0.8029
+      ],
+      [
+       -0.1105,
+       -0.2076,
+       0.859
+      ]
+     ]
+    },
+    {
+     "name": "CatGirl_Eye_Dead_L",
+     "tris": 8,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       0.1114,
+       -0.2612,
+       0.788
+      ],
+      [
+       0.22,
+       -0.1919,
+       0.8899
+      ]
+     ]
+    },
+    {
+     "name": "CatGirl_Eye_Dead_R",
+     "tris": 8,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       -0.2197,
+       -0.2606,
+       0.788
+      ],
+      [
+       -0.1113,
+       -0.1917,
+       0.8901
+      ]
+     ]
+    },
+    {
+     "name": "CatGirl_Eye_Happy_L",
+     "tris": 8,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       0.1058,
+       -0.2609,
+       0.8115
+      ],
+      [
+       0.2291,
+       -0.1994,
+       0.871
+      ]
+     ]
+    },
+    {
+     "name": "CatGirl_Eye_Happy_R",
+     "tris": 8,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       -0.229,
+       -0.2608,
+       0.8115
+      ],
+      [
+       -0.1057,
+       -0.1993,
+       0.8711
+      ]
+     ]
+    },
+    {
+     "name": "CatGirl_Eye_Open_L",
+     "tris": 52,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       0.0926,
+       -0.2705,
+       0.7654
+      ],
+      [
+       0.2403,
+       -0.181,
+       0.9225
+      ]
+     ]
+    },
+    {
+     "name": "CatGirl_Eye_Open_R",
+     "tris": 52,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       -0.2402,
+       -0.2703,
+       0.7654
+      ],
+      [
+       -0.0926,
+       -0.1809,
+       0.9227
+      ]
+     ]
+    },
+    {
+     "name": "CatGirl_Eye_Ouch_L",
+     "tris": 8,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       0.1233,
+       -0.2577,
+       0.7851
+      ],
+      [
+       0.222,
+       -0.1904,
+       0.8885
+      ]
+     ]
+    },
+    {
+     "name": "CatGirl_Eye_Ouch_R",
+     "tris": 8,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       -0.2217,
+       -0.2576,
+       0.7852
+      ],
+      [
+       -0.1232,
+       -0.1903,
+       0.8887
+      ]
+     ]
+    },
+    {
+     "name": "CatGirl_Fur",
+     "tris": 548,
+     "mats": [
+      "M_Palette_FurCalico"
      ],
      "uvs": 1,
      "skinned": true,
      "parent": "CatRig",
      "bbox": [
       [
-       -0.4063,
-       -0.3532,
-       0.8626
+       -0.4922,
+       -0.275,
+       0.1727
       ],
       [
-       0.4067,
-       0.4191,
-       1.2583
+       0.5157,
+       0.3947,
+       1.248
+      ]
+     ]
+    },
+    {
+     "name": "CatGirl_Mouth_Flat",
+     "tris": 4,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       -0.0355,
+       -0.2601,
+       0.733
+      ],
+      [
+       0.0353,
+       -0.2383,
+       0.749
+      ]
+     ]
+    },
+    {
+     "name": "CatGirl_Mouth_Grit",
+     "tris": 8,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       -0.058,
+       -0.2625,
+       0.722
+      ],
+      [
+       0.058,
+       -0.2392,
+       0.748
+      ]
+     ]
+    },
+    {
+     "name": "CatGirl_Mouth_O",
+     "tris": 6,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       -0.0226,
+       -0.2458,
+       0.7075
+      ],
+      [
+       0.0226,
+       -0.2237,
+       0.7525
+      ]
+     ]
+    },
+    {
+     "name": "CatGirl_Mouth_Open",
+     "tris": 10,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       -0.045,
+       -0.26,
+       0.712
+      ],
+      [
+       0.045,
+       -0.2237,
+       0.752
+      ]
+     ]
+    },
+    {
+     "name": "CatGirl_Mouth_Smile",
+     "tris": 8,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       -0.0539,
+       -0.2605,
+       0.729
+      ],
+      [
+       0.0537,
+       -0.2383,
+       0.7591
+      ]
+     ]
+    },
+    {
+     "name": "CatGirl_Whiskers",
+     "tris": 12,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "CatRig",
+     "bbox": [
+      [
+       -0.2225,
+       -0.2509,
+       0.718
+      ],
+      [
+       0.2225,
+       -0.2097,
+       0.7819
       ]
      ]
     }
@@ -1059,61 +1987,165 @@
    "sockets": [],
    "bones": 29,
    "rig": "CatRig",
-   "clips": [],
+   "clips": [
+    {
+     "name": "Idle",
+     "frames": 61,
+     "file": "CatRig@Idle.fbx",
+     "loop": true
+    },
+    {
+     "name": "Run",
+     "frames": 13,
+     "file": "CatRig@Run.fbx",
+     "loop": true
+    },
+    {
+     "name": "RunHeavy",
+     "frames": 17,
+     "file": "CatRig@RunHeavy.fbx",
+     "loop": true
+    },
+    {
+     "name": "SwingHammer",
+     "frames": 41,
+     "file": "CatRig@SwingHammer.fbx",
+     "loop": false
+    },
+    {
+     "name": "SwingPickaxe",
+     "frames": 31,
+     "file": "CatRig@SwingPickaxe.fbx",
+     "loop": false
+    },
+    {
+     "name": "HitReact",
+     "frames": 13,
+     "file": "CatRig@HitReact.fbx",
+     "loop": false
+    },
+    {
+     "name": "Death",
+     "frames": 31,
+     "file": "CatRig@Death.fbx",
+     "loop": false
+    },
+    {
+     "name": "Respawn",
+     "frames": 31,
+     "file": "CatRig@Respawn.fbx",
+     "loop": false
+    },
+    {
+     "name": "Interact",
+     "frames": 25,
+     "file": "CatRig@Interact.fbx",
+     "loop": false
+    },
+    {
+     "name": "UnloadOre",
+     "frames": 31,
+     "file": "CatRig@UnloadOre.fbx",
+     "loop": false
+    },
+    {
+     "name": "PortalEnter",
+     "frames": 25,
+     "file": "CatRig@PortalEnter.fbx",
+     "loop": false
+    },
+    {
+     "name": "PortalExit",
+     "frames": 25,
+     "file": "CatRig@PortalExit.fbx",
+     "loop": false
+    },
+    {
+     "name": "HeroSelectGirl",
+     "frames": 91,
+     "file": "CatRig@HeroSelectGirl.fbx",
+     "loop": true
+    },
+    {
+     "name": "HeroSelectBoy",
+     "frames": 91,
+     "file": "CatRig@HeroSelectBoy.fbx",
+     "loop": true
+    },
+    {
+     "name": "HeroConfirm",
+     "frames": 61,
+     "file": "CatRig@HeroConfirm.fbx",
+     "loop": false
+    },
+    {
+     "name": "ClimbDown",
+     "frames": 21,
+     "file": "CatRig@ClimbDown.fbx",
+     "loop": true
+    },
+    {
+     "name": "Found",
+     "frames": 46,
+     "file": "CatRig@Found.fbx",
+     "loop": false
+    }
+   ],
    "materials": [
-    "M_Palette"
+    "M_Palette",
+    "M_Palette_FurCalico"
    ],
    "cells": [
     15,
-    28,
     35,
     36,
     37,
     38,
     39,
-    40,
     43,
     44,
     51,
     52,
-    90,
-    92,
-    93
+    80,
+    81,
+    82,
+    83,
+    84
    ],
    "fur": true,
    "bbox": [
     [
-     -0.4987,
-     -0.3996,
-     0.0
+     -0.5474,
+     -0.275,
+     0.002
     ],
     [
-     0.4928,
-     0.5123,
-     1.3
+     0.5474,
+     0.3947,
+     1.248
     ]
    ],
    "concept": "musya",
    "view": null,
    "anim": null,
-   "pilot_tag": true,
-   "pilot_copy": true,
+   "pilot_tag": false,
+   "pilot_copy": false,
    "props": null
   },
   {
-   "id": "Tools",
-   "name": "Инструменты: кирка и молот",
+   "id": "Hat_Miner",
+   "name": "Каска шахтёра",
    "cat": "chars",
    "src": "uart",
    "folder": "Characters",
-   "fbx": "Characters/Tools",
-   "glb": "glb/Tools.glb",
-   "bytes": 7580,
-   "tris": 256,
+   "fbx": "Characters/Hat_Miner",
+   "glb": "glb/Hat_Miner.glb",
+   "bytes": 7096,
+   "tris": 224,
    "parts": [
     {
-     "name": "Hammer",
-     "tris": 176,
+     "name": "Hat_Miner",
+     "tris": 208,
      "mats": [
       "M_Palette"
      ],
@@ -1122,36 +2154,58 @@
      "parent": null,
      "bbox": [
       [
-       -0.1349,
-       -0.2,
-       -0.125
+       -0.3477,
+       -0.3413,
+       -0.02
       ],
       [
-       0.1349,
-       0.2,
-       0.6349
+       0.3477,
+       0.3095,
+       0.2905
       ]
      ]
     },
     {
-     "name": "Pickaxe_Base",
-     "tris": 80,
+     "name": "Lens_Off",
+     "tris": 8,
      "mats": [
       "M_Palette"
      ],
      "uvs": 1,
      "skinned": false,
-     "parent": null,
+     "parent": "Hat_Miner",
      "bbox": [
       [
-       -0.052,
-       -0.303,
-       -0.14
+       0.011,
+       -0.3427,
+       -0.0039
       ],
       [
-       0.052,
-       0.1764,
-       0.565
+       0.171,
+       -0.2933,
+       0.1482
+      ]
+     ]
+    },
+    {
+     "name": "Lens_On",
+     "tris": 8,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "Hat_Miner",
+     "bbox": [
+      [
+       0.011,
+       -0.3437,
+       -0.0042
+      ],
+      [
+       0.171,
+       -0.2942,
+       0.1479
       ]
      ]
     }
@@ -1164,30 +2218,323 @@
     "M_Palette"
    ],
    "cells": [
+    13,
     14,
-    44,
-    45,
-    46,
+    28,
+    40,
+    43
+   ],
+   "fur": false,
+   "bbox": [
+    [
+     -0.3477,
+     -0.3437,
+     -0.02
+    ],
+    [
+     0.3477,
+     0.3095,
+     0.2905
+    ]
+   ],
+   "concept": "barsik",
+   "view": null,
+   "anim": null,
+   "pilot_tag": false,
+   "pilot_copy": false,
+   "props": null
+  },
+  {
+   "id": "Tool_Hammer_Kolotushka",
+   "name": "Молот «Колотушка»",
+   "cat": "chars",
+   "src": "uart",
+   "folder": "Characters",
+   "fbx": "Characters/Tool_Hammer_Kolotushka",
+   "glb": "glb/Tool_Hammer_Kolotushka.glb",
+   "bytes": 7652,
+   "tris": 184,
+   "parts": [
+    {
+     "name": "Tool_Hammer_Kolotushka",
+     "tris": 184,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": null,
+     "bbox": [
+      [
+       -0.1201,
+       -0.225,
+       -0.15
+      ],
+      [
+       0.1201,
+       0.225,
+       0.605
+      ]
+     ]
+    }
+   ],
+   "sockets": [
+    "Tip"
+   ],
+   "bones": 0,
+   "rig": null,
+   "clips": [],
+   "materials": [
+    "M_Palette"
+   ],
+   "cells": [
+    9,
+    10,
+    14,
     58
    ],
    "fur": false,
    "bbox": [
     [
-     -0.1349,
-     -0.303,
-     -0.14
+     -0.1201,
+     -0.225,
+     -0.15
     ],
     [
-     0.1349,
-     0.2,
-     0.6349
+     0.1201,
+     0.225,
+     0.605
+    ]
+   ],
+   "concept": "musya",
+   "view": null,
+   "anim": null,
+   "pilot_tag": false,
+   "pilot_copy": false,
+   "props": null
+  },
+  {
+   "id": "Pickaxe_Base",
+   "name": "Серая кирка",
+   "cat": "chars",
+   "src": "uart",
+   "folder": "Characters",
+   "fbx": "Characters/Pickaxe_Base",
+   "glb": "glb/Pickaxe_Base.glb",
+   "bytes": 3880,
+   "tris": 92,
+   "parts": [
+    {
+     "name": "Pickaxe_Base",
+     "tris": 92,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": null,
+     "bbox": [
+      [
+       -0.05,
+       -0.2193,
+       -0.2
+      ],
+      [
+       0.05,
+       0.2193,
+       0.4949
+      ]
+     ]
+    }
+   ],
+   "sockets": [
+    "Tip"
+   ],
+   "bones": 0,
+   "rig": null,
+   "clips": [],
+   "materials": [
+    "M_Palette"
+   ],
+   "cells": [
+    14,
+    45,
+    46
+   ],
+   "fur": false,
+   "bbox": [
+    [
+     -0.05,
+     -0.2193,
+     -0.2
+    ],
+    [
+     0.05,
+     0.2193,
+     0.4949
     ]
    ],
    "concept": "barsik",
-   "view": "row",
+   "view": null,
    "anim": null,
-   "pilot_tag": true,
-   "pilot_copy": true,
+   "pilot_tag": false,
+   "pilot_copy": false,
+   "props": null
+  },
+  {
+   "id": "Prop_HeroPedestal",
+   "name": "Пьедестал героя",
+   "cat": "chars",
+   "src": "uart",
+   "folder": "Characters",
+   "fbx": "Characters/Prop_HeroPedestal",
+   "glb": "glb/Prop_HeroPedestal.glb",
+   "bytes": 5428,
+   "tris": 148,
+   "parts": [
+    {
+     "name": "Inlay",
+     "tris": 40,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "Prop_HeroPedestal",
+     "bbox": [
+      [
+       -0.605,
+       -0.605,
+       0.554
+      ],
+      [
+       0.605,
+       0.605,
+       0.554
+      ]
+     ]
+    },
+    {
+     "name": "Prop_HeroPedestal",
+     "tris": 108,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": null,
+     "bbox": [
+      [
+       -0.79,
+       -0.7513,
+       -0.0
+      ],
+      [
+       0.79,
+       0.7513,
+       0.55
+      ]
+     ]
+    }
+   ],
+   "sockets": [
+    "Stand"
+   ],
+   "bones": 0,
+   "rig": null,
+   "clips": [],
+   "materials": [
+    "M_Palette"
+   ],
+   "cells": [
+    9,
+    10,
+    13,
+    43,
+    47
+   ],
+   "fur": false,
+   "bbox": [
+    [
+     -0.79,
+     -0.7513,
+     -0.0
+    ],
+    [
+     0.79,
+     0.7513,
+     0.554
+    ]
+   ],
+   "concept": null,
+   "view": null,
+   "anim": null,
+   "pilot_tag": false,
+   "pilot_copy": false,
+   "props": null
+  },
+  {
+   "id": "Prop_IntroRope",
+   "name": "Верёвка (интро)",
+   "cat": "chars",
+   "src": "uart",
+   "folder": "Characters",
+   "fbx": "Characters/Prop_IntroRope",
+   "glb": "glb/Prop_IntroRope.glb",
+   "bytes": 4944,
+   "tris": 228,
+   "parts": [
+    {
+     "name": "Prop_IntroRope",
+     "tris": 228,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": null,
+     "bbox": [
+      [
+       -0.0554,
+       -0.0554,
+       -9.0
+      ],
+      [
+       0.0554,
+       0.0554,
+       0.0
+      ]
+     ]
+    }
+   ],
+   "sockets": [],
+   "bones": 0,
+   "rig": null,
+   "clips": [],
+   "materials": [
+    "M_Palette"
+   ],
+   "cells": [
+    55
+   ],
+   "fur": false,
+   "bbox": [
+    [
+     -0.0554,
+     -0.0554,
+     -9.0
+    ],
+    [
+     0.0554,
+     0.0554,
+     0.0
+    ]
+   ],
+   "concept": "mine",
+   "view": null,
+   "anim": null,
+   "pilot_tag": false,
+   "pilot_copy": false,
    "props": null
   },
   {
@@ -1198,12 +2545,12 @@
    "folder": "Enemies",
    "fbx": "Enemies/RatDigger",
    "glb": "glb/RatDigger.glb",
-   "bytes": 47428,
-   "tris": 1194,
+   "bytes": 172392,
+   "tris": 1086,
    "parts": [
     {
      "name": "RatDigger_Body",
-     "tris": 940,
+     "tris": 1006,
      "mats": [
       "M_Palette"
      ],
@@ -1212,36 +2559,14 @@
      "parent": "R1Rig",
      "bbox": [
       [
-       -0.5447,
-       -0.4277,
+       -0.5357,
+       -0.463,
        -0.0
       ],
       [
-       0.5824,
-       0.3749,
-       0.9758
-      ]
-     ]
-    },
-    {
-     "name": "RatDigger_Helmet",
-     "tris": 174,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": true,
-     "parent": "R1Rig",
-     "bbox": [
-      [
-       -0.27,
-       -0.2628,
-       0.7065
-      ],
-      [
-       0.27,
-       0.2945,
-       0.9916
+       0.4251,
+       0.3815,
+       1.0078
       ]
      ]
     },
@@ -1256,14 +2581,14 @@
      "parent": "R1Rig",
      "bbox": [
       [
-       0.4454,
-       -0.2613,
-       0.2857
+       0.1765,
+       -0.3909,
+       0.2444
       ],
       [
-       0.9032,
-       -0.1267,
-       0.8354
+       0.6593,
+       -0.2217,
+       0.8196
       ]
      ]
     }
@@ -1271,7 +2596,51 @@
    "sockets": [],
    "bones": 26,
    "rig": "R1Rig",
-   "clips": [],
+   "clips": [
+    {
+     "name": "Idle",
+     "frames": 61,
+     "file": "(embedded)",
+     "loop": true
+    },
+    {
+     "name": "Walk",
+     "frames": 19,
+     "file": "(embedded)",
+     "loop": true
+    },
+    {
+     "name": "Run",
+     "frames": 13,
+     "file": "(embedded)",
+     "loop": true
+    },
+    {
+     "name": "Attack",
+     "frames": 21,
+     "file": "(embedded)",
+     "loop": false
+    },
+    {
+     "name": "HitReact",
+     "frames": 10,
+     "file": "(embedded)",
+     "loop": false,
+     "additive": true
+    },
+    {
+     "name": "Death",
+     "frames": 20,
+     "file": "(embedded)",
+     "loop": false
+    },
+    {
+     "name": "Spawn",
+     "frames": 28,
+     "file": "(embedded)",
+     "loop": false
+    }
+   ],
    "materials": [
     "M_Palette"
    ],
@@ -1280,7 +2649,9 @@
     28,
     36,
     37,
+    39,
     43,
+    44,
     45,
     46,
     62,
@@ -1294,21 +2665,21 @@
    "fur": false,
    "bbox": [
     [
-     -0.5447,
-     -0.4277,
+     -0.5357,
+     -0.463,
      -0.0
     ],
     [
-     0.9032,
-     0.3749,
-     0.9916
+     0.6593,
+     0.3815,
+     1.0078
     ]
    ],
    "concept": "rat",
    "view": null,
    "anim": null,
-   "pilot_tag": true,
-   "pilot_copy": true,
+   "pilot_tag": false,
+   "pilot_copy": false,
    "props": null
   },
   {
@@ -1319,12 +2690,12 @@
    "folder": "Enemies",
    "fbx": "Enemies/RatGuard",
    "glb": "glb/RatGuard.glb",
-   "bytes": 47140,
-   "tris": 1192,
+   "bytes": 173680,
+   "tris": 1144,
    "parts": [
     {
      "name": "RatGuard_Body",
-     "tris": 916,
+     "tris": 1006,
      "mats": [
       "M_Palette"
      ],
@@ -1333,42 +2704,20 @@
      "parent": "R1Rig",
      "bbox": [
       [
-       -0.5447,
-       -0.4895,
+       -0.5357,
+       -0.463,
        -0.0
       ],
       [
-       0.5447,
-       0.3749,
-       0.9758
-      ]
-     ]
-    },
-    {
-     "name": "RatGuard_Helmet",
-     "tris": 174,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": true,
-     "parent": "R1Rig",
-     "bbox": [
-      [
-       -0.27,
-       -0.2628,
-       0.7065
-      ],
-      [
-       0.27,
-       0.2945,
-       0.9916
+       0.4251,
+       0.3815,
+       1.0078
       ]
      ]
     },
     {
      "name": "RatGuard_Shield",
-     "tris": 102,
+     "tris": 138,
      "mats": [
       "M_Palette"
      ],
@@ -1377,14 +2726,14 @@
      "parent": "R1Rig",
      "bbox": [
       [
-       0.1307,
-       -0.5982,
-       0.1125
+       0.0199,
+       -0.5152,
+       0.1
       ],
       [
-       0.6116,
-       -0.4419,
-       0.6875
+       0.5355,
+       -0.32,
+       0.66
       ]
      ]
     }
@@ -1392,17 +2741,64 @@
    "sockets": [],
    "bones": 26,
    "rig": "R1Rig",
-   "clips": [],
+   "clips": [
+    {
+     "name": "Idle",
+     "frames": 61,
+     "file": "(embedded)",
+     "loop": true
+    },
+    {
+     "name": "Walk",
+     "frames": 19,
+     "file": "(embedded)",
+     "loop": true
+    },
+    {
+     "name": "Run",
+     "frames": 13,
+     "file": "(embedded)",
+     "loop": true
+    },
+    {
+     "name": "Attack",
+     "frames": 21,
+     "file": "(embedded)",
+     "loop": false
+    },
+    {
+     "name": "HitReact",
+     "frames": 10,
+     "file": "(embedded)",
+     "loop": false,
+     "additive": true
+    },
+    {
+     "name": "Death",
+     "frames": 20,
+     "file": "(embedded)",
+     "loop": false
+    },
+    {
+     "name": "Spawn",
+     "frames": 28,
+     "file": "(embedded)",
+     "loop": false
+    }
+   ],
    "materials": [
     "M_Palette"
    ],
    "cells": [
     10,
+    11,
+    12,
     13,
     14,
     28,
     36,
     37,
+    39,
     43,
     44,
     62,
@@ -1416,22 +2812,350 @@
    "fur": false,
    "bbox": [
     [
-     -0.5447,
-     -0.5982,
+     -0.5357,
+     -0.5152,
      -0.0
     ],
     [
-     0.6116,
-     0.3749,
-     0.9916
+     0.5355,
+     0.3815,
+     1.0078
     ]
    ],
    "concept": "rat",
    "view": null,
    "anim": null,
-   "pilot_tag": true,
-   "pilot_copy": true,
+   "pilot_tag": false,
+   "pilot_copy": false,
    "props": null
+  },
+  {
+   "id": "RatKing",
+   "name": "Крысиный король",
+   "cat": "enemies",
+   "src": "uart",
+   "folder": "Enemies",
+   "fbx": "Enemies/RatKing",
+   "glb": "glb/RatKing.glb",
+   "bytes": 264684,
+   "tris": 2618,
+   "parts": [
+    {
+     "name": "RatKing_Body",
+     "tris": 2124,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": true,
+     "parent": "RatKingRig",
+     "bbox": [
+      [
+       -1.7387,
+       -1.1956,
+       -0.0148
+      ],
+      [
+       2.0058,
+       1.9014,
+       2.9409
+      ]
+     ]
+    },
+    {
+     "name": "RatKing_Crown",
+     "tris": 248,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "RatKingRig",
+     "bbox": [
+      [
+       -0.5255,
+       -0.6896,
+       2.74
+      ],
+      [
+       0.5255,
+       0.39,
+       3.1975
+      ]
+     ]
+    },
+    {
+     "name": "RatKing_EyeGlow",
+     "tris": 28,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": true,
+     "parent": "RatKingRig",
+     "bbox": [
+      [
+       -0.3441,
+       -0.7863,
+       2.492
+      ],
+      [
+       0.3441,
+       -0.6038,
+       2.6847
+      ]
+     ]
+    },
+    {
+     "name": "RatKing_Scepter",
+     "tris": 218,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": "RatKingRig",
+     "bbox": [
+      [
+       1.0891,
+       -0.6449,
+       0.05
+      ],
+      [
+       1.5999,
+       -0.1983,
+       3.05
+      ]
+     ]
+    }
+   ],
+   "sockets": [],
+   "bones": 28,
+   "rig": "RatKingRig",
+   "clips": [
+    {
+     "name": "Idle",
+     "frames": 73,
+     "file": "(embedded)",
+     "loop": true
+    },
+    {
+     "name": "Walk",
+     "frames": 31,
+     "file": "(embedded)",
+     "loop": true
+    },
+    {
+     "name": "Telegraph",
+     "frames": 10,
+     "file": "(embedded)",
+     "loop": false
+    },
+    {
+     "name": "Laser",
+     "frames": 19,
+     "file": "(embedded)",
+     "loop": false
+    },
+    {
+     "name": "HitReact",
+     "frames": 10,
+     "file": "(embedded)",
+     "loop": false,
+     "additive": true
+    },
+    {
+     "name": "Death",
+     "frames": 20,
+     "file": "(embedded)",
+     "loop": false
+    },
+    {
+     "name": "RageStep",
+     "frames": 24,
+     "file": "(embedded)",
+     "loop": false
+    },
+    {
+     "name": "Roar",
+     "frames": 34,
+     "file": "(embedded)",
+     "loop": false
+    }
+   ],
+   "materials": [
+    "M_Palette"
+   ],
+   "cells": [
+    36,
+    37,
+    67,
+    69,
+    70,
+    71,
+    72,
+    73,
+    74,
+    95
+   ],
+   "fur": false,
+   "bbox": [
+    [
+     -1.7387,
+     -1.1956,
+     -0.0148
+    ],
+    [
+     2.0058,
+     1.9014,
+     3.1975
+    ]
+   ],
+   "concept": "king",
+   "view": null,
+   "anim": null,
+   "pilot_tag": false,
+   "pilot_copy": false,
+   "props": null
+  },
+  {
+   "id": "RatBurrow",
+   "name": "Крысиная нора",
+   "cat": "enemies",
+   "src": "uart",
+   "folder": "Enemies",
+   "fbx": "Enemies/RatBurrow",
+   "glb": "glb/RatBurrow.glb",
+   "bytes": 21980,
+   "tris": 804,
+   "parts": [
+    {
+     "name": "RatBurrow",
+     "tris": 612,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": null,
+     "bbox": [
+      [
+       -1.4223,
+       -1.6682,
+       -0.03
+      ],
+      [
+       1.4432,
+       1.0417,
+       1.2197
+      ]
+     ]
+    },
+    {
+     "name": "RatBurrow_Boards",
+     "tris": 40,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": null,
+     "bbox": [
+      [
+       -0.5332,
+       -1.205,
+       0.1257
+      ],
+      [
+       0.5332,
+       -1.095,
+       0.7943
+      ]
+     ]
+    },
+    {
+     "name": "RatBurrow_Palisade",
+     "tris": 152,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": null,
+     "bbox": [
+      [
+       -1.3691,
+       0.2783,
+       -0.0255
+      ],
+      [
+       1.3753,
+       1.3015,
+       1.53
+      ]
+     ]
+    }
+   ],
+   "sockets": [
+    "Socket_Eye_L",
+    "Socket_Eye_R",
+    "Socket_Mouth",
+    "Socket_Ring"
+   ],
+   "bones": 0,
+   "rig": null,
+   "clips": [],
+   "materials": [
+    "M_Palette"
+   ],
+   "cells": [
+    4,
+    5,
+    6,
+    7,
+    9,
+    12,
+    14,
+    19,
+    76,
+    77,
+    78,
+    79
+   ],
+   "fur": false,
+   "bbox": [
+    [
+     -1.4223,
+     -1.6682,
+     -0.03
+    ],
+    [
+     1.4432,
+     1.3015,
+     1.53
+    ]
+   ],
+   "concept": "burrow",
+   "view": null,
+   "anim": null,
+   "pilot_tag": false,
+   "pilot_copy": false,
+   "props": {
+    "label": "Спавнер крыс",
+    "roles": {
+     "base": [
+      "RatBurrow"
+     ],
+     "spent": [
+      "RatBurrow_Boards"
+     ],
+     "guard": [
+      "RatBurrow_Palisade"
+     ]
+    },
+    "note": "static, origin = mound centre on the floor, mouth faces -Y (Unity +Z); Boards/Palisade share the origin (toggle the child renderers); floors f2-f3",
+    "clips": []
+   }
   },
   {
    "id": "Rock_Base_A",
@@ -2833,9 +4557,9 @@
    ],
    "cells": [
     6,
+    23,
     24,
-    25,
-    101
+    25
    ],
    "fur": false,
    "bbox": [
@@ -2856,8 +4580,193 @@
    "pilot_tag": false,
    "pilot_copy": false,
    "props": {
-    "note": "authored for the default tub; socket_pile (cart) at the tub-floor centre, local scale = tub inner size / default. OrePile_k is the bed stage mesh (Cart_PileBed is the authoring hull, not exported). n = round(Load / Capacity * 12): n 1-4 OrePile_1, 5-8 OrePile_2, 9-12 OrePile_3; ball i visible when i < n at socket_pile_ii (x = -.45 + .30 i, y = -.23 + .23 j, index 3 i + j; owned by the cart). rocks-3: Cart_Nugget pivot = bottom centre, place it at (slot x, slot y, nugget_z) + yaw from the index hash; OrePile_1/2/3 carry 2/3/3 baked accents (gem_base / gold, see accents), no extra instances",
+    "note": "authored for the default tub; socket_pile (cart) at the tub-floor centre, local scale = tub inner size / default. OrePile_k is the bed stage mesh (Cart_PileBed is the authoring hull, not exported). n = round(Load / Capacity * 12): n 1-4 OrePile_1, 5-8 OrePile_2, 9-12 OrePile_3; ball i visible when i < n at socket_pile_ii (x = -.45 + .30 i, y = -.23 + .23 j, index 3 i + j; owned by the cart). rocks-3: Cart_Nugget pivot = bottom centre, place it at (slot x, slot y, nugget_z) + yaw from the index hash; OrePile_1/2/3 carry 2/3/3 baked accents (amethyst / gold, see accents; AD-08 was gem_base), no extra instances",
     "kind": "cart_pile"
+   }
+  },
+  {
+   "id": "Gem_Amethyst",
+   "name": "Gem_Amethyst",
+   "cat": "loot",
+   "src": "uart",
+   "folder": "Loot",
+   "fbx": "Loot/Gem_Amethyst",
+   "glb": "glb/Gem_Amethyst.glb",
+   "bytes": 11216,
+   "tris": 174,
+   "parts": [
+    {
+     "name": "Gem_Amethyst_3",
+     "tris": 12,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": null,
+     "bbox": [
+      [
+       -0.1039,
+       -0.06,
+       0.0
+      ],
+      [
+       0.1039,
+       0.12,
+       0.42
+      ]
+     ]
+    },
+    {
+     "name": "Gem_Amethyst_4",
+     "tris": 16,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": null,
+     "bbox": [
+      [
+       -0.0849,
+       -0.0849,
+       0.0
+      ],
+      [
+       0.0849,
+       0.0849,
+       0.42
+      ]
+     ]
+    },
+    {
+     "name": "Gem_Amethyst_5",
+     "tris": 20,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": null,
+     "bbox": [
+      [
+       -0.1141,
+       -0.0971,
+       0.0
+      ],
+      [
+       0.1141,
+       0.12,
+       0.42
+      ]
+     ]
+    },
+    {
+     "name": "Gem_Amethyst_6",
+     "tris": 24,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": null,
+     "bbox": [
+      [
+       -0.12,
+       -0.1039,
+       0.0
+      ],
+      [
+       0.12,
+       0.1039,
+       0.42
+      ]
+     ]
+    },
+    {
+     "name": "Gem_Amethyst_7",
+     "tris": 64,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": null,
+     "bbox": [
+      [
+       -0.15,
+       -0.05,
+       -0.0
+      ],
+      [
+       0.15,
+       0.05,
+       0.3
+      ]
+     ]
+    },
+    {
+     "name": "Gem_Amethyst_8",
+     "tris": 38,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": null,
+     "bbox": [
+      [
+       -0.15,
+       -0.1427,
+       0.0
+      ],
+      [
+       0.15,
+       0.1427,
+       0.19
+      ]
+     ]
+    }
+   ],
+   "sockets": [],
+   "bones": 0,
+   "rig": null,
+   "clips": [],
+   "materials": [
+    "M_Palette"
+   ],
+   "cells": [
+    23
+   ],
+   "fur": false,
+   "bbox": [
+    [
+     -0.15,
+     -0.1427,
+     -0.0
+    ],
+    [
+     0.15,
+     0.1427,
+     0.42
+    ]
+   ],
+   "concept": null,
+   "view": null,
+   "anim": null,
+   "pilot_tag": false,
+   "pilot_copy": false,
+   "props": {
+    "meshes": {
+     "Gem_Amethyst_3": "base_3",
+     "Gem_Amethyst_4": "base_4",
+     "Gem_Amethyst_5": "base_5",
+     "Gem_Amethyst_6": "base_6",
+     "Gem_Amethyst_7": "base_7",
+     "Gem_Amethyst_8": "base_8"
+    },
+    "note": "same meshes / pivots as Gem_Base (pivot = bottom point at z 0; _7 star faces -Y); UV-shifted to the amethyst row of M_Palette (AD-08 violet crystal)",
+    "kind": "gems"
    }
   },
   {
@@ -5460,12 +7369,12 @@
    "folder": "Props",
    "fbx": "Props/Decor_Barrels_A",
    "glb": "glb/Decor_Barrels_A.glb",
-   "bytes": 8072,
-   "tris": 186,
+   "bytes": 10148,
+   "tris": 246,
    "parts": [
     {
      "name": "Decor_Barrels_A_Body",
-     "tris": 186,
+     "tris": 246,
      "mats": [
       "M_Palette"
      ],
@@ -5475,12 +7384,12 @@
      "bbox": [
       [
        -0.7434,
-       -0.7934,
+       -0.8055,
        -0.0
       ],
       [
-       0.8974,
-       0.5974,
+       0.9087,
+       0.6087,
        0.85
       ]
      ]
@@ -5503,12 +7412,12 @@
    "bbox": [
     [
      -0.7434,
-     -0.7934,
+     -0.8055,
      -0.0
     ],
     [
-     0.8974,
-     0.5974,
+     0.9087,
+     0.6087,
      0.85
     ]
    ],
@@ -5520,7 +7429,7 @@
    "props": {
     "label": "Декор: бочка и ящики",
     "roles": {},
-    "note": "barrel (lathe 8, open top with interior, 2 wood bands) + crate 0.76 + crate 0.50 (wood_light, darker battens); static, never emissive",
+    "note": "barrel (lathe 8, open top with interior, 2 wood bands) + crate 0.76 (3 planks) + crate 0.50 (2 planks): wood_light planks, dark wood_loc gaps, wood corner battens + proud lid with a plank top (AD-25); static, never emissive",
     "clips": []
    }
   },
@@ -5532,7 +7441,7 @@
    "folder": "Props",
    "fbx": "Props/Decor_Mushroom_A",
    "glb": "glb/Decor_Mushroom_A.glb",
-   "bytes": 3924,
+   "bytes": 4024,
    "tris": 108,
    "parts": [
     {
@@ -5546,14 +7455,14 @@
      "parent": null,
      "bbox": [
       [
-       -0.1663,
-       -0.2201,
+       -0.1982,
+       -0.3185,
        -0.0
       ],
       [
-       0.3401,
-       0.2063,
-       0.31
+       0.4415,
+       0.2632,
+       0.546
       ]
      ]
     }
@@ -5573,14 +7482,14 @@
    "fur": false,
    "bbox": [
     [
-     -0.1663,
-     -0.2201,
+     -0.1982,
+     -0.3185,
      -0.0
     ],
     [
-     0.3401,
-     0.2063,
-     0.31
+     0.4415,
+     0.2632,
+     0.546
     ]
    ],
    "concept": "decor",
@@ -5591,7 +7500,7 @@
    "props": {
     "label": "Декор: грибы A",
     "roles": {},
-    "note": "tall cap 0.36 + short cap 0.26, cream stems, white dots; mushroom_red is a R5 decor exception",
+    "note": "AD-24: tall cap 0.43 + short cap 0.30 (x1.3 baked, 0.52 / 0.36 tall), lip at 0.68 h over a pale flared stem, 3 + 2 white spot facets; mushroom_red is a R5 decor exception",
     "clips": []
    }
   },
@@ -5603,12 +7512,12 @@
    "folder": "Props",
    "fbx": "Props/Decor_Mushroom_B",
    "glb": "glb/Decor_Mushroom_B.glb",
-   "bytes": 3584,
-   "tris": 94,
+   "bytes": 3980,
+   "tris": 104,
    "parts": [
     {
      "name": "Decor_Mushroom_B_Body",
-     "tris": 94,
+     "tris": 104,
      "mats": [
       "M_Palette"
      ],
@@ -5617,14 +7526,14 @@
      "parent": null,
      "bbox": [
       [
-       -0.2479,
-       -0.18,
+       -0.3461,
+       -0.2574,
        -0.0
       ],
       [
-       0.1478,
-       0.1478,
-       0.2916
+       0.1705,
+       0.1705,
+       0.598
       ]
      ]
     }
@@ -5644,14 +7553,14 @@
    "fur": false,
    "bbox": [
     [
-     -0.2479,
-     -0.18,
+     -0.3461,
+     -0.2574,
      -0.0
     ],
     [
-     0.1478,
-     0.1478,
-     0.2916
+     0.1705,
+     0.1705,
+     0.598
     ]
    ],
    "concept": "decor",
@@ -5662,7 +7571,7 @@
    "props": {
     "label": "Декор: грибы B",
     "roles": {},
-    "note": "cap 0.32 + tiny cap 0.18 (6 sides), 1 dot",
+    "note": "AD-24: cap 0.39 + tiny cap 0.23 (x1.3 baked, 6 sides), pale stems, 3 + 1 white spot facets",
     "clips": []
    }
   },
@@ -6468,12 +8377,12 @@
    "folder": "Environment",
    "fbx": "Environment/Kit_Adits_WallCrystal_A",
    "glb": "glb/Kit_Adits_WallCrystal_A.glb",
-   "bytes": 3384,
-   "tris": 44,
+   "bytes": 4904,
+   "tris": 83,
    "parts": [
     {
      "name": "Kit_Adits_WallCrystal_A",
-     "tris": 44,
+     "tris": 83,
      "mats": [
       "M_Palette"
      ],
@@ -6482,14 +8391,14 @@
      "parent": null,
      "bbox": [
       [
-       -0.2936,
-       -0.1914,
+       -0.5181,
+       -0.4314,
        -0.0
       ],
       [
-       0.3216,
-       0.2504,
-       0.6091
+       0.5707,
+       0.3767,
+       0.8451
       ]
      ]
     }
@@ -6502,20 +8411,21 @@
     "M_Palette"
    ],
    "cells": [
-    6,
-    63
+    8,
+    20,
+    51
    ],
    "fur": false,
    "bbox": [
     [
-     -0.2936,
-     -0.1914,
+     -0.5181,
+     -0.4314,
      -0.0
     ],
     [
-     0.3216,
-     0.2504,
-     0.6091
+     0.5707,
+     0.3767,
+     0.8451
     ]
    ],
    "concept": "rightrock",
@@ -6533,12 +8443,12 @@
    "folder": "Environment",
    "fbx": "Environment/Kit_Adits_WallCrystal_B",
    "glb": "glb/Kit_Adits_WallCrystal_B.glb",
-   "bytes": 3812,
-   "tris": 58,
+   "bytes": 5464,
+   "tris": 94,
    "parts": [
     {
      "name": "Kit_Adits_WallCrystal_B",
-     "tris": 58,
+     "tris": 94,
      "mats": [
       "M_Palette"
      ],
@@ -6547,14 +8457,14 @@
      "parent": null,
      "bbox": [
       [
-       -0.2923,
-       -0.1411,
+       -0.5268,
+       -0.4036,
        -0.0
       ],
       [
-       0.2632,
-       0.2319,
-       0.4673
+       0.567,
+       0.3803,
+       0.7322
       ]
      ]
     }
@@ -6567,20 +8477,21 @@
     "M_Palette"
    ],
    "cells": [
-    6,
-    63
+    8,
+    20,
+    51
    ],
    "fur": false,
    "bbox": [
     [
-     -0.2923,
-     -0.1411,
+     -0.5268,
+     -0.4036,
      -0.0
     ],
     [
-     0.2632,
-     0.2319,
-     0.4673
+     0.567,
+     0.3803,
+     0.7322
     ]
    ],
    "concept": "rightrock",
@@ -6591,19 +8502,19 @@
    "props": null
   },
   {
-   "id": "Crystal_Emerald",
-   "name": "Изумрудный кристалл",
+   "id": "Kit_Adits_WallCrystal_C",
+   "name": "Кристалл в стене C",
    "cat": "env",
    "src": "uart",
    "folder": "Environment",
-   "fbx": "Environment/Crystal_Emerald",
-   "glb": "glb/Crystal_Emerald.glb",
-   "bytes": 6908,
-   "tris": 97,
+   "fbx": "Environment/Kit_Adits_WallCrystal_C",
+   "glb": "glb/Kit_Adits_WallCrystal_C.glb",
+   "bytes": 4904,
+   "tris": 83,
    "parts": [
     {
-     "name": "Crystal_Emerald_Body",
-     "tris": 43,
+     "name": "Kit_Adits_WallCrystal_C",
+     "tris": 83,
      "mats": [
       "M_Palette"
      ],
@@ -6612,36 +8523,14 @@
      "parent": null,
      "bbox": [
       [
-       -0.7716,
-       -0.7005,
-       -0.03
+       -0.5181,
+       -0.4314,
+       -0.0
       ],
       [
-       0.6141,
-       0.6233,
-       0.3543
-      ]
-     ]
-    },
-    {
-     "name": "Crystal_Emerald_Crystal",
-     "tris": 54,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": false,
-     "parent": null,
-     "bbox": [
-      [
-       -0.6588,
-       -0.2391,
-       -0.04
-      ],
-      [
-       0.67,
-       0.3301,
-       0.8664
+       0.5707,
+       0.3767,
+       0.8451
       ]
      ]
     }
@@ -6654,27 +8543,93 @@
     "M_Palette"
    ],
    "cells": [
-    7,
     8,
-    20
+    21,
+    22
    ],
    "fur": false,
    "bbox": [
     [
-     -0.7716,
-     -0.7005,
-     -0.04
+     -0.5181,
+     -0.4314,
+     -0.0
     ],
     [
-     0.67,
-     0.6233,
-     0.8664
+     0.5707,
+     0.3767,
+     0.8451
     ]
    ],
-   "concept": "rock_emerald",
+   "concept": "rightrock",
    "view": null,
    "anim": null,
-   "pilot_tag": true,
+   "pilot_tag": false,
+   "pilot_copy": false,
+   "props": null
+  },
+  {
+   "id": "Kit_Adits_WallCrystal_D",
+   "name": "Кристалл в стене D",
+   "cat": "env",
+   "src": "uart",
+   "folder": "Environment",
+   "fbx": "Environment/Kit_Adits_WallCrystal_D",
+   "glb": "glb/Kit_Adits_WallCrystal_D.glb",
+   "bytes": 5464,
+   "tris": 94,
+   "parts": [
+    {
+     "name": "Kit_Adits_WallCrystal_D",
+     "tris": 94,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": null,
+     "bbox": [
+      [
+       -0.5268,
+       -0.4036,
+       -0.0
+      ],
+      [
+       0.567,
+       0.3803,
+       0.7322
+      ]
+     ]
+    }
+   ],
+   "sockets": [],
+   "bones": 0,
+   "rig": null,
+   "clips": [],
+   "materials": [
+    "M_Palette"
+   ],
+   "cells": [
+    8,
+    21,
+    22
+   ],
+   "fur": false,
+   "bbox": [
+    [
+     -0.5268,
+     -0.4036,
+     -0.0
+    ],
+    [
+     0.567,
+     0.3803,
+     0.7322
+    ]
+   ],
+   "concept": "rightrock",
+   "view": null,
+   "anim": null,
+   "pilot_tag": false,
    "pilot_copy": false,
    "props": null
   },
@@ -6878,934 +8833,13 @@
     "note": "decor scatter (ART_ROCKS 9); bottoms below z 0 are 25 % of each stone height",
     "kind": "pebble_cluster"
    }
-  },
-  {
-   "id": "Kit_Base_Floor",
-   "name": "Пол базы",
-   "cat": "env",
-   "src": "uart",
-   "folder": "Environment",
-   "fbx": "Environment/Kit_Base_Floor",
-   "glb": "glb/Kit_Base_Floor.glb",
-   "bytes": 6504,
-   "tris": 22,
-   "parts": [
-    {
-     "name": "Kit_Base_Floor_T01",
-     "tris": 2,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": false,
-     "parent": null,
-     "bbox": [
-      [
-       -1.0,
-       -1.0,
-       -0.0
-      ],
-      [
-       1.0,
-       1.0,
-       0.0
-      ]
-     ]
-    },
-    {
-     "name": "Kit_Base_Floor_T12",
-     "tris": 2,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": false,
-     "parent": null,
-     "bbox": [
-      [
-       -1.0,
-       -1.0,
-       -0.0
-      ],
-      [
-       1.0,
-       1.0,
-       0.0
-      ]
-     ]
-    },
-    {
-     "name": "Kit_Base_Floor_T23",
-     "tris": 2,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": false,
-     "parent": null,
-     "bbox": [
-      [
-       -1.0,
-       -1.0,
-       -0.0
-      ],
-      [
-       1.0,
-       1.0,
-       0.0
-      ]
-     ]
-    },
-    {
-     "name": "Kit_Base_Floor_T34",
-     "tris": 2,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": false,
-     "parent": null,
-     "bbox": [
-      [
-       -1.0,
-       -1.0,
-       -0.0
-      ],
-      [
-       1.0,
-       1.0,
-       0.0
-      ]
-     ]
-    },
-    {
-     "name": "Kit_Base_Floor_T45",
-     "tris": 2,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": false,
-     "parent": null,
-     "bbox": [
-      [
-       -1.0,
-       -1.0,
-       -0.0
-      ],
-      [
-       1.0,
-       1.0,
-       0.0
-      ]
-     ]
-    },
-    {
-     "name": "Kit_Base_Floor_Z0",
-     "tris": 2,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": false,
-     "parent": null,
-     "bbox": [
-      [
-       -1.0,
-       -1.0,
-       -0.0
-      ],
-      [
-       1.0,
-       1.0,
-       0.0
-      ]
-     ]
-    },
-    {
-     "name": "Kit_Base_Floor_Z1",
-     "tris": 2,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": false,
-     "parent": null,
-     "bbox": [
-      [
-       -1.0,
-       -1.0,
-       -0.0
-      ],
-      [
-       1.0,
-       1.0,
-       0.0
-      ]
-     ]
-    },
-    {
-     "name": "Kit_Base_Floor_Z2",
-     "tris": 2,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": false,
-     "parent": null,
-     "bbox": [
-      [
-       -1.0,
-       -1.0,
-       -0.0
-      ],
-      [
-       1.0,
-       1.0,
-       0.0
-      ]
-     ]
-    },
-    {
-     "name": "Kit_Base_Floor_Z3",
-     "tris": 2,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": false,
-     "parent": null,
-     "bbox": [
-      [
-       -1.0,
-       -1.0,
-       -0.0
-      ],
-      [
-       1.0,
-       1.0,
-       0.0
-      ]
-     ]
-    },
-    {
-     "name": "Kit_Base_Floor_Z4",
-     "tris": 2,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": false,
-     "parent": null,
-     "bbox": [
-      [
-       -1.0,
-       -1.0,
-       -0.0
-      ],
-      [
-       1.0,
-       1.0,
-       0.0
-      ]
-     ]
-    },
-    {
-     "name": "Kit_Base_Floor_Z5",
-     "tris": 2,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": false,
-     "parent": null,
-     "bbox": [
-      [
-       -1.0,
-       -1.0,
-       -0.0
-      ],
-      [
-       1.0,
-       1.0,
-       0.0
-      ]
-     ]
-    }
-   ],
-   "sockets": [],
-   "bones": 0,
-   "rig": null,
-   "clips": [],
-   "materials": [
-    "M_Palette"
-   ],
-   "cells": [
-    0,
-    1,
-    2,
-    3,
-    4,
-    5
-   ],
-   "fur": false,
-   "bbox": [
-    [
-     -1.0,
-     -1.0,
-     -0.0
-    ],
-    [
-     1.0,
-     1.0,
-     0.0
-    ]
-   ],
-   "concept": "boulders",
-   "view": null,
-   "anim": null,
-   "pilot_tag": true,
-   "pilot_copy": false,
-   "props": null
-  },
-  {
-   "id": "Kit_Base_Road",
-   "name": "Дорожка",
-   "cat": "env",
-   "src": "uart",
-   "folder": "Environment",
-   "fbx": "Environment/Kit_Base_Road",
-   "glb": "glb/Kit_Base_Road.glb",
-   "bytes": 2484,
-   "tris": 50,
-   "parts": [
-    {
-     "name": "Kit_Base_Road_Body",
-     "tris": 50,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": false,
-     "parent": null,
-     "bbox": [
-      [
-       -0.65,
-       -1.2,
-       -0.0
-      ],
-      [
-       0.65,
-       1.2,
-       0.26
-      ]
-     ]
-    }
-   ],
-   "sockets": [],
-   "bones": 0,
-   "rig": null,
-   "clips": [],
-   "materials": [
-    "M_Palette"
-   ],
-   "cells": [
-    9,
-    13,
-    14
-   ],
-   "fur": false,
-   "bbox": [
-    [
-     -0.65,
-     -1.2,
-     -0.0
-    ],
-    [
-     0.65,
-     1.2,
-     0.26
-    ]
-   ],
-   "concept": "boulders",
-   "view": null,
-   "anim": null,
-   "pilot_tag": true,
-   "pilot_copy": false,
-   "props": null
-  },
-  {
-   "id": "Kit_Base_Wall_A",
-   "name": "Стена A",
-   "cat": "env",
-   "src": "uart",
-   "folder": "Environment",
-   "fbx": "Environment/Kit_Base_Wall_A",
-   "glb": "glb/Kit_Base_Wall_A.glb",
-   "bytes": 4748,
-   "tris": 59,
-   "parts": [
-    {
-     "name": "Kit_Base_Wall_A_Body",
-     "tris": 59,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": false,
-     "parent": null,
-     "bbox": [
-      [
-       -1.0981,
-       -1.0127,
-       -0.04
-      ],
-      [
-       0.9638,
-       1.0212,
-       1.7069
-      ]
-     ]
-    }
-   ],
-   "sockets": [],
-   "bones": 0,
-   "rig": null,
-   "clips": [],
-   "materials": [
-    "M_Palette"
-   ],
-   "cells": [
-    6,
-    8
-   ],
-   "fur": false,
-   "bbox": [
-    [
-     -1.0981,
-     -1.0127,
-     -0.04
-    ],
-    [
-     0.9638,
-     1.0212,
-     1.7069
-    ]
-   ],
-   "concept": "rightrock",
-   "view": null,
-   "anim": null,
-   "pilot_tag": true,
-   "pilot_copy": false,
-   "props": null
-  },
-  {
-   "id": "Kit_Base_Wall_B",
-   "name": "Стена B",
-   "cat": "env",
-   "src": "pilot",
-   "folder": null,
-   "fbx": "art\\export\\pilot_env\\Kit_Base_Wall_B.fbx",
-   "glb": "glb/Kit_Base_Wall_B.glb",
-   "bytes": 4824,
-   "tris": 59,
-   "parts": [
-    {
-     "name": "Kit_Base_Wall_B_Body",
-     "tris": 59,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": false,
-     "parent": null,
-     "bbox": [
-      [
-       -1.112,
-       -1.0222,
-       -0.04
-      ],
-      [
-       1.0843,
-       1.1337,
-       1.62
-      ]
-     ]
-    }
-   ],
-   "sockets": [],
-   "bones": 0,
-   "rig": null,
-   "clips": [],
-   "materials": [
-    "M_Palette"
-   ],
-   "cells": [
-    6,
-    8
-   ],
-   "fur": false,
-   "bbox": [
-    [
-     -1.112,
-     -1.0222,
-     -0.04
-    ],
-    [
-     1.0843,
-     1.1337,
-     1.62
-    ]
-   ],
-   "concept": "rightrock",
-   "view": null,
-   "anim": null,
-   "pilot_tag": true,
-   "pilot_copy": false,
-   "props": null
-  },
-  {
-   "id": "Kit_Base_Wall_Low",
-   "name": "Низкая стенка",
-   "cat": "env",
-   "src": "pilot",
-   "folder": null,
-   "fbx": "art\\export\\pilot_env\\Kit_Base_Wall_Low.fbx",
-   "glb": "glb/Kit_Base_Wall_Low.glb",
-   "bytes": 3736,
-   "tris": 43,
-   "parts": [
-    {
-     "name": "Kit_Base_Wall_Low_Body",
-     "tris": 43,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": false,
-     "parent": null,
-     "bbox": [
-      [
-       -1.0762,
-       -0.8065,
-       -0.04
-      ],
-      [
-       1.1113,
-       0.6616,
-       0.6337
-      ]
-     ]
-    }
-   ],
-   "sockets": [],
-   "bones": 0,
-   "rig": null,
-   "clips": [],
-   "materials": [
-    "M_Palette"
-   ],
-   "cells": [
-    6,
-    8
-   ],
-   "fur": false,
-   "bbox": [
-    [
-     -1.0762,
-     -0.8065,
-     -0.04
-    ],
-    [
-     1.1113,
-     0.6616,
-     0.6337
-    ]
-   ],
-   "concept": "rightrock",
-   "view": null,
-   "anim": null,
-   "pilot_tag": true,
-   "pilot_copy": false,
-   "props": null
-  },
-  {
-   "id": "Kit_Base_WallTop",
-   "name": "Верх стены",
-   "cat": "env",
-   "src": "uart",
-   "folder": "Environment",
-   "fbx": "Environment/Kit_Base_WallTop",
-   "glb": "glb/Kit_Base_WallTop.glb",
-   "bytes": 3720,
-   "tris": 41,
-   "parts": [
-    {
-     "name": "Kit_Base_WallTop_Body",
-     "tris": 41,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": false,
-     "parent": null,
-     "bbox": [
-      [
-       -1.0646,
-       -1.0918,
-       -0.04
-      ],
-      [
-       1.0994,
-       1.0904,
-       1.9258
-      ]
-     ]
-    }
-   ],
-   "sockets": [],
-   "bones": 0,
-   "rig": null,
-   "clips": [],
-   "materials": [
-    "M_Palette"
-   ],
-   "cells": [
-    6,
-    8
-   ],
-   "fur": false,
-   "bbox": [
-    [
-     -1.0646,
-     -1.0918,
-     -0.04
-    ],
-    [
-     1.0994,
-     1.0904,
-     1.9258
-    ]
-   ],
-   "concept": "rightrock",
-   "view": null,
-   "anim": null,
-   "pilot_tag": true,
-   "pilot_copy": false,
-   "props": null
-  },
-  {
-   "id": "Kit_Base_Support",
-   "name": "Опора",
-   "cat": "env",
-   "src": "uart",
-   "folder": "Environment",
-   "fbx": "Environment/Kit_Base_Support",
-   "glb": "glb/Kit_Base_Support.glb",
-   "bytes": 3124,
-   "tris": 74,
-   "parts": [
-    {
-     "name": "Kit_Base_Support_Body",
-     "tris": 74,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": false,
-     "parent": null,
-     "bbox": [
-      [
-       -1.33,
-       -0.23,
-       -0.0
-      ],
-      [
-       1.33,
-       0.23,
-       2.42
-      ]
-     ]
-    }
-   ],
-   "sockets": [
-    "Socket_Hang"
-   ],
-   "bones": 0,
-   "rig": null,
-   "clips": [],
-   "materials": [
-    "M_Palette"
-   ],
-   "cells": [
-    10,
-    13
-   ],
-   "fur": false,
-   "bbox": [
-    [
-     -1.33,
-     -0.23,
-     -0.0
-    ],
-    [
-     1.33,
-     0.23,
-     2.42
-    ]
-   ],
-   "concept": "krep",
-   "view": null,
-   "anim": null,
-   "pilot_tag": true,
-   "pilot_copy": false,
-   "props": null
-  },
-  {
-   "id": "Kit_Base_LampPost",
-   "name": "Фонарный столб (пилот)",
-   "cat": "env",
-   "src": "uart",
-   "folder": "Environment",
-   "fbx": "Environment/Kit_Base_LampPost",
-   "glb": "glb/Kit_Base_LampPost.glb",
-   "bytes": 5936,
-   "tris": 122,
-   "parts": [
-    {
-     "name": "Kit_Base_LampPost_Body",
-     "tris": 42,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": false,
-     "parent": null,
-     "bbox": [
-      [
-       -0.19,
-       -0.19,
-       -0.0
-      ],
-      [
-       0.975,
-       0.19,
-       2.46
-      ]
-     ]
-    },
-    {
-     "name": "Kit_Base_LampPost_Glow",
-     "tris": 8,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": false,
-     "parent": null,
-     "bbox": [
-      [
-       0.6445,
-       -0.1755,
-       1.337
-      ],
-      [
-       0.9955,
-       0.1755,
-       1.715
-      ]
-     ]
-    },
-    {
-     "name": "Kit_Base_LampPost_Lantern",
-     "tris": 72,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": false,
-     "parent": null,
-     "bbox": [
-      [
-       0.5814,
-       -0.2386,
-       1.256
-      ],
-      [
-       1.0586,
-       0.2386,
-       2.12
-      ]
-     ]
-    }
-   ],
-   "sockets": [
-    "Socket_Light"
-   ],
-   "bones": 0,
-   "rig": null,
-   "clips": [],
-   "materials": [
-    "M_Palette"
-   ],
-   "cells": [
-    10,
-    13,
-    14,
-    15,
-    24,
-    27
-   ],
-   "fur": false,
-   "bbox": [
-    [
-     -0.19,
-     -0.2386,
-     -0.0
-    ],
-    [
-     1.0586,
-     0.2386,
-     2.46
-    ]
-   ],
-   "concept": "lantern",
-   "view": null,
-   "anim": null,
-   "pilot_tag": true,
-   "pilot_copy": false,
-   "props": null
-  },
-  {
-   "id": "Kit_Base_Lantern",
-   "name": "Фонарь (пилот)",
-   "cat": "env",
-   "src": "uart",
-   "folder": "Environment",
-   "fbx": "Environment/Kit_Base_Lantern",
-   "glb": "glb/Kit_Base_Lantern.glb",
-   "bytes": 4044,
-   "tris": 80,
-   "parts": [
-    {
-     "name": "Kit_Base_Lantern_Body",
-     "tris": 72,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": false,
-     "parent": null,
-     "bbox": [
-      [
-       -0.1768,
-       -0.1768,
-       -0.0
-      ],
-      [
-       0.1768,
-       0.1768,
-       0.64
-      ]
-     ]
-    },
-    {
-     "name": "Kit_Base_Lantern_Glow",
-     "tris": 8,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": false,
-     "parent": null,
-     "bbox": [
-      [
-       -0.13,
-       -0.13,
-       0.06
-      ],
-      [
-       0.13,
-       0.13,
-       0.34
-      ]
-     ]
-    }
-   ],
-   "sockets": [
-    "Socket_Hang",
-    "Socket_Light"
-   ],
-   "bones": 0,
-   "rig": null,
-   "clips": [],
-   "materials": [
-    "M_Palette"
-   ],
-   "cells": [
-    13,
-    14,
-    15,
-    24,
-    27
-   ],
-   "fur": false,
-   "bbox": [
-    [
-     -0.1768,
-     -0.1768,
-     -0.0
-    ],
-    [
-     0.1768,
-     0.1768,
-     0.64
-    ]
-   ],
-   "concept": "lantern",
-   "view": null,
-   "anim": null,
-   "pilot_tag": true,
-   "pilot_copy": false,
-   "props": null
   }
  ],
  "fails": [],
- "pending": [
-  {
-   "id": "Hat_Miner",
-   "name": "Каска шахтёра",
-   "cat": "chars",
-   "concept": "barsik"
-  },
-  {
-   "id": "Prop_HeroPedestal",
-   "name": "Пьедестал героя",
-   "cat": "chars",
-   "concept": null
-  },
-  {
-   "id": "Prop_IntroRope",
-   "name": "Верёвка (интро)",
-   "cat": "chars",
-   "concept": "mine"
-  },
-  {
-   "id": "RatKing",
-   "name": "Крысиный король",
-   "cat": "enemies",
-   "concept": "king"
-  },
-  {
-   "id": "RatBurrow",
-   "name": "Крысиная нора",
-   "cat": "enemies",
-   "concept": "burrow"
-  }
- ],
+ "pending": [],
  "totals": {
-  "models": 62,
-  "tris": 13137,
-  "glb_bytes": 631464
+  "models": 61,
+  "tris": 15826,
+  "glb_bytes": 1992168
  }
 }

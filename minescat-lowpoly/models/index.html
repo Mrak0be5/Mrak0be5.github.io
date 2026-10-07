@@ -7,7 +7,7 @@
 <meta name="description" content="Все low-poly 3D-модели игры «Котик-шахтёр»: персонажи, враги, камни, лут, постройки, пропсы и окружение. Вращение, анимации, окрасы.">
 <meta name="theme-color" content="#16171c">
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="css/style.css?v=2">
+<link rel="stylesheet" href="css/style.css?v=3">
 <script type="importmap">
 {
   "imports": {
@@ -20,10 +20,13 @@
 <body>
 <header class="top">
   <div class="top-in">
-    <h1>Котик-шахтёр Low Poly — 3D-модели</h1>
+    <h1><span class="nw">Котик-шахтёр</span> Low Poly — <span class="nw">3D-модели</span></h1>
     <p id="stats" class="stats">Загрузка списка моделей…</p>
   </div>
-  <nav id="tabs" class="tabs" aria-label="Категории"></nav>
+  <div class="tabs-wrap">
+    <nav id="tabs" class="tabs" aria-label="Категории"></nav>
+    <button id="tabsmore" class="tabs-more" type="button" aria-label="Ещё категории" title="Ещё категории" hidden>›</button>
+  </div>
 </header>
 
 <main id="grid" class="grid" aria-live="polite"></main>
@@ -53,6 +56,7 @@
     <section class="vsec"><h3>Вид</h3>
       <div class="chips toggles">
         <button data-opt="rotate" class="chip on">Автоповорот</button>
+        <button data-opt="hat" class="chip on" hidden>Каска</button>
         <button data-opt="concept" class="chip">Концепт</button>
         <button data-opt="dark" class="chip">Тёмный фон</button>
         <button data-opt="wire" class="chip">Сетка</button>
@@ -66,6 +70,6 @@
 </div>
 
 <noscript><p class="nojs">Для просмотра моделей нужен JavaScript и WebGL.</p></noscript>
-<script type="module" src="js/app.js?v=2"></script>
+<script type="module" src="js/app.js?v=3"></script>
 </body>
 </html>
