@@ -38,7 +38,7 @@ h1 { margin: 0; font-size: clamp(19px, 2.6vw, 28px); font-weight: 750; letter-sp
   overflow: hidden; cursor: pointer; transition: transform .12s ease, border-color .12s ease, background .12s ease;
   text-align: left; padding: 0; display: flex; flex-direction: column; }
 .card:hover, .card:focus-visible { transform: translateY(-2px); border-color: var(--accent); background: var(--card-hi); outline: none; }
-.card .th { aspect-ratio: 1 / 1; width: 100%; display: block; background: #e9bf6a; object-fit: cover; }
+.card .th { aspect-ratio: 1 / 1; width: 100%; height: auto; display: block; background: #e9bf6a; object-fit: cover; }
 .card .th.wait { background: linear-gradient(110deg, #2a2c36 30%, #343745 50%, #2a2c36 70%); background-size: 200% 100%;
   animation: shimmer 1.2s linear infinite; }
 @keyframes shimmer { to { background-position: -200% 0; } }
@@ -53,6 +53,8 @@ h1 { margin: 0; font-size: clamp(19px, 2.6vw, 28px); font-weight: 750; letter-sp
 .card.pending { cursor: default; opacity: .62; }
 .card.pending:hover { transform: none; border-color: var(--line); background: var(--card); }
 .card.pending .th { filter: grayscale(.65) brightness(.8); }
+.card .th.empty { display: flex; align-items: center; justify-content: center; font-size: 64px; font-weight: 700;
+  color: rgba(40, 28, 10, .35); }
 
 .foot { max-width: 1400px; margin: 0 auto; padding: 0 18px 40px; color: var(--dim); font-size: 13px; }
 

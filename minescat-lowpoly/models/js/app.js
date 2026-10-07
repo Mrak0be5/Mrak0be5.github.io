@@ -707,13 +707,18 @@ function card(a) {
 function pendingCard(p) {
   const c = el('div', 'card pending');
   c.title = p.name + ' — модель в работе';
-  const img = el('img', 'th');
-  img.alt = p.name; img.width = 300; img.height = 300;
-  if (p.concept) img.src = 'concepts/' + p.concept + '.webp';
+  let img;
+  if (p.concept) {
+    img = el('img', 'th');
+    img.alt = p.name; img.width = 300; img.height = 300;
+    img.src = 'concepts/' + p.concept + '.webp';
+  } else {
+    img = el('div', 'th empty', '?');
+  }
   const tags = el('div', 'tags');
   tags.append(el('span', 'tag wip', 'в работе'));
   const meta = el('div', 'meta');
-  meta.append(el('div', 'nm', p.name), el('div', 'sub', 'пока только концепт'));
+  meta.append(el('div', 'nm', p.name), el('div', 'sub', p.concept ? 'пока только концепт' : 'модель ещё не готова'));
   c.append(img, tags, meta);
   return c;
 }
@@ -939,7 +944,7 @@ function fillPanel(a, inst) {
   rows.push(['Клипы из FBX', String((a.clips || []).length)]);
   rows.push(['Габариты (Ш×Г×В)', dims]);
   rows.push(['Файл GLB', fmtKB(a.bytes)]);
-  rows.push(['Источник', a.src === 'pilot' ? 'пилотный FBX' : 'финальный FBX (Unity)']);
+  rows.push(['Источник', a.pilot_copy ? 'пилотный FBX (копия уже в Unity)' : a.src === 'pilot' ? 'пилотный FBX' : 'финальный FBX (Unity)']);
   for (const [k, v] of rows) dl.append(el('dt', null, k), el('dd', null, v));
 
   const cw = $('#vclips .chips');
