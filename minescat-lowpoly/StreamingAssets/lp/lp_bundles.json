@@ -2,14 +2,14 @@
     "version": 1,
     "target": "WebGL",
     "compression": "lz4",
-    "builtAt": "2026-10-07T10:39:19Z",
-    "map": "a6.bundle_map.json (bundle_map.py: qa/lanes/cats/player_rec.log, qa/lanes/cats/player_shot.log, qa/lanes/cave/_t/r4/f1_player.log, qa/lanes/cave/_t/r4/f2_player.log, qa/lanes/cave/_t/r4/f3_player.log, qa/lanes/cave/_t/r5/f1_player.log, qa/lanes/cave/_t/r5/f2_player.log, qa/lanes/cave/_t/r5/f3_player.log, qa/lanes/cave/_t/r6/f1_player.log, qa/lanes/cave/_t/r6/f2_player.log, qa/lanes/cave/_t/r6/f3_player.log, qa/lanes/cave/f1_player.log, qa/lanes/cave/f2_player.log, qa/lanes/cave/f3_player.log, qa/lanes/cave/player_shot.log, qa/lanes/enemies/player_rec.log, qa/lanes/enemies/player_shot.log, qa/lanes/hero/player_shot.log, qa/lanes/hero_run2/player_shot.log, qa/lanes/hero_skip/player_shot.log, qa/lanes/int/player_shot.log, qa/lanes/int/s01_console.txt, qa/lanes/objects/try3/player_shot.log, qa/lanes/props/player_shot.log, qa/lanes/ui/player_shot.log, qa/lanes/vfx/player_rec.log, qa/lanes/vfx/player_shot.log, qa/web/a1_bot_console.txt, qa/web/a3_bot_console.txt, qa/web/a5_bot_console.txt)",
+    "builtAt": "2026-10-07T20:17:22Z",
+    "map": "rc1.bundle_map.json (bundle_map.py: qa/gates/r1/build/player.log.txt, qa/gates/r1/m4_f1/console.txt, qa/gates/r1/m4_f1/player.log.txt, qa/gates/r1/m4_f2/console.txt, qa/gates/r1/m4_f2/player.log.txt, qa/gates/r1/m4_f3/console.txt, qa/gates/r1/m4_f3/player.log.txt, qa/gates/r1/m5/console.txt, qa/gates/r1/m5/player.log.txt, qa/gates/r1/m5_f2/console.txt, qa/gates/r1/m5_f2/player.log.txt, qa/gates/r1/m6_cart/console.txt, qa/gates/r1/m6_cart/player.log.txt, qa/gates/r1/m6_gal/console.txt, qa/gates/r1/m6_gal/player.log.txt, qa/gates/r1/m7_king/console.txt, qa/gates/r1/m7_king/player.log.txt, qa/gates/r1/m7_nogrey/console.txt, qa/gates/r1/m7_nogrey/player.log.txt, qa/gates/r1/m8_ui/console.txt, qa/gates/r1/m8_ui/player.log.txt, qa/gates/r1/m8_uiqa2/console.txt, qa/gates/r1/m8_uiqa2/player.log.txt, qa/gates/r1/m8_uiqa/console.txt, qa/gates/r1/m8_uiqa/player.log.txt, qa/gates/r1/m9_first/console.txt, qa/gates/r1/m9_first/player.log.txt, qa/gates/r1/m9_second/console.txt, qa/gates/r1/m9_second/player.log.txt, qa/gates/r1f/build/player.log.txt, qa/gates/r1f/camA/console.txt, qa/gates/r1f/camA/player.log.txt, qa/gates/r1f/camB/console.txt, qa/gates/r1f/camB/player.log.txt, qa/gates/r1f/gal/Bld/player.log.txt, qa/gates/r1f/gal/Portal/player.log.txt, qa/gates/r1f/gal/console.txt, qa/gates/r1f/gen_fix/console.txt, qa/gates/r1f/gen_fix/player.log.txt, qa/gates/r1f/gen_full/console.txt, qa/gates/r1f/gen_full/player.log.txt, qa/gates/r1f/m5/console.txt, qa/gates/r1f/m5/player.log.txt, qa/gates/r1f/nogrey/console.txt, qa/gates/r1f/nogrey/player.log.txt, qa/gates/r2/build/player.log.txt, qa/gates/r2/gen_fix/console.txt, qa/gates/r2/gen_fix/player.log.txt, qa/gates/r2/m4_f1/console.txt, qa/gates/r2/m4_f1/player.log.txt, qa/gates/r2/m4_f2/console.txt, qa/gates/r2/m4_f2/player.log.txt, qa/gates/r2/m4_f3/console.txt, qa/gates/r2/m4_f3/player.log.txt, qa/gates/r2/m5/console.txt, qa/gates/r2/m5/player.log.txt, qa/gates/r2/m5_f2/console.txt, qa/gates/r2/m5_f2/player.log.txt, qa/gates/r2/m5_gal/Bld/player.log.txt, qa/gates/r2/m5_gal/Portal/player.log.txt, qa/gates/r2/m5_gal/console.txt, qa/gates/r2/m6_cart/console.txt, qa/gates/r2/m6_cart/player.log.txt, qa/gates/r2/m6_gal/console.txt, qa/gates/r2/m6_gal/player.log.txt, qa/gates/r2/m7_king/console.txt, qa/gates/r2/m7_king/player.log.txt, qa/gates/r2/m7_nogrey/console.txt, qa/gates/r2/m7_nogrey/player.log.txt, qa/gates/r2/m8_ui/console.txt, qa/gates/r2/m8_ui/player.log.txt, qa/gates/r2/m8_uiqa2/console.txt, qa/gates/r2/m8_uiqa2/player.log.txt, qa/gates/r2/m9_first/console.txt, qa/gates/r2/m9_first/player.log.txt, qa/gates/r2/m9_second/console.txt, qa/gates/r2/m9_second/player.log.txt, qa/gates/rc1/build/player.log.txt, qa/gates/rc1/m5_f2/console.txt, qa/gates/rc1/m5_f2/player.log.txt, qa/gates/rc1/m7_king/console.txt, qa/gates/rc1/m7_king/player.log.txt, qa/gates/rc1/m9_first/console.txt, qa/gates/rc1/m9_first/player.log.txt, qa/lanes/cats/player_rec.log, qa/lanes/cats/player_shot.log, qa/lanes/cave/_t/r4/f1_player.log, qa/lanes/cave/_t/r4/f2_player.log, qa/lanes/cave/_t/r4/f3_player.log, qa/lanes/cave/_t/r5/f1_player.log, qa/lanes/cave/_t/r5/f2_player.log, qa/lanes/cave/_t/r5/f3_player.log, qa/lanes/cave/_t/r6/f1_player.log, qa/lanes/cave/_t/r6/f2_player.log, qa/lanes/cave/_t/r6/f3_player.log, qa/lanes/cave/_t/r7/f1_player.log, qa/lanes/cave/_t/r7/f2_player.log, qa/lanes/cave/_t/r7/f3_player.log, qa/lanes/cave/_t/r8/f1_player.log, qa/lanes/cave/_t/r8/f2_player.log, qa/lanes/cave/_t/r8/f3_player.log, qa/lanes/cave/_t/r9/f1_player.log, qa/lanes/cave/_t/r9/f2_player.log, qa/lanes/cave/_t/r9/f3_player.log, qa/lanes/cave/f1_player.log, qa/lanes/cave/f2_player.log, qa/lanes/cave/f3_player.log, qa/lanes/cave/fixr1/r1e/player_shot.log, qa/lanes/cave/fixr1/r1f/player_shot.log, qa/lanes/cave/fixr1/r1g/player_shot.log, qa/lanes/cave/fixr1/r1h/player_shot.log, qa/lanes/cave/fixr1/r1i/player_shot.log, qa/lanes/cave/fixr1/r1j/player_shot.log, qa/lanes/cave/fixr1/r1k/player_shot.log, qa/lanes/cave/fixr1/r1l/player_shot.log, qa/lanes/cave/fixr1/r1m/player_shot.log, qa/lanes/cave/fixr1/r1n/player_shot.log, qa/lanes/cave/fixr1/r1o/player_shot.log, qa/lanes/cave/fixr1/r1p/player_shot.log, qa/lanes/cave/fixr1/r1q/player_shot.log, qa/lanes/cave/fixr1/r1r/player_shot.log, qa/lanes/cave/fixr1/r1s/player_shot.log, qa/lanes/cave/player_shot.log, qa/lanes/enemies/player_rec.log, qa/lanes/enemies/player_shot.log, qa/lanes/hero/player_shot.log, qa/lanes/hero_run2/player_shot.log, qa/lanes/hero_skip/player_shot.log, qa/lanes/int/player_shot.log, qa/lanes/int/s01_console.txt, qa/lanes/int/s02_console.txt, qa/lanes/int/s03_console.txt, qa/lanes/int/s04_console.txt, qa/lanes/int/s05_console.txt, qa/lanes/int/s06_console.txt, qa/lanes/int/s07_console.txt, qa/lanes/int/s08_console.txt, qa/lanes/objects/fixr1/r1b/player_shot.log, qa/lanes/objects/player_shot.log, qa/lanes/objects/try3/player_shot.log, qa/lanes/props/fixr1/r1a/player_shot.log, qa/lanes/props/fixr1/r1c/player_shot.log, qa/lanes/props/fixr1/r1d/player_shot.log, qa/lanes/props/fixr1/r1e/player_shot.log, qa/lanes/props/player_shot.log, qa/lanes/ui/player_shot.log, qa/lanes/vfx/player_rec.log, qa/lanes/vfx/player_shot.log, qa/web/a1_bot_console.txt, qa/web/a3_bot_console.txt, qa/web/a5_bot_console.txt, qa/web/a6_bot_console.txt, qa/webqa/r1/p1_log_after_reload.txt, qa/webqa/r1/p1_log_before_reload.txt, qa/webqa/r1/p2_log.txt, qa/webqa/r2/p1_logs_s01.txt, qa/webqa/r2/p2_log_after_reload.txt, qa/webqa/r2/p2_log_before_reload.txt, qa/webqa/r2/p3_log_skip.txt)",
     "bundles": [
         {
             "name": "extra",
-            "file": "lp_extra_6ada015d.bundle",
-            "bytes": 58283,
-            "crc": 2482858944,
+            "file": "lp_extra_e8efe41d.bundle",
+            "bytes": 58970,
+            "crc": 157558267,
             "floor": 0,
             "keepMin": 0,
             "keepMax": 99,
@@ -27,19 +27,20 @@
         },
         {
             "name": "f2",
-            "file": "lp_f2_bd86fc62.bundle",
-            "bytes": 275932,
-            "crc": 3909168654,
+            "file": "lp_f2_1f34b3a6.bundle",
+            "bytes": 281548,
+            "crc": 1529210471,
             "floor": 2,
             "keepMin": 1,
-            "keepMax": 3,
+            "keepMax": 99,
             "ids": [
                 "Bld_BlackMarket",
                 "RatBurrow",
                 "RatDigger",
                 "RatGuard",
-                "Portal_Up",
-                "Decor_Tuft_A"
+                "Kit_Adits_WallCrystal_C",
+                "Kit_Adits_WallCrystal_D",
+                "Portal_Up"
             ]
         }
     ],
@@ -50,12 +51,16 @@
         "Cart_Pile",
         "CatBoy",
         "CatGirl",
+        "CatRig",
         "Debris",
         "Decor_Barrels_A",
         "Decor_Mushroom_A",
         "Decor_Mushroom_B",
+        "Decor_Tuft_A",
         "Decor_Tuft_B",
+        "Gem_Amethyst",
         "Gem_Base",
+        "Hat_Miner",
         "Kit_Adits_Boulder_A",
         "Kit_Adits_Boulder_B",
         "Kit_Adits_Boulder_C",
@@ -73,7 +78,10 @@
         "Pebble_Cluster_A",
         "Pebble_Cluster_B",
         "Pebble_Cluster_C",
+        "Pickaxe_Base",
         "Portal_Down",
+        "Prop_HeroPedestal",
+        "Prop_IntroRope",
         "Prop_LampPost",
         "Prop_MineLantern",
         "Prop_Rails",
@@ -90,6 +98,6 @@
         "Rock_Prisms",
         "Spawner_Vein",
         "Thread_Pulse",
-        "Tools"
+        "Tool_Hammer_Kolotushka"
     ]
 }

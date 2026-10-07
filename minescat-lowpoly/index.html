@@ -8,9 +8,16 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Котик-шахтёр</title>
 <style>
-html, body { margin: 0; height: 100%; background: #0d0b0a; overflow: hidden; touch-action: none; overscroll-behavior: none;
+html, body { margin: 0; height: 100%; overflow: hidden; touch-action: none; overscroll-behavior: none;
              -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
-#wrap { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: #000; box-shadow: 0 0 40px rgba(0,0,0,.6); }
+/* fix r1 W5 / W10: warm cave backdrop behind the canvas (CSS only): lantern glow, darker rock edges */
+body { background: #0d0a08;
+       background-image: radial-gradient(ellipse 60% 45% at 50% 42%, rgba(240,166,64,.16), rgba(240,166,64,0) 70%),
+                         radial-gradient(ellipse 40% 30% at 18% 78%, rgba(120,170,200,.07), rgba(0,0,0,0) 70%),
+                         radial-gradient(ellipse 40% 30% at 82% 22%, rgba(190,120,220,.06), rgba(0,0,0,0) 70%),
+                         linear-gradient(180deg, #1c140f 0%, #120d0a 55%, #0a0706 100%); }
+#wrap { position: absolute; left: 0; top: 0; background: #000; box-shadow: 0 0 0 1px rgba(240,166,64,.10), 0 0 48px rgba(0,0,0,.75); }
+#wrap.full { box-shadow: none; }
 #c { width: 100%; height: 100%; display: block; outline: none; touch-action: none; }
 #load { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
         color: #f3dfb8; font: 600 18px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -20,10 +27,24 @@ html, body { margin: 0; height: 100%; background: #0d0b0a; overflow: hidden; tou
 #fill { height: 100%; width: 0; background: linear-gradient(90deg, #f0a640, #ffd27a); transition: width .2s; }
 #pct { font-weight: 400; font-size: 14px; opacity: .85; }
 #hint { font-weight: 400; font-size: 13px; opacity: .6; text-align: center; padding: 0 12%; }
-#models { position: fixed; right: 14px; bottom: 10px; color: #c9a27a; font: 13px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-          text-decoration: none; opacity: .75; display: none; }
-#models:hover { opacity: 1; text-decoration: underline; }
+/* desktop side panel (only when the letterbox side space is wide enough): game title, controls, models button */
+#side { position: fixed; top: 0; bottom: 0; left: 0; display: none; flex-direction: column; align-items: flex-end; justify-content: center;
+        gap: 18px; padding: 0 44px 0 24px; box-sizing: border-box; text-align: right; color: #f3dfb8;
+        font: 400 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; pointer-events: none; }
+#side h1 { margin: 0; font-size: 44px; line-height: 1.08; font-weight: 800; letter-spacing: .3px; color: #ffd27a;
+           text-shadow: 0 2px 0 #5a3412, 0 6px 24px rgba(240,166,64,.25); }
+#side .sub { opacity: .78; max-width: 300px; }
+#side .keys { opacity: .55; font-size: 13px; max-width: 300px; }
+#models { pointer-events: auto; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 20px; box-sizing: border-box;
+          border-radius: 22px; border: 1px solid rgba(255,210,122,.45); background: rgba(240,166,64,.14); color: #ffe4b0;
+          font: 600 16px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; text-decoration: none; white-space: nowrap; }
+#models:hover, #models:focus-visible { background: rgba(240,166,64,.26); border-color: rgba(255,210,122,.8); outline: none; }
+/* rc1: small 3D-models link on the loading screen (phones never see the desktop side panel) */
+#mlink { position: absolute; bottom: calc(18px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); padding: 10px 16px;
+         color: #f3dfb8; opacity: .55; font: 400 13px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+#mlink:hover, #mlink:focus-visible { opacity: .9; outline: none; }
 #err { position: absolute; left: 8px; right: 8px; bottom: 8px; color: #ffb3a3; font: 12px/1.4 monospace; white-space: pre-wrap; pointer-events: none; }
+#sa { position: fixed; visibility: hidden; pointer-events: none; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
 </style>
 </head>
 <body>
@@ -34,26 +55,48 @@ html, body { margin: 0; height: 100%; background: #0d0b0a; overflow: hidden; tou
     <div id="bar"><div id="fill"></div></div>
     <div id="pct">загрузка 0%</div>
     <div id="hint">Веди пальцем или мышью по экрану, чтобы идти</div>
+    <a id="mlink" href="./models/" target="_blank" rel="noopener">3D-модели</a>
   </div>
 </div>
 <div id="err"></div>
-<a id="models" href="./models/" target="_blank" rel="noopener">3D-модели игры</a>
+<div id="side">
+  <h1>Котик-шахтёр</h1>
+  <div class="sub">Копай руду, собирай кристаллы и спускайся всё глубже в шахту.</div>
+  <div class="keys">Веди мышью по экрану или жми WASD / стрелки, чтобы идти.</div>
+  <a id="models" href="./models/" target="_blank" rel="noopener">3D-модели игры &rarr;</a>
+</div>
+<div id="sa"></div>
 <script>
 (function () {
-  var models = document.getElementById('models');
+  var side = document.getElementById('side'), sa = document.getElementById('sa');
   var wrap = document.getElementById('wrap'), load = document.getElementById('load'), canvas = document.getElementById('c');
   var fill = document.getElementById('fill'), pct = document.getElementById('pct'), err = document.getElementById('err');
   var q = new URLSearchParams(location.search);
-  var A = 9 / 16;   // portrait product canvas, letterboxed on wide screens
+  // fix r1 W5: portrait canvas between 9:16 and 9:21. A phone in portrait fills its safe area (the game keeps the frame
+  // width, the HUD stacks top / bottom); wider screens are letterboxed at 9:16 over the cave backdrop, taller ones at 9:21.
+  // ?aspect=fixed = the old fixed 9:16 canvas (QA A/B).
+  var AMAX = 9 / 16, AMIN = q.get('aspect') === 'fixed' ? AMAX : 9 / 21;
+  function px(v) { return parseFloat(v) || 0; }
   function fit() {
-    var w = window.innerWidth, h = window.innerHeight;
-    var cw = Math.min(w, h * A), ch = cw / A;
-    wrap.style.width = Math.floor(cw) + 'px';
-    wrap.style.height = Math.floor(ch) + 'px';
-    models.style.display = (w - cw) / 2 >= 150 ? 'block' : 'none';   // only in the letterbox side space, never over the canvas
+    var cs = getComputedStyle(sa);
+    var it = px(cs.paddingTop), ir = px(cs.paddingRight), ib = px(cs.paddingBottom), il = px(cs.paddingLeft);
+    var W = Math.max(1, window.innerWidth - il - ir), H = Math.max(1, window.innerHeight - it - ib);
+    var a = W / H, cw, ch;
+    if (a > AMAX) { ch = H; cw = H * AMAX; }
+    else if (a < AMIN) { cw = W; ch = W / AMIN; }
+    else { cw = W; ch = H; }
+    cw = Math.floor(cw); ch = Math.floor(ch);
+    var x = Math.round(il + (W - cw) / 2), y = Math.round(it + (H - ch) / 2);
+    wrap.style.width = cw + 'px'; wrap.style.height = ch + 'px';
+    wrap.style.left = x + 'px'; wrap.style.top = y + 'px';
+    wrap.className = cw >= W - 1 && ch >= H - 1 ? 'full' : '';
+    var sideW = x;   // left letterbox space: title + models button, only when wide enough (never over the canvas)
+    side.style.width = sideW + 'px';
+    side.style.display = sideW >= 300 && ch >= 420 ? 'flex' : 'none';
     return ch;
   }
   window.addEventListener('resize', fit);
+  window.addEventListener('orientationchange', function () { setTimeout(fit, 120); });
   var ch = fit();
   // backing store: device pixels, capped at ~1280 px tall (?dpr=1.5 overrides)
   var dpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), Math.max(1, 1280 / Math.max(ch, 1)));
@@ -80,13 +123,13 @@ html, body { margin: 0; height: 100%; background: #0d0b0a; overflow: hidden; tou
   })();
   var b = 'Build/';
   var config = {
-    dataUrl: b + '2158e87f072bd4106182261cfb54e98d.data.unityweb',
-    frameworkUrl: b + 'a8e2970346865b1a27afa8a54e758e49.framework.js.unityweb',
-    codeUrl: b + 'e8f3607bebbf45f31ffcd8e7928797bb.wasm.unityweb',
+    dataUrl: b + 'e40f063cf45d572610715bdc0e425ce5.data.unityweb',
+    frameworkUrl: b + '1ff42a72cc5e6229bb74c3a3c8fa2500.framework.js.unityweb',
+    codeUrl: b + '6dce3886fadd0532f99c94c947118451.wasm.unityweb',
     streamingAssetsUrl: 'StreamingAssets',
     companyName: "MinesCat",
     productName: "Mines Cat LowPoly",
-    productVersion: "a6",
+    productVersion: "rc1",
     devicePixelRatio: dpr,
     autoSyncPersistentDataPath: true,
     showBanner: function (msg, type) { if (type === 'error') showErr(msg); else console.warn('[web] ' + msg); }
@@ -94,7 +137,7 @@ html, body { margin: 0; height: 100%; background: #0d0b0a; overflow: hidden; tou
   var t0 = performance.now();
   console.log('[web] boot ' + config.productVersion + ' dpr=' + dpr.toFixed(2));
   var s = document.createElement('script');
-  s.src = b + '0acd431f8504dde274b94bd3383eea15.loader.js';
+  s.src = b + 'd3bfed8654237504567cfa6ec00036a0.loader.js';
   s.onload = function () {
     wiped.then(function () {
       return createUnityInstance(canvas, config, function (p) { setP(p); });
