@@ -42,13 +42,33 @@ html, body { margin: 0; height: 100%; background: #0b0907; overflow: hidden; tou
   }
   window.addEventListener('resize', fit);
   var ch = fit();
-  // render close to the 1080x1920 reference: at least devicePixelRatio, up to 1920 px tall, capped at 2x
-  var dpr = Math.min(Math.max(window.devicePixelRatio || 1, 1920 / Math.max(ch, 1)), 2);
+  // perf: native device pixels, at most ~1280 px tall (the 1920-tall supersampled backing store cost ~2x fps)
+  var dpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), Math.max(1, 1280 / Math.max(ch, 1)));
+  var qd = parseFloat(new URLSearchParams(location.search).get('dpr'));   // ?dpr=1.5 test override
+  if (qd > 0) dpr = qd;
   function showErr(m) { err.textContent += m + '\n'; console.error('[web] ' + m); }
   window.addEventListener('error', function (e) { showErr(String(e.message || e)); });
+  // ?reset=1: full save reset (also used by the in-game «Сбросить прогресс»): delete the Unity IndexedDB (/idbfs =
+  // persistentDataPath: save, hero profile, PlayerPrefs) before createUnityInstance, then strip the parameter
+  var wiped = (function () {
+    var q = new URLSearchParams(location.search);
+    if (!q.has('reset')) return Promise.resolve();
+    q.delete('reset');
+    var qs = q.toString();
+    try { history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash); } catch (e) {}
+    if (!window.indexedDB) return Promise.resolve();
+    return new Promise(function (res) {
+      var r;
+      try { r = indexedDB.deleteDatabase('/idbfs'); } catch (e) { console.warn('[web] reset: ' + e); res(); return; }
+      r.onsuccess = function () { console.log('[web] reset: /idbfs deleted'); res(); };
+      r.onerror = function () { console.warn('[web] reset: delete failed'); res(); };
+      r.onblocked = function () { console.warn('[web] reset: /idbfs blocked (game open in another tab?)'); };
+      setTimeout(res, 4000);
+    });
+  })();
   var b = 'Build/';
   // GitHub refuses files over 100 MB: a big data file is published as parts and glued back into a Blob here
-  var parts = ['WebGL.data.unityweb.part0', 'WebGL.data.unityweb.part1', 'WebGL.data.unityweb.part2', 'WebGL.data.unityweb.part3'], dataSize = 328086206, share = parts.length ? 0.85 : 0;
+  var parts = ['WebGL.data.unityweb.part0', 'WebGL.data.unityweb.part1', 'WebGL.data.unityweb.part2', 'WebGL.data.unityweb.part3'], dataSize = 328073744, share = parts.length ? 0.85 : 0;
   function setP(p) { fill.style.width = Math.round(p * 100) + '%'; pct.textContent = 'загрузка ' + Math.round(p * 100) + '%'; }
   function loadData() {
     if (!parts.length) return Promise.resolve(b + 'WebGL.data.unityweb');
@@ -84,8 +104,8 @@ html, body { margin: 0; height: 100%; background: #0b0907; overflow: hidden; tou
   var s = document.createElement('script');
   s.src = b + 'WebGL.loader.js';
   s.onload = function () {
-    loadData().then(function (url) {
-      config.dataUrl = url;
+    Promise.all([loadData(), wiped]).then(function (r) {
+      config.dataUrl = r[0];
       return createUnityInstance(document.getElementById('c'), config, function (p) { setP(share + (1 - share) * p); });
     }).then(function (u) {
       window.unityInstance = u;
