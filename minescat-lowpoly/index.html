@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0d0b0a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Котик-шахтёр</title>
+<style>
+html, body { margin: 0; height: 100%; background: #0d0b0a; overflow: hidden; touch-action: none; overscroll-behavior: none;
+             -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+#wrap { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: #000; box-shadow: 0 0 40px rgba(0,0,0,.6); }
+#c { width: 100%; height: 100%; display: block; outline: none; touch-action: none; }
+#load { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+        color: #f3dfb8; font: 600 18px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        background: radial-gradient(#2b2119, #0d0b0a 70%); }
+#title { font-size: 26px; letter-spacing: .5px; }
+#bar { width: 62%; height: 10px; border-radius: 5px; background: #2a2019; overflow: hidden; }
+#fill { height: 100%; width: 0; background: linear-gradient(90deg, #f0a640, #ffd27a); transition: width .2s; }
+#pct { font-weight: 400; font-size: 14px; opacity: .85; }
+#hint { font-weight: 400; font-size: 13px; opacity: .6; text-align: center; padding: 0 12%; }
+#err { position: absolute; left: 8px; right: 8px; bottom: 8px; color: #ffb3a3; font: 12px/1.4 monospace; white-space: pre-wrap; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="c" tabindex="-1"></canvas>
+  <div id="load">
+    <div id="title">Котик-шахтёр</div>
+    <div id="bar"><div id="fill"></div></div>
+    <div id="pct">загрузка 0%</div>
+    <div id="hint">Веди пальцем или мышью по экрану, чтобы идти</div>
+  </div>
+</div>
+<div id="err"></div>
+<script>
+(function () {
+  var wrap = document.getElementById('wrap'), load = document.getElementById('load'), canvas = document.getElementById('c');
+  var fill = document.getElementById('fill'), pct = document.getElementById('pct'), err = document.getElementById('err');
+  var q = new URLSearchParams(location.search);
+  var A = 9 / 16;   // portrait product canvas, letterboxed on wide screens
+  function fit() {
+    var w = window.innerWidth, h = window.innerHeight;
+    var cw = Math.min(w, h * A), ch = cw / A;
+    wrap.style.width = Math.floor(cw) + 'px';
+    wrap.style.height = Math.floor(ch) + 'px';
+    return ch;
+  }
+  window.addEventListener('resize', fit);
+  var ch = fit();
+  // backing store: device pixels, capped at ~1280 px tall (?dpr=1.5 overrides)
+  var dpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), Math.max(1, 1280 / Math.max(ch, 1)));
+  var qd = parseFloat(q.get('dpr'));
+  if (qd > 0) dpr = qd;
+  function showErr(m) { err.textContent += m + '\n'; console.error('[web] ' + m); }
+  window.addEventListener('error', function (e) { showErr(String(e.message || e)); });
+  function setP(p) { fill.style.width = Math.round(p * 100) + '%'; pct.textContent = 'загрузка ' + Math.round(p * 100) + '%'; }
+  // ?reset=1: delete the Unity IndexedDB (/idbfs = persistentDataPath: saves, PlayerPrefs) before the game starts
+  var wiped = (function () {
+    if (!q.has('reset')) return Promise.resolve();
+    q.delete('reset');
+    var qs = q.toString();
+    try { history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash); } catch (e) {}
+    if (!window.indexedDB) return Promise.resolve();
+    return new Promise(function (res) {
+      var r;
+      try { r = indexedDB.deleteDatabase('/idbfs'); } catch (e) { console.warn('[web] reset: ' + e); res(); return; }
+      r.onsuccess = function () { console.log('[web] reset: /idbfs deleted'); res(); };
+      r.onerror = function () { console.warn('[web] reset: delete failed'); res(); };
+      r.onblocked = function () { console.warn('[web] reset: /idbfs blocked (game open in another tab?)'); };
+      setTimeout(res, 4000);
+    });
+  })();
+  var b = 'Build/';
+  var config = {
+    dataUrl: b + '83c53aa77e6fe8db94f1c9ced49417f7.data.unityweb',
+    frameworkUrl: b + 'b27f329d982239bc2035de6aa2df4f88.framework.js.unityweb',
+    codeUrl: b + '25a233ca074a26c03e5ff55426ae9a7e.wasm.unityweb',
+    streamingAssetsUrl: 'StreamingAssets',
+    companyName: "MinesCat",
+    productName: "Mines Cat LowPoly",
+    productVersion: "a3",
+    devicePixelRatio: dpr,
+    autoSyncPersistentDataPath: true,
+    showBanner: function (msg, type) { if (type === 'error') showErr(msg); else console.warn('[web] ' + msg); }
+  };
+  var t0 = performance.now();
+  console.log('[web] boot ' + config.productVersion + ' dpr=' + dpr.toFixed(2));
+  var s = document.createElement('script');
+  s.src = b + '09b1d6ea566f22a146f8da6da8fa3711.loader.js';
+  s.onload = function () {
+    wiped.then(function () {
+      return createUnityInstance(canvas, config, function (p) { setP(p); });
+    }).then(function (u) {
+      window.unityInstance = u;
+      load.style.display = 'none';
+      console.log('[web] unity ready in ' + Math.round(performance.now() - t0) + ' ms');
+    }).catch(function (e) { showErr(String(e)); });
+  };
+  s.onerror = function () { showErr('не удалось загрузить ' + s.src); };
+  document.body.appendChild(s);
+})();
+</script>
+</body>
+</html>
