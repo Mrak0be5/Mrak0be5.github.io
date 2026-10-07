@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Котик-шахтёр Low Poly — 3D-модели</title>
+<meta name="description" content="Все low-poly 3D-модели игры «Котик-шахтёр»: персонажи, враги, камни, лут, постройки, пропсы и окружение. Вращение, анимации, окрасы.">
+<meta name="theme-color" content="#16171c">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/style.css?v=1">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<header class="top">
+  <div class="top-in">
+    <h1>Котик-шахтёр Low Poly — 3D-модели</h1>
+    <p id="stats" class="stats">Загрузка списка моделей…</p>
+  </div>
+  <nav id="tabs" class="tabs" aria-label="Категории"></nav>
+</header>
+
+<main id="grid" class="grid" aria-live="polite"></main>
+
+<footer class="foot">
+  <p>Модели в реальном времени (three.js): плоское затенение, одна общая палитра 256×256, тёплый ключевой свет и заполняющий свет как в игре.
+  Метка «пилот» — черновая модель, финальная ещё в работе. Нажмите на карточку, чтобы покрутить модель.</p>
+</footer>
+
+<div id="viewer" class="viewer" hidden role="dialog" aria-modal="true" aria-labelledby="vname">
+  <div class="v-stage" id="vstage">
+    <canvas id="vcanvas"></canvas>
+    <figure id="vconcept" class="v-concept" hidden><img alt="Концепт"><figcaption>Концепт</figcaption></figure>
+    <button id="vprev" class="v-nav prev" title="Предыдущая (←)" aria-label="Предыдущая">‹</button>
+    <button id="vnext" class="v-nav next" title="Следующая (→)" aria-label="Следующая">›</button>
+    <div id="vloading" class="v-loading">Загрузка…</div>
+    <div class="v-hint">Вращать — мышь или палец · зум — колесо или щипок · сдвиг — правая кнопка или два пальца</div>
+  </div>
+  <aside class="v-panel">
+    <button id="vclose" class="v-close" title="Закрыть (Esc)" aria-label="Закрыть">✕</button>
+    <h2 id="vname"></h2>
+    <div id="vbadges" class="badges"></div>
+    <dl id="vstats" class="vstats"></dl>
+    <section id="vclips" class="vsec"><h3>Анимация</h3><div class="chips"></div></section>
+    <section id="vstages" class="vsec"><h3>Стадия</h3><div class="chips"></div></section>
+    <section id="vfur" class="vsec"><h3>Окрас</h3><div class="chips"></div></section>
+    <section class="vsec"><h3>Вид</h3>
+      <div class="chips toggles">
+        <button data-opt="rotate" class="chip on">Автоповорот</button>
+        <button data-opt="concept" class="chip">Концепт</button>
+        <button data-opt="dark" class="chip">Тёмный фон</button>
+        <button data-opt="wire" class="chip">Сетка</button>
+        <button data-opt="sockets" class="chip">Точки крепления</button>
+        <button data-opt="reset" class="chip">Сбросить камеру</button>
+      </div>
+    </section>
+    <section id="vparts" class="vsec"><h3>Части</h3><ul class="parts"></ul></section>
+    <p id="vnote" class="vnote"></p>
+  </aside>
+</div>
+
+<noscript><p class="nojs">Для просмотра моделей нужен JavaScript и WebGL.</p></noscript>
+<script type="module" src="js/app.js?v=1"></script>
+</body>
+</html>
