@@ -20,6 +20,9 @@ html, body { margin: 0; height: 100%; background: #0d0b0a; overflow: hidden; tou
 #fill { height: 100%; width: 0; background: linear-gradient(90deg, #f0a640, #ffd27a); transition: width .2s; }
 #pct { font-weight: 400; font-size: 14px; opacity: .85; }
 #hint { font-weight: 400; font-size: 13px; opacity: .6; text-align: center; padding: 0 12%; }
+#models { position: fixed; right: 14px; bottom: 10px; color: #c9a27a; font: 13px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+          text-decoration: none; opacity: .75; display: none; }
+#models:hover { opacity: 1; text-decoration: underline; }
 #err { position: absolute; left: 8px; right: 8px; bottom: 8px; color: #ffb3a3; font: 12px/1.4 monospace; white-space: pre-wrap; pointer-events: none; }
 </style>
 </head>
@@ -34,8 +37,10 @@ html, body { margin: 0; height: 100%; background: #0d0b0a; overflow: hidden; tou
   </div>
 </div>
 <div id="err"></div>
+<a id="models" href="./models/" target="_blank" rel="noopener">3D-модели игры</a>
 <script>
 (function () {
+  var models = document.getElementById('models');
   var wrap = document.getElementById('wrap'), load = document.getElementById('load'), canvas = document.getElementById('c');
   var fill = document.getElementById('fill'), pct = document.getElementById('pct'), err = document.getElementById('err');
   var q = new URLSearchParams(location.search);
@@ -45,6 +50,7 @@ html, body { margin: 0; height: 100%; background: #0d0b0a; overflow: hidden; tou
     var cw = Math.min(w, h * A), ch = cw / A;
     wrap.style.width = Math.floor(cw) + 'px';
     wrap.style.height = Math.floor(ch) + 'px';
+    models.style.display = (w - cw) / 2 >= 150 ? 'block' : 'none';   // only in the letterbox side space, never over the canvas
     return ch;
   }
   window.addEventListener('resize', fit);
@@ -74,13 +80,13 @@ html, body { margin: 0; height: 100%; background: #0d0b0a; overflow: hidden; tou
   })();
   var b = 'Build/';
   var config = {
-    dataUrl: b + '83c53aa77e6fe8db94f1c9ced49417f7.data.unityweb',
-    frameworkUrl: b + 'b27f329d982239bc2035de6aa2df4f88.framework.js.unityweb',
-    codeUrl: b + '25a233ca074a26c03e5ff55426ae9a7e.wasm.unityweb',
+    dataUrl: b + '2158e87f072bd4106182261cfb54e98d.data.unityweb',
+    frameworkUrl: b + 'a8e2970346865b1a27afa8a54e758e49.framework.js.unityweb',
+    codeUrl: b + 'e8f3607bebbf45f31ffcd8e7928797bb.wasm.unityweb',
     streamingAssetsUrl: 'StreamingAssets',
     companyName: "MinesCat",
     productName: "Mines Cat LowPoly",
-    productVersion: "a3",
+    productVersion: "a6",
     devicePixelRatio: dpr,
     autoSyncPersistentDataPath: true,
     showBanner: function (msg, type) { if (type === 'error') showErr(msg); else console.warn('[web] ' + msg); }
@@ -88,7 +94,7 @@ html, body { margin: 0; height: 100%; background: #0d0b0a; overflow: hidden; tou
   var t0 = performance.now();
   console.log('[web] boot ' + config.productVersion + ' dpr=' + dpr.toFixed(2));
   var s = document.createElement('script');
-  s.src = b + '09b1d6ea566f22a146f8da6da8fa3711.loader.js';
+  s.src = b + '0acd431f8504dde274b94bd3383eea15.loader.js';
   s.onload = function () {
     wiped.then(function () {
       return createUnityInstance(canvas, config, function (p) { setP(p); });
