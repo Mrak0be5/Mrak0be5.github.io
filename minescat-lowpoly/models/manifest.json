@@ -1,6 +1,6 @@
 {
  "version": 1,
- "built_utc": "2026-10-08T10:25:08Z",
+ "built_utc": "2026-10-08T21:02:29Z",
  "categories": [
   [
    "chars",
@@ -940,7 +940,7 @@
    "folder": "Characters",
    "fbx": "Characters/CatBoy",
    "glb": "glb/CatBoy.glb",
-   "bytes": 480324,
+   "bytes": 481096,
    "tris": 1332,
    "parts": [
     {
@@ -961,7 +961,7 @@
       [
        0.5474,
        0.2207,
-       1.2044
+       1.2393
       ]
      ]
     },
@@ -1247,7 +1247,7 @@
       [
        0.5157,
        0.3947,
-       1.248
+       1.2916
       ]
      ]
     },
@@ -1522,7 +1522,7 @@
     [
      0.5474,
      0.3947,
-     1.248
+     1.2916
     ]
    ],
    "concept": "barsik",
@@ -1540,7 +1540,7 @@
    "folder": "Characters",
    "fbx": "Characters/CatGirl",
    "glb": "glb/CatGirl.glb",
-   "bytes": 482396,
+   "bytes": 483172,
    "tris": 1364,
    "parts": [
     {
@@ -1561,7 +1561,7 @@
       [
        0.5474,
        0.2207,
-       1.2044
+       1.2393
       ]
      ]
     },
@@ -1847,7 +1847,7 @@
       [
        0.5157,
        0.3947,
-       1.248
+       1.2916
       ]
      ]
     },
@@ -2122,7 +2122,7 @@
     [
      0.5474,
      0.3947,
-     1.248
+     1.2916
     ]
    ],
    "concept": "musya",
@@ -2140,12 +2140,12 @@
    "folder": "Characters",
    "fbx": "Characters/Hat_Miner",
    "glb": "glb/Hat_Miner.glb",
-   "bytes": 7096,
-   "tris": 224,
+   "bytes": 7132,
+   "tris": 230,
    "parts": [
     {
      "name": "Hat_Miner",
-     "tris": 208,
+     "tris": 214,
      "mats": [
       "M_Palette"
      ],
@@ -2155,13 +2155,13 @@
      "bbox": [
       [
        -0.3477,
-       -0.3413,
-       -0.02
+       -0.3523,
+       -0.0388
       ],
       [
        0.3477,
        0.3095,
-       0.2905
+       0.2916
       ]
      ]
     },
@@ -2176,14 +2176,14 @@
      "parent": "Hat_Miner",
      "bbox": [
       [
-       0.011,
-       -0.3427,
-       -0.0039
+       -0.08,
+       -0.3515,
+       -0.0245
       ],
       [
-       0.171,
-       -0.2933,
-       0.1482
+       0.08,
+       -0.302,
+       0.1277
       ]
      ]
     },
@@ -2198,14 +2198,14 @@
      "parent": "Hat_Miner",
      "bbox": [
       [
-       0.011,
-       -0.3437,
-       -0.0042
+       -0.08,
+       -0.3524,
+       -0.0248
       ],
       [
-       0.171,
-       -0.2942,
-       0.1479
+       0.08,
+       -0.303,
+       0.1274
       ]
      ]
     }
@@ -2218,7 +2218,6 @@
     "M_Palette"
    ],
    "cells": [
-    13,
     14,
     28,
     40,
@@ -2228,13 +2227,13 @@
    "bbox": [
     [
      -0.3477,
-     -0.3437,
-     -0.02
+     -0.3524,
+     -0.0388
     ],
     [
      0.3477,
      0.3095,
-     0.2905
+     0.2916
     ]
    ],
    "concept": "barsik",
@@ -2545,7 +2544,7 @@
    "folder": "Enemies",
    "fbx": "Enemies/RatDigger",
    "glb": "glb/RatDigger.glb",
-   "bytes": 172392,
+   "bytes": 172048,
    "tris": 1086,
    "parts": [
     {
@@ -2564,7 +2563,7 @@
        -0.0
       ],
       [
-       0.4251,
+       0.5219,
        0.3815,
        1.0078
       ]
@@ -2656,7 +2655,6 @@
     46,
     62,
     65,
-    66,
     67,
     68,
     71,
@@ -2690,7 +2688,7 @@
    "folder": "Enemies",
    "fbx": "Enemies/RatGuard",
    "glb": "glb/RatGuard.glb",
-   "bytes": 173680,
+   "bytes": 173332,
    "tris": 1144,
    "parts": [
     {
@@ -2709,7 +2707,7 @@
        -0.0
       ],
       [
-       0.4251,
+       0.5219,
        0.3815,
        1.0078
       ]
@@ -2803,7 +2801,6 @@
     44,
     62,
     65,
-    66,
     67,
     68,
     71,
@@ -3871,12 +3868,12 @@
    "folder": "Rocks",
    "fbx": "Rocks/Spawner_Vein",
    "glb": "glb/Spawner_Vein.glb",
-   "bytes": 4580,
-   "tris": 92,
+   "bytes": 5596,
+   "tris": 96,
    "parts": [
     {
      "name": "Spawner_Vein",
-     "tris": 92,
+     "tris": 96,
      "mats": [
       "M_Palette"
      ],
@@ -3885,14 +3882,14 @@
      "parent": null,
      "bbox": [
       [
-       -0.56,
-       -0.3976,
-       -0.0227
+       -0.4237,
+       -0.3493,
+       -0.0172
       ],
       [
-       0.508,
-       0.3609,
-       0.125
+       0.4169,
+       0.389,
+       0.1259
       ]
      ]
     }
@@ -3912,14 +3909,14 @@
    "fur": false,
    "bbox": [
     [
-     -0.56,
-     -0.3976,
-     -0.0227
+     -0.4237,
+     -0.3493,
+     -0.0172
     ],
     [
-     0.508,
-     0.3609,
-     0.125
+     0.4169,
+     0.389,
+     0.1259
     ]
    ],
    "concept": "rock_gold",
@@ -3928,7 +3925,7 @@
    "pilot_tag": false,
    "pilot_copy": false,
    "props": {
-    "note": "flat floor seam, no collider / HP / stages; rocks may overlap it",
+    "note": "low cobble ring (centre + 5 stones on a .30 m ring, ~.9 m, top <= 0.145 m), no collider / HP / stages; rocks may overlap it",
     "kind": "spawner_vein"
    }
   },
@@ -3940,12 +3937,12 @@
    "folder": "FX_Meshes",
    "fbx": "FX_Meshes/Debris",
    "glb": "glb/Debris.glb",
-   "bytes": 10784,
-   "tris": 143,
+   "bytes": 11880,
+   "tris": 166,
    "parts": [
     {
      "name": "Crumble_Base",
-     "tris": 39,
+     "tris": 62,
      "mats": [
       "M_Palette"
      ],
@@ -3954,14 +3951,14 @@
      "parent": null,
      "bbox": [
       [
-       -0.4775,
-       -0.2605,
-       -0.0
+       -0.3739,
+       -0.2972,
+       -0.0327
       ],
       [
-       0.4775,
-       0.2602,
-       0.1962
+       0.3734,
+       0.2967,
+       0.2396
       ]
      ]
     },
@@ -4106,19 +4103,20 @@
     "M_Palette"
    ],
    "cells": [
-    6
+    6,
+    7
    ],
    "fur": false,
    "bbox": [
     [
-     -0.4775,
-     -0.2605,
+     -0.3739,
+     -0.2972,
      -0.0867
     ],
     [
-     0.4775,
-     0.2602,
-     0.1962
+     0.3734,
+     0.2967,
+     0.2396
     ]
    ],
    "concept": "rightrock",
@@ -5518,12 +5516,12 @@
    "folder": "Portals",
    "fbx": "Portals/Portal_Down",
    "glb": "glb/Portal_Down.glb",
-   "bytes": 24320,
-   "tris": 363,
+   "bytes": 25076,
+   "tris": 427,
    "parts": [
     {
      "name": "Portal_Down_Frame",
-     "tris": 117,
+     "tris": 207,
      "mats": [
       "M_Palette"
      ],
@@ -5532,13 +5530,13 @@
      "parent": null,
      "bbox": [
       [
-       -1.52,
-       -0.753,
-       -0.0
+       -1.54,
+       -0.5985,
+       -0.0201
       ],
       [
-       1.52,
-       0.38,
+       2.02,
+       0.3,
        2.4
       ]
      ]
@@ -5699,7 +5697,7 @@
     },
     {
      "name": "Portal_Down_Swirl",
-     "tris": 108,
+     "tris": 86,
      "mats": [
       "M_Palette_Portal"
      ],
@@ -5708,20 +5706,20 @@
      "parent": null,
      "bbox": [
       [
-       -0.8889,
+       -0.8869,
        0.05,
-       0.0861
+       0.0881
       ],
       [
-       0.8889,
-       0.05,
-       1.8639
+       0.8869,
+       0.13,
+       1.8619
       ]
      ]
     },
     {
      "name": "Portal_Down_SwirlEdge",
-     "tris": 24,
+     "tris": 20,
      "mats": [
       "M_Palette_Portal"
      ],
@@ -5730,12 +5728,12 @@
      "parent": null,
      "bbox": [
       [
-       -0.88,
+       -0.89,
        0.04,
        0.04
       ],
       [
-       0.88,
+       0.89,
        0.04,
        1.91
       ]
@@ -5756,22 +5754,25 @@
    "cells": [
     6,
     7,
+    9,
     10,
+    13,
     14,
     29,
     30,
     31,
+    43,
     71
    ],
    "fur": false,
    "bbox": [
     [
-     -1.52,
+     -1.54,
      -1.51,
-     -0.0
+     -0.0201
     ],
     [
-     1.52,
+     2.02,
      1.51,
      2.4
     ]
@@ -5881,8 +5882,8 @@
    "folder": "Portals",
    "fbx": "Portals/Portal_Up",
    "glb": "glb/Portal_Up.glb",
-   "bytes": 21104,
-   "tris": 333,
+   "bytes": 21856,
+   "tris": 397,
    "parts": [
     {
      "name": "Portal_Up_Boards_0",
@@ -5896,12 +5897,12 @@
      "bbox": [
       [
        -1.0045,
-       -0.37,
+       -0.32,
        0.623
       ],
       [
        1.0045,
-       -0.29,
+       -0.24,
        1.737
       ]
      ]
@@ -5918,12 +5919,12 @@
      "bbox": [
       [
        -1.0045,
-       -0.38,
+       -0.33,
        0.623
       ],
       [
        1.0045,
-       -0.3,
+       -0.25,
        1.737
       ]
      ]
@@ -5940,19 +5941,19 @@
      "bbox": [
       [
        -1.05,
-       -0.39,
+       -0.34,
        0.455
       ],
       [
        1.05,
-       -0.31,
+       -0.26,
        0.705
       ]
      ]
     },
     {
      "name": "Portal_Up_Frame",
-     "tris": 117,
+     "tris": 207,
      "mats": [
       "M_Palette"
      ],
@@ -5961,13 +5962,13 @@
      "parent": null,
      "bbox": [
       [
-       -1.52,
-       -0.753,
-       -0.0
+       -1.54,
+       -0.5985,
+       -0.0201
       ],
       [
-       1.52,
-       0.38,
+       2.02,
+       0.3,
        2.4
       ]
      ]
@@ -5996,7 +5997,7 @@
     },
     {
      "name": "Portal_Up_Swirl",
-     "tris": 108,
+     "tris": 86,
      "mats": [
       "M_Palette_Portal"
      ],
@@ -6005,20 +6006,20 @@
      "parent": null,
      "bbox": [
       [
-       -0.8889,
+       -0.8869,
        0.05,
-       0.0861
+       0.0881
       ],
       [
-       0.8889,
-       0.05,
-       1.8639
+       0.8869,
+       0.13,
+       1.8619
       ]
      ]
     },
     {
      "name": "Portal_Up_SwirlEdge",
-     "tris": 24,
+     "tris": 20,
      "mats": [
       "M_Palette_Portal"
      ],
@@ -6027,12 +6028,12 @@
      "parent": null,
      "bbox": [
       [
-       -0.88,
+       -0.89,
        0.04,
        0.04
       ],
       [
-       0.88,
+       0.89,
        0.04,
        1.91
       ]
@@ -6055,20 +6056,23 @@
     7,
     9,
     10,
+    13,
+    14,
     29,
     30,
     31,
+    43,
     71
    ],
    "fur": false,
    "bbox": [
     [
-     -1.52,
+     -1.54,
      -1.51,
-     -0.0
+     -0.0201
     ],
     [
-     1.52,
+     2.02,
      1.51,
      2.4
     ]
@@ -7571,7 +7575,7 @@
    "props": {
     "label": "Декор: грибы B",
     "roles": {},
-    "note": "AD-24: cap 0.39 + tiny cap 0.23 (x1.3 baked, 6 sides), pale stems, 3 + 1 white spot facets",
+    "note": "AD-24: cap 0.37 + tiny cap 0.23 (x1.3 baked, 0.57 / 0.33 tall, 6 sides), pale stems, 3 + 1 white spot facets",
     "clips": []
    }
   },
@@ -7583,12 +7587,12 @@
    "folder": "Props",
    "fbx": "Props/Decor_Tuft_A",
    "glb": "glb/Decor_Tuft_A.glb",
-   "bytes": 3040,
-   "tris": 32,
+   "bytes": 2372,
+   "tris": 28,
    "parts": [
     {
      "name": "Decor_Tuft_A_Body",
-     "tris": 32,
+     "tris": 28,
      "mats": [
       "M_Palette"
      ],
@@ -7597,14 +7601,14 @@
      "parent": null,
      "bbox": [
       [
-       -0.4265,
-       -0.3647,
+       -0.624,
+       -0.5871,
        0.015
       ],
       [
-       0.3881,
-       0.4276,
-       0.33
+       0.624,
+       0.5871,
+       0.5
       ]
      ]
     }
@@ -7622,14 +7626,14 @@
    "fur": false,
    "bbox": [
     [
-     -0.4265,
-     -0.3647,
+     -0.624,
+     -0.5871,
      0.015
     ],
     [
-     0.3881,
-     0.4276,
-     0.33
+     0.624,
+     0.5871,
+     0.5
     ]
    ],
    "concept": "decor",
@@ -7640,7 +7644,7 @@
    "props": {
     "label": "Декор: кустик A",
     "roles": {},
-    "note": "leafy rosette: 5 broad arched outer leaves + 3 upright inner (folded diamonds, 4 tris each), ~0.82 wide x 0.33 tall, plant t 0.74-1.0 (R5 decor exception)",
+    "note": "leafy clump (R2-16): 4 broad low outer leaves in dark green (plant t .30-.55) + 3 upright inner leaves in light green (plant t .82-1.0), folded diamonds 4 tris each, ~1.3 wide x 0.5 tall (x1.6)",
     "clips": []
    }
   },
@@ -7652,12 +7656,12 @@
    "folder": "Props",
    "fbx": "Props/Decor_Tuft_B",
    "glb": "glb/Decor_Tuft_B.glb",
-   "bytes": 2148,
-   "tris": 31,
+   "bytes": 2184,
+   "tris": 24,
    "parts": [
     {
      "name": "Decor_Tuft_B_Body",
-     "tris": 31,
+     "tris": 24,
      "mats": [
       "M_Palette"
      ],
@@ -7666,14 +7670,14 @@
      "parent": null,
      "bbox": [
       [
-       -0.455,
-       -0.345,
-       -0.0
+       -0.4172,
+       -0.4172,
+       0.015
       ],
       [
-       0.545,
-       0.315,
-       0.34
+       0.6472,
+       0.571,
+       0.44
       ]
      ]
     }
@@ -7691,14 +7695,14 @@
    "fur": false,
    "bbox": [
     [
-     -0.455,
-     -0.345,
-     -0.0
+     -0.4172,
+     -0.4172,
+     0.015
     ],
     [
-     0.545,
-     0.315,
-     0.34
+     0.6472,
+     0.571,
+     0.44
     ]
    ],
    "concept": "decor",
@@ -7709,7 +7713,7 @@
    "props": {
     "label": "Декор: кустик B",
     "roles": {},
-    "note": "3 chunky faceted hulls 0.60/0.43/0.31 wide (~1.0 m footprint), <= 0.34 tall, plant t 0.80-1.0",
+    "note": "leafy clump (R2-16): 3 broad low outer leaves dark green + 3 upright inner leaves light green (plant), 24 tris, ~1.15 wide x 0.45 tall (x1.6)",
     "clips": []
    }
   },
@@ -8641,7 +8645,7 @@
    "folder": "FX_Meshes",
    "fbx": "FX_Meshes/Pebble_Cluster_A",
    "glb": "glb/Pebble_Cluster_A.glb",
-   "bytes": 2340,
+   "bytes": 2360,
    "tris": 29,
    "parts": [
     {
@@ -8775,7 +8779,7 @@
    "folder": "FX_Meshes",
    "fbx": "FX_Meshes/Pebble_Cluster_C",
    "glb": "glb/Pebble_Cluster_C.glb",
-   "bytes": 3724,
+   "bytes": 3764,
    "tris": 59,
    "parts": [
     {
@@ -8839,7 +8843,7 @@
  "pending": [],
  "totals": {
   "models": 61,
-  "tris": 15826,
-  "glb_bytes": 1992168
+  "tris": 15976,
+  "glb_bytes": 1996108
  }
 }
