@@ -6848,6 +6848,7 @@ function sea_rings(vx0, vy0) {
 }
 
 let SEA_LET = null;
+const SEA_FLAT_HINT = true;
 function sea_letters(text, Pos) {
   const Lc = SEA_LET;   // same lesson, same place: no key string per frame
   if (Lc && Lc.text === text && Math.abs(Lc.px - Pos.x) < 5e-4 && Math.abs(Lc.pz - Pos.z) < 5e-4) return Lc;
@@ -6935,7 +6936,7 @@ function sea_tutorial(vx0, vy0) {
     }
   }
   const tx = Wd._surfaceText && Wd._surfaceText.Text, pos = Wd._surfaceLesson && Wd._surfaceLesson.Position, op = Math.max(0, Math.min(1, Wd._surfaceOpacity || 0));
-  if (!tx || !pos || op < .02) return;
+  if (!tx || !pos || op < .02 || SEA_FLAT_HINT) return;   // readability: hud.js draws the lesson as a straight plate
   const L = sea_letters(tx, pos), q = L.pts;
   for (let k = 0; k < q.length; k += 2) {
     const x = q[k] - vx0, y = q[k + 1] - vy0; if (x < 0 || y < 0 || x >= W || y >= H) continue;
@@ -8299,14 +8300,14 @@ const DV = {
   post: -1, postBoss: false, postRec: null, gulped: false, snackAge: -1, biteAge: 9, biteAmp: 1,
   blinkT: -1, blinkWait: 2, blinkHold: .04, blinkOpen: .09, dbl: -1, sacc: 1, igx: 0, igy: 0, gx: 0, gy: 0,
   wide: 0, wideV: 0, widePulse: 0, happy: 0, happyT: 0, angry: 0, exert: 0, flare: 0, near: 0, lastGrip: null, look: null,
-  kick: 0, kickV: 0, since: 9, hyaw: 0, px: 0, py: 0, pz: 0, chompAt: -9, word: null, clock: 0,
+  kick: 0, kickV: 0, since: 9, hyaw: 0, px: 0, py: 0, pz: 0, chompAt: -9, word: null, snaps: [], clock: 0,
   M: { x: 0, y: 0, z: 0, fx: 0, fz: 1 },
   out: { yaw: 0, rise: 0, sx: 1, sy: 1, pitch: 0, open: 0, chew: 0, tongue: 0, blink: 0, lidT: 0, lidB: 0, pupil: 1, look: null, gx: 0, gy: 0, mq: 0 },
 };
 for (let i = 0; i < DV_NP; i++) DV.P.push({ on: false, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, age: 0, life: 0, kind: 0, col: 0, a: 0, spin: 0, g: 0 });
 
 function dv_reset() {
-  const keep = { recs: new Map(), q: [], gone: [], snacks: [], arms: [], rng: seeded(73411), arng: seeded(0x4B52414B), lastGrip: null, look: null, postRec: null, word: null, k: null };
+  const keep = { recs: new Map(), q: [], gone: [], snacks: [], arms: [], rng: seeded(73411), arng: seeded(0x4B52414B), lastGrip: null, look: null, postRec: null, word: null, snaps: [], k: null };
   Object.assign(DV, keep, {
     rise: 0, riseV: 0, pitch: 0, pitchV: 0, yaw: 0, eyes: 0, open: 0, chew: 0, tongue: 0, sx: 1, sy: 1, mq: 0, mqV: 0, lastOpen: 0,
     post: -1, postBoss: false, gulped: false, snackAge: -1, biteAge: 9, biteAmp: 1,
@@ -8348,12 +8349,13 @@ on("Sunk", a => {
   DV.widePulse = 1;   // "grab"
 });
 function dv_claimed(s) { const r = DV.recs.get(s); return !!r && s.SinkTime >= 0 && s.SinkTime <= r.final + .25; }
-function dv_headYaw(k) { const hd = k._head; return hd && hd.Rotation ? hd.Rotation.y : 0; }
+function dv_headYaw(k) { if (typeof kr_faceYaw === "function") return kr_faceYaw(k); const hd = k._head; return hd && hd.Rotation ? hd.Rotation.y : 0; }
 
 function dv_mouth(k) {
   const M = DV.M, hd = k._head, yaw = dv_headYaw(k) + DV.yaw + DV.hyaw, s = Math.sin(yaw), c = Math.cos(yaw);
   const A = typeof KR_HERO === "object" ? KR_HERO.maw : { y: .1, z: .71 }, P = k.Position, bob = hd && hd.Position ? hd.Position.y : 0, f = A.z * 1.2 * DV.sx;
-  M.x = P.x + f * s; M.z = P.z + f * c; M.y = (P.y || 0) + bob + A.y * 1.2 + Math.max(0, DV.rise) * 1.2; M.fx = s; M.fz = c; M.yaw = yaw;
+  const tc = typeof KR_TC === "number" ? KR_TC : 1, ts = typeof KR_TS === "number" ? KR_TS : 0, fz = (A.z * tc - A.y * ts) * 1.2 * DV.sx;
+  M.x = P.x + fz * s; M.z = P.z + fz * c; M.y = (P.y || 0) + bob + (A.y * tc + A.z * ts) * 1.2 + Math.max(0, DV.rise) * 1.2; M.fx = s; M.fz = c; M.yaw = yaw;
   return M;
 }
 
@@ -8390,6 +8392,7 @@ function dv_beat(kind, r, bite, final, pickup) {
   for (let i = 0; i < scraps; i++) { const f = rr(.4, 1.3), sd = rr(-1.7, 1.7); dv_part(1, px, py + .1, pz, fx * f + sx * sd, rr(1.5, 2.5), fz * f + sz * sd, rr(.75, .88), DV_C.scrap, 0); }
   for (let i = 0; i < spit; i++) { const f = rr(.8, 2), sd = rr(-1.5, 1.5); dv_part(2, px, py, pz, fx * f + sx * sd, rr(.9, 2.1), fz * f + sz * sd, .45, DV_C.spit, 0); }
   dv_part(4, px, py + .1, pz, 0, 0, 0, final ? .2 : .15, WHITE, 0);
+  if (DV.snaps.length < 6) DV.snaps.push({ x: px, y: py, z: pz, age: 0, k: k * (final ? 1.25 : 1) });   // the jaws snapping shut (drawn in devour_top)
   if (typeof fx_trauma === "function") fx_trauma(final ? (r.boss ? .3 : .2) : .08);
   if (!final || DV.clock - DV.chompAt < .6) return;
   if (typeof Audio === "object" && Audio && Audio.Play) try { Audio.Play(6); } catch (e) {}
@@ -8734,6 +8737,7 @@ VIS_TICK.push(dt => {
     if (p.y < -.05 && p.kind !== 3) p.on = false;
   }
   if (DV.word) { DV.word.age += dt; if (DV.word.age > .9) DV.word = null; }
+  for (let i = DV.snaps.length - 1; i >= 0; i--) if ((DV.snaps[i].age += dt) > .42) DV.snaps.splice(i, 1);
 });
 
 function dv_head(k) {
@@ -8762,10 +8766,37 @@ function devour_top() {
     else if (p.kind === 3) { const r = u < .8 ? 1 : 0; fx_p(x, y - r, p.col); fx_p(x - r, y, p.col); fx_p(x + r, y, p.col); fx_p(x, y + r, p.col); if (!r) fx_p(x, y, WHITE); }
     else if (p.kind === 4) { const arm = Math.round(4 * (1 - u) + 1); fx_plus(x, y, p.col, WHITE, arm); }
   }
+  for (const n of DV.snaps) dv_drawSnap(n);
   const w = DV.word;
   if (w) {
     const a = w.age, pop = a < .08 ? 1 + 2 * (1 - a / .08) : 1, k = (w.boss ? 3 : 2) * (a < .08 ? 1.5 : 1), x = SX(w.x), y = SY(w.z, w.y) - Math.round(10 * dv_sm(a / .9) * pop);
     if (a < .75 || ((a * 20) | 0) % 2 === 0) text(w.s, x - (textW(w.s, k) >> 1), y, DV_C.chomp, k);
+  }
+}
+
+const DV_SNAP_C = [WHITE, hx("#ffe9a8"), hx("#ffd65c"), hx("#3a1030")];
+function dv_drawSnap(n) {
+  const x = SX(n.x), y = SY(n.z, n.y), a = n.age, R = Math.round(10 * n.k);
+  if (a < .16) {
+    const u = Math.min(1, a / .1), gap = Math.round((1 - u * u) * R * .9);
+    for (let row = -1; row <= 1; row += 2) {
+      const yy = y + row * (gap + 1);
+      for (let i = -R; i <= R; i++) {
+        const bow = Math.round((i * i) / (R * 1.6)), ty = yy - row * bow, tooth = ((i + R) % 4) < 2 ? 2 : 0;
+        fx_p(x + i, ty - row, DV_SNAP_C[3]);
+        for (let t = 0; t <= tooth; t++) fx_p(x + i, ty + row * t, t === tooth ? DV_SNAP_C[1] : DV_SNAP_C[0]);
+      }
+    }
+    if (u >= 1) for (let i = -R - 3; i <= R + 3; i++) if (i % 2 === 0) fx_p(x + i, y, DV_SNAP_C[0]);
+  }
+  if (a >= .08) {   // the impact ring: dashed, thinning, with sparks thrown on its spokes
+    const u = (a - .08) / .34, rr = R * (.8 + 1.6 * dv_sm(u)), ry = rr * .55, segs = 18;
+    for (let j = 0; j < segs; j++) {
+      if (u > .5 && (j & 1)) continue;
+      const t0 = j / segs * Math.PI * 2;
+      for (let q = 0; q < 3; q++) { const t = t0 + q * .07; fx_p(Math.round(x + Math.cos(t) * rr), Math.round(y + Math.sin(t) * ry), u < .4 ? DV_SNAP_C[0] : DV_SNAP_C[2]); }
+    }
+    if (u < .6) for (let j = 0; j < 6; j++) { const t = j / 6 * Math.PI * 2 + .3, r2 = rr + 3; fx_plus(Math.round(x + Math.cos(t) * r2), Math.round(y + Math.sin(t) * r2 * .55), DV_SNAP_C[2], WHITE, 1); }
   }
 }
 
@@ -8842,7 +8873,7 @@ for (let a = 0; a < 33; a++) for (let b = 0; b < 17; b++) {
 const KR_ROW = [Math.cos(.55), Math.sin(.55)];   // the two sucker rows sit .55 rad either side of the bone +Z axis
 
 const KR = {
-  frame: 1, churn: 0, rimO: 0, hurtT: -9, glowT: -9, glowEvo: false, blinkSeed: 7, lastDamage: -100,
+  frame: 1, fy: 0, fsg: 1, fyOk: false, churn: 0, rimO: 0, hurtT: -9, glowT: -9, glowEvo: false, blinkSeed: 7, lastDamage: -100,
   heads: new Map(), foams: new Map(),
   cap: 0, bw: 0, bh: 0, x0: 0, y0: 0,
   col: null, dep: null, wz: null, part: null, seg: null, stamp: null, list: null, order: null, wet: null, n: 0, nIn: 0,   // wet: under the water line
@@ -8957,6 +8988,9 @@ function kr_headBake(yi, look) {
 }
 
 const KR_HHB = { x0: -24, y0: -54, w: 48, h: 82 };
+const KR_TILT = .38, KR_TC = Math.cos(KR_TILT), KR_TS = Math.sin(KR_TILT), KR_HEYE_GROW = 1.22;
+function kr_tilt(a, i) { const y = a[i + 1], z = a[i + 2]; a[i + 1] = y * KR_TC + z * KR_TS; a[i + 2] = -y * KR_TS + z * KR_TC; }   // head units, about the waterline
+const KR_TV = new Float64Array(3);
 let KR_HM = null;
 function kr_heroMesh() {
   if (KR_HM) return KR_HM;
@@ -8970,6 +9004,11 @@ function kr_heroMesh() {
     const l = Math.hypot(x, y, z) || 1; nrm[v * 3] = x / l; nrm[v * 3 + 1] = y / l; nrm[v * 3 + 2] = z / l;
   }
   let v0 = 0; H.parts.forEach((p, k) => { part.fill(k, v0, v0 + p[0]); v0 += p[0]; });
+  for (let k = 1; k < 3; k++) {
+    let cx = 0, cy = 0, cz = 0, c = 0; for (let v = 0; v < nv; v++) if (part[v] === k) { cx += pos[v * 3]; cy += pos[v * 3 + 1]; cz += pos[v * 3 + 2]; c++; }
+    if (c) { cx /= c; cy /= c; cz /= c; for (let v = 0; v < nv; v++) if (part[v] === k) { pos[v * 3] = cx + (pos[v * 3] - cx) * KR_HEYE_GROW; pos[v * 3 + 1] = cy + (pos[v * 3 + 1] - cy) * KR_HEYE_GROW; pos[v * 3 + 2] = cz + (pos[v * 3 + 2] - cz) * KR_HEYE_GROW; } }
+  }
+  for (let v = 0; v < nv; v++) { kr_tilt(pos, v * 3); kr_tilt(nrm, v * 3); }
   const idx = new Uint16Array(Ib.length / 2); for (let i = 0; i < idx.length; i++) idx[i] = Ib[i * 2] | Ib[i * 2 + 1] << 8;
   return (KR_HM = { pos, nrm, att: T, part, idx, nv });
 }
@@ -9066,7 +9105,7 @@ const KR_MWHEX = ["#5a1a5a", "#1f0730", "#0a0212", "#7a2a66", "#d877b4", "#b062c
 palAdd(KR_MWHEX);
 const KR_MW = KR_MWHEX.map(hx);   // 0-2 throat, 3-9 lip profile (inside -> ridge -> skin), 10 / 11 tooth / root, 12-14 tongue / groove / underside
 const KR_MWR = [-.02, 0, .03, .065, .09, .102, .106], KR_MWU = [.13, .27, .39, .5, .61, .73, .87], KR_MWL = [.19, .33, .45, .55, .67, .81];
-const KR_MW_GROW = 1.3;   // pixel-art emphasis: the C# mouth is ~14 px wide here, the teeth must read as teeth
+const KR_MW_GROW = 1.55;   // pixel-art emphasis: the C# mouth is ~14 px wide here, the teeth must read as teeth
 const KR_MWN = 64, KR_MWB = { cnt: new Uint8Array(KR_MWN * KR_MWN * 4), cls: new Uint8Array(KR_MWN * KR_MWN * 4), dep: new Float32Array(KR_MWN * KR_MWN) };
 function kr_mawEdge(W, Hu, Hl, sm, u, up) { const f = Math.pow(Math.max(0, Math.sin(Math.PI * u)), .8), k = 2 * u - 1; return (up ? Hu : -Hl) * f + sm * k * k; }
 function kr_mawSample(mx, my, o, tg) {
@@ -9118,7 +9157,8 @@ function kr_maw(R, D, fr) {
     const g = v >> 4, lx = mx * sx, ly = M.y + my * sy, k = Math.max(0, .1 - ly);
     const lz = .71 - 1.25 * lx * lx - .44 * k * k + dz0 + (g === 3 ? .05 + .12 * tg : g === 0 ? -.06 : g === 2 ? .02 : .04);
     const nx = 2.5 * lx, nwz = -nx * sn + cs; if (nwz * KY + .88 * k * KZ < .12 * Math.hypot(nx, 1)) continue;   // the side of the snout turned away
-    const X = lx * SC, Y = ly * SC, Z = lz * SC, wx = X * cs + Z * sn, wz = -X * sn + Z * cs;
+    KR_TV[1] = ly; KR_TV[2] = lz; kr_tilt(KR_TV, 0);
+    const X = lx * SC, Y = KR_TV[1] * SC, Z = KR_TV[2] * SC, wx = X * cs + Z * sn, wz = -X * sn + Z * cs;
     let ty = (wz * KZ - Y * KY) * PPM; ty = ty * (ty < 0 ? ky : kx * R.hf) - R.hr;
     const px = Math.round(wx * PPM * kx), py = Math.round(ty); if (px < -half || px >= half || py < -half || py >= half) continue;
     const ci = (py + half) * N + px + half;
@@ -9394,7 +9434,7 @@ function kr_set(li, c, d, z, part, seg, fr) {
 }
 function kr_headPose(R, k) {
   const D = R.look !== "pink" && typeof dv_head === "function" ? dv_head(k) : null; R.dv = D;
-  const hd = k._head || {}, yaw = (hd.Rotation ? hd.Rotation.y : 0) + (D ? D.yaw : 0), N = KR_HB.N;
+  const hd = k._head || {}, yaw = kr_faceYaw(k) + (D ? D.yaw : 0), N = KR_HB.N;
   const yi = ((Math.round(yaw / (Math.PI * 2) * N) % N) + N) % N;
   R.bake = kr_headBake(yi, R.look);
   let kx = 1, ky = 1;
@@ -9626,7 +9666,7 @@ const KR_BOW = [
   "...........aaaa.......aaa.",
 ];
 function kr_bow(R, k, fr) {
-  const hd = k._head || {}, yaw = hd.Rotation ? hd.Rotation.y : 0, cs = Math.cos(yaw), sn = Math.sin(yaw);
+  const yaw = kr_faceYaw(k), cs = Math.cos(yaw), sn = Math.sin(yaw);
   const lx = .22 * 1.2, ly = .584 * 1.2, lz = .04 * 1.2, wx = lx * cs + lz * sn, wz = -lx * sn + lz * cs;
   const p = R.pos, sx = Math.round(kr_px(p.x + wx)) - 13, sy = Math.round(kr_py(p.z + wz, p.y + R.bob + ly * R.hys)) - 8, d = ((p.y + ly) * KZ + (p.z + wz) * KY) * PPM + 8;
   const pal = { a: KR_C.bow[0], b: KR_C.bow[1], c: KR_C.bow[2], d: KR_C.bow[3], e: KR_C.bow[4] }, back = cs < -.35, flip = sn < -.5;
@@ -9843,10 +9883,23 @@ function kr_bands(R) {
 on("Hurt", () => { KR.hurtT = G.t; });
 on("LevelUpRings", e => { KR.glowT = G.t; KR.glowEvo = !!e && Balance.EvolutionArms({ Xp: Balance.XpForLevel(e.level) }) !== Balance.EvolutionArms({ Xp: Balance.XpForLevel(e.level - 1) }); });   // the L4 / L9 evolution (Balance.cs:79)
 on("levelup_banner", e => { KR.glowT = G.t; KR.glowEvo = !!(e && e.evolved); });
-on("ready", () => { KR.hurtT = KR.glowT = -9; KR.built = null; KR.lastDamage = typeof G.LastDamage === "number" ? G.LastDamage : -100; });
+on("ready", () => { KR.fyOk = false; KR.hurtT = KR.glowT = -9; KR.built = null; KR.lastDamage = typeof G.LastDamage === "number" ? G.LastDamage : -100; });
+const KR_FACE_MAX = 1.2;
+function kr_faceYaw(k) {
+  const raw = k && k._head && k._head.Rotation ? k._head.Rotation.y : 0;
+  return k === G.Kraken && KR.fyOk && !k.CinematicPresentation && !k.Preview ? KR.fy : raw;
+}
+VIS_TICK.push(dt => {
+  const k = G.Kraken; if (!k || !k._head) { KR.fyOk = false; return; }
+  let r = (k._head.Rotation ? k._head.Rotation.y : 0) % (Math.PI * 2); if (r > Math.PI) r -= Math.PI * 2; if (r < -Math.PI) r += Math.PI * 2;
+  const a = Math.abs(r), sg = r < 0 ? -1 : 1;
+  if (a > .3 && !(a > 2.5 && sg !== KR.fsg)) KR.fsg = sg;
+  const want = a <= .3 ? r * .8 : KR.fsg * Math.min(a * .8, KR_FACE_MAX);
+  if (!KR.fyOk) { KR.fy = want; KR.fyOk = true; } else KR.fy += (want - KR.fy) * (1 - Math.exp(-dt * 9));
+});
 VIS_TICK.push(() => {   // bake one missing head yaw bucket per frame, nearest the current heading first (a first turn never hitches)
   const k = G.Kraken; if (!k || !k._head || KR.heads.size >= KR_HB.N) return;
-  const yi = ((Math.round((k._head.Rotation ? k._head.Rotation.y : 0) / (Math.PI * 2) * KR_HB.N) % KR_HB.N) + KR_HB.N) % KR_HB.N;
+  const yi = ((Math.round(kr_faceYaw(k) / (Math.PI * 2) * KR_HB.N) % KR_HB.N) + KR_HB.N) % KR_HB.N;
   for (let d = 0; d <= KR_HB.N / 2; d++) for (const s of [1, -1]) { const b = (yi + s * d + KR_HB.N) % KR_HB.N; if (!KR.heads.has(b)) { kr_headBake(b, "purple"); return; } }
 });
 VIS_TICK.push(() => {   // the Hurt event is the trigger; a G.LastDamage change covers a rules path that does not emit it
@@ -10277,6 +10330,7 @@ function sh_blitDense(S, sx, sy, o) {
       const hv = k1 ? hg[base + x] : Math.round(hg[base + x] * k), xx = x0 + (k1 ? x : ox + Math.round((x - ox) * k)) + (lk !== 0 ? Math.round(lk * hg[base + x]) : 0);
       if (xx < 0 || xx >= W) continue;
       const hcm = hv + dyc;
+      if (o.solid) { if (hcm >= 0) pix[row + xx] = o.solid; continue; }
       if (plain && (hcm >= 0 || !cut)) pix[row + xx] = c;
       else sh_put(row + xx, c, hcm, o.flash, o.under, o.fade, cut);
     }
@@ -10292,6 +10346,7 @@ function sh_blitSparse(O, S, sx, sy, o) {
     const xx = x0 + (k1 ? xs[i] : ox + Math.round((xs[i] - ox) * k)) + (lk !== 0 ? Math.round(lk * hg[i]) : 0);
     if (xx < 0 || xx >= W) continue;
     const hcm = (k1 ? hg[i] : Math.round(hg[i] * k)) + dyc;
+    if (o.solid) { if (hcm >= 0) pix[yy * W + xx] = o.solid; continue; }
     if (plain && (hcm >= 0 || !cut)) pix[yy * W + xx] = cc[i];
     else sh_put(yy * W + xx, cc[i], hcm, o.flash, o.under, o.fade, cut);
   }
@@ -10904,8 +10959,16 @@ function sh_drawShip(s, I) {
   const Hd = sh_dHead(K, hi), sy = SY(w.z);
   if (!Hd) return;
   if (!sink) { q.lean = sh_lean(mr.x, mr.z, w.yaw); q.under = s.Emergence < 1; q.k = q.under && s._originalScale ? md.Scale.x / s._originalScale.x : 1; }
-  sh_blitDense(Hd.base, sx, sy, q);
   const t = G.t + I.ph, panic = sink || s._grip > 0 || I.panic > 0;
+  if (!sink && SH_HELD.has(s)) {   // the ship the arms hold: a pulsing 1 px gold / white contour around hull, rig and sails
+    q.solid = ((G.t * 6) | 0) % 2 ? SH_HOLD_C[0] : SH_HOLD_C[1];
+    for (const [ox, oy] of SH_N4) {
+      sh_blitDense(Hd.base, sx + ox, sy + oy, q);
+      for (let i = 0; i < M.L.length; i++) { const L = M.L[i][0]; sh_blitSparse(sh_dOv(Hd, L, sh_frameOf(L, M.L[i][1], t, panic)), Hd.base, sx + ox, sy + oy, q); }
+    }
+    q.solid = 0;
+  }
+  sh_blitDense(Hd.base, sx, sy, q);
   for (let i = 0; i < M.L.length; i++) { const L = M.L[i][0]; sh_blitSparse(sh_dOv(Hd, L, sh_frameOf(L, M.L[i][1], t, panic)), Hd.base, sx, sy, q); }
   q.k = 1;
 }
@@ -10982,10 +11045,31 @@ function sh_drawTrail(s, I, K) {
   const qx = SX(x0 + (hl + .08) * sn), qy = SY(z0 + (hl + .08) * c, .03), lz = hl - Math.min(1.1, hl * .5) * (.4 + .6 * k);
   for (let sg = -1; sg <= 1; sg += 2) { const lx = sg * (s.HullHalfWidth + .15) * (.5 + .5 * k); line(qx, qy, SX(x0 + lx * c + lz * sn), SY(z0 - lx * sn + lz * c, .03), SH_FOAM[1]); }
 }
+const SH_HELD = new Set(), SH_N4 = [[-1, 0], [1, 0], [0, -1], [0, 1]], SH_HOLD_C = [hx("#ffd65c"), hx("#fff6d0"), hx("#ff7a45"), hx("#3a1030")];
+function sh_heldScan() {
+  SH_HELD.clear();
+  const k = G.Kraken; if (!k || !k._arms || k.Preview || k.CinematicPresentation) return;
+  for (const a of k._arms) { if (a.Target && a.Target.Alive !== false && a.State >= 1 && a.State <= 5) SH_HELD.add(a.Target); }   // Motion.Windup .. Finish
+}
+function sh_grabRing(s) {   // dashed ellipse marching around the hull + four corner brackets that breathe in
+  const cx = SX(s.Position.x), cy = SY(s.Position.z), r = (s.HullHalfLength + .55) * PPM, rx = r, ry = r * KZ, n = Math.max(48, Math.round(Math.PI * (rx + ry))), ph = G.t * 14;
+  for (let i = 0; i < n; i++) {
+    if (((i + (ph | 0)) % 7) > 3) continue;
+    const a = i / n * Math.PI * 2, x = Math.round(cx + Math.cos(a) * rx), y = Math.round(cy + Math.sin(a) * ry);
+    if (x < 0 || y < 1 || x >= W || y >= H) continue;
+    pix[(y - 1) * W + x] = SH_HOLD_C[3]; pix[y * W + x] = SH_HOLD_C[2];
+  }
+  const b = 1 + .12 * Math.sin(G.t * 8), bx = rx * b + 3, by = ry * b + 2;
+  for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    const x0 = Math.round(cx + sx * bx), y0 = Math.round(cy + sy * by);
+    for (let j = 0; j < 5; j++) { fx_p(x0 - sx * j, y0, SH_HOLD_C[0]); fx_p(x0, y0 - sy * j, SH_HOLD_C[0]); fx_p(x0 - sx * j, y0 + sy, SH_HOLD_C[3]); fx_p(x0 + sx, y0 - sy * j, SH_HOLD_C[3]); }
+  }
+}
 function ships_ground() {
   SH_DB.n = 0; SH_DB.ms = 0;
   const S = G.Ships;
   if (!S) return;
+  sh_heldScan();
   for (let i = 0; i < S.length; i++) {
     const s = S[i];
     if (!s || !s.Visible || !s.Model || !s.Spec) continue;
@@ -11000,6 +11084,7 @@ function ships_ground() {
       if (s._wake.Halo) sh_dWake(K, hiA, sxr, szr, .065, 1.1, .055, true, ax, az);
       sh_drawTrail(s, I, K);
     }
+    if (s.SinkTime < 0 && SH_HELD.has(s)) sh_grabRing(s);
     const bs = s._bossShield, cs = s.ConvoyShieldRing, oh = s._objectiveHalo;
     if (bs && bs.Visible) sh_flatRing(s.Position.x, s.Position.z, .16, bs.Radius || s.HullHalfLength + .8, bs.Width || .18, hx("#9cdfff"), SH_C.ringE);  // BossEncounters.cs:20-23
     if (cs && cs.Visible) sh_flatRing(s.Position.x, s.Position.z, .1, cs.Radius || s.HullHalfLength + .55, cs.Width || .12, hx("#86e5ff"), SH_C.ringE);  // CorsairConvoy.cs:42-43
@@ -14785,6 +14870,15 @@ function hud_btnScale(b) {
 }
 const hud_pressNow = b => b.pFrom + (b.pTo - b.pFrom) * kTw(G.t - b.pT, 0, .1, "quad", "out");
 const HUD_BLOCK = { block: true };
+function hud_navNext() {
+  let best = "", bl = 1e9;
+  for (const p in Hud._navigation) {
+    if (!Hud._navigation[p].locked) continue;
+    const l = FeatureProgression.RequiredLevel(p) * 100 + FeatureProgression.Order(p);
+    if (l < bl) { bl = l; best = p; }
+  }
+  return best;
+}
 function hud_drawBtn(b, o) {
   if (!b.visible) return;
   const ox = o && o.dx || 0, oy = o && o.dy || 0, f = o && o.fade != null ? o.fade : 1;
@@ -14803,12 +14897,12 @@ function hud_drawBtn(b, o) {
 
 function hud_world() {
   const S = G.Save;
-  hud_drawGuide(); hud_combat();
+  hud_drawGuide(); hud_surfaceHint(); hud_combat();
   hud_shipBars();
   hud_escort();
   if (typeof Hud.DrawOpeningHold === "function") Hud.DrawOpeningHold();   // :120 GameHudOpening (cine.js)
   const fight = hud_fish(true), cp = HUD_PC;
-  if (fight) { cp.x = 180; cp.y = 780 - 106.5; } else { hud_proj(G.PlayerPosition, cp); cp.y += 25; }
+  if (fight) { cp.x = 180; cp.y = 780 - 106.5; } else { hud_proj(G.PlayerPosition, cp); cp.y += 46; }   // pushed 21 px lower so the pill stays clear of the head and the devour
   const cap = Balance.Capacity(S), full = S.Cargo >= cap - 1;
   if (full) {   // :124-125 alarm: (.92,.2,.26,.85) fill, border 4 (1,.62,.55,glow), radius 26
     const glow = Math.round((.6 + .4 * Math.sin(G.t * 1000 * .008)) * 16) / 16;   // baked per 1/16 glow step
@@ -14844,13 +14938,30 @@ function hud_world() {
   }
   if (G.Cold > 0) { rect(140, 65, 80, 3, HUDC.ink); rect(140, 65, Math.round(80 * Math.min(1, G.Cold / 100)), 3, HUDC.cold); }   // :140 (W/2-80, 130) 160x6
 }
+function hud_surfaceHint() {
+  const Wd = G.World, tx = Wd && Wd._surfaceText && Wd._surfaceText.Text, pos = Wd && Wd._surfaceLesson && Wd._surfaceLesson.Position;
+  const op = Math.round(Math.max(0, Math.min(1, Wd && Wd._surfaceOpacity || 0)) * 8) / 8;
+  if (!tx || !pos || op < .1 || Hud.ModalOpen) return;
+  const lines = String(loc(tx)).split("\n"), k = 3, lh = lineH(k);
+  let tw = 0; for (const l of lines) tw = Math.max(tw, textW(l, k));
+  const w = Math.min(330, tw + 30), h = lines.length * lh + 13;
+  const s = hud_spr("srf|" + tx + "|" + w, w + 1, h + 2, () => {
+    kFlat(0, 0, w, h, { bg: KC.PlateInk, a: .9, border: KC.PlateRim, ba: .9, bw: 1, r: 9, shadow: .45 });
+    lines.forEach((l, i) => text(caseFor(l, k), Math.round(w / 2 - textW(l, k) / 2), 7 + i * lh, i ? WHITE : HUDC.gold, k, HUDC.ink));
+  });
+  const p = hud_proj(pos, HUD_PB), bob = Math.round(Math.sin(G.t * 2.4) * 1.5);
+  hud_blitX(s, hud_cl(Math.round(p.x), w / 2 + 6, 354 - w / 2), hud_cl(Math.round(p.y), 150, 650) + bob, w >> 1, h >> 1, 1, op);
+}
 function hud_drawGuide() {
   if (Hud.ModalOpen || G.SurfaceTutorialActive) return;
   const g = Hud._guide, d = g && g.Destination;
   if (!d || d.DistanceTo(G.PlayerPosition) <= 2.1) return;
   const o = hud_proj(G.PlayerPosition, HUD_PA), t = hud_proj(d, HUD_PB), dx = t.x - o.x, dy = t.y - o.y, l = Math.hypot(dx, dy);
   if (l < .01) return;
-  const ux = dx / l, uy = dy / l, r = 88 + 3 * Math.sin(G.t * 1000 * .006), ax = o.x + ux * r, ay = o.y + uy * r;
+  const ux = dx / l, uy = dy / l;
+  let r = 88; if (!hud_fish(true)) while (r < 150 && Math.abs(ux * r) < 62 && uy * r > 30 && uy * r < 88) r += 2;   // clear the cargo pill below
+  r += 3 * Math.sin(G.t * 1000 * .006);
+  const ax = o.x + ux * r, ay = o.y + uy * r;
   hud_blit(hud_spr("guide", 33, 34, () => {   // shadow r 29 (+3), disc r 28 (.10,.08,.17,.86), Gold ring r 27 w 3
     hud_disc(16.5, 18, 14.5, HUDC.shade, .4); hud_disc(16.5, 16.5, 14, HUDC.disc, .86);
     hud_ring(16.5, 16.5, 13.5, 1.6, HUDC.gold); hud_ring(16.5, 16.5, 12.4, 1, mix(HUDC.gold, HUDC.disc, .55), .7);
@@ -14861,6 +14972,24 @@ function hud_drawGuide() {
   for (let i = 0; i < 8; i += 2) { P[i] = Math.round(P[i] * 2) / 2; P[i + 1] = Math.round(P[i + 1] * 2) / 2; D[i] = P[i]; D[i + 1] = P[i + 1] + 1; }
   hud_poly(D, HUDC.guideD);   // the chevron's drop edge, then the Gold face
   hud_poly(P, HUDC.gold);
+  const m = Math.round(d.DistanceTo(G.PlayerPosition)), ml = m + (Loc.En ? " m" : " м");
+  hud_label(ml, ax, ay + 24, HUDC.gold, 18);
+  const L = 16, R = 344, T = 112, Bt = 690;
+  if (t.x >= L && t.x <= R && t.y >= T && t.y <= Bt) return;
+  let k = 1;
+  if (dx > 0) k = Math.min(k, (R - o.x) / dx); else if (dx < 0) k = Math.min(k, (L - o.x) / dx);
+  if (dy > 0) k = Math.min(k, (Bt - o.y) / dy); else if (dy < 0) k = Math.min(k, (T - o.y) / dy);
+  const ex = o.x + dx * k, ey = o.y + dy * k;
+  if (Math.hypot(ex - ax, ey - ay) < 46) return;   // the chevron already sits at the edge
+  const pu = .5 + .5 * Math.sin(G.t * 7), E = HUD_CHV, F = HUD_CHD;
+  hud_disc(Math.round(ex), Math.round(ey) + 1, 10, HUDC.shade, .45);
+  hud_disc(Math.round(ex), Math.round(ey), 9.5, HUDC.disc, .9);
+  hud_ring(Math.round(ex), Math.round(ey), 9.5, 1.4, HUDC.gold, .7 + Math.round(pu * 3) * .1);
+  E[0] = ex + ux * 6; E[1] = ey + uy * 6; E[2] = ex - ux * 4 + sx * 5; E[3] = ey - uy * 4 + sy * 5;
+  E[4] = ex - ux * 1.5; E[5] = ey - uy * 1.5; E[6] = ex - ux * 4 - sx * 5; E[7] = ey - uy * 4 - sy * 5;
+  for (let i = 0; i < 8; i += 2) { E[i] = Math.round(E[i] * 2) / 2; E[i + 1] = Math.round(E[i + 1] * 2) / 2; F[i] = E[i]; F[i + 1] = E[i + 1] + 1; }
+  hud_poly(F, HUDC.guideD); hud_poly(E, HUDC.gold);
+  hud_label(ml, hud_cl(ex - ux * 22, 30, 330), hud_cl(ey - uy * 22, T, Bt), WHITE, 16);
 }
 const HUD_CHV = [0, 0, 0, 0, 0, 0, 0, 0], HUD_CHD = [0, 0, 0, 0, 0, 0, 0, 0];
 function hud_combat() {
@@ -15143,7 +15272,8 @@ function hud_draw() {
   hud_zone();
   const B = HUD.btn;
   hud_drawBtn(B.settings);
-  for (const p of ["relics", "talents", "event", "daily", "upgrades"]) hud_drawBtn(B[p]);
+  const nx = hud_navNext();
+  for (const p of ["relics", "talents", "event", "daily", "upgrades"]) if (!B[p].locked || p === nx || G.FeatureLessonLock(p) === "") hud_drawBtn(B[p]);
   hud_toast();
   hud_drawBtn(B.gate);
   hud_drawBtn(B.talk);
