@@ -1,6 +1,6 @@
 {
  "version": 1,
- "built_utc": "2026-10-07T20:24:08Z",
+ "built_utc": "2026-10-08T10:25:08Z",
  "categories": [
   [
    "chars",
@@ -4449,144 +4449,8 @@
    }
   },
   {
-   "id": "Cart_Pile",
-   "name": "Груз вагонетки",
-   "cat": "loot",
-   "src": "uart",
-   "folder": "Loot",
-   "fbx": "Loot/Cart_Pile",
-   "glb": "glb/Cart_Pile.glb",
-   "bytes": 8532,
-   "tris": 150,
-   "parts": [
-    {
-     "name": "Cart_Nugget",
-     "tris": 14,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": false,
-     "parent": null,
-     "bbox": [
-      [
-       -0.1208,
-       -0.1528,
-       -0.0
-      ],
-      [
-       0.0959,
-       0.1671,
-       0.2371
-      ]
-     ]
-    },
-    {
-     "name": "OrePile_1",
-     "tris": 40,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": false,
-     "parent": null,
-     "bbox": [
-      [
-       -0.5797,
-       -0.3299,
-       -0.0
-      ],
-      [
-       0.5803,
-       0.3305,
-       0.334
-      ]
-     ]
-    },
-    {
-     "name": "OrePile_2",
-     "tris": 48,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": false,
-     "parent": null,
-     "bbox": [
-      [
-       -0.5797,
-       -0.3299,
-       -0.0
-      ],
-      [
-       0.5803,
-       0.3305,
-       0.3751
-      ]
-     ]
-    },
-    {
-     "name": "OrePile_3",
-     "tris": 48,
-     "mats": [
-      "M_Palette"
-     ],
-     "uvs": 1,
-     "skinned": false,
-     "parent": null,
-     "bbox": [
-      [
-       -0.5797,
-       -0.3299,
-       -0.0
-      ],
-      [
-       0.5803,
-       0.3305,
-       0.6528
-      ]
-     ]
-    }
-   ],
-   "sockets": [],
-   "bones": 0,
-   "rig": null,
-   "clips": [],
-   "materials": [
-    "M_Palette"
-   ],
-   "cells": [
-    6,
-    23,
-    24,
-    25
-   ],
-   "fur": false,
-   "bbox": [
-    [
-     -0.5797,
-     -0.3299,
-     -0.0
-    ],
-    [
-     0.5803,
-     0.3305,
-     0.6528
-    ]
-   ],
-   "concept": "cart_load",
-   "view": "row",
-   "anim": null,
-   "pilot_tag": false,
-   "pilot_copy": false,
-   "props": {
-    "note": "authored for the default tub; socket_pile (cart) at the tub-floor centre, local scale = tub inner size / default. OrePile_k is the bed stage mesh (Cart_PileBed is the authoring hull, not exported). n = round(Load / Capacity * 12): n 1-4 OrePile_1, 5-8 OrePile_2, 9-12 OrePile_3; ball i visible when i < n at socket_pile_ii (x = -.45 + .30 i, y = -.23 + .23 j, index 3 i + j; owned by the cart). rocks-3: Cart_Nugget pivot = bottom centre, place it at (slot x, slot y, nugget_z) + yaw from the index hash; OrePile_1/2/3 carry 2/3/3 baked accents (amethyst / gold, see accents; AD-08 was gem_base), no extra instances",
-    "kind": "cart_pile"
-   }
-  },
-  {
    "id": "Gem_Amethyst",
-   "name": "Gem_Amethyst",
+   "name": "Самоцветы: аметист 3–8",
    "cat": "loot",
    "src": "uart",
    "folder": "Loot",
@@ -4751,8 +4615,8 @@
      0.42
     ]
    ],
-   "concept": null,
-   "view": null,
+   "concept": "gems",
+   "view": "row",
    "anim": null,
    "pilot_tag": false,
    "pilot_copy": false,
@@ -4767,6 +4631,142 @@
     },
     "note": "same meshes / pivots as Gem_Base (pivot = bottom point at z 0; _7 star faces -Y); UV-shifted to the amethyst row of M_Palette (AD-08 violet crystal)",
     "kind": "gems"
+   }
+  },
+  {
+   "id": "Cart_Pile",
+   "name": "Груз вагонетки",
+   "cat": "loot",
+   "src": "uart",
+   "folder": "Loot",
+   "fbx": "Loot/Cart_Pile",
+   "glb": "glb/Cart_Pile.glb",
+   "bytes": 8532,
+   "tris": 150,
+   "parts": [
+    {
+     "name": "Cart_Nugget",
+     "tris": 14,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": null,
+     "bbox": [
+      [
+       -0.1208,
+       -0.1528,
+       -0.0
+      ],
+      [
+       0.0959,
+       0.1671,
+       0.2371
+      ]
+     ]
+    },
+    {
+     "name": "OrePile_1",
+     "tris": 40,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": null,
+     "bbox": [
+      [
+       -0.5797,
+       -0.3299,
+       -0.0
+      ],
+      [
+       0.5803,
+       0.3305,
+       0.334
+      ]
+     ]
+    },
+    {
+     "name": "OrePile_2",
+     "tris": 48,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": null,
+     "bbox": [
+      [
+       -0.5797,
+       -0.3299,
+       -0.0
+      ],
+      [
+       0.5803,
+       0.3305,
+       0.3751
+      ]
+     ]
+    },
+    {
+     "name": "OrePile_3",
+     "tris": 48,
+     "mats": [
+      "M_Palette"
+     ],
+     "uvs": 1,
+     "skinned": false,
+     "parent": null,
+     "bbox": [
+      [
+       -0.5797,
+       -0.3299,
+       -0.0
+      ],
+      [
+       0.5803,
+       0.3305,
+       0.6528
+      ]
+     ]
+    }
+   ],
+   "sockets": [],
+   "bones": 0,
+   "rig": null,
+   "clips": [],
+   "materials": [
+    "M_Palette"
+   ],
+   "cells": [
+    6,
+    23,
+    24,
+    25
+   ],
+   "fur": false,
+   "bbox": [
+    [
+     -0.5797,
+     -0.3299,
+     -0.0
+    ],
+    [
+     0.5803,
+     0.3305,
+     0.6528
+    ]
+   ],
+   "concept": "cart_load",
+   "view": "row",
+   "anim": null,
+   "pilot_tag": false,
+   "pilot_copy": false,
+   "props": {
+    "note": "authored for the default tub; socket_pile (cart) at the tub-floor centre, local scale = tub inner size / default. OrePile_k is the bed stage mesh (Cart_PileBed is the authoring hull, not exported). n = round(Load / Capacity * 12): n 1-4 OrePile_1, 5-8 OrePile_2, 9-12 OrePile_3; ball i visible when i < n at socket_pile_ii (x = -.45 + .30 i, y = -.23 + .23 j, index 3 i + j; owned by the cart). rocks-3: Cart_Nugget pivot = bottom centre, place it at (slot x, slot y, nugget_z) + yaw from the index hash; OrePile_1/2/3 carry 2/3/3 baked accents (amethyst / gold, see accents; AD-08 was gem_base), no extra instances",
+    "kind": "cart_pile"
    }
   },
   {
