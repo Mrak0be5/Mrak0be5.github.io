@@ -1010,7 +1010,7 @@
    "folder": "Characters",
    "fbx": "Characters/CatBoy",
    "glb": "glb/CatBoy.glb",
-   "bytes": 750244,
+   "bytes": 744048,
    "tris": 4034,
    "parts": [
     {
@@ -1636,7 +1636,7 @@
    "folder": "Characters",
    "fbx": "Characters/CatGirl",
    "glb": "glb/CatGirl.glb",
-   "bytes": 736456,
+   "bytes": 730260,
    "tris": 3904,
    "parts": [
     {
@@ -9433,7 +9433,7 @@
  "totals": {
   "models": 61,
   "tris": 44634,
-  "glb_bytes": 3822424,
+  "glb_bytes": 3810032,
   "ao_models": 40
  }
 }
