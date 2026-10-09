@@ -22,7 +22,7 @@
 <body>
 <canvas id="game" width="216" height="384" tabindex="0"></canvas>
 <noscript>Для игры нужен JavaScript. / This game needs JavaScript.</noscript>
-<script>window.BUILD_INFO = {"time": "2026-10-09 16:06", "hash": "f763921a", "dev": false, "files": 30};</script>
+<script>window.BUILD_INFO = {"time": "2026-10-09 16:19", "hash": "3b7566ab", "dev": false, "files": 30};</script>
 <script>
 // Core: events, seeded rng, time, number/time formatting, i18n, action registry, stats-modifier hooks, easing,
 // simulation + scene registries, error capture, boot warm-up registry. Loaded first, so every later file can use these
@@ -5877,6 +5877,7 @@ _ 4 ###
   // HUD buttons (spec 10 G8 visibility + G9 labels, spec 07 §3.1/§3.31 slots).
   //   col 'L'/'R' side columns (k = slot from the bottom, y = 290 − 28k), 'T' top icons.
   //   visible: 'start' | tutorial step name (visible from that step) | 'firstA' (first A+ gun ever owned)
+  //   hideLocked: not drawn until the feature opens (Idle Cat Gunner HUD); otherwise
   //   feature: D.unlocks key gating it; locked tap → toast key `lockKey` (with the stage as {0} for lock.tip).
   //   label: button text / tooltip key; title: window title key (= label + '.title', set below for every button).
   D.hudButtons = [
@@ -5885,14 +5886,14 @@ _ 4 ###
     { id: 'rebirth', col: 'L', k: 2, label: 'menu.rebirth', icon: 'moon', visible: 'done', feature: 'rebirth', lockKey: 'rb.locked' },
     { id: 'shop', col: 'L', k: 3, label: 'menu.shop', icon: 'shop', visible: 'done' },
     { id: 'buffs', col: 'L', k: 4, label: 'menu.buff', icon: 'buffs', visible: 'done' },
-    { id: 'fish', col: 'L', k: 5, label: 'menu.fish', icon: 'pond', visible: 'done', feature: 'fish', lockKey: 'lock.tip' },
+    { id: 'fish', col: 'L', k: 5, label: 'menu.fish', icon: 'pond', visible: 'done', feature: 'fish', lockKey: 'lock.tip', hideLocked: true },
     { id: 'pets', col: 'L', k: 6, label: 'menu.pet', icon: 'pets', visible: 'done', feature: 'pets', lockKey: 'lock.pets' },
     { id: 'charms', col: 'L', k: 7, label: 'menu.charm', icon: 'charms', visible: 'done', feature: 'charms', lockKey: 'lock.charms' },
     { id: 'play', col: 'R', k: 0, label: 'menu.play', icon: 'play', visible: 'challenge' },
     { id: 'auto', col: 'R', k: 1, label: 'menu.auto', icon: 'auto', visible: 'done' },
     { id: 'piggy', col: 'R', k: 2, label: 'menu.piggy', icon: 'jar', visible: 'done' },
-    { id: 'mine', col: 'R', k: 3, label: 'menu.mine', icon: 'mine', visible: 'done', feature: 'mine', lockKey: 'lock.tip' },
-    { id: 'boss', col: 'R', k: 4, label: 'menu.boss', icon: 'boss', visible: 'done', feature: 'boss', lockKey: 'lock.tip' },
+    { id: 'mine', col: 'R', k: 3, label: 'menu.mine', icon: 'mine', visible: 'done', feature: 'mine', lockKey: 'lock.tip', hideLocked: true },
+    { id: 'boss', col: 'R', k: 4, label: 'menu.boss', icon: 'boss', visible: 'done', feature: 'boss', lockKey: 'lock.tip', hideLocked: true },
     { id: 'hunt', col: 'R', k: 5, label: 'menu.hunt', icon: 'slugs', visible: 'done', feature: 'hunt', lockKey: 'lock.hunt' },
     { id: 'trip', col: 'R', k: 6, label: 'menu.trip', icon: 'trip', visible: 'done', feature: 'trip', lockKey: 'lock.trip', iconOnly: true },
     { id: 'raid', col: 'R', k: 7, label: 'menu.raid', icon: 'king', visible: 'done', feature: 'raid', lockKey: 'lock.raid' },
@@ -23053,6 +23054,8 @@ _ 4 ###
   // ---------------------------------------------------------------------------------------------------------------
   const visibleBtn = (b) => {
     if (!b) return false;
+    // hideLocked (as in Idle Cat Gunner): no padlocked button, it appears together with its "Unlocked" toast
+    if (b.hideLocked && (!featureOpen(b.feature) || unlockQ.indexOf(b.feature) >= 0)) return false;
     if (b.visible === 'start') return true;
     if (b.visible === 'firstA') return tutDone() && maxDeg() >= 3;
     const i = TUT.indexOf(b.visible);
@@ -23716,6 +23719,7 @@ _ 4 ###
     lastUnlockT = uiT();
     const b = btnByFeature(f);
     G.ui.toast(G.t('unlock.toast', G.t('feat.' + f)), { kind: 'unlock', icon: b ? b.icon : undefined });
+    if (b && b.hideLocked && visibleBtn(b)) vis[b.id] = true;   // shown right now with the unlock pop, not the reveal one
     if (b && vis[b.id]) {
       hud.pop(b.id, 'unlock');
       const r = btnRect(b);
