@@ -22,7 +22,7 @@
 <body>
 <canvas id="game" width="216" height="384" tabindex="0"></canvas>
 <noscript>Для игры нужен JavaScript. / This game needs JavaScript.</noscript>
-<script>window.BUILD_INFO = {"time": "2026-10-09 13:15", "hash": "43899517", "dev": false, "files": 30};</script>
+<script>window.BUILD_INFO = {"time": "2026-10-09 14:48", "hash": "99897fc8", "dev": false, "files": 30};</script>
 <script>
 // Core: events, seeded rng, time, number/time formatting, i18n, action registry, stats-modifier hooks, easing,
 // simulation + scene registries, error capture, boot warm-up registry. Loaded first, so every later file can use these
@@ -317,6 +317,7 @@
       'save.corrupt': 'Сохранение повреждено. Начата новая игра.', 'save.noStorage': 'Сохранение недоступно в этом браузере.',
       'boot.errorHint': 'Копия файла отложена,\nпрогресс не тронут.', 'boot.retryFail': 'Всё ещё не читается.',
       'boot.resetQ': 'Стереть сохранение и начать с нуля?', 'boot.resetQ2': 'Точно? Прогресс не вернуть!', 'boot.erase': 'Стереть',
+      'boot.welcome': 'С возвращением!', 'boot.continue': 'Продолжить', 'boot.newGame': 'Новая игра', 'boot.record': 'Рекорд: {0}',
       'lock.tip': 'Откроется на этапе {0}',
     },
     en: {
@@ -329,6 +330,7 @@
       'save.corrupt': 'The save was damaged. A new game was started.', 'save.noStorage': 'Saving is unavailable in this browser.',
       'boot.errorHint': 'A copy was set aside;\nnothing was overwritten.', 'boot.retryFail': 'Still unreadable.',
       'boot.resetQ': 'Erase the save and start from scratch?', 'boot.resetQ2': 'Sure? Progress cannot be recovered!', 'boot.erase': 'Erase',
+      'boot.welcome': 'Welcome back!', 'boot.continue': 'Continue', 'boot.newGame': 'New game', 'boot.record': 'Best: {0}',
       'lock.tip': 'Unlocks at Stage {0}',
     },
   };
@@ -29622,6 +29624,7 @@ _ 4 ###
     if (G.art && G.art.rabbit) {
       try { for (let w = 0; w < 3; w++) G.art.rabbit(G.ctx, 74 + w * 34, 262, { who: w, pose: 'idle', t: t + w * 0.37 }); } catch (e) { /* art not ready */ }
     }
+    if (G.ui.isOpen('bootChoice')) return;   // «Продолжить / Новая игра»: полоса загрузки уже не нужна
     // bar 120×4 with a hopping rabbit on the fill edge (spec 07 §3.29)
     const p = warmSkipped() ? 1 : warmProgress();
     const shown = Math.min(p, G.clamp(t / BOOT_MIN, 0, 1));
@@ -29638,6 +29641,15 @@ _ 4 ###
   };
 
   const saveError = () => !!(G.save && G.save.info && G.save.info.error);
+  // Вопрос при запуске задаётся один раз и только при обычном запуске с сохранением: QA, бот, ?scene/?win и
+  // повтор после окна ошибки сохранения грузят сразу.
+  let choiceDone = false;
+  const needChoice = () => {
+    if (choiceDone) return false;
+    const f = G.flags, inf = G.save && G.save.info;
+    if (f.qa || f.bot || f.fresh || f.scene || f.win || !inf || inf.fresh) { choiceDone = true; return false; }
+    return true;
+  };
   const bootStep = (dt) => {
     bootT += dt;
     const skip = warmSkipped();
@@ -29648,6 +29660,11 @@ _ 4 ###
     if (saveError()) {                     // S02: wait for Retry / Start over
       if (!G.ui.isOpen('bootError')) G.ui.open('bootError', {});
       if (window.__qa) window.__qa.waiting = 'bootError';
+      return;
+    }
+    if (needChoice()) {                    // есть сохранение: спросить «Продолжить / Новая игра»
+      if (!G.ui.isOpen('bootChoice')) G.ui.open('bootChoice', {});
+      if (window.__qa) window.__qa.waiting = 'bootChoice';
       return;
     }
     finishBoot();
@@ -29680,7 +29697,7 @@ _ 4 ###
   const retryLoad = (w) => {
     let inf = null;
     try { inf = G.load(); } catch (e) { G.reportError(e, 'load'); }
-    if (inf && !inf.error) { bootInfo = inf; G.ui.close(w, 'retry'); return; }
+    if (inf && !inf.error) { bootInfo = inf; choiceDone = true; G.ui.close(w, 'retry'); return; }
     G.ui.shake('bootErr:retry');
     G.ui.toast(G.t('boot.retryFail'), { deny: true });
   };
@@ -29714,6 +29731,37 @@ _ 4 ###
       return true;                 // Esc cannot dismiss it
     },
   };
+  // ---------- «Продолжить / Новая игра» при запуске с сохранением ----------
+  const continueGame = (w) => { choiceDone = true; G.ui.close(w, 'continue'); };
+  const newGame = (w) => {
+    G.ui.confirm(G.t('boot.resetQ'), () => {
+      G.resetAll({ reload: false });
+      bootInfo = G.save.info;
+      G.save();
+      choiceDone = true;
+      G.ui.close(w, 'new');
+    }, { title: G.t('boot.newGame'), yes: G.t('boot.erase'), danger: true, double: true, doubleText: G.t('boot.resetQ2') });
+  };
+  G.windows.bootChoice = {
+    rect: { x: 24, y: 226, w: 168, h: 102 }, closable: false, outsideClose: false, single: true,
+    title: () => G.t('boot.welcome'),
+    draw(a, w) {
+      const tc = (G.PAL && G.PAL.textDark) || '#2b2033';
+      const cx = w.x + Math.floor(w.w / 2);
+      const st = G.S.stage || {};
+      G.text(G.t('trans.stage', (st.cur || 1) + '-' + (st.sub || 1)), cx, w.cy + 4, { align: 'center', color: tc });
+      const rec = (st.max || 1) * 10 + (st.maxSub || 1) > (st.cur || 1) * 10 + (st.sub || 1);
+      if (rec) G.text(G.t('boot.record', (st.max || 1) + '-' + (st.maxSub || 1)), cx, w.cy + 14, { align: 'center', color: 'P16' });
+      const bw = w.w - 24, bh = 20, bx = w.x + 12, by2 = w.y + w.h - bh - 8, by1 = by2 - bh - 6;
+      if (G.ui.button('bootChoice:continue', bx, by1, bw, bh, { style: 'green', label: G.t('boot.continue') })) continueGame(w);
+      if (G.ui.button('bootChoice:new', bx, by2, bw, bh, { style: 'grey', label: G.t('boot.newGame') })) newGame(w);
+    },
+    onKey(k, a, w) {
+      if (k === 'Enter') continueGame(w);
+      return true;                 // Esc не закрывает: нужен выбор
+    },
+  };
+
   // G.load() later in the session (import / copy slot) failing -> same dialog; a good load or a reset closes it.
   G.on('state:loaded', (p) => {
     if (p && p.error) { if (G.ready && !G.ui.isOpen('bootError')) G.ui.open('bootError', { late: true }); } else G.ui.close('bootError', 'ok');
