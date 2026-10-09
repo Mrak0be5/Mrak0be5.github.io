@@ -123,13 +123,13 @@ body { background: #0d0a08;
   })();
   var b = 'Build/';
   var config = {
-    dataUrl: b + '90a20b1e24126a8576cb4e2b963ee97a.data.unityweb',
+    dataUrl: b + '134363646603d9f670322b11c7ae0cc2.data.unityweb',
     frameworkUrl: b + '1ff42a72cc5e6229bb74c3a3c8fa2500.framework.js.unityweb',
-    codeUrl: b + '1fdc6af29c3869ca1ba32a1282ab44b9.wasm.unityweb',
+    codeUrl: b + 'bdce2d31665e7675f6c8c40e4dc24a3a.wasm.unityweb',
     streamingAssetsUrl: 'StreamingAssets',
     companyName: "MinesCat",
     productName: "Mines Cat LowPoly",
-    productVersion: "rc2fix",
+    productVersion: "rc3a",
     devicePixelRatio: dpr,
     autoSyncPersistentDataPath: true,
     showBanner: function (msg, type) { if (type === 'error') showErr(msg); else console.warn('[web] ' + msg); }
@@ -137,7 +137,7 @@ body { background: #0d0a08;
   var t0 = performance.now();
   console.log('[web] boot ' + config.productVersion + ' dpr=' + dpr.toFixed(2));
   var s = document.createElement('script');
-  s.src = b + 'ab2835d56d069e90088aa4f87392e95e.loader.js';
+  s.src = b + 'dbcc39836092337d9e89fe117d09a7c6.loader.js';
   s.onload = function () {
     wiped.then(function () {
       return createUnityInstance(canvas, config, function (p) { setP(p); });
