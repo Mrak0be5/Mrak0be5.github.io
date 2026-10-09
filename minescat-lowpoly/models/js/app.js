@@ -2,6 +2,14 @@
 // manifest.json (tools/models_export.py) + glb/<id>.glb (no images, no normals) + concepts/<key>.webp.
 // Look = MinesCatLP/Lit: final = albedo x (ambient + key x NdotL x shadow) + albedo x emit x strength + rim; flat shading;
 // palette = one 256x256 atlas rebuilt here from manifest.palette.swatches (alpha = emit), so no PNG ships.
+// Own maps (LOOK_V2 §4, wave 6): asset.own = tex/<Asset>_Own.png, linear RGB around mid-grey on uv1 (UVOwn); every non-FX
+// slot of that asset gets albedo x 2 x own, exactly like M_Palette_Own_<Asset> (_OwnStrength 1) in the game.
+// LOOK_V2 surface (wave 6, = MinesCatLPForward.hlsl): vertex AO = COLOR_0 (FBX `Col`, raw), applied only where A is the V2
+// marker (0.3 < A < 0.7); triplanar detail from tex/lp_look.rgba (DetailA/B 256x256 + 16x16 cell LUT, raw RGBA8): per palette
+// cell channel / amplitude / tile / object-or-world space, albedoLit *= 1 + (d - 0.5) x 2 x amp, on V2-marker vertices only;
+// AO + detail touch the lit term only (emission keeps the plain albedo). Stage = LpStageLook: key #FFE9C7 x 0.85 from
+// (60, 125, 0), shadow strength 0.40, ambient gradient dc #8C8F99 + (up #9C948A - dc) n.y + (dc - front #9AA0AB) n.z (Unity
+// axes; three z = -Unity z), no fill light, no tonemap. ?look=v1 = the round-2 page look (flat ambient + fill, no AO/detail).
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -37,6 +45,8 @@ const STAGE_RU = ['Целый', 'Трещина 1', 'Трещина 2', 'Тре�
 const state = { man: null, assets: [], byId: new Map(), tab: 'all', palette: null, gltf: new Map(), shown: [] };
 const timeU = { value: 0 };
 const loader = new GLTFLoader();
+const LOOK_V1 = /[?&]look=v1(&|$)/.test(location.search);   // QA A/B: the published round-2 page look
+LP.look = LOOK_V1 ? 'v1' : 'v2';
 
 // ---------- helpers ----------
 function el(tag, cls, text) {
@@ -101,7 +111,91 @@ function slotFlags(name = '') {
     guard: /guard/i.test(name), spent: /spent/i.test(name),
   };
 }
-function makeMat(slot, rim) {
+// 1x1 mid-grey stand-in so every program has a bound own-map sampler (uOwn 0 = off)
+const OWN_NONE = (() => {
+  const t = new THREE.DataTexture(new Uint8Array([128, 128, 128, 255]), 1, 1, THREE.RGBAFormat);
+  t.needsUpdate = true;
+  return t;
+})();
+const texLoader = new THREE.TextureLoader();
+const OWN_OFF = /[?&]own=0(&|$)/.test(location.search);   // QA A/B: ?own=0 = palette only (the game's v1 look)
+function loadOwn(url) {
+  return texLoader.loadAsync(url).then((t) => {
+    t.colorSpace = THREE.NoColorSpace;          // linear multiplier, like the game's *_Own import (sRGB off)
+    t.flipY = false;                             // glTF uv convention (v 0 = top row), same as the GLB's TEXCOORD_1
+    t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+    t.minFilter = THREE.LinearMipmapLinearFilter;
+    t.magFilter = THREE.LinearFilter;
+    t.needsUpdate = true;
+    return t;
+  });
+}
+// MinesCatLPForward.hlsl LOOK_V2 surface terms -> lpF (multiplies the lit term only)
+const LP_FRAG_DECL = [
+  'uniform float uLpOn;', 'uniform float uLpCol;', 'uniform float uLpGain;',
+  'uniform sampler2D uLpDA;', 'uniform sampler2D uLpDB;', 'uniform sampler2D uLpLut;',
+  'varying vec4 vLpCol;', 'varying vec3 vLpObj;', 'varying vec3 vLpWld;',
+].join('\n');
+const LP_FRAG_SURFACE = [
+  '\tfloat lpOn = uLpOn * ( 1.0 - uUnlit );',
+  '\tfloat lpMk = uLpCol * step( 0.3, vLpCol.a ) * step( vLpCol.a, 0.7 );',
+  '\tvec3 lpF = mix( vec3( 1.0 ), vLpCol.rgb, lpMk * lpOn );',
+  '\tivec2 lpCell = clamp( ivec2( floor( fract( vec2( vMapUv.x, 1.0 - vMapUv.y ) ) * 16.0 ) ), ivec2( 0 ), ivec2( 15 ) );',   // glTF v = 1 - Unity v
+  '\tvec4 lpLut = texelFetch( uLpLut, lpCell, 0 );',
+  '\tvec3 lpPos = ( lpLut.a > 0.5 ? vLpObj : vLpWld ) * vec3( 1.0, 1.0, -1.0 );',                                          // Unity axes
+  '\tvec3 lpP = lpPos / ( 0.25 * exp2( 4.0 * lpLut.b ) );',
+  '\tvec3 lpN = normalize( cross( dFdx( lpPos ), dFdy( lpPos ) ) );',                                                        // flat normal of that space
+  '\tvec3 lpW = pow( abs( lpN ), vec3( 4.0 ) );',
+  '\tlpW /= max( lpW.x + lpW.y + lpW.z, 0.001 );',
+  '\tfloat lpIdx = floor( lpLut.r * 7.0 + 0.5 );',
+  '\tvec4 lpS = lpIdx < 3.5',
+  '\t\t? texture2D( uLpDA, lpP.zy ) * lpW.x + texture2D( uLpDA, lpP.xz ) * lpW.y + texture2D( uLpDA, lpP.xy ) * lpW.z',
+  '\t\t: texture2D( uLpDB, lpP.zy ) * lpW.x + texture2D( uLpDB, lpP.xz ) * lpW.y + texture2D( uLpDB, lpP.xy ) * lpW.z;',
+  '\tfloat lpK = lpIdx < 3.5 ? lpIdx : lpIdx - 4.0;',
+  '\tfloat lpD = lpK < 0.5 ? lpS.r : ( lpK < 1.5 ? lpS.g : ( lpK < 2.5 ? lpS.b : lpS.a ) );',
+  '\tlpF *= 1.0 + ( lpD - 0.5 ) * 2.0 * ( 0.5 * lpLut.g * uLpGain * lpMk * lpOn );',
+].join('\n');
+
+// ---------- LOOK_V2 maps (tex/lp_look.rgba: raw RGBA8, rows bottom-up = Unity texture v, straight alpha) ----------
+function lookTex(bytes, w, h, lut) {
+  const t = new THREE.DataTexture(bytes, w, h, THREE.RGBAFormat);
+  t.colorSpace = THREE.NoColorSpace;
+  t.flipY = false;
+  t.unpackAlignment = 1;
+  if (lut) {
+    t.magFilter = t.minFilter = THREE.NearestFilter;
+    t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+    t.generateMipmaps = false;
+  } else {
+    t.magFilter = THREE.LinearFilter;
+    t.minFilter = THREE.LinearMipmapLinearFilter;
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.generateMipmaps = true;
+  }
+  t.needsUpdate = true;
+  return t;
+}
+const LOOK_NONE = {      // neutral stand-ins: detail 0.5, LUT amplitude 0 (= no detail), so every program binds valid samplers
+  a: lookTex(new Uint8Array([128, 128, 128, 128]), 1, 1, false),
+  b: lookTex(new Uint8Array([128, 128, 128, 128]), 1, 1, false),
+  lut: lookTex(new Uint8Array(16 * 16 * 4), 16, 16, true),
+  ok: false,
+};
+async function loadLook(look) {
+  if (!look || !look.file || LOOK_V1) return LOOK_NONE;
+  const res = await fetch(look.file, { cache: 'no-cache' });
+  if (!res.ok) throw new Error('look maps http ' + res.status);
+  const buf = new Uint8Array(await res.arrayBuffer());
+  const m = Object.fromEntries((look.maps || []).map((x) => [x.name, x]));
+  const get = (nm, lut) => {
+    const x = m[nm];
+    if (!x || x.offset + x.bytes > buf.length || x.bytes !== x.w * x.h * 4) throw new Error('look map ' + nm + ' bad');
+    return lookTex(buf.slice(x.offset, x.offset + x.bytes), x.w, x.h, lut);
+  };
+  return { a: get('LP_DetailA', false), b: get('LP_DetailB', false), lut: get('LP_CellLut', true), ok: true, gain: look.gain ?? 1 };
+}
+
+function makeMat(slot, rim, ownTex, hasCol) {
   const f = slotFlags(slot);
   const m = new THREE.MeshLambertMaterial({ map: state.palette, flatShading: true });
   m.name = slot;
@@ -115,27 +209,37 @@ function makeMat(slot, rim) {
     uPulse: { value: f.portal ? 0.2 : 0 },
     uRim: { value: rim ? 0.15 : 0 },
     uTint: { value: tint },
+    uOwn: { value: ownTex && !(f.portal || f.fire || f.unlit) ? 1 : 0 },
+    uOwnMap: { value: ownTex || OWN_NONE },
     uTime: timeU,
+    uLpOn: { value: LOOK_V1 ? 0 : 1 },
+    uLpCol: { value: hasCol ? 1 : 0 },
+    uLpGain: { value: (state.look && state.look.gain) ?? 1 },
+    uLpDA: { value: (state.look || LOOK_NONE).a },
+    uLpDB: { value: (state.look || LOOK_NONE).b },
+    uLpLut: { value: (state.look || LOOK_NONE).lut },
   };
   m.userData.u = u;
   m.userData.flags = f;
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec2 lpuv1;\nuniform float uTime;\nuniform float uPulse;\nvarying float vLpPulse;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvLpPulse = 1.0 - uPulse + uPulse * sin( 6.28318530718 * ( 0.75 * uTime - 2.0 * lpuv1.x ) );');
+      .replace('#include <common>', '#include <common>\nattribute vec2 lpuv1;\nattribute vec4 lpcol;\nuniform float uTime;\nuniform float uPulse;\nvarying float vLpPulse;\nvarying vec2 vLpOwnUv;\nvarying vec4 vLpCol;\nvarying vec3 vLpObj;\nvarying vec3 vLpWld;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvLpPulse = 1.0 - uPulse + uPulse * sin( 6.28318530718 * ( 0.75 * uTime - 2.0 * lpuv1.x ) );\n\tvLpOwnUv = lpuv1;\n\tvLpCol = lpcol;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\n\tvLpObj = transformed;\n\tvLpWld = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uEmit;\nuniform float uGlow;\nuniform float uUnlit;\nuniform float uRim;\nuniform vec3 uTint;\nvarying float vLpPulse;')
-      .replace('#include <map_fragment>', 'vec4 lpTex = texture2D( map, vMapUv );\n\tfloat lpEmit = lpTex.a;\n\tdiffuseColor.rgb *= lpTex.rgb * uTint;')
+      .replace('#include <common>', '#include <common>\nuniform float uEmit;\nuniform float uGlow;\nuniform float uUnlit;\nuniform float uRim;\nuniform vec3 uTint;\nuniform float uOwn;\nuniform sampler2D uOwnMap;\nvarying float vLpPulse;\nvarying vec2 vLpOwnUv;\n' + LP_FRAG_DECL)
+      .replace('#include <map_fragment>', 'vec4 lpTex = texture2D( map, vMapUv );\n\tfloat lpEmit = lpTex.a;\n\tdiffuseColor.rgb *= lpTex.rgb * uTint;\n\tdiffuseColor.rgb *= mix( vec3( 1.0 ), texture2D( uOwnMap, vLpOwnUv ).rgb * 2.0, uOwn );\n' + LP_FRAG_SURFACE)
       .replace(/vec3 outgoingLight = [^;]+;/, [
-        'vec3 lpLit = mix( reflectedLight.directDiffuse + reflectedLight.indirectDiffuse, diffuseColor.rgb, uUnlit );',
+        'vec3 lpLit = mix( ( reflectedLight.directDiffuse + reflectedLight.indirectDiffuse ) * lpF, diffuseColor.rgb, uUnlit );',
         '\tvec3 outgoingLight = lpLit + diffuseColor.rgb * ( lpEmit * uEmit * uGlow );',
         '\toutgoingLight += pow( 1.0 - saturate( dot( normal, normalize( vViewPosition ) ) ), 3.0 ) * uRim * vec3( 1.0, 0.896, 0.672 );',
         '\toutgoingLight *= vLpPulse;',
       ].join('\n'));
     if (!sh.fragmentShader.includes('lpLit')) LP.errors.push('shader patch failed: outgoingLight');
+    if (!sh.vertexShader.includes('vLpWld =')) LP.errors.push('shader patch failed: project_vertex');
   };
-  m.customProgramCacheKey = () => 'lp-lit-v1';
+  m.customProgramCacheKey = () => 'lp-lit-v3';
   return m;
 }
 
@@ -143,10 +247,14 @@ function makeMat(slot, rim) {
 async function getGltf(a) {
   let p = state.gltf.get(a.id);
   if (!p) {
-    p = loader.loadAsync(a.glb).then((g) => {
+    const ownP = a.own && !OWN_OFF ? loadOwn(a.own).catch((e) => { LP.errors.push('own map ' + a.id + ': ' + e.message); return null; }) : null;
+    p = Promise.all([loader.loadAsync(a.glb), ownP]).then(([g, own]) => {
       g.scene.traverse((o) => {
         if (o.isMesh && o.geometry.attributes.uv1 && !o.geometry.attributes.lpuv1) o.geometry.setAttribute('lpuv1', o.geometry.attributes.uv1);
+        // COLOR_0 (vertex AO) under an own name: the material keeps vertexColors off, the shader reads the V2 marker itself
+        if (o.isMesh && o.geometry.attributes.color && !o.geometry.attributes.lpcol) o.geometry.setAttribute('lpcol', o.geometry.attributes.color);
       });
+      g.userData.lpOwn = own || null;
       return g;
     });
     state.gltf.set(a.id, p);
@@ -165,7 +273,7 @@ function instantiate(a, g, own) {
   root.traverse((o) => {
     if (!o.isMesh) return;
     const slot = (o.material && o.material.name) || 'M_Palette';
-    o.material = makeMat(slot, rim);
+    o.material = makeMat(slot, rim, o.geometry.attributes.lpuv1 ? g.userData.lpOwn : null, !!o.geometry.attributes.lpcol);
     const f = o.material.userData.flags;
     o.castShadow = !(f.portal || f.fire || f.unlit);
     o.receiveShadow = true;
@@ -191,7 +299,7 @@ function attachHat(inst, g) {
   hat.name = '__hat';
   hat.traverse((o) => {
     if (!o.isMesh) return;
-    o.material = makeMat((o.material && o.material.name) || 'M_Palette', true);
+    o.material = makeMat((o.material && o.material.name) || 'M_Palette', true, null, !!o.geometry.attributes.lpcol);
     o.castShadow = true; o.receiveShadow = true;
     o.geometry = o.geometry.clone();
     o.userData.hatMesh = true;
@@ -596,19 +704,29 @@ function defaultClip(inst, clips) {
 // ---------- stage (scene, lights, ground) ----------
 function makeStage(shadowSize) {
   const scene = new THREE.Scene();
+  // ambient (LpStageLook, linear): dc + (up - dc) n.y + (dc - front) n.z(Unity) = AmbientLight dc + two hemisphere terms
+  // (a hemisphere light with sky s / ground g gives (s+g)/2 + (s-g)/2 * n.dir; three z = -Unity z, so the front term
+  // -(dc - front) n.z(three) rides on a +z hemisphere with sky -(dc - front), ground +(dc - front))
   const amb = new THREE.AmbientLight(0x8c8f99, Math.PI);
+  const dc = new THREE.Color(0x8c8f99), ay = new THREE.Color(0x9c948a).sub(dc), az = dc.clone().sub(new THREE.Color(0x9aa0ab));
+  const hemiY = new THREE.HemisphereLight(0xffffff, 0xffffff, Math.PI);
+  hemiY.color.copy(ay); hemiY.groundColor.copy(ay).multiplyScalar(-1); hemiY.position.set(0, 1, 0);
+  const hemiZ = new THREE.HemisphereLight(0xffffff, 0xffffff, Math.PI);
+  hemiZ.color.copy(az).multiplyScalar(-1); hemiZ.groundColor.copy(az); hemiZ.position.set(0, 0, 1);
   const key = new THREE.DirectionalLight(0xffe9c7, 0.85 * Math.PI);
   key.castShadow = true;
   key.shadow.mapSize.set(shadowSize, shadowSize);
   key.shadow.bias = -0.0004;
   key.shadow.normalBias = 0.02;
-  if ('intensity' in key.shadow) key.shadow.intensity = 0.6;
-  const fill = new THREE.DirectionalLight(0xfff1de, 0.35 * Math.PI);
+  if ('intensity' in key.shadow) key.shadow.intensity = LOOK_V1 ? 0.6 : 0.4;      // game soft shadow strength 0.40
+  const fill = new THREE.DirectionalLight(0xfff1de, 0.35 * Math.PI);              // round-2 viewer aid, not in the game
   const groundMat = new THREE.MeshLambertMaterial({ color: STYLE.sand.ground });
   const ground = new THREE.Mesh(new THREE.CircleGeometry(1, 64), groundMat);
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
-  scene.add(amb, key, key.target, fill, fill.target, ground);
+  scene.add(amb, key, key.target, ground);
+  if (LOOK_V1) scene.add(fill, fill.target);
+  else scene.add(hemiY, hemiZ);
   scene.background = new THREE.Color(STYLE.sand.bg);
   scene.fog = new THREE.Fog(STYLE.sand.bg, 10, 40);
   const st = { scene, amb, key, fill, ground, groundMat, dark: false, r: 1 };
@@ -1202,7 +1320,16 @@ LP.probe = () => {
     lum += l;
     if (l < 25) black++;
   }
-  return { cover: +(n / (w * h)).toFixed(3), mean: n ? Math.round(lum / n) : 0, black: n ? +(black / n).toFixed(3) : 0 };
+  let ao = 0, aoV2 = 0, meshes = 0;
+  if (V.inst) for (const o of V.inst.meshes) {
+    meshes++;
+    const c = o.geometry.attributes.lpcol;
+    if (!c) continue;
+    ao++;
+    if (c.itemSize === 4) { const a = c.getW(0); if (a > 0.3 && a < 0.7) aoV2++; }
+  }
+  return { cover: +(n / (w * h)).toFixed(3), mean: n ? Math.round(lum / n) : 0, black: n ? +(black / n).toFixed(3) : 0,
+    look: LP.look, maps: !!LP.lookMaps, meshes, ao, aoV2 };
 };
 
 // ---------- boot ----------
@@ -1214,6 +1341,8 @@ async function boot() {
     state.assets = man.assets || [];
     for (const a of state.assets) state.byId.set(a.id, a);
     state.palette = buildPalette(man.palette);
+    try { state.look = await loadLook(man.look); } catch (e) { LP.errors.push('look: ' + e.message); state.look = LOOK_NONE; }
+    LP.lookMaps = !!state.look.ok;
     const t = man.totals || {};
     const built = man.built_utc ? new Date(man.built_utc) : null;
     const dubai = built ? new Date(built.getTime() + 4 * 3600e3).toISOString().slice(0, 16).replace('T', ' ') + ' (Дубай)' : '';

@@ -1,6 +1,55 @@
 {
  "version": 1,
- "built_utc": "2026-10-08T21:02:29Z",
+ "look": {
+  "file": "tex/lp_look.rgba",
+  "rows": "bottom-up",
+  "maps": [
+   {
+    "name": "LP_DetailA",
+    "w": 256,
+    "h": 256,
+    "offset": 0,
+    "bytes": 262144,
+    "sha1": "2db498ce233b",
+    "mean": [
+     0.5003,
+     0.5,
+     0.5,
+     0.5
+    ]
+   },
+   {
+    "name": "LP_DetailB",
+    "w": 256,
+    "h": 256,
+    "offset": 262144,
+    "bytes": 262144,
+    "sha1": "c8b1716db304",
+    "mean": [
+     0.5,
+     0.5,
+     0.5004,
+     0.5
+    ]
+   },
+   {
+    "name": "LP_CellLut",
+    "w": 16,
+    "h": 16,
+    "offset": 524288,
+    "bytes": 1024,
+    "sha1": "91bc0876dfa9",
+    "mean": [
+     0.2963,
+     0.0554,
+     0.1209,
+     0.3984
+    ]
+   }
+  ],
+  "gain": 1.0
+ },
+ "built_utc": "2026-10-09T10:35:48Z",
  "categories": [
   [
    "chars",
@@ -826,85 +875,85 @@
    ],
    [
     106,
-    "#E1BF6F",
-    "#E1BF6F",
+    "#E7BE5C",
+    "#E7BE5C",
     0.0,
     "ground_path_t2"
    ],
    [
     107,
-    "#C9A253",
-    "#C9A253",
+    "#CFA040",
+    "#CFA040",
     0.0,
     "ground_t2"
    ],
    [
     108,
-    "#BD9044",
-    "#BD9044",
+    "#C48E2F",
+    "#C48E2F",
     0.0,
     "ground_dark_t2"
    ],
    [
     109,
-    "#B38540",
-    "#B38540",
+    "#BA832D",
+    "#BA832D",
     0.0,
     "ground_edge_t2"
    ],
    [
     110,
-    "#AD7F3B",
-    "#AD7F3B",
+    "#B47D28",
+    "#B47D28",
     0.0,
     "ground_wallfoot_t2"
    ],
    [
     111,
-    "#926235",
-    "#926235",
+    "#985F29",
+    "#985F29",
     0.0,
     "ground_underwall_t2"
    ],
    [
     112,
-    "#D9BE72",
-    "#D9BE72",
+    "#E4BC56",
+    "#E4BC56",
     0.0,
     "ground_path_t3"
    ],
    [
     113,
-    "#C1A156",
-    "#C1A156",
+    "#CD9F39",
+    "#CD9F39",
     0.0,
     "ground_t3"
    ],
    [
     114,
-    "#B48F48",
-    "#B48F48",
+    "#C08A2C",
+    "#C08A2C",
     0.0,
     "ground_dark_t3"
    ],
    [
     115,
-    "#AB8442",
-    "#AB8442",
+    "#B77F28",
+    "#B77F28",
     0.0,
     "ground_edge_t3"
    ],
    [
     116,
-    "#A57E3D",
-    "#A57E3D",
+    "#B17923",
+    "#B17923",
     0.0,
     "ground_wallfoot_t3"
    ],
    [
     117,
-    "#8B6136",
-    "#8B6136",
+    "#965C26",
+    "#965C26",
     0.0,
     "ground_underwall_t3"
    ],
@@ -928,6 +977,27 @@
     "#4A4352",
     0.0,
     "rock_void"
+   ],
+   [
+    121,
+    "#F3CC7F",
+    "#F3CC7F",
+    0.0,
+    "road_bed"
+   ],
+   [
+    122,
+    "#F1C972",
+    "#F1C972",
+    0.0,
+    "road_bed_t2"
+   ],
+   [
+    123,
+    "#EEC76C",
+    "#EEC76C",
+    0.0,
+    "road_bed_t3"
    ]
   ]
  },
@@ -940,30 +1010,31 @@
    "folder": "Characters",
    "fbx": "Characters/CatBoy",
    "glb": "glb/CatBoy.glb",
-   "bytes": 481096,
-   "tris": 1332,
+   "bytes": 750244,
+   "tris": 4034,
    "parts": [
     {
      "name": "CatBoy_Body",
-     "tris": 560,
+     "tris": 1988,
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": true,
      "parent": "CatRig",
      "bbox": [
       [
-       -0.5474,
-       -0.2688,
-       0.002
+       -0.5579,
+       -0.2845,
+       -0.0
       ],
       [
-       0.5474,
-       0.2207,
-       1.2393
+       0.5579,
+       0.275,
+       1.328
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "CatBoy_Brow_L",
@@ -971,21 +1042,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       0.1265,
-       -0.2661,
-       0.9279
+       0.1301,
+       -0.2709,
+       0.9237
       ],
       [
-       0.2202,
-       -0.2131,
-       0.967
+       0.2226,
+       -0.2171,
+       0.9611
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatBoy_Brow_R",
@@ -993,21 +1065,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       -0.2202,
-       -0.2659,
-       0.928
+       -0.2226,
+       -0.2709,
+       0.9237
       ],
       [
-       -0.1264,
-       -0.2131,
-       0.967
+       -0.1301,
+       -0.2171,
+       0.9611
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatBoy_Eye_Closed_L",
@@ -1015,21 +1088,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       0.1106,
-       -0.2676,
-       0.8028
+       0.1135,
+       -0.2703,
+       0.799
       ],
       [
-       0.2332,
-       -0.2076,
-       0.859
+       0.2365,
+       -0.212,
+       0.8583
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatBoy_Eye_Closed_R",
@@ -1037,21 +1111,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       -0.2331,
-       -0.2676,
-       0.8029
+       -0.2365,
+       -0.2703,
+       0.799
       ],
       [
-       -0.1105,
-       -0.2076,
-       0.859
+       -0.1135,
+       -0.212,
+       0.8583
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatBoy_Eye_Dead_L",
@@ -1059,21 +1134,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       0.1114,
-       -0.2612,
-       0.788
+       0.1177,
+       -0.269,
+       0.7866
       ],
       [
-       0.22,
-       -0.1919,
-       0.8899
+       0.2249,
+       -0.1997,
+       0.8868
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatBoy_Eye_Dead_R",
@@ -1081,21 +1157,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       -0.2197,
-       -0.2606,
-       0.788
+       -0.2246,
+       -0.2687,
+       0.7866
       ],
       [
-       -0.1113,
-       -0.1917,
-       0.8901
+       -0.1177,
+       -0.1997,
+       0.8869
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatBoy_Eye_Happy_L",
@@ -1103,21 +1180,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       0.1058,
-       -0.2609,
+       0.1099,
+       -0.2649,
        0.8115
       ],
       [
-       0.2291,
-       -0.1994,
-       0.871
+       0.2342,
+       -0.2062,
+       0.8692
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatBoy_Eye_Happy_R",
@@ -1125,21 +1203,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       -0.229,
-       -0.2608,
+       -0.2342,
+       -0.2647,
        0.8115
       ],
       [
-       -0.1057,
-       -0.1993,
-       0.8711
+       -0.1099,
+       -0.206,
+       0.8692
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatBoy_Eye_Open_L",
@@ -1147,21 +1226,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       0.0926,
-       -0.2705,
-       0.7654
+       0.0984,
+       -0.2746,
+       0.765
       ],
       [
-       0.2403,
-       -0.181,
-       0.9225
+       0.2425,
+       -0.1832,
+       0.9179
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatBoy_Eye_Open_R",
@@ -1169,21 +1249,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       -0.2402,
-       -0.2703,
-       0.7654
+       -0.2424,
+       -0.2768,
+       0.765
       ],
       [
-       -0.0926,
-       -0.1809,
-       0.9227
+       -0.0984,
+       -0.1832,
+       0.9179
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatBoy_Eye_Ouch_L",
@@ -1191,21 +1272,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       0.1233,
-       -0.2577,
-       0.7851
+       0.1275,
+       -0.2625,
+       0.7839
       ],
       [
-       0.222,
-       -0.1904,
-       0.8885
+       0.2267,
+       -0.198,
+       0.8888
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatBoy_Eye_Ouch_R",
@@ -1213,43 +1295,45 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       -0.2217,
-       -0.2576,
-       0.7852
+       -0.2264,
+       -0.2624,
+       0.7839
       ],
       [
-       -0.1232,
-       -0.1903,
-       0.8887
+       -0.1275,
+       -0.198,
+       0.889
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatBoy_Fur",
-     "tris": 548,
+     "tris": 1822,
      "mats": [
       "M_Palette_FurGinger"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": true,
      "parent": "CatRig",
      "bbox": [
       [
-       -0.4922,
-       -0.2731,
-       0.1727
+       -0.5193,
+       -0.29,
+       0.162
       ],
       [
-       0.5157,
-       0.3947,
-       1.2916
+       0.5248,
+       0.3974,
+       1.3652
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "CatBoy_Mouth_Flat",
@@ -1257,21 +1341,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       -0.0355,
-       -0.2601,
-       0.733
+       -0.0371,
+       -0.2643,
+       0.7314
       ],
       [
-       0.0353,
-       -0.2383,
-       0.749
+       0.0362,
+       -0.2326,
+       0.7447
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatBoy_Mouth_Grit",
@@ -1279,21 +1364,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
        -0.058,
-       -0.2625,
-       0.722
+       -0.2659,
+       0.7235
       ],
       [
        0.058,
-       -0.2392,
+       -0.234,
        0.748
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatBoy_Mouth_O",
@@ -1301,21 +1387,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
        -0.0226,
-       -0.2458,
-       0.7075
+       -0.2554,
+       0.7055
       ],
       [
        0.0226,
-       -0.2237,
+       -0.2266,
        0.7525
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatBoy_Mouth_Open",
@@ -1323,21 +1410,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
        -0.045,
-       -0.26,
-       0.712
+       -0.2659,
+       0.71
       ],
       [
        0.045,
-       -0.2237,
+       -0.2289,
        0.752
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatBoy_Mouth_Smile",
@@ -1345,21 +1433,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       -0.0539,
-       -0.2605,
-       0.729
+       -0.055,
+       -0.2683,
+       0.7266
       ],
       [
-       0.0537,
-       -0.2383,
-       0.7591
+       0.0547,
+       -0.2434,
+       0.7584
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatBoy_Whiskers",
@@ -1367,21 +1456,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       -0.2225,
-       -0.2509,
-       0.718
+       -0.2217,
+       -0.2583,
+       0.7159
       ],
       [
-       0.2225,
-       -0.2097,
+       0.2217,
+       -0.2087,
        0.7819
       ]
-     ]
+     ],
+     "col": null
     }
    ],
    "sockets": [],
@@ -1515,14 +1605,14 @@
    "fur": true,
    "bbox": [
     [
-     -0.5474,
-     -0.2731,
-     0.002
+     -0.5579,
+     -0.29,
+     -0.0
     ],
     [
-     0.5474,
-     0.3947,
-     1.2916
+     0.5579,
+     0.3974,
+     1.3652
     ]
    ],
    "concept": "barsik",
@@ -1530,7 +1620,13 @@
    "anim": null,
    "pilot_tag": false,
    "pilot_copy": false,
-   "props": null
+   "props": null,
+   "own": "tex/CatBoy_Own.png",
+   "ao": 2,
+   "color0": {
+    "VEC4/5123n": 2,
+    "none": 18
+   }
   },
   {
    "id": "CatGirl",
@@ -1540,30 +1636,31 @@
    "folder": "Characters",
    "fbx": "Characters/CatGirl",
    "glb": "glb/CatGirl.glb",
-   "bytes": 483172,
-   "tris": 1364,
+   "bytes": 736456,
+   "tris": 3904,
    "parts": [
     {
      "name": "CatGirl_Body",
-     "tris": 592,
+     "tris": 1936,
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": true,
      "parent": "CatRig",
      "bbox": [
       [
-       -0.5474,
-       -0.2688,
-       0.002
+       -0.5579,
+       -0.2845,
+       -0.0
       ],
       [
-       0.5474,
-       0.2207,
-       1.2393
+       0.5579,
+       0.2507,
+       1.328
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "CatGirl_Brow_L",
@@ -1571,21 +1668,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       0.1265,
-       -0.2661,
-       0.9279
+       0.1301,
+       -0.2709,
+       0.9237
       ],
       [
-       0.2202,
-       -0.2131,
-       0.967
+       0.2226,
+       -0.2171,
+       0.9611
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatGirl_Brow_R",
@@ -1593,21 +1691,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       -0.2202,
-       -0.2659,
-       0.928
+       -0.2226,
+       -0.2709,
+       0.9237
       ],
       [
-       -0.1264,
-       -0.2131,
-       0.967
+       -0.1301,
+       -0.2171,
+       0.9611
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatGirl_Eye_Closed_L",
@@ -1615,21 +1714,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       0.1106,
-       -0.2676,
-       0.8028
+       0.1135,
+       -0.2703,
+       0.799
       ],
       [
-       0.2332,
-       -0.2076,
-       0.859
+       0.2365,
+       -0.212,
+       0.8583
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatGirl_Eye_Closed_R",
@@ -1637,21 +1737,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       -0.2331,
-       -0.2676,
-       0.8029
+       -0.2365,
+       -0.2703,
+       0.799
       ],
       [
-       -0.1105,
-       -0.2076,
-       0.859
+       -0.1135,
+       -0.212,
+       0.8583
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatGirl_Eye_Dead_L",
@@ -1659,21 +1760,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       0.1114,
-       -0.2612,
-       0.788
+       0.1177,
+       -0.269,
+       0.7866
       ],
       [
-       0.22,
-       -0.1919,
-       0.8899
+       0.2249,
+       -0.1997,
+       0.8868
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatGirl_Eye_Dead_R",
@@ -1681,21 +1783,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       -0.2197,
-       -0.2606,
-       0.788
+       -0.2246,
+       -0.2687,
+       0.7866
       ],
       [
-       -0.1113,
-       -0.1917,
-       0.8901
+       -0.1177,
+       -0.1997,
+       0.8869
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatGirl_Eye_Happy_L",
@@ -1703,21 +1806,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       0.1058,
-       -0.2609,
+       0.1099,
+       -0.2649,
        0.8115
       ],
       [
-       0.2291,
-       -0.1994,
-       0.871
+       0.2342,
+       -0.2062,
+       0.8692
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatGirl_Eye_Happy_R",
@@ -1725,21 +1829,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       -0.229,
-       -0.2608,
+       -0.2342,
+       -0.2647,
        0.8115
       ],
       [
-       -0.1057,
-       -0.1993,
-       0.8711
+       -0.1099,
+       -0.206,
+       0.8692
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatGirl_Eye_Open_L",
@@ -1747,21 +1852,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       0.0926,
-       -0.2705,
-       0.7654
+       0.0984,
+       -0.2746,
+       0.765
       ],
       [
-       0.2403,
-       -0.181,
-       0.9225
+       0.2425,
+       -0.1832,
+       0.9179
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatGirl_Eye_Open_R",
@@ -1769,21 +1875,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       -0.2402,
-       -0.2703,
-       0.7654
+       -0.2424,
+       -0.2768,
+       0.765
       ],
       [
-       -0.0926,
-       -0.1809,
-       0.9227
+       -0.0984,
+       -0.1832,
+       0.9179
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatGirl_Eye_Ouch_L",
@@ -1791,21 +1898,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       0.1233,
-       -0.2577,
-       0.7851
+       0.1275,
+       -0.2625,
+       0.7839
       ],
       [
-       0.222,
-       -0.1904,
-       0.8885
+       0.2267,
+       -0.198,
+       0.8888
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatGirl_Eye_Ouch_R",
@@ -1813,43 +1921,45 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       -0.2217,
-       -0.2576,
-       0.7852
+       -0.2264,
+       -0.2624,
+       0.7839
       ],
       [
-       -0.1232,
-       -0.1903,
-       0.8887
+       -0.1275,
+       -0.198,
+       0.889
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatGirl_Fur",
-     "tris": 548,
+     "tris": 1744,
      "mats": [
       "M_Palette_FurCalico"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": true,
      "parent": "CatRig",
      "bbox": [
       [
-       -0.4922,
-       -0.275,
-       0.1727
+       -0.5193,
+       -0.29,
+       0.162
       ],
       [
-       0.5157,
-       0.3947,
-       1.2916
+       0.5248,
+       0.3974,
+       1.3652
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "CatGirl_Mouth_Flat",
@@ -1857,21 +1967,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       -0.0355,
-       -0.2601,
-       0.733
+       -0.0371,
+       -0.2643,
+       0.7314
       ],
       [
-       0.0353,
-       -0.2383,
-       0.749
+       0.0362,
+       -0.2326,
+       0.7447
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatGirl_Mouth_Grit",
@@ -1879,21 +1990,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
        -0.058,
-       -0.2625,
-       0.722
+       -0.2659,
+       0.7235
       ],
       [
        0.058,
-       -0.2392,
+       -0.234,
        0.748
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatGirl_Mouth_O",
@@ -1901,21 +2013,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
        -0.0226,
-       -0.2458,
-       0.7075
+       -0.2554,
+       0.7055
       ],
       [
        0.0226,
-       -0.2237,
+       -0.2266,
        0.7525
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatGirl_Mouth_Open",
@@ -1923,21 +2036,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
        -0.045,
-       -0.26,
-       0.712
+       -0.2659,
+       0.71
       ],
       [
        0.045,
-       -0.2237,
+       -0.2289,
        0.752
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatGirl_Mouth_Smile",
@@ -1945,21 +2059,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       -0.0539,
-       -0.2605,
-       0.729
+       -0.055,
+       -0.2683,
+       0.7266
       ],
       [
-       0.0537,
-       -0.2383,
-       0.7591
+       0.0547,
+       -0.2434,
+       0.7584
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "CatGirl_Whiskers",
@@ -1967,21 +2082,22 @@
      "mats": [
       "M_Palette"
      ],
-     "uvs": 1,
+     "uvs": 2,
      "skinned": false,
      "parent": "CatRig",
      "bbox": [
       [
-       -0.2225,
-       -0.2509,
-       0.718
+       -0.2217,
+       -0.2583,
+       0.7159
       ],
       [
-       0.2225,
-       -0.2097,
+       0.2217,
+       -0.2087,
        0.7819
       ]
-     ]
+     ],
+     "col": null
     }
    ],
    "sockets": [],
@@ -2115,14 +2231,14 @@
    "fur": true,
    "bbox": [
     [
-     -0.5474,
-     -0.275,
-     0.002
+     -0.5579,
+     -0.29,
+     -0.0
     ],
     [
-     0.5474,
-     0.3947,
-     1.2916
+     0.5579,
+     0.3974,
+     1.3652
     ]
    ],
    "concept": "musya",
@@ -2130,7 +2246,13 @@
    "anim": null,
    "pilot_tag": false,
    "pilot_copy": false,
-   "props": null
+   "props": null,
+   "own": "tex/CatGirl_Own.png",
+   "ao": 2,
+   "color0": {
+    "VEC4/5123n": 2,
+    "none": 18
+   }
   },
   {
    "id": "Hat_Miner",
@@ -2140,12 +2262,12 @@
    "folder": "Characters",
    "fbx": "Characters/Hat_Miner",
    "glb": "glb/Hat_Miner.glb",
-   "bytes": 7132,
-   "tris": 230,
+   "bytes": 28020,
+   "tris": 872,
    "parts": [
     {
      "name": "Hat_Miner",
-     "tris": 214,
+     "tris": 800,
      "mats": [
       "M_Palette"
      ],
@@ -2154,20 +2276,21 @@
      "parent": null,
      "bbox": [
       [
-       -0.3477,
-       -0.3523,
-       -0.0388
+       -0.3556,
+       -0.3296,
+       -0.02
       ],
       [
-       0.3477,
-       0.3095,
-       0.2916
+       0.3556,
+       0.3165,
+       0.2874
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Lens_Off",
-     "tris": 8,
+     "tris": 36,
      "mats": [
       "M_Palette"
      ],
@@ -2176,20 +2299,21 @@
      "parent": "Hat_Miner",
      "bbox": [
       [
-       -0.08,
-       -0.3515,
-       -0.0245
+       -0.0654,
+       -0.2877,
+       0.0075
       ],
       [
-       0.08,
-       -0.302,
-       0.1277
+       0.0654,
+       -0.2345,
+       0.127
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "Lens_On",
-     "tris": 8,
+     "tris": 36,
      "mats": [
       "M_Palette"
      ],
@@ -2198,16 +2322,17 @@
      "parent": "Hat_Miner",
      "bbox": [
       [
-       -0.08,
-       -0.3524,
-       -0.0248
+       -0.0654,
+       -0.2886,
+       0.007
       ],
       [
-       0.08,
-       -0.303,
-       0.1274
+       0.0654,
+       -0.2354,
+       0.1266
       ]
-     ]
+     ],
+     "col": null
     }
    ],
    "sockets": [],
@@ -2220,20 +2345,21 @@
    "cells": [
     14,
     28,
+    34,
     40,
     43
    ],
    "fur": false,
    "bbox": [
     [
-     -0.3477,
-     -0.3524,
-     -0.0388
+     -0.3556,
+     -0.3296,
+     -0.02
     ],
     [
-     0.3477,
-     0.3095,
-     0.2916
+     0.3556,
+     0.3165,
+     0.2874
     ]
    ],
    "concept": "barsik",
@@ -2241,7 +2367,13 @@
    "anim": null,
    "pilot_tag": false,
    "pilot_copy": false,
-   "props": null
+   "props": null,
+   "own": null,
+   "ao": 1,
+   "color0": {
+    "none": 2,
+    "VEC4/5123n": 1
+   }
   },
   {
    "id": "Tool_Hammer_Kolotushka",
@@ -2251,12 +2383,12 @@
    "folder": "Characters",
    "fbx": "Characters/Tool_Hammer_Kolotushka",
    "glb": "glb/Tool_Hammer_Kolotushka.glb",
-   "bytes": 7652,
-   "tris": 184,
+   "bytes": 23236,
+   "tris": 516,
    "parts": [
     {
      "name": "Tool_Hammer_Kolotushka",
-     "tris": 184,
+     "tris": 516,
      "mats": [
       "M_Palette"
      ],
@@ -2265,16 +2397,17 @@
      "parent": null,
      "bbox": [
       [
-       -0.1201,
-       -0.225,
-       -0.15
+       -0.1352,
+       -0.228,
+       -0.152
       ],
       [
-       0.1201,
-       0.225,
-       0.605
+       0.1352,
+       0.228,
+       0.609
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [
@@ -2290,19 +2423,20 @@
     9,
     10,
     14,
+    56,
     58
    ],
    "fur": false,
    "bbox": [
     [
-     -0.1201,
-     -0.225,
-     -0.15
+     -0.1352,
+     -0.228,
+     -0.152
     ],
     [
-     0.1201,
-     0.225,
-     0.605
+     0.1352,
+     0.228,
+     0.609
     ]
    ],
    "concept": "musya",
@@ -2310,7 +2444,12 @@
    "anim": null,
    "pilot_tag": false,
    "pilot_copy": false,
-   "props": null
+   "props": null,
+   "own": null,
+   "ao": 1,
+   "color0": {
+    "VEC4/5123n": 1
+   }
   },
   {
    "id": "Pickaxe_Base",
@@ -2320,12 +2459,12 @@
    "folder": "Characters",
    "fbx": "Characters/Pickaxe_Base",
    "glb": "glb/Pickaxe_Base.glb",
-   "bytes": 3880,
-   "tris": 92,
+   "bytes": 23884,
+   "tris": 492,
    "parts": [
     {
      "name": "Pickaxe_Base",
-     "tris": 92,
+     "tris": 492,
      "mats": [
       "M_Palette"
      ],
@@ -2334,16 +2473,17 @@
      "parent": null,
      "bbox": [
       [
-       -0.05,
-       -0.2193,
-       -0.2
+       -0.0517,
+       -0.2167,
+       -0.23
       ],
       [
-       0.05,
-       0.2193,
-       0.4949
+       0.0517,
+       0.2167,
+       0.505
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [
@@ -2358,19 +2498,20 @@
    "cells": [
     14,
     45,
-    46
+    46,
+    56
    ],
    "fur": false,
    "bbox": [
     [
-     -0.05,
-     -0.2193,
-     -0.2
+     -0.0517,
+     -0.2167,
+     -0.23
     ],
     [
-     0.05,
-     0.2193,
-     0.4949
+     0.0517,
+     0.2167,
+     0.505
     ]
    ],
    "concept": "barsik",
@@ -2378,7 +2519,12 @@
    "anim": null,
    "pilot_tag": false,
    "pilot_copy": false,
-   "props": null
+   "props": null,
+   "own": null,
+   "ao": 1,
+   "color0": {
+    "VEC4/5123n": 1
+   }
   },
   {
    "id": "Prop_HeroPedestal",
@@ -2411,7 +2557,8 @@
        0.605,
        0.554
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "Prop_HeroPedestal",
@@ -2433,7 +2580,8 @@
        0.7513,
        0.55
       ]
-     ]
+     ],
+     "col": null
     }
    ],
    "sockets": [
@@ -2470,7 +2618,12 @@
    "anim": null,
    "pilot_tag": false,
    "pilot_copy": false,
-   "props": null
+   "props": null,
+   "own": null,
+   "ao": 0,
+   "color0": {
+    "none": 2
+   }
   },
   {
    "id": "Prop_IntroRope",
@@ -2503,7 +2656,8 @@
        0.0554,
        0.0
       ]
-     ]
+     ],
+     "col": null
     }
    ],
    "sockets": [],
@@ -2534,7 +2688,12 @@
    "anim": null,
    "pilot_tag": false,
    "pilot_copy": false,
-   "props": null
+   "props": null,
+   "own": null,
+   "ao": 0,
+   "color0": {
+    "none": 1
+   }
   },
   {
    "id": "RatDigger",
@@ -2544,12 +2703,12 @@
    "folder": "Enemies",
    "fbx": "Enemies/RatDigger",
    "glb": "glb/RatDigger.glb",
-   "bytes": 172048,
-   "tris": 1086,
+   "bytes": 315568,
+   "tris": 3708,
    "parts": [
     {
      "name": "RatDigger_Body",
-     "tris": 1006,
+     "tris": 3400,
      "mats": [
       "M_Palette"
      ],
@@ -2558,20 +2717,21 @@
      "parent": "R1Rig",
      "bbox": [
       [
-       -0.5357,
-       -0.463,
+       -0.5511,
+       -0.4837,
        -0.0
       ],
       [
-       0.5219,
-       0.3815,
-       1.0078
+       0.5181,
+       0.3552,
+       1.0156
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "RatDigger_Pick",
-     "tris": 80,
+     "tris": 308,
      "mats": [
       "M_Palette"
      ],
@@ -2580,16 +2740,17 @@
      "parent": "R1Rig",
      "bbox": [
       [
-       0.1765,
-       -0.3909,
-       0.2444
+       0.1686,
+       -0.3881,
+       0.2327
       ],
       [
-       0.6593,
-       -0.2217,
-       0.8196
+       0.6877,
+       -0.2174,
+       0.8161
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [],
@@ -2644,6 +2805,7 @@
     "M_Palette"
    ],
    "cells": [
+    13,
     14,
     28,
     36,
@@ -2653,6 +2815,7 @@
     44,
     45,
     46,
+    54,
     62,
     65,
     67,
@@ -2663,14 +2826,14 @@
    "fur": false,
    "bbox": [
     [
-     -0.5357,
-     -0.463,
+     -0.5511,
+     -0.4837,
      -0.0
     ],
     [
-     0.6593,
-     0.3815,
-     1.0078
+     0.6877,
+     0.3552,
+     1.0156
     ]
    ],
    "concept": "rat",
@@ -2678,7 +2841,12 @@
    "anim": null,
    "pilot_tag": false,
    "pilot_copy": false,
-   "props": null
+   "props": null,
+   "own": null,
+   "ao": 2,
+   "color0": {
+    "VEC4/5123n": 2
+   }
   },
   {
    "id": "RatGuard",
@@ -2688,12 +2856,12 @@
    "folder": "Enemies",
    "fbx": "Enemies/RatGuard",
    "glb": "glb/RatGuard.glb",
-   "bytes": 173332,
-   "tris": 1144,
+   "bytes": 334924,
+   "tris": 3914,
    "parts": [
     {
      "name": "RatGuard_Body",
-     "tris": 1006,
+     "tris": 3400,
      "mats": [
       "M_Palette"
      ],
@@ -2702,20 +2870,21 @@
      "parent": "R1Rig",
      "bbox": [
       [
-       -0.5357,
-       -0.463,
+       -0.5511,
+       -0.4837,
        -0.0
       ],
       [
-       0.5219,
-       0.3815,
-       1.0078
+       0.5181,
+       0.3552,
+       1.0156
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "RatGuard_Shield",
-     "tris": 138,
+     "tris": 514,
      "mats": [
       "M_Palette"
      ],
@@ -2724,16 +2893,17 @@
      "parent": "R1Rig",
      "bbox": [
       [
-       0.0199,
-       -0.5152,
+       0.02,
+       -0.5148,
        0.1
       ],
       [
-       0.5355,
-       -0.32,
+       0.5329,
+       -0.3179,
        0.66
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [],
@@ -2799,6 +2969,7 @@
     39,
     43,
     44,
+    54,
     62,
     65,
     67,
@@ -2809,14 +2980,14 @@
    "fur": false,
    "bbox": [
     [
-     -0.5357,
-     -0.5152,
+     -0.5511,
+     -0.5148,
      -0.0
     ],
     [
-     0.5355,
-     0.3815,
-     1.0078
+     0.5329,
+     0.3552,
+     1.0156
     ]
    ],
    "concept": "rat",
@@ -2824,7 +2995,12 @@
    "anim": null,
    "pilot_tag": false,
    "pilot_copy": false,
-   "props": null
+   "props": null,
+   "own": null,
+   "ao": 2,
+   "color0": {
+    "VEC4/5123n": 2
+   }
   },
   {
    "id": "RatKing",
@@ -2834,12 +3010,12 @@
    "folder": "Enemies",
    "fbx": "Enemies/RatKing",
    "glb": "glb/RatKing.glb",
-   "bytes": 264684,
-   "tris": 2618,
+   "bytes": 695332,
+   "tris": 12736,
    "parts": [
     {
      "name": "RatKing_Body",
-     "tris": 2124,
+     "tris": 9694,
      "mats": [
       "M_Palette"
      ],
@@ -2848,20 +3024,21 @@
      "parent": "RatKingRig",
      "bbox": [
       [
-       -1.7387,
-       -1.1956,
-       -0.0148
+       -1.7685,
+       -1.2304,
+       -0.0462
       ],
       [
-       2.0058,
-       1.9014,
-       2.9409
+       1.8803,
+       1.9887,
+       2.9502
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "RatKing_Crown",
-     "tris": 248,
+     "tris": 1890,
      "mats": [
       "M_Palette"
      ],
@@ -2870,20 +3047,21 @@
      "parent": "RatKingRig",
      "bbox": [
       [
-       -0.5255,
-       -0.6896,
-       2.74
+       -0.5541,
+       -0.7056,
+       2.735
       ],
       [
-       0.5255,
-       0.39,
-       3.1975
+       0.5541,
+       0.419,
+       3.2
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "RatKing_EyeGlow",
-     "tris": 28,
+     "tris": 36,
      "mats": [
       "M_Palette"
      ],
@@ -2892,20 +3070,21 @@
      "parent": "RatKingRig",
      "bbox": [
       [
-       -0.3441,
-       -0.7863,
-       2.492
+       -0.3475,
+       -0.7896,
+       2.501
       ],
       [
-       0.3441,
-       -0.6038,
-       2.6847
+       0.3475,
+       -0.6058,
+       2.6886
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "RatKing_Scepter",
-     "tris": 218,
+     "tris": 1116,
      "mats": [
       "M_Palette"
      ],
@@ -2915,15 +3094,16 @@
      "bbox": [
       [
        1.0891,
-       -0.6449,
-       0.05
+       -0.6767,
+       0.0
       ],
       [
-       1.5999,
-       -0.1983,
+       1.5895,
+       -0.1652,
        3.05
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [],
@@ -2986,6 +3166,8 @@
    "cells": [
     36,
     37,
+    39,
+    53,
     67,
     69,
     70,
@@ -2998,14 +3180,14 @@
    "fur": false,
    "bbox": [
     [
-     -1.7387,
-     -1.1956,
-     -0.0148
+     -1.7685,
+     -1.2304,
+     -0.0462
     ],
     [
-     2.0058,
-     1.9014,
-     3.1975
+     1.8803,
+     1.9887,
+     3.2
     ]
    ],
    "concept": "king",
@@ -3013,7 +3195,12 @@
    "anim": null,
    "pilot_tag": false,
    "pilot_copy": false,
-   "props": null
+   "props": null,
+   "own": null,
+   "ao": 4,
+   "color0": {
+    "VEC4/5123n": 4
+   }
   },
   {
    "id": "RatBurrow",
@@ -3023,12 +3210,12 @@
    "folder": "Enemies",
    "fbx": "Enemies/RatBurrow",
    "glb": "glb/RatBurrow.glb",
-   "bytes": 21980,
-   "tris": 804,
+   "bytes": 139008,
+   "tris": 2352,
    "parts": [
     {
      "name": "RatBurrow",
-     "tris": 612,
+     "tris": 1695,
      "mats": [
       "M_Palette"
      ],
@@ -3037,20 +3224,21 @@
      "parent": null,
      "bbox": [
       [
-       -1.4223,
+       -1.6111,
        -1.6682,
        -0.03
       ],
       [
-       1.4432,
-       1.0417,
+       1.6045,
+       1.0734,
        1.2197
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "RatBurrow_Boards",
-     "tris": 40,
+     "tris": 276,
      "mats": [
       "M_Palette"
      ],
@@ -3059,20 +3247,21 @@
      "parent": null,
      "bbox": [
       [
-       -0.5332,
-       -1.205,
-       0.1257
+       -0.53,
+       -1.201,
+       0.1312
       ],
       [
-       0.5332,
-       -1.095,
-       0.7943
+       0.5303,
+       -1.0919,
+       0.7893
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "RatBurrow_Palisade",
-     "tris": 152,
+     "tris": 381,
      "mats": [
       "M_Palette"
      ],
@@ -3081,16 +3270,17 @@
      "parent": null,
      "bbox": [
       [
-       -1.3691,
-       0.2783,
+       -1.3673,
+       0.2634,
        -0.0255
       ],
       [
-       1.3753,
-       1.3015,
+       1.3759,
+       1.3087,
        1.53
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [
@@ -3117,18 +3307,19 @@
     76,
     77,
     78,
-    79
+    79,
+    105
    ],
    "fur": false,
    "bbox": [
     [
-     -1.4223,
+     -1.6111,
      -1.6682,
      -0.03
     ],
     [
-     1.4432,
-     1.3015,
+     1.6045,
+     1.3087,
      1.53
     ]
    ],
@@ -3150,8 +3341,13 @@
       "RatBurrow_Palisade"
      ]
     },
-    "note": "static, origin = mound centre on the floor, mouth faces -Y (Unity +Z); Boards/Palisade share the origin (toggle the child renderers); floors f2-f3",
+    "note": "static, origin = mound centre on the floor, mouth faces -Y (Unity +Z); Boards/Palisade share the origin (toggle the child renderers); floors f2-f3; LOOK_V2 vertex AO in Col (A 0.5), LOD1 file",
     "clips": []
+   },
+   "own": null,
+   "ao": 3,
+   "color0": {
+    "VEC4/5123n": 3
    }
   },
   {
@@ -3162,7 +3358,7 @@
    "folder": "Rocks",
    "fbx": "Rocks/Rock_Base_A",
    "glb": "glb/Rock_Base_A.glb",
-   "bytes": 17772,
+   "bytes": 29612,
    "tris": 265,
    "parts": [
     {
@@ -3185,7 +3381,8 @@
        0.4942,
        0.6201
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Rock_Base_A_Cap",
@@ -3207,7 +3404,8 @@
        0.028,
        0.5899
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Rock_Base_A_Chunk0",
@@ -3229,7 +3427,8 @@
        -0.0293,
        0.26
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Rock_Base_A_Chunk1",
@@ -3251,7 +3450,8 @@
        -0.1734,
        0.2118
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Rock_Base_A_Crack1",
@@ -3273,7 +3473,8 @@
        0.4942,
        0.6201
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Rock_Base_A_Crack2",
@@ -3295,7 +3496,8 @@
        0.4942,
        0.6201
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Rock_Base_A_Crack3",
@@ -3317,7 +3519,8 @@
        0.4942,
        0.6201
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [
@@ -3405,6 +3608,11 @@
     ],
     "note": "stage meshes: show exactly one of Rock_Base_X / _Crack1 / _Crack2 / _Crack3 (MC StageOf: <.75 / <.50 / <.25); flying parts _Chunk0 (stage 1), _Chunk1 (stage 2), _Cap (stage 3) spawn at socket_chunk_0 / socket_chunk_1 / socket_cap (their own origins = those centroids) and are hidden in the prefab. Copper prisms Ore_Copper_L/M/S/XS (Rock_Prisms.fbx) at socket_ore_0..3 by tier; Rock_Gold_X = this mesh set + Ore_Gold_L/M/S at socket_gold_0..2. Prisms never move during the stages.",
     "kind": "rock"
+   },
+   "own": null,
+   "ao": 7,
+   "color0": {
+    "VEC4/5123n": 7
    }
   },
   {
@@ -3415,7 +3623,7 @@
    "folder": "Rocks",
    "fbx": "Rocks/Rock_Base_B",
    "glb": "glb/Rock_Base_B.glb",
-   "bytes": 17076,
+   "bytes": 28076,
    "tris": 251,
    "parts": [
     {
@@ -3438,7 +3646,8 @@
        0.4896,
        0.5599
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Rock_Base_B_Cap",
@@ -3460,7 +3669,8 @@
        -0.0156,
        0.5297
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Rock_Base_B_Chunk0",
@@ -3482,7 +3692,8 @@
        -0.0229,
        0.2619
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Rock_Base_B_Chunk1",
@@ -3504,7 +3715,8 @@
        -0.1706,
        0.2251
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Rock_Base_B_Crack1",
@@ -3526,7 +3738,8 @@
        0.4896,
        0.5599
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Rock_Base_B_Crack2",
@@ -3548,7 +3761,8 @@
        0.4896,
        0.5599
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Rock_Base_B_Crack3",
@@ -3570,7 +3784,8 @@
        0.4896,
        0.5599
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [
@@ -3658,6 +3873,11 @@
     ],
     "note": "stage meshes: show exactly one of Rock_Base_X / _Crack1 / _Crack2 / _Crack3 (MC StageOf: <.75 / <.50 / <.25); flying parts _Chunk0 (stage 1), _Chunk1 (stage 2), _Cap (stage 3) spawn at socket_chunk_0 / socket_chunk_1 / socket_cap (their own origins = those centroids) and are hidden in the prefab. Copper prisms Ore_Copper_L/M/S/XS (Rock_Prisms.fbx) at socket_ore_0..3 by tier; Rock_Gold_X = this mesh set + Ore_Gold_L/M/S at socket_gold_0..2. Prisms never move during the stages.",
     "kind": "rock"
+   },
+   "own": null,
+   "ao": 7,
+   "color0": {
+    "VEC4/5123n": 7
    }
   },
   {
@@ -3668,12 +3888,12 @@
    "folder": "Rocks",
    "fbx": "Rocks/Rock_Prisms",
    "glb": "glb/Rock_Prisms.glb",
-   "bytes": 10388,
-   "tris": 126,
+   "bytes": 19060,
+   "tris": 180,
    "parts": [
     {
      "name": "Ore_Copper_L",
-     "tris": 18,
+     "tris": 36,
      "mats": [
       "M_Palette"
      ],
@@ -3682,20 +3902,21 @@
      "parent": null,
      "bbox": [
       [
-       -0.2921,
+       -0.3901,
        -0.2543,
-       -0.0
+       -0.1189
       ],
       [
        0.2758,
-       0.27,
+       0.2802,
        1.0402
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Ore_Copper_M",
-     "tris": 18,
+     "tris": 36,
      "mats": [
       "M_Palette"
      ],
@@ -3706,14 +3927,15 @@
       [
        -0.214,
        -0.1902,
-       -0.0
+       -0.0975
       ],
       [
-       0.2115,
-       0.1782,
+       0.2918,
+       0.1865,
        0.836
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Ore_Copper_S",
@@ -3728,14 +3950,15 @@
       [
        -0.1738,
        -0.1442,
-       -0.0
+       0.0
       ],
       [
        0.1706,
        0.1449,
        0.7091
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Ore_Copper_XS",
@@ -3750,18 +3973,19 @@
       [
        -0.1331,
        -0.1137,
-       -0.0
+       0.0
       ],
       [
        0.1284,
        0.1099,
        0.5704
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Ore_Gold_L",
-     "tris": 18,
+     "tris": 36,
      "mats": [
       "M_Palette"
      ],
@@ -3770,16 +3994,17 @@
      "parent": null,
      "bbox": [
       [
-       -0.3068,
+       -0.3796,
        -0.2572,
-       -0.0
+       -0.1085
       ],
       [
        0.2821,
-       0.2539,
+       0.279,
        1.0566
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Ore_Gold_M",
@@ -3794,14 +4019,15 @@
       [
        -0.2104,
        -0.1865,
-       -0.0
+       0.0
       ],
       [
        0.2321,
        0.2011,
        0.8388
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Ore_Gold_S",
@@ -3816,14 +4042,15 @@
       [
        -0.1791,
        -0.1466,
-       -0.0
+       0.0
       ],
       [
        0.1643,
        0.1479,
        0.6879
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [],
@@ -3835,18 +4062,20 @@
    ],
    "cells": [
     24,
-    25
+    25,
+    72,
+    103
    ],
    "fur": false,
    "bbox": [
     [
-     -0.3068,
+     -0.3901,
      -0.2572,
-     -0.0
+     -0.1189
     ],
     [
-     0.2821,
-     0.27,
+     0.2918,
+     0.2802,
      1.0566
     ]
    ],
@@ -3856,8 +4085,13 @@
    "pilot_tag": false,
    "pilot_copy": false,
    "props": {
-    "note": "each prism at the origin, open base at z 0, growth +Z (Unity +Y); instance at the rock sockets socket_ore_0..3 (copper, by tier) / socket_gold_0..2 (gold). rocks-3: sockets sit just below the floor (z < 0, base ring hidden by the floor), tips <= 1.10 m",
+    "note": "each prism at the origin, open base at z 0, growth +Z (Unity +Y); instance at the rock sockets socket_ore_0..3 (copper, by tier) / socket_gold_0..2 (gold). rocks-3: sockets sit just below the floor (z < 0, base ring hidden by the floor), tips <= 1.10 m. rocks-7 (w6 R3-01): FBX nodes carry NO axis rotation (mesh pre-rotated, Unity localRotation = identity, mesh +Y = growth) and the rock sockets socket_ore_*/socket_gold_* are exported as R_q * R_x(+90): socket * TRS(0, part.rotation, s) (LpObjArt.AddPrism) and part-under-socket with local identity (LpArtCatalog.SpawnResolved) both stand the prism upright. Do not add a code-side axis fix.",
     "kind": "rock_prisms"
+   },
+   "own": null,
+   "ao": 7,
+   "color0": {
+    "VEC4/5123n": 7
    }
   },
   {
@@ -3868,7 +4102,7 @@
    "folder": "Rocks",
    "fbx": "Rocks/Spawner_Vein",
    "glb": "glb/Spawner_Vein.glb",
-   "bytes": 5596,
+   "bytes": 8928,
    "tris": 96,
    "parts": [
     {
@@ -3891,7 +4125,8 @@
        0.389,
        0.1259
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [],
@@ -3927,6 +4162,11 @@
    "props": {
     "note": "low cobble ring (centre + 5 stones on a .30 m ring, ~.9 m, top <= 0.145 m), no collider / HP / stages; rocks may overlap it",
     "kind": "spawner_vein"
+   },
+   "own": null,
+   "ao": 1,
+   "color0": {
+    "VEC4/5123n": 1
    }
   },
   {
@@ -3960,7 +4200,8 @@
        0.2967,
        0.2396
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "Debris_1",
@@ -3982,7 +4223,8 @@
        0.0653,
        0.0498
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "Debris_2",
@@ -4004,7 +4246,8 @@
        0.0932,
        0.0695
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "Debris_3",
@@ -4026,7 +4269,8 @@
        0.1063,
        0.0835
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "Debris_4",
@@ -4048,7 +4292,8 @@
        0.1289,
        0.0875
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "Debris_5",
@@ -4070,7 +4315,8 @@
        0.1335,
        0.1061
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "Debris_6",
@@ -4092,7 +4338,8 @@
        0.2011,
        0.1131
       ]
-     ]
+     ],
+     "col": null
     }
    ],
    "sockets": [],
@@ -4126,6 +4373,11 @@
    "pilot_copy": false,
    "props": {
     "kind": "debris"
+   },
+   "own": null,
+   "ao": 0,
+   "color0": {
+    "none": 7
    }
   },
   {
@@ -4159,7 +4411,8 @@
        0.0892,
        0.2924
       ]
-     ]
+     ],
+     "col": null
     }
    ],
    "sockets": [],
@@ -4193,6 +4446,11 @@
    "pilot_copy": false,
    "props": {
     "kind": "loot_ore"
+   },
+   "own": null,
+   "ao": 0,
+   "color0": {
+    "none": 1
    }
   },
   {
@@ -4226,7 +4484,8 @@
        0.1299,
        0.09
       ]
-     ]
+     ],
+     "col": null
     }
    ],
    "sockets": [],
@@ -4259,6 +4518,11 @@
    "pilot_copy": false,
    "props": {
     "kind": "coin"
+   },
+   "own": null,
+   "ao": 0,
+   "color0": {
+    "none": 1
    }
   },
   {
@@ -4292,7 +4556,8 @@
        0.12,
        0.42
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "Gem_Base_4",
@@ -4314,7 +4579,8 @@
        0.0849,
        0.42
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "Gem_Base_5",
@@ -4336,7 +4602,8 @@
        0.12,
        0.42
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "Gem_Base_6",
@@ -4358,7 +4625,8 @@
        0.1039,
        0.42
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "Gem_Base_7",
@@ -4380,7 +4648,8 @@
        0.05,
        0.3
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "Gem_Base_8",
@@ -4402,7 +4671,8 @@
        0.1427,
        0.19
       ]
-     ]
+     ],
+     "col": null
     }
    ],
    "sockets": [],
@@ -4444,6 +4714,11 @@
     },
     "note": "pivot = bottom point at z 0; Gem_Base_7 star stands upright facing -Y (camera)",
     "kind": "gems"
+   },
+   "own": null,
+   "ao": 0,
+   "color0": {
+    "none": 6
    }
   },
   {
@@ -4477,7 +4752,8 @@
        0.12,
        0.42
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "Gem_Amethyst_4",
@@ -4499,7 +4775,8 @@
        0.0849,
        0.42
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "Gem_Amethyst_5",
@@ -4521,7 +4798,8 @@
        0.12,
        0.42
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "Gem_Amethyst_6",
@@ -4543,7 +4821,8 @@
        0.1039,
        0.42
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "Gem_Amethyst_7",
@@ -4565,7 +4844,8 @@
        0.05,
        0.3
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "Gem_Amethyst_8",
@@ -4587,7 +4867,8 @@
        0.1427,
        0.19
       ]
-     ]
+     ],
+     "col": null
     }
    ],
    "sockets": [],
@@ -4629,6 +4910,11 @@
     },
     "note": "same meshes / pivots as Gem_Base (pivot = bottom point at z 0; _7 star faces -Y); UV-shifted to the amethyst row of M_Palette (AD-08 violet crystal)",
     "kind": "gems"
+   },
+   "own": null,
+   "ao": 0,
+   "color0": {
+    "none": 6
    }
   },
   {
@@ -4639,7 +4925,7 @@
    "folder": "Loot",
    "fbx": "Loot/Cart_Pile",
    "glb": "glb/Cart_Pile.glb",
-   "bytes": 8532,
+   "bytes": 13336,
    "tris": 150,
    "parts": [
     {
@@ -4662,7 +4948,8 @@
        0.1671,
        0.2371
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "OrePile_1",
@@ -4684,7 +4971,8 @@
        0.3305,
        0.334
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "OrePile_2",
@@ -4706,7 +4994,8 @@
        0.3305,
        0.3751
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "OrePile_3",
@@ -4728,7 +5017,8 @@
        0.3305,
        0.6528
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [],
@@ -4765,6 +5055,11 @@
    "props": {
     "note": "authored for the default tub; socket_pile (cart) at the tub-floor centre, local scale = tub inner size / default. OrePile_k is the bed stage mesh (Cart_PileBed is the authoring hull, not exported). n = round(Load / Capacity * 12): n 1-4 OrePile_1, 5-8 OrePile_2, 9-12 OrePile_3; ball i visible when i < n at socket_pile_ii (x = -.45 + .30 i, y = -.23 + .23 j, index 3 i + j; owned by the cart). rocks-3: Cart_Nugget pivot = bottom centre, place it at (slot x, slot y, nugget_z) + yaw from the index hash; OrePile_1/2/3 carry 2/3/3 baked accents (amethyst / gold, see accents; AD-08 was gem_base), no extra instances",
     "kind": "cart_pile"
+   },
+   "own": null,
+   "ao": 4,
+   "color0": {
+    "VEC4/5123n": 4
    }
   },
   {
@@ -4775,12 +5070,12 @@
    "folder": "Buildings",
    "fbx": "Buildings/Bld_Reworker",
    "glb": "glb/Bld_Reworker.glb",
-   "bytes": 26168,
-   "tris": 486,
+   "bytes": 71364,
+   "tris": 930,
    "parts": [
     {
      "name": "Bld_Reworker_Body",
-     "tris": 276,
+     "tris": 660,
      "mats": [
       "M_Palette"
      ],
@@ -4796,13 +5091,14 @@
       [
        1.48,
        1.1576,
-       2.36
+       2.8899
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Bld_Reworker_Cube_0",
-     "tris": 10,
+     "tris": 30,
      "mats": [
       "M_Palette"
      ],
@@ -4816,15 +5112,16 @@
        0.9157
       ],
       [
-       0.5001,
+       0.4873,
        0.33,
-       1.3954
+       1.3825
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Bld_Reworker_Cube_1",
-     "tris": 10,
+     "tris": 30,
      "mats": [
       "M_Palette"
      ],
@@ -4838,15 +5135,16 @@
        0.7243
       ],
       [
-       0.9027,
+       0.8899,
        0.33,
-       1.204
+       1.1911
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Bld_Reworker_Cube_2",
-     "tris": 10,
+     "tris": 30,
      "mats": [
       "M_Palette"
      ],
@@ -4860,11 +5158,12 @@
        0.5329
       ],
       [
-       1.3053,
+       1.2925,
        0.33,
-       1.0126
+       0.9997
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Bld_Reworker_Gem_0",
@@ -4886,7 +5185,8 @@
        0.114,
        0.36
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Bld_Reworker_Gem_1",
@@ -4908,7 +5208,8 @@
        0.3097,
        0.32
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Bld_Reworker_Gem_2",
@@ -4930,7 +5231,8 @@
        0.3993,
        0.28
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Bld_Reworker_Glow",
@@ -4952,7 +5254,8 @@
        -0.5,
        0.9
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "Bld_Reworker_Heap",
@@ -4974,7 +5277,8 @@
        0.71,
        2.7
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Bld_Reworker_Nut",
@@ -4996,7 +5300,8 @@
        -0.5,
        1.2619
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [
@@ -5023,8 +5328,11 @@
     10,
     13,
     14,
+    21,
+    22,
     25,
     43,
+    72,
     101,
     102
    ],
@@ -5038,7 +5346,7 @@
     [
      1.48,
      1.1576,
-     2.7
+     2.8899
     ]
    ],
    "concept": "proc",
@@ -5070,7 +5378,7 @@
       "Bld_Reworker_Gem_2"
      ]
     },
-    "note": "column + hopper (ore heap) + front gold nut + wooden conveyor to the tray; the furnace slot _Glow is the only emissive part; cubes/heap copper_ore, gems gem_base",
+    "note": "column + steel hopper (blue gem cluster + ore heap) + front gold nut + conveyor (dark wood rails, dark belt) to the tray; the furnace slot _Glow is the only emissive mesh part; cubes sapphire / crown_gold / copper_ore, heap copper_ore, tray gems gem_base",
     "clips": [
      {
       "name": "Idle",
@@ -5129,6 +5437,12 @@
       "trigger": "no energy (P1)"
      }
     ]
+   },
+   "own": null,
+   "ao": 9,
+   "color0": {
+    "VEC4/5123n": 9,
+    "none": 1
    }
   },
   {
@@ -5139,12 +5453,12 @@
    "folder": "Buildings",
    "fbx": "Buildings/Bld_Generator",
    "glb": "glb/Bld_Generator.glb",
-   "bytes": 17192,
-   "tris": 396,
+   "bytes": 42576,
+   "tris": 632,
    "parts": [
     {
      "name": "Bld_Generator_Body",
-     "tris": 220,
+     "tris": 380,
      "mats": [
       "M_Palette"
      ],
@@ -5162,11 +5476,12 @@
        0.9239,
        1.85
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Bld_Generator_Cap",
-     "tris": 40,
+     "tris": 64,
      "mats": [
       "M_Palette"
      ],
@@ -5184,7 +5499,8 @@
        0.5413,
        2.2
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Bld_Generator_Core",
@@ -5206,11 +5522,12 @@
        0.6005,
        1.35
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Bld_Generator_TankL",
-     "tris": 60,
+     "tris": 104,
      "mats": [
       "M_Palette"
      ],
@@ -5219,20 +5536,21 @@
      "parent": null,
      "bbox": [
       [
-       -1.4126,
-       -0.1126,
+       -1.4357,
+       -0.1357,
        0.25
       ],
       [
-       -0.7474,
-       0.5526,
+       -0.7243,
+       0.5757,
        1.64
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Bld_Generator_TankR",
-     "tris": 60,
+     "tris": 68,
      "mats": [
       "M_Palette"
      ],
@@ -5250,7 +5568,8 @@
        0.57,
        1.27
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [
@@ -5346,6 +5665,11 @@
       "trigger": "energy 0 (P1)"
      }
     ]
+   },
+   "own": null,
+   "ao": 5,
+   "color0": {
+    "VEC4/5123n": 5
    }
   },
   {
@@ -5356,12 +5680,12 @@
    "folder": "Buildings",
    "fbx": "Buildings/Bld_BlackMarket",
    "glb": "glb/Bld_BlackMarket.glb",
-   "bytes": 14936,
-   "tris": 327,
+   "bytes": 37028,
+   "tris": 563,
    "parts": [
     {
      "name": "Bld_BlackMarket_Body",
-     "tris": 198,
+     "tris": 434,
      "mats": [
       "M_Palette"
      ],
@@ -5370,16 +5694,17 @@
      "parent": null,
      "bbox": [
       [
-       -1.4,
-       -1.5036,
+       -1.4171,
+       -1.495,
        -0.0
       ],
       [
-       1.5178,
+       1.5079,
        0.85,
        2.5062
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Bld_BlackMarket_Cloth",
@@ -5401,7 +5726,8 @@
        -0.97,
        2.0
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Bld_BlackMarket_Coin",
@@ -5423,7 +5749,8 @@
        -0.3523,
        1.19
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [
@@ -5440,21 +5767,23 @@
    "cells": [
     9,
     10,
+    13,
     19,
     26,
     43,
     71,
-    104
+    104,
+    105
    ],
    "fur": false,
    "bbox": [
     [
-     -1.4,
-     -1.5036,
+     -1.4171,
+     -1.495,
      -0.0
     ],
     [
-     1.5178,
+     1.5079,
      0.85,
      2.5062
     ]
@@ -5506,6 +5835,11 @@
       "trigger": "«Открыть» pressed"
      }
     ]
+   },
+   "own": null,
+   "ao": 3,
+   "color0": {
+    "VEC4/5123n": 3
    }
   },
   {
@@ -5516,12 +5850,12 @@
    "folder": "Portals",
    "fbx": "Portals/Portal_Down",
    "glb": "glb/Portal_Down.glb",
-   "bytes": 25076,
-   "tris": 427,
+   "bytes": 65500,
+   "tris": 891,
    "parts": [
     {
      "name": "Portal_Down_Frame",
-     "tris": 207,
+     "tris": 667,
      "mats": [
       "M_Palette"
      ],
@@ -5539,7 +5873,8 @@
        0.3,
        2.4
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Portal_Down_Grate_0",
@@ -5561,7 +5896,8 @@
        -0.07,
        1.91
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Portal_Down_Grate_1",
@@ -5583,7 +5919,8 @@
        -0.07,
        1.91
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Portal_Down_Grate_2",
@@ -5605,7 +5942,8 @@
        -0.07,
        1.91
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Portal_Down_Grate_3",
@@ -5627,7 +5965,8 @@
        -0.07,
        1.91
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Portal_Down_Grate_4",
@@ -5649,11 +5988,12 @@
        -0.07,
        1.91
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Portal_Down_Grate_X",
-     "tris": 6,
+     "tris": 10,
      "mats": [
       "M_Palette"
      ],
@@ -5671,7 +6011,8 @@
        -0.12,
        1.32
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Portal_Down_Pad",
@@ -5693,7 +6034,8 @@
        1.51,
        0.02
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Portal_Down_Swirl",
@@ -5715,7 +6057,8 @@
        0.13,
        1.8619
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "Portal_Down_SwirlEdge",
@@ -5737,7 +6080,8 @@
        0.04,
        1.91
       ]
-     ]
+     ],
+     "col": null
     }
    ],
    "sockets": [
@@ -5872,6 +6216,12 @@
       "trigger": "event 16"
      }
     ]
+   },
+   "own": null,
+   "ao": 8,
+   "color0": {
+    "VEC4/5123n": 8,
+    "none": 2
    }
   },
   {
@@ -5882,12 +6232,12 @@
    "folder": "Portals",
    "fbx": "Portals/Portal_Up",
    "glb": "glb/Portal_Up.glb",
-   "bytes": 21856,
-   "tris": 397,
+   "bytes": 69544,
+   "tris": 1013,
    "parts": [
     {
      "name": "Portal_Up_Boards_0",
-     "tris": 12,
+     "tris": 64,
      "mats": [
       "M_Palette"
      ],
@@ -5896,20 +6246,21 @@
      "parent": null,
      "bbox": [
       [
-       -1.0045,
-       -0.32,
-       0.623
+       -0.9985,
+       -0.34,
+       0.6289
       ],
       [
-       1.0045,
+       0.9985,
        -0.24,
-       1.737
+       1.7311
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Portal_Up_Boards_1",
-     "tris": 12,
+     "tris": 64,
      "mats": [
       "M_Palette"
      ],
@@ -5918,20 +6269,21 @@
      "parent": null,
      "bbox": [
       [
-       -1.0045,
-       -0.33,
-       0.623
+       -0.9985,
+       -0.35,
+       0.6289
       ],
       [
-       1.0045,
+       0.9985,
        -0.25,
-       1.737
+       1.7311
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Portal_Up_Boards_2",
-     "tris": 12,
+     "tris": 64,
      "mats": [
       "M_Palette"
      ],
@@ -5941,7 +6293,7 @@
      "bbox": [
       [
        -1.05,
-       -0.34,
+       -0.36,
        0.455
       ],
       [
@@ -5949,11 +6301,12 @@
        -0.26,
        0.705
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Portal_Up_Frame",
-     "tris": 207,
+     "tris": 667,
      "mats": [
       "M_Palette"
      ],
@@ -5971,7 +6324,8 @@
        0.3,
        2.4
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Portal_Up_Pad",
@@ -5993,7 +6347,8 @@
        1.51,
        0.02
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Portal_Up_Swirl",
@@ -6015,7 +6370,8 @@
        0.13,
        1.8619
       ]
-     ]
+     ],
+     "col": null
     },
     {
      "name": "Portal_Up_SwirlEdge",
@@ -6037,7 +6393,8 @@
        0.04,
        1.91
       ]
-     ]
+     ],
+     "col": null
     }
    ],
    "sockets": [
@@ -6166,6 +6523,12 @@
       "trigger": "event 16"
      }
     ]
+   },
+   "own": null,
+   "ao": 5,
+   "color0": {
+    "VEC4/5123n": 5,
+    "none": 2
    }
   },
   {
@@ -6176,12 +6539,12 @@
    "folder": "Carts",
    "fbx": "Carts/Cart_Classic",
    "glb": "glb/Cart_Classic.glb",
-   "bytes": 17032,
-   "tris": 332,
+   "bytes": 50012,
+   "tris": 732,
    "parts": [
     {
      "name": "Cart_Classic_Body",
-     "tris": 180,
+     "tris": 372,
      "mats": [
       "M_Palette"
      ],
@@ -6199,11 +6562,12 @@
        0.803,
        0.9
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Wheel_FL",
-     "tris": 38,
+     "tris": 90,
      "mats": [
       "M_Palette"
      ],
@@ -6221,11 +6585,12 @@
        -0.2,
        0.5
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Wheel_FR",
-     "tris": 38,
+     "tris": 90,
      "mats": [
       "M_Palette"
      ],
@@ -6243,11 +6608,12 @@
        -0.2,
        0.5
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Wheel_RL",
-     "tris": 38,
+     "tris": 90,
      "mats": [
       "M_Palette"
      ],
@@ -6265,11 +6631,12 @@
        0.7,
        0.5
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Wheel_RR",
-     "tris": 38,
+     "tris": 90,
      "mats": [
       "M_Palette"
      ],
@@ -6287,7 +6654,8 @@
        0.7,
        0.5
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [
@@ -6408,6 +6776,11 @@
       "trigger": "event 25"
      }
     ]
+   },
+   "own": null,
+   "ao": 5,
+   "color0": {
+    "VEC4/5123n": 5
    }
   },
   {
@@ -6418,12 +6791,12 @@
    "folder": "Props",
    "fbx": "Props/Prop_MineLantern",
    "glb": "glb/Prop_MineLantern.glb",
-   "bytes": 4704,
-   "tris": 80,
+   "bytes": 18160,
+   "tris": 368,
    "parts": [
     {
      "name": "Prop_MineLantern_Body",
-     "tris": 72,
+     "tris": 360,
      "mats": [
       "M_Palette"
      ],
@@ -6441,7 +6814,8 @@
        0.19,
        0.0
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Prop_MineLantern_Glow",
@@ -6463,7 +6837,8 @@
        0.13,
        -0.32
       ]
-     ]
+     ],
+     "col": null
     }
    ],
    "sockets": [
@@ -6534,6 +6909,12 @@
       "trigger": "always (code, point light only)"
      }
     ]
+   },
+   "own": null,
+   "ao": 1,
+   "color0": {
+    "VEC4/5123n": 1,
+    "none": 1
    }
   },
   {
@@ -6544,12 +6925,12 @@
    "folder": "Props",
    "fbx": "Props/Prop_LampPost",
    "glb": "glb/Prop_LampPost.glb",
-   "bytes": 3644,
-   "tris": 62,
+   "bytes": 15776,
+   "tris": 254,
    "parts": [
     {
      "name": "Prop_LampPost_Body",
-     "tris": 62,
+     "tris": 254,
      "mats": [
       "M_Palette"
      ],
@@ -6567,7 +6948,8 @@
        0.21,
        2.62
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [
@@ -6582,7 +6964,8 @@
    "cells": [
     7,
     10,
-    13
+    13,
+    14
    ],
    "fur": false,
    "bbox": [
@@ -6611,6 +6994,11 @@
     },
     "note": "L-post, arm to -Y (south); metal end block over Socket_Hang; place Prop_MineLantern at Socket_Hang (glass 1.68-1.98 m)",
     "clips": []
+   },
+   "own": null,
+   "ao": 1,
+   "color0": {
+    "VEC4/5123n": 1
    }
   },
   {
@@ -6621,12 +7009,12 @@
    "folder": "Props",
    "fbx": "Props/Prop_TimberSupport",
    "glb": "glb/Prop_TimberSupport.glb",
-   "bytes": 4440,
-   "tris": 80,
+   "bytes": 18912,
+   "tris": 308,
    "parts": [
     {
      "name": "Prop_TimberSupport_Body",
-     "tris": 80,
+     "tris": 308,
      "mats": [
       "M_Palette"
      ],
@@ -6644,7 +7032,8 @@
        0.21,
        2.44
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [
@@ -6659,7 +7048,8 @@
    "cells": [
     7,
     10,
-    13
+    13,
+    14
    ],
    "fur": false,
    "bbox": [
@@ -6688,6 +7078,11 @@
     },
     "note": "posts 0.30 at x +-0.93 (opening 1.56), beam 2.10-2.40 between metal caps 0.40 (z 2.02-2.44); inner corners filled with 0.38 m gussets (concept chamfer; replaces the 0.14 braces); peg + Socket_Hang (0, -0.33, 2.26) under the peg tip for Prop_MineLantern (glass 1.64-1.94 m)",
     "clips": []
+   },
+   "own": null,
+   "ao": 1,
+   "color0": {
+    "VEC4/5123n": 1
    }
   },
   {
@@ -6698,12 +7093,12 @@
    "folder": "Props",
    "fbx": "Props/Prop_TimberSupport_Post",
    "glb": "glb/Prop_TimberSupport_Post.glb",
-   "bytes": 2356,
-   "tris": 32,
+   "bytes": 8384,
+   "tris": 134,
    "parts": [
     {
      "name": "Prop_TimberSupport_Post_Body",
-     "tris": 32,
+     "tris": 134,
      "mats": [
       "M_Palette"
      ],
@@ -6721,7 +7116,8 @@
        0.21,
        2.44
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [],
@@ -6734,7 +7130,8 @@
    "cells": [
     7,
     10,
-    13
+    13,
+    14
    ],
    "fur": false,
    "bbox": [
@@ -6759,6 +7156,11 @@
     "roles": {},
     "note": "post + cap + inner gusset toward +X + foot stone; pivot = foot centre; the right post = same mesh, yaw 180",
     "clips": []
+   },
+   "own": null,
+   "ao": 1,
+   "color0": {
+    "VEC4/5123n": 1
    }
   },
   {
@@ -6769,12 +7171,12 @@
    "folder": "Props",
    "fbx": "Props/Prop_TimberSupport_Beam",
    "glb": "glb/Prop_TimberSupport_Beam.glb",
-   "bytes": 1392,
-   "tris": 10,
+   "bytes": 2320,
+   "tris": 30,
    "parts": [
     {
      "name": "Prop_TimberSupport_Beam_Body",
-     "tris": 10,
+     "tris": 30,
      "mats": [
       "M_Palette"
      ],
@@ -6792,7 +7194,8 @@
        0.15,
        0.3
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [],
@@ -6828,6 +7231,11 @@
     "roles": {},
     "note": "unit beam 1.00 x 0.30 x 0.30, pivot = bottom-face centre; place at z 2.10, scale X to span + 0.4 m (ends under the post caps); never parent the lantern under it",
     "clips": []
+   },
+   "own": null,
+   "ao": 1,
+   "color0": {
+    "VEC4/5123n": 1
    }
   },
   {
@@ -6838,7 +7246,7 @@
    "folder": "Props",
    "fbx": "Props/Prop_TimberSupport_Peg",
    "glb": "glb/Prop_TimberSupport_Peg.glb",
-   "bytes": 1428,
+   "bytes": 1852,
    "tris": 10,
    "parts": [
     {
@@ -6861,7 +7269,8 @@
        0.0,
        0.08
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [
@@ -6899,6 +7308,11 @@
     "roles": {},
     "note": "pivot = back-bottom edge centre: place at (x, beam front y, 2.26) of a built beam; Socket_Hang at its tip",
     "clips": []
+   },
+   "own": null,
+   "ao": 1,
+   "color0": {
+    "VEC4/5123n": 1
    }
   },
   {
@@ -6909,12 +7323,12 @@
    "folder": "Props",
    "fbx": "Props/Prop_Rails",
    "glb": "glb/Prop_Rails.glb",
-   "bytes": 2404,
-   "tris": 42,
+   "bytes": 7944,
+   "tris": 102,
    "parts": [
     {
      "name": "Prop_Rails_Body",
-     "tris": 42,
+     "tris": 102,
      "mats": [
       "M_Palette"
      ],
@@ -6932,7 +7346,8 @@
        1.2,
        0.16
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [],
@@ -6970,6 +7385,11 @@
     "roles": {},
     "note": "2.4 m along Y, gauge 0.84, rails 0.12 x 0.09 (z 0.07-0.16), 3 ties 1.25 x 0.25 x 0.07; no shadows; ends open",
     "clips": []
+   },
+   "own": null,
+   "ao": 1,
+   "color0": {
+    "VEC4/5123n": 1
    }
   },
   {
@@ -6980,12 +7400,12 @@
    "folder": "Props",
    "fbx": "Props/Prop_Rails_Curve45",
    "glb": "glb/Prop_Rails_Curve45.glb",
-   "bytes": 3680,
-   "tris": 90,
+   "bytes": 9600,
+   "tris": 150,
    "parts": [
     {
      "name": "Prop_Rails_Curve45_Body",
-     "tris": 90,
+     "tris": 150,
      "mats": [
       "M_Palette"
      ],
@@ -6994,16 +7414,17 @@
      "parent": null,
      "bbox": [
       [
-       -0.6154,
+       -0.6139,
        0.0,
        -0.0
       ],
       [
-       1.0679,
+       1.0606,
        2.0365,
        0.16
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [],
@@ -7021,12 +7442,12 @@
    "fur": false,
    "bbox": [
     [
-     -0.6154,
+     -0.6139,
      0.0,
      -0.0
     ],
     [
-     1.0679,
+     1.0606,
      2.0365,
      0.16
     ]
@@ -7041,6 +7462,11 @@
     "roles": {},
     "note": "centreline r 2.4 m about (+2.4, 0): entry origin heading +Y, exit (0.703, 1.697) heading 45 deg right; 5 x 9 deg rail sub-segments, 3 ties (0.94 m apart like the straight); mirror (scale X -1) for left turns",
     "clips": []
+   },
+   "own": null,
+   "ao": 1,
+   "color0": {
+    "VEC4/5123n": 1
    }
   },
   {
@@ -7051,12 +7477,12 @@
    "folder": "Props",
    "fbx": "Props/Prop_Rails_End",
    "glb": "glb/Prop_Rails_End.glb",
-   "bytes": 3100,
-   "tris": 56,
+   "bytes": 6340,
+   "tris": 76,
    "parts": [
     {
      "name": "Prop_Rails_End_Body",
-     "tris": 56,
+     "tris": 76,
      "mats": [
       "M_Palette"
      ],
@@ -7074,7 +7500,8 @@
        0.53,
        0.4
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [],
@@ -7113,6 +7540,11 @@
     "roles": {},
     "note": "0.8 m bumper piece: rail stubs from y -0.40 (open end, butts into a straight), 1 tie, wood bumper beam at y +0.30 (z 0.16-0.38) on 2 metal posts",
     "clips": []
+   },
+   "own": null,
+   "ao": 1,
+   "color0": {
+    "VEC4/5123n": 1
    }
   },
   {
@@ -7123,7 +7555,7 @@
    "folder": "Props",
    "fbx": "Props/Prop_Signpost",
    "glb": "glb/Prop_Signpost.glb",
-   "bytes": 4824,
+   "bytes": 7852,
    "tris": 85,
    "parts": [
     {
@@ -7146,7 +7578,8 @@
        -0.08,
        0.5
       ]
-     ]
+     ],
+     "col": "Col"
     },
     {
      "name": "Prop_Signpost_Body",
@@ -7168,7 +7601,8 @@
        0.1801,
        1.2
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [
@@ -7213,6 +7647,11 @@
     },
     "note": "post 1.20 + 2 planks with a gold-cream pickaxe relief (button_gold, up-right); _Arrow pivots on the post axis at z 0.40 - the view yaws it toward the next road tile; Head (0, 0, 1.50) for «Этаж N+1»",
     "clips": []
+   },
+   "own": null,
+   "ao": 2,
+   "color0": {
+    "VEC4/5123n": 2
    }
   },
   {
@@ -7223,7 +7662,7 @@
    "folder": "Props",
    "fbx": "Props/Prop_WirePeg",
    "glb": "glb/Prop_WirePeg.glb",
-   "bytes": 2244,
+   "bytes": 2944,
    "tris": 30,
    "parts": [
     {
@@ -7246,7 +7685,8 @@
        0.04,
        0.22
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [],
@@ -7282,6 +7722,11 @@
     "roles": {},
     "note": "staple over the ground wire (tube d 0.12 at z 0.07, along Y): legs x +-0.12, bridge z 0.16-0.22; one per 2.4 m, GPU instanced",
     "clips": []
+   },
+   "own": null,
+   "ao": 1,
+   "color0": {
+    "VEC4/5123n": 1
    }
   },
   {
@@ -7315,7 +7760,8 @@
        0.14,
        0.1493
       ]
-     ]
+     ],
+     "col": null
     }
    ],
    "sockets": [],
@@ -7363,6 +7809,11 @@
       "trigger": "isGeneratorWireActive (code)"
      }
     ]
+   },
+   "own": null,
+   "ao": 0,
+   "color0": {
+    "none": 1
    }
   },
   {
@@ -7373,12 +7824,12 @@
    "folder": "Props",
    "fbx": "Props/Decor_Barrels_A",
    "glb": "glb/Decor_Barrels_A.glb",
-   "bytes": 10148,
-   "tris": 246,
+   "bytes": 18268,
+   "tris": 262,
    "parts": [
     {
      "name": "Decor_Barrels_A_Body",
-     "tris": 246,
+     "tris": 262,
      "mats": [
       "M_Palette"
      ],
@@ -7396,7 +7847,8 @@
        0.6087,
        0.85
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [],
@@ -7435,6 +7887,11 @@
     "roles": {},
     "note": "barrel (lathe 8, open top with interior, 2 wood bands) + crate 0.76 (3 planks) + crate 0.50 (2 planks): wood_light planks, dark wood_loc gaps, wood corner battens + proud lid with a plank top (AD-25); static, never emissive",
     "clips": []
+   },
+   "own": null,
+   "ao": 1,
+   "color0": {
+    "VEC4/5123n": 1
    }
   },
   {
@@ -7445,7 +7902,7 @@
    "folder": "Props",
    "fbx": "Props/Decor_Mushroom_A",
    "glb": "glb/Decor_Mushroom_A.glb",
-   "bytes": 4024,
+   "bytes": 6872,
    "tris": 108,
    "parts": [
     {
@@ -7468,7 +7925,8 @@
        0.2632,
        0.546
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [],
@@ -7506,6 +7964,11 @@
     "roles": {},
     "note": "AD-24: tall cap 0.43 + short cap 0.30 (x1.3 baked, 0.52 / 0.36 tall), lip at 0.68 h over a pale flared stem, 3 + 2 white spot facets; mushroom_red is a R5 decor exception",
     "clips": []
+   },
+   "own": null,
+   "ao": 1,
+   "color0": {
+    "VEC4/5123n": 1
    }
   },
   {
@@ -7516,7 +7979,7 @@
    "folder": "Props",
    "fbx": "Props/Decor_Mushroom_B",
    "glb": "glb/Decor_Mushroom_B.glb",
-   "bytes": 3980,
+   "bytes": 6904,
    "tris": 104,
    "parts": [
     {
@@ -7539,7 +8002,8 @@
        0.1705,
        0.598
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [],
@@ -7577,6 +8041,11 @@
     "roles": {},
     "note": "AD-24: cap 0.37 + tiny cap 0.23 (x1.3 baked, 0.57 / 0.33 tall, 6 sides), pale stems, 3 + 1 white spot facets",
     "clips": []
+   },
+   "own": null,
+   "ao": 1,
+   "color0": {
+    "VEC4/5123n": 1
    }
   },
   {
@@ -7587,7 +8056,7 @@
    "folder": "Props",
    "fbx": "Props/Decor_Tuft_A",
    "glb": "glb/Decor_Tuft_A.glb",
-   "bytes": 2372,
+   "bytes": 3548,
    "tris": 28,
    "parts": [
     {
@@ -7610,7 +8079,8 @@
        0.5871,
        0.5
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [],
@@ -7646,6 +8116,11 @@
     "roles": {},
     "note": "leafy clump (R2-16): 4 broad low outer leaves in dark green (plant t .30-.55) + 3 upright inner leaves in light green (plant t .82-1.0), folded diamonds 4 tris each, ~1.3 wide x 0.5 tall (x1.6)",
     "clips": []
+   },
+   "own": null,
+   "ao": 1,
+   "color0": {
+    "VEC4/5123n": 1
    }
   },
   {
@@ -7656,7 +8131,7 @@
    "folder": "Props",
    "fbx": "Props/Decor_Tuft_B",
    "glb": "glb/Decor_Tuft_B.glb",
-   "bytes": 2184,
+   "bytes": 3176,
    "tris": 24,
    "parts": [
     {
@@ -7679,7 +8154,8 @@
        0.571,
        0.44
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [],
@@ -7715,6 +8191,11 @@
     "roles": {},
     "note": "leafy clump (R2-16): 3 broad low outer leaves dark green + 3 upright inner leaves light green (plant), 24 tris, ~1.15 wide x 0.45 tall (x1.6)",
     "clips": []
+   },
+   "own": null,
+   "ao": 1,
+   "color0": {
+    "VEC4/5123n": 1
    }
   },
   {
@@ -7748,7 +8229,8 @@
        0.8979,
        1.0
       ]
-     ]
+     ],
+     "col": null
     }
    ],
    "sockets": [],
@@ -7779,7 +8261,12 @@
    "anim": null,
    "pilot_tag": false,
    "pilot_copy": false,
-   "props": null
+   "props": null,
+   "own": null,
+   "ao": 0,
+   "color0": {
+    "none": 1
+   }
   },
   {
    "id": "Kit_Adits_Boulder_B",
@@ -7812,7 +8299,8 @@
        0.9041,
        1.0
       ]
-     ]
+     ],
+     "col": null
     }
    ],
    "sockets": [],
@@ -7843,7 +8331,12 @@
    "anim": null,
    "pilot_tag": false,
    "pilot_copy": false,
-   "props": null
+   "props": null,
+   "own": null,
+   "ao": 0,
+   "color0": {
+    "none": 1
+   }
   },
   {
    "id": "Kit_Adits_Boulder_C",
@@ -7876,7 +8369,8 @@
        0.7593,
        1.0
       ]
-     ]
+     ],
+     "col": null
     }
    ],
    "sockets": [],
@@ -7907,7 +8401,12 @@
    "anim": null,
    "pilot_tag": false,
    "pilot_copy": false,
-   "props": null
+   "props": null,
+   "own": null,
+   "ao": 0,
+   "color0": {
+    "none": 1
+   }
   },
   {
    "id": "Kit_Adits_Boulder_D",
@@ -7940,7 +8439,8 @@
        0.8796,
        1.0
       ]
-     ]
+     ],
+     "col": null
     }
    ],
    "sockets": [],
@@ -7971,7 +8471,12 @@
    "anim": null,
    "pilot_tag": false,
    "pilot_copy": false,
-   "props": null
+   "props": null,
+   "own": null,
+   "ao": 0,
+   "color0": {
+    "none": 1
+   }
   },
   {
    "id": "Kit_Adits_Boulder_E",
@@ -8004,7 +8509,8 @@
        0.7349,
        1.0
       ]
-     ]
+     ],
+     "col": null
     }
    ],
    "sockets": [],
@@ -8035,7 +8541,12 @@
    "anim": null,
    "pilot_tag": false,
    "pilot_copy": false,
-   "props": null
+   "props": null,
+   "own": null,
+   "ao": 0,
+   "color0": {
+    "none": 1
+   }
   },
   {
    "id": "Kit_Adits_Boulder_F",
@@ -8068,7 +8579,8 @@
        0.801,
        1.0
       ]
-     ]
+     ],
+     "col": null
     }
    ],
    "sockets": [],
@@ -8099,7 +8611,12 @@
    "anim": null,
    "pilot_tag": false,
    "pilot_copy": false,
-   "props": null
+   "props": null,
+   "own": null,
+   "ao": 0,
+   "color0": {
+    "none": 1
+   }
   },
   {
    "id": "Kit_Adits_Shaft_A",
@@ -8109,12 +8626,12 @@
    "folder": "Environment",
    "fbx": "Environment/Kit_Adits_Shaft_A",
    "glb": "glb/Kit_Adits_Shaft_A.glb",
-   "bytes": 12972,
-   "tris": 313,
+   "bytes": 21864,
+   "tris": 701,
    "parts": [
     {
      "name": "Kit_Adits_Shaft_A",
-     "tris": 313,
+     "tris": 701,
      "mats": [
       "M_Palette"
      ],
@@ -8132,7 +8649,8 @@
        2.65,
        3.0
       ]
-     ]
+     ],
+     "col": null
     }
    ],
    "sockets": [],
@@ -8145,7 +8663,9 @@
    "cells": [
     6,
     8,
-    11
+    11,
+    13,
+    14
    ],
    "fur": false,
    "bbox": [
@@ -8165,7 +8685,12 @@
    "anim": null,
    "pilot_tag": false,
    "pilot_copy": false,
-   "props": null
+   "props": null,
+   "own": null,
+   "ao": 0,
+   "color0": {
+    "none": 1
+   }
   },
   {
    "id": "Kit_Adits_Shaft_B",
@@ -8175,12 +8700,12 @@
    "folder": "Environment",
    "fbx": "Environment/Kit_Adits_Shaft_B",
    "glb": "glb/Kit_Adits_Shaft_B.glb",
-   "bytes": 13392,
-   "tris": 325,
+   "bytes": 22280,
+   "tris": 713,
    "parts": [
     {
      "name": "Kit_Adits_Shaft_B",
-     "tris": 325,
+     "tris": 713,
      "mats": [
       "M_Palette"
      ],
@@ -8198,7 +8723,8 @@
        2.65,
        3.0
       ]
-     ]
+     ],
+     "col": null
     }
    ],
    "sockets": [
@@ -8213,7 +8739,9 @@
    "cells": [
     6,
     8,
-    11
+    11,
+    13,
+    14
    ],
    "fur": false,
    "bbox": [
@@ -8233,7 +8761,12 @@
    "anim": null,
    "pilot_tag": false,
    "pilot_copy": false,
-   "props": null
+   "props": null,
+   "own": null,
+   "ao": 0,
+   "color0": {
+    "none": 1
+   }
   },
   {
    "id": "Kit_Adits_Shaft_C",
@@ -8243,12 +8776,12 @@
    "folder": "Environment",
    "fbx": "Environment/Kit_Adits_Shaft_C",
    "glb": "glb/Kit_Adits_Shaft_C.glb",
-   "bytes": 14112,
-   "tris": 331,
+   "bytes": 23000,
+   "tris": 719,
    "parts": [
     {
      "name": "Kit_Adits_Shaft_C",
-     "tris": 331,
+     "tris": 719,
      "mats": [
       "M_Palette"
      ],
@@ -8266,7 +8799,8 @@
        2.65,
        3.0
       ]
-     ]
+     ],
+     "col": null
     }
    ],
    "sockets": [
@@ -8282,7 +8816,9 @@
    "cells": [
     6,
     8,
-    11
+    11,
+    13,
+    14
    ],
    "fur": false,
    "bbox": [
@@ -8302,7 +8838,12 @@
    "anim": null,
    "pilot_tag": false,
    "pilot_copy": false,
-   "props": null
+   "props": null,
+   "own": null,
+   "ao": 0,
+   "color0": {
+    "none": 1
+   }
   },
   {
    "id": "Kit_Adits_ShaftMouth",
@@ -8312,12 +8853,12 @@
    "folder": "Environment",
    "fbx": "Environment/Kit_Adits_ShaftMouth",
    "glb": "glb/Kit_Adits_ShaftMouth.glb",
-   "bytes": 8044,
-   "tris": 192,
+   "bytes": 35328,
+   "tris": 576,
    "parts": [
     {
      "name": "Kit_Adits_ShaftMouth",
-     "tris": 192,
+     "tris": 576,
      "mats": [
       "M_Palette"
      ],
@@ -8327,15 +8868,16 @@
      "bbox": [
       [
        -2.6,
-       -2.6,
+       -2.64,
        -0.0
       ],
       [
        2.6,
-       2.6,
+       2.64,
        1.5
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [
@@ -8357,12 +8899,12 @@
    "bbox": [
     [
      -2.6,
-     -2.6,
+     -2.64,
      -0.0
     ],
     [
      2.6,
-     2.6,
+     2.64,
      1.5
     ]
    ],
@@ -8371,7 +8913,12 @@
    "anim": null,
    "pilot_tag": false,
    "pilot_copy": false,
-   "props": null
+   "props": null,
+   "own": null,
+   "ao": 1,
+   "color0": {
+    "VEC4/5123n": 1
+   }
   },
   {
    "id": "Kit_Adits_WallCrystal_A",
@@ -8404,7 +8951,8 @@
        0.3767,
        0.8451
       ]
-     ]
+     ],
+     "col": null
     }
    ],
    "sockets": [],
@@ -8437,7 +8985,12 @@
    "anim": null,
    "pilot_tag": false,
    "pilot_copy": false,
-   "props": null
+   "props": null,
+   "own": null,
+   "ao": 0,
+   "color0": {
+    "none": 1
+   }
   },
   {
    "id": "Kit_Adits_WallCrystal_B",
@@ -8470,7 +9023,8 @@
        0.3803,
        0.7322
       ]
-     ]
+     ],
+     "col": null
     }
    ],
    "sockets": [],
@@ -8503,7 +9057,12 @@
    "anim": null,
    "pilot_tag": false,
    "pilot_copy": false,
-   "props": null
+   "props": null,
+   "own": null,
+   "ao": 0,
+   "color0": {
+    "none": 1
+   }
   },
   {
    "id": "Kit_Adits_WallCrystal_C",
@@ -8536,7 +9095,8 @@
        0.3767,
        0.8451
       ]
-     ]
+     ],
+     "col": null
     }
    ],
    "sockets": [],
@@ -8569,7 +9129,12 @@
    "anim": null,
    "pilot_tag": false,
    "pilot_copy": false,
-   "props": null
+   "props": null,
+   "own": null,
+   "ao": 0,
+   "color0": {
+    "none": 1
+   }
   },
   {
    "id": "Kit_Adits_WallCrystal_D",
@@ -8602,7 +9167,8 @@
        0.3803,
        0.7322
       ]
-     ]
+     ],
+     "col": null
     }
    ],
    "sockets": [],
@@ -8635,7 +9201,12 @@
    "anim": null,
    "pilot_tag": false,
    "pilot_copy": false,
-   "props": null
+   "props": null,
+   "own": null,
+   "ao": 0,
+   "color0": {
+    "none": 1
+   }
   },
   {
    "id": "Pebble_Cluster_A",
@@ -8645,7 +9216,7 @@
    "folder": "FX_Meshes",
    "fbx": "FX_Meshes/Pebble_Cluster_A",
    "glb": "glb/Pebble_Cluster_A.glb",
-   "bytes": 2360,
+   "bytes": 3492,
    "tris": 29,
    "parts": [
     {
@@ -8668,7 +9239,8 @@
        0.1842,
        0.1337
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [],
@@ -8702,6 +9274,11 @@
    "props": {
     "note": "decor scatter (ART_ROCKS 9); bottoms below z 0 are 25 % of each stone height",
     "kind": "pebble_cluster"
+   },
+   "own": null,
+   "ao": 1,
+   "color0": {
+    "VEC4/5123n": 1
    }
   },
   {
@@ -8712,7 +9289,7 @@
    "folder": "FX_Meshes",
    "fbx": "FX_Meshes/Pebble_Cluster_B",
    "glb": "glb/Pebble_Cluster_B.glb",
-   "bytes": 2964,
+   "bytes": 4728,
    "tris": 43,
    "parts": [
     {
@@ -8735,7 +9312,8 @@
        0.2317,
        0.1086
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [],
@@ -8769,6 +9347,11 @@
    "props": {
     "note": "decor scatter (ART_ROCKS 9); bottoms below z 0 are 25 % of each stone height",
     "kind": "pebble_cluster"
+   },
+   "own": null,
+   "ao": 1,
+   "color0": {
+    "VEC4/5123n": 1
    }
   },
   {
@@ -8779,7 +9362,7 @@
    "folder": "FX_Meshes",
    "fbx": "FX_Meshes/Pebble_Cluster_C",
    "glb": "glb/Pebble_Cluster_C.glb",
-   "bytes": 3764,
+   "bytes": 6196,
    "tris": 59,
    "parts": [
     {
@@ -8802,7 +9385,8 @@
        0.334,
        0.1337
       ]
-     ]
+     ],
+     "col": "Col"
     }
    ],
    "sockets": [],
@@ -8836,6 +9420,11 @@
    "props": {
     "note": "decor scatter (ART_ROCKS 9); bottoms below z 0 are 25 % of each stone height",
     "kind": "pebble_cluster"
+   },
+   "own": null,
+   "ao": 1,
+   "color0": {
+    "VEC4/5123n": 1
    }
   }
  ],
@@ -8843,7 +9432,8 @@
  "pending": [],
  "totals": {
   "models": 61,
-  "tris": 15976,
-  "glb_bytes": 1996108
+  "tris": 44634,
+  "glb_bytes": 3822424,
+  "ao_models": 40
  }
 }
