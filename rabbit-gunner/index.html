@@ -22,7 +22,7 @@
 <body>
 <canvas id="game" width="216" height="384" tabindex="0"></canvas>
 <noscript>Для игры нужен JavaScript. / This game needs JavaScript.</noscript>
-<script>window.BUILD_INFO = {"time": "2026-10-09 06:16", "hash": "356184bb", "dev": true, "files": 31};</script>
+<script>window.BUILD_INFO = {"time": "2026-10-09 13:15", "hash": "43899517", "dev": false, "files": 30};</script>
 <script>
 // Core: events, seeded rng, time, number/time formatting, i18n, action registry, stats-modifier hooks, easing,
 // simulation + scene registries, error capture, boot warm-up registry. Loaded first, so every later file can use these
@@ -5581,7 +5581,9 @@ _ 4 ###
   G.stripAB = stripAB;
   G.stripXY = stripXY;
 
-  const trees = (s) => Math.min(30 + 10 * (clampInt(s, 1, STAGES) - 1), 100);
+  // Деревьев на подэтапе N-k: k × min(30 + 10(s−1), 100), как CalcRegularTreeCount(stage, level) оригинала.
+  // Подтверждено по кадрам видео: 1-1 = 30, 1-2 = 60, 1-3 = 90, 2-1 = 40, 2-2 = 80 (spec 08 §3, Q1).
+  const trees = (s, sub = 1) => clampInt(sub, 1, 5) * Math.min(30 + 10 * (clampInt(s, 1, STAGES) - 1), 100);
   const stageIdx = (s) => clampInt(s, 1, STAGES);
 
   D.stage = {
@@ -5603,7 +5605,7 @@ _ 4 ###
       for (let t = 0; t < 3; t++) { if (x < rates[t]) return t; x -= rates[t]; }
       return rates[2] > 0 ? 2 : rates[1] > 0 ? 1 : 0;
     },
-    trees,                                            // regular trees per sub-stage: min(30 + 10(s−1), 100)
+    trees,                                            // trees(s, sub) — обычных деревьев на подэтапе: sub × min(30 + 10(s−1), 100)
     biome: (s) => (stageIdx(s) - 1) % 10,
     n: (stage, sub) => 5 * (stage - 1) + (sub - 1),   // position index (spec 05 §1); 1-1 → 0
     pos: (n) => ({ stage: Math.floor(n / 5) + 1, sub: (n % 5) + 1 }),
@@ -5616,12 +5618,12 @@ _ 4 ###
     // Expected sub-stage HP: N × mean type mul × HP (+ golden 35 × HP on N-5). 1-1 → 8 700.
     expectedHP(stage, sub) {
       const hp = D.stage.HP(stage);
-      return trees(stage) * AVG_MUL[clampInt(sub, 1, 5) - 1] * hp + (sub === 5 ? 35 * hp : 0);
+      return trees(stage, sub) * AVG_MUL[clampInt(sub, 1, 5) - 1] * hp + (sub === 5 ? 35 * hp : 0);
     },
     // Tree grid of one attempt (spec 01 §6). rng() in [0, 1). Returns regular trees (golden spawns later at
     // goldenAt(aMax)). Each: {i, a, b, x, y, type}.
     layout(stage, sub, rng) {
-      const N = trees(stage), rows = MAP.rows, out = [];
+      const N = trees(stage, sub), rows = MAP.rows, out = [];
       const fullCols = Math.floor(N / 5);
       const lastRows = rows.map((_, i) => i);
       if (N % 5) {                                             // partial last column → random distinct rows
@@ -6313,6 +6315,10 @@ _ 4 ###
       needDps: (N) => chTrees(N) * stageHP(N) * 1.93 / 60,
       ARENA_R: 75, CLAMP_R: 74, RING_R0: 22, RING_R1: 70, VIGNETTE: [70, 75],
       OFFER_EVERY: 2, PULSE_PERIOD: 0.8,
+      // DEFAULT: ведомые в 'attack' подходят к своему дереву до 10 u, как ведущий (AutoStopDistance). Без этого они били
+      // с 20–40 u, при конусе 20° и коллайдере 2.5 u долетало ≈ 58 % их урона, и Ch2 выигрывался с запасом 2–5 с
+      // (видео ≈ 10–12 с). Spec 04 §2.5, spec 08 §5.6.
+      FOLLOWER_REACH: 10,
       // Concentric-ring layout (spec 04 §2.5). rng() in [0, 1) → [{x, y, type}] (y = original z).
       layout(n, rng) {
         const R0 = 22, R1 = 70, area = Math.PI * (R1 * R1 - R0 * R0);
@@ -7912,6 +7918,7 @@ _ 4 ###
 //     reticles: true, edgeArrow: false (off-screen arrow to the leader's target, Boss / Mine), input: true (joystick)
 //     fxUpdate: true,                // update() also advances G.fx (pass false if your scene calls G.fx.update itself)
 //     leaderStop: 10,                // AutoStopDistance (u)
+//     followerReach: 0,              // ведомые в 'attack' подходят к своей цели до этой дистанции (u); 0 = стоят (челлендж 10, spec 04 §2.5)
 //     zOffset: true,                 // approach targets from screen-below (01 §8 AutoZOffset); false = straight at them
 //     pickLeaderTarget(b, leader) -> target | null,      // override leader move-target choice (default: nearest alive)
 //     onDamage(t, dealt, src, b), onKill(t, {money, src}, b), drawBg(ctx, b) (custom background)
@@ -8518,6 +8525,8 @@ _ 4 ###
           dvx = F.repX * gs; dvy = F.repY * gs;
           F.repLeft -= Math.hypot(F.vx, F.vy) * dt + 0.02;
         } else if (F.state === 'attack') {
+          // челлендж: на редких кольцах промах с 20–40 u пропадает, поэтому ведомый подходит к своей цели, как ведущий
+          if (this.o.followerReach && own) toward(own.x, own.y, this.o.followerReach);
           if (F.fidgetT > 0.5 && F.stateT > F.fidgetAt) { F.fidgetT = 0; F.fidgetAt = F.stateT + 1.5 + frnd() * 1.5; }
         }
       }
@@ -9140,7 +9149,8 @@ _ 4 ###
 //   cur() sub() max() maxSub() n() recN() replay() (n < recN → ×2 walk, 10 C21) biome() label() ('Этап 1-3')
 //   unlocked(feature) (record-based, G.D.unlockedAt; features not in G.D.unlocks → true)
 //   phase() 'boot'|'play'|'clear'|'timesup'|'transition'|'mode'|'away'   phaseT()   golden() (golden target|null)
-//   progress() integer % (01 §14.3: 99 cap, 100 on clear) · progress01() · timer() · timeLimit() · timeLeft()
+//   progress() integer %: доля срубленных обычных деревьев (01 §14.3: 99 cap, 100 on clear) · progress01() · timer()
+//   timeLimit() · timeLeft()
 //   timeFrac() (1 → 0) · limit() (= timeLimit) · pct() (= progress) · firing() · squadScreen() (screen squad points)
 //   eco() Eco overlay active · ecoCombat() (→ caption eco.combat vs eco.moving)
 //   battle (getter): the main G.Battle (squad positions, rabbitScreens(), leader()...)
@@ -9200,7 +9210,7 @@ _ 4 ###
 
   // ---------- flow (not saved) ----------
   const F = {
-    phase: 'boot', t: 0, battle: null, built: false, attempt: 0, aMax: 22, golden: null, goldenSpawned: false,
+    phase: 'boot', t: 0, battle: null, built: false, attempt: 0, aMax: 22, nReg: 0, golden: null, goldenSpawned: false,
     trans: null, saved: null, inMode: null, toastQ: [], toastWait: 0, lastOffline: null, clearElapsed: 0,
     pending: null, rebirthAt: -99,
   };
@@ -9250,6 +9260,7 @@ _ 4 ###
       });
     }
     F.aMax = aMax > -1e9 ? aMax : 22;
+    F.nReg = b.nRegAlive;                                   // знаменатель прогресса: обычные деревья этой попытки
     b.bounds.aMax = F.aMax + mapv('aTail', 60);
     s.totalHp = total;
     s.progressHp = 0;
@@ -9637,7 +9648,7 @@ _ 4 ###
       if (key !== stKey) { st = G.calc('offline', stage, { lv: lv.slice(), n, recN: rec, noCache: true }); stKey = key; }
       const dpsA = st.dpsArea, dpsS = st.dpsSingle;
       if (!(dpsA > 0) || !(dpsS > 0)) break;
-      const N = DS.trees(stage), A = AVG[sub - 1], HP = DS.HP(stage), REW = DS.REW(stage);
+      const N = DS.trees(stage, sub), A = AVG[sub - 1], HP = DS.HP(stage), REW = DS.REW(stage);
       const walk = N * walkPer / (n < rec ? 2 : 1);
       const Treg = Math.max(N * A * HP / dpsA, walk) * scale;
       const Tgold = sub === 5 ? off('GOLDEN_HP_MUL') * HP / dpsS * scale : 0;
@@ -9769,11 +9780,13 @@ _ 4 ###
 
   const ecoActive = () => ecoSetting() && F.phase !== 'mode' && F.phase !== 'away';
   const ecoCombat = () => !!(F.battle && F.phase === 'play' && F.battle.hasTarget());
+  // Прогресс как в оригинале: доля срубленных обычных деревьев, floor(100 · убито / N), потолок 99 до зачистки
+  // (на золотом дереве N-5 полоса стоит на 99 %). progressHp/totalHp остаются в сохранении для совместимости.
   const progressPct = () => {
-    const s = S();
     if (F.phase === 'clear') return 100;
-    if (!(s.totalHp > 0)) return 0;
-    return Math.min(99, Math.floor(100 * s.progressHp / s.totalHp + 1e-9));
+    const b = F.battle, n = F.nReg;
+    if (!b || !(n > 0)) return 0;
+    return clamp(Math.floor(100 * (n - b.nRegAlive) / n + 1e-9), 0, 99);
   };
 
   // ---------- public API ----------
@@ -25555,6 +25568,7 @@ _ 4 ###
       biome: r.mode === 'challenge' ? d.biome(r.level) : 8,
       arena: { challenge: 'mayhem', mine: 'burrow', boss: 'lavaring' }[r.mode],
       bounds: { type: 'circle', r: d.CLAMP_R || d.ARENA_R }, spawn: r.mode === 'boss' ? d.SPAWN_SQUAD : { x: 0, y: 0 },
+      followerReach: d.FOLLOWER_REACH || 0,
       onKill(t) {
         r.killed++;
         if (r.mode === 'mine') {
@@ -30109,270 +30123,6 @@ _ 4 ###
 })();
 
 //# sourceURL=src/95_bot.js
-</script>
-<script>
-// DEV ONLY (excluded from release builds): 'uitest' scene for the engine — every glyph, every button style, a modal
-// window with a 30-item scroll list, drag & drop, toasts. ?scene=uitest&page=0..3 (fonts, buttons, windows, drag).
-(() => {
-  'use strict';
-  const G = window.G = window.G || {};
-  const ru = () => G.lang === 'ru';
-  const L = (r, e) => (ru() ? r : e);
-  let page = Math.max(0, Math.min(3, +(G.flags && G.flags.page) || 0));
-  let log = '-';
-  let toggles = { a: true, b: false };
-  let tab = 0;
-  let enteredPage = -1;
-
-  const PAGES = () => [L('Шрифт', 'Font'), L('Кнопки', 'Buttons'), L('Окна', 'Windows'), L('Драг', 'Drag')];
-
-  // ---- page 0: fonts ----
-  const drawFonts = () => {
-    const X = G.px;
-    let y = 20;
-    X.panel(2, y, 212, 74, 'dark', { alpha: 1 });
-    const main = G.font.all('main');
-    let x = 6, yy = y + 4;
-    for (const ch of main) {
-      const w = G.textW(ch);
-      if (x + w > 210) { x = 6; yy += 10; }
-      G.text(ch, x, yy);
-      x += w + 2;
-    }
-    y += 76;
-    X.panel(2, y, 212, 28, 'dark', { alpha: 1 });
-    const small = G.font.all('small');
-    x = 6; yy = y + 4;
-    for (const ch of small) {
-      const w = G.textW(ch, 'small');
-      if (x + w > 210) { x = 6; yy += 7; }
-      G.text(ch, x, yy, { font: 'small', color: 'gold' });
-      x += w + 2;
-    }
-    y += 30;
-    const inner = X.panel(2, y, 212, 66, 'plain');
-    const tc = 'textDark';
-    G.text('Съешь же ещё этих мягких французских булок, да выпей чаю!', inner.x + 1, inner.y + 1, { color: tc, maxW: inner.w - 2 });
-    G.text('ЭЙ, ЖЛОБ! ГДЕ ТУЗ? ПРЯЧЬ ЮНЫХ СЪЁМЩИЦ В ШКАФ.', inner.x + 1, inner.y + 21, { color: tc, maxW: inner.w - 2 });
-    G.text('Quick brown fox: jumps 0-9 «№1» ×3 ★', inner.x + 1, inner.y + 41, { color: 'P16' });
-    G.text('Капуста +{0} {coin}  Кристаллы 150 {gem}'.replace('{0}', G.fmt(12345)), inner.x + 1, inner.y + 50, { color: 'P22' });
-    y += 68;
-    X.rect(0, y, 216, 120, 'P24');
-    X.dither(0, y, 216, 120, 'P22', 0.25, 0);
-    const cols = [['#ffffff', '12.34a'], ['P36', 'КРИТ!'], ['P26', '+1.2a'], ['P14', '+15'], ['gold', '★ 3'], ['P43', '×4']];
-    cols.forEach(([c, s], i) => G.text(s, 6 + i * 35, y + 4, { color: c, outline: 'P00' }));
-    G.text('Этап разнесён!', 108, y + 16, { scale: 2, align: 'center', outline: 'P00', shadow: 'gold' });
-    G.text('×3', 30, y + 38, { scale: 3, align: 'center', color: 'gold', outline: 'P00', shadow: 'P31' });
-    G.text('Время вышло!', 128, y + 40, { scale: 2, align: 'center', color: '#ff7a3d', outline: 'P00' });
-    G.text('ПУШКИ КОСТЮМ АМУЛЕТ РАЗНОС СЛИЗНИ', 4, y + 62, { font: 'small', outline: 'P00' });
-    G.text('GUNS LOOKS MOON SHOP MAYHEM BURROW', 4, y + 70, { font: 'small', outline: 'P00' });
-    G.text('LV.18  63%  2:41  1-3  »×2  +100', 4, y + 78, { font: 'small', color: 'gold', outline: 'P00' });
-    G.text('Тень и обводка: Йогурт, ёжик, щука, цирк.', 4, y + 88, { outline: 'P00', shadow: 'P31' });
-    G.text(L('Моно: 0123 1111 iiii', 'Mono: 0123 1111 iiii'), 4, y + 100, { mono: true, color: 'P35' });
-    const w = G.textW('Ширина 6 x 5 = 30');
-    G.text('Ширина 6 x 5 = 30 → ' + w + 'px', 4, y + 110, { color: 'P05' });
-  };
-
-  // ---- page 1: buttons ----
-  const drawButtons = () => {
-    const X = G.px;
-    const U = G.ui;
-    const panel = X.panel(2, 20, 212, 300, 'plain');
-    let y = panel.y + 2;
-    const b = (id, x, w, o) => { if (U.button(id, x, y, w, 18, o)) { log = id; G.ui.toast(L('Нажато: ', 'Pressed: ') + (o.label || id)); } };
-    b('green', 8, 64, { style: 'green', label: L('Купить', 'Buy') });
-    b('orange', 76, 64, { style: 'orange', label: L('Призыв', 'Summon'), icon: 'crystal' });
-    b('blue', 144, 64, { style: 'blue', label: L('Инфо', 'Info') });
-    y += 22;
-    b('grey', 8, 64, { style: 'grey', label: G.t('common.cancel') });
-    b('red', 76, 64, { style: 'red', label: L('Сброс', 'Reset') });
-    b('gold', 144, 64, { style: 'gold', label: L('Забрать', 'Claim') });
-    y += 22;
-    b('disabled', 8, 64, { style: 'green', label: L('Нельзя', 'Disabled'), disabled: true });
-    b('deny', 76, 64, { style: 'teal', label: '12.3a', icon: 'cabbage', deny: true });
-    b('purple', 144, 64, { style: 'purple', label: L('Луна', 'Moon') });
-    y += 24;
-    if (U.button('big', 8, y, 200, 28, { style: 'orange', label: L('Ящик хлама', 'Junk Crate'), sub: '100 {gem}', pulse: true })) { log = 'big'; G.ui.float('-100', 108, y, { color: 'P14' }); }
-    y += 32;
-    if (U.button('link', 60, y, 96, 12, { style: 'link', label: L('Нет, спасибо', 'No thanks'), textColor: 'P03', shadow: false })) log = 'link';
-    y += 16;
-    if (U.button('card', 8, y, 100, 30, { style: 'card', draw: (cx, cy, cw, ch, s) => {
-      U.icon('power', cx + 4, cy + 6, { size: 16 });
-      G.text(L('Сила', 'Power'), cx + 24, cy + 5, { color: 'textDark' });
-      G.text('LV.18', cx + 24, cy + 16, { font: 'small', color: 'P16' });
-    } })) log = 'card';
-    if (U.button('cardDark', 112, y, 96, 30, { style: 'cardDark', label: 'cardDark', badge: 3 })) log = 'cardDark';
-    y += 36;
-    const side = [['guns', 'ПУШКИ', 'GUNS'], ['costume', 'КОСТЮМ', 'LOOKS'], ['moon', 'ЛУНА', 'MOON'], ['shop', 'ЛАВКА', 'SHOP'],
-      ['play', 'РАЗНОС', 'MAYHEM'], ['pets', 'ЗВЕРИ', 'PETS'], ['charms', 'АМУЛЕТ', 'CHARMS']];
-    X.rect(4, y - 2, 208, 32, 'P25');
-    side.forEach(([ic, r, e], i) => {
-      const locked = ic === 'pets' || ic === 'charms';
-      if (U.button('side:' + ic, 6 + i * 29, y, 26, 26, { style: 'icon', icon: ic, label: L(r, e), locked, lockText: G.t('lock.tip', 12),
-        badge: ic === 'shop' ? true : ic === 'guns' ? 'new' : undefined, pulse: ic === 'play' })) log = 'side:' + ic;
-    });
-    y += 32;
-    toggles.a = U.toggle('tgA', 10, y, toggles.a);
-    toggles.b = U.toggle('tgB', 40, y, toggles.b);
-    if (U.button('x', 70, y - 2, 15, 15, { style: 'close' })) log = 'close';
-    U.badge(92, y, true, 'b1');
-    U.badge(102, y, 7, 'b2');
-    U.badge(116, y, 'new', 'b3');
-    X.panel(150, y - 1, 58, 13, 'pill');
-    U.icon('cabbage', 153, y + 2, { size: 7 });
-    G.text('16.4a', 205, y + 2, { align: 'right' });
-    y += 18;
-    tab = U.tabs('tabs', 8, y, 200, 14, [L('Задания', 'Jobs'), L('Пропуск', 'Pass'), L('Магазин', 'Shop')], tab);
-    X.rect(8, y + 14, 200, 18, 'panel');
-    G.text(L('Вкладка ', 'Tab ') + (tab + 1), 108, y + 19, { align: 'center', color: 'textDark' });
-    y += 36;
-    U.bar(8, y, 182, 6, 0.63, { fill: '#c98a3a' });
-    G.text('63%', 208, y, { font: 'small', align: 'right', color: 'textDark' });
-    U.bar(8, y + 8, 182, 3, 0.4, { fill: '#ffd34a', hi: '#fff3a3' });
-    G.text('1:12', 208, y + 7, { font: 'small', align: 'right', color: 'textDark' });
-    U.bar(8, y + 14, 68, 3, 0.8, { fill: 'cardNoBar' });
-    const hold = U.button('hold', 84, y + 12, 70, 16, { style: 'green', label: 'Hold +' });
-    const n = U.holdRepeat('hold', 0.4, 0.1);
-    if (hold || n) { holdCount += hold ? 1 : n; }
-    G.text(String(holdCount), 160, y + 16, { color: 'textDark' });
-    G.text((L('Нажато: ', 'Last: ')) + log, 108, 326, { align: 'center', color: 'P05' });
-  };
-  let holdCount = 0;
-
-  // ---- page 2: windows ----
-  G.windows.uitest_list = {
-    rect: 'modal',
-    title: () => L('Арсенал (30)', 'Armory (30)'),
-    draw(a, w) {
-      const rowH = 26;
-      G.ui.scroll('uitest:list', w.cx, w.cy, w.cw, w.ch - 24, 30 * rowH, (off, top) => {
-        for (let i = 0; i < 30; i++) {
-          const ry = top + i * rowH;
-          if (ry > w.cy + w.ch || ry + rowH < w.cy) continue;
-          G.px.panel(w.cx + 1, ry + 1, w.cw - 6, rowH - 2, 'card');
-          if (G.art && G.art.gunIcon) { try { G.art.gunIcon(G.px.ctx(), (i % 65) + 1, w.cx + 4, ry + 4, { size: 16 }); } catch (e) { G.ui.icon('guns', w.cx + 4, ry + 4); } } else G.ui.icon('guns', w.cx + 4, ry + 4);
-          G.text((ru() ? 'Пушка №' : 'Blaster #') + (i + 1), w.cx + 24, ry + 5, { color: 'textDark' });
-          G.text('LV.' + (i * 3 + 1) + '  ' + G.fmt(Math.pow(3.1, i)), w.cx + 24, ry + 15, { font: 'small', color: 'P16' });
-          if (G.ui.button('uitest:buy' + i, w.cx + w.cw - 52, ry + 5, 44, 16, { style: i % 3 ? 'green' : 'grey', label: L('Купить', 'Buy'), disabled: i % 3 === 0 })) {
-            log = 'buy' + i;
-            G.ui.toast(L('Куплено: Пушка №', 'Bought: Blaster #') + (i + 1));
-          }
-        }
-      });
-      const by = w.y + w.h - 26;
-      if (G.ui.button('uitest:sheet', w.cx, by, 60, 18, { style: 'blue', label: L('Шторка', 'Sheet') })) G.ui.open('uitest_sheet');
-      if (G.ui.button('uitest:confirm', w.cx + 64, by, 60, 18, { style: 'red', label: L('Сброс', 'Reset') })) {
-        G.ui.confirm(L('Стереть ВСЁ без возврата?', 'Erase EVERYTHING for good?'), () => G.ui.toast(L('Стёрто (понарошку)', 'Erased (not really)')),
-          { danger: true, title: L('Сброс', 'Reset'), yes: L('Стереть', 'Erase') });
-      }
-      if (G.ui.button('uitest:tall', w.cx + 128, by, w.cw - 128, 18, { style: 'grey', label: L('Ещё', 'More') })) G.ui.open('uitest_tall');
-    },
-  };
-  G.windows.uitest_sheet = {
-    rect: 'sheet', title: () => L('Оружейная', 'Armory'),
-    draw(a, w) {
-      G.text(L('Нижняя шторка выезжает снизу.', 'A bottom sheet slides up.'), w.cx + 2, w.cy + 4, { color: 'textDark', maxW: w.cw - 4 });
-      for (let i = 0; i < 16; i++) {
-        const cx = w.cx + 8 + (i % 4) * 48, cy = w.cy + 30 + Math.floor(i / 4) * 48;
-        G.px.panel(cx, cy, 44, 44, 'inset');
-      }
-    },
-  };
-  G.windows.uitest_tall = {
-    rect: 'tall', title: () => L('Высокое окно', 'Tall window'),
-    draw(a, w) {
-      G.text(L('Третий слой. Можно закрыть ✕, тапом мимо или Esc.', 'Third layer. Close with ✕, outside tap or Esc.'), w.cx + 2, w.cy + 4, { color: 'textDark', maxW: w.cw - 4 });
-      if (G.ui.button('uitest:t4', w.cx + 10, w.cy + 40, w.cw - 20, 20, { style: 'orange', label: L('Тосты ×4', 'Toasts ×4') })) {
-        for (let i = 1; i <= 4; i++) G.ui.toast(L('Тост №', 'Toast #') + i);
-      }
-    },
-  };
-  const drawWindowsPage = () => {
-    G.px.rect(0, 16, 216, 368, 'P23');
-    G.px.dither(0, 16, 216, 368, 'P22', 0.5, 0);
-    if (G.ui.button('uitest:openList', 58, 340, 100, 20, { style: 'green', label: L('Открыть', 'Open') })) G.ui.open('uitest_list');
-  };
-
-  // ---- page 3: drag & drop ----
-  const inv = [1, 1, 3, null, 7, 12, null, 20];
-  const slots = [5, null, null];
-  const cellArt = (id) => (c, x, y) => {
-    if (G.art && G.art.gunIcon) { try { G.art.gunIcon(c, id, x, y, { size: 24 }); return; } catch (e) { /* fallthrough */ } }
-    G.px.with(c, () => { G.px.box(x, y, 24, 24, 'P00', 2); G.px.box(x + 1, y + 1, 22, 22, G.RANK_COLORS ? G.RANK_COLORS[id % 13] : '#ffd34a', 1); });
-    G.text(String(id), x + 12, y + 9, { align: 'center', color: 'textDark', ctx: c });
-  };
-  const drawDragPage = () => {
-    const X = G.px, U = G.ui;
-    X.rect(0, 16, 216, 368, 'P12');
-    X.panel(4, 24, 208, 56, 'plain', {});
-    G.text(L('Слоты (лапы)', 'Paw slots'), 108, 28, { align: 'center', color: 'textDark' });
-    const cell = (kind, i, x, y, val) => {
-      const id = kind + i;
-      const hov = U.drag.over(id, x, y, 28, 28);
-      X.panel(x, y, 28, 28, 'inset', hov ? { fill: '#ffe9a8' } : undefined);
-      if (val !== null && !(U.drag.active && U.drag.from === id)) cellArt(val)(X.ctx(), x + 2, y + 2);
-      if (val !== null && U.dragStart(id, x, y, 28, 28)) {
-        U.drag.begin({ kind, i, val }, { from: id, draw: cellArt(val), w: 24, h: 24, home: { x: x + 2, y: y + 2 } });
-      }
-      const p = U.drag.dropTarget(id, x, y, 28, 28);
-      if (p) {
-        const src = p.kind === 'inv' ? inv : slots, dst = kind === 'inv' ? inv : slots;
-        if (dst[i] !== null && dst[i] === p.val && !(p.kind === kind && p.i === i)) {
-          dst[i] = p.val + 1; src[p.i] = null;
-          G.ui.toast(L('Склеено! Ранг ', 'Taped up! Rank ') + dst[i]);
-          G.sfx('merge');
-        } else if (!(p.kind === kind && p.i === i)) {
-          const t = dst[i]; dst[i] = p.val; src[p.i] = t;
-          G.sfx('equip');
-        }
-        log = 'drop ' + p.kind + p.i + '→' + id;
-      }
-      if (val !== null && U.button('cellbtn:' + id, x, y, 28, 28, { style: 'custom' })) {
-        G.ui.tooltip(L('Пушка ранга ', 'Rank ') + val, x + 14, y);
-        log = 'tap ' + id;
-      }
-    };
-    slots.forEach((v, i) => cell('slot', i, 50 + i * 40, 42, v));
-    X.panel(4, 88, 208, 100, 'plain');
-    inv.forEach((v, i) => cell('inv', i, 22 + (i % 4) * 46, 96 + Math.floor(i / 4) * 44, v));
-    let y = 200;
-    if (U.button('t1', 8, y, 64, 18, { style: 'blue', label: L('Тост', 'Toast') })) G.ui.toast(L('Рюкзак полон! Склей что-нибудь.', 'Backpack full! Tape something up.'), { deny: true });
-    if (U.button('t2', 76, y, 64, 18, { style: 'gold', label: L('Открыто', 'Unlock') })) G.ui.toast(L('Открыто: Кристальная нора!', 'Unlocked: Crystal Burrow!'), { kind: 'unlock', icon: 'mine' });
-    if (U.button('t3', 144, y, 64, 18, { style: 'green', label: '+1.2a' })) G.ui.float('+1.2a', 176, y - 2, { color: 'P26' });
-    y += 24;
-    if (U.button('shake', 8, y, 64, 18, { style: 'red', label: L('Тряска', 'Shake') })) G.px.shake(3, 0.3);
-    if (U.button('lang', 76, y, 64, 18, { style: 'grey', label: ru() ? 'EN' : 'RU' })) G.setLang(ru() ? 'en' : 'ru');
-    if (U.button('err', 144, y, 64, 18, { style: 'grey', label: L('Ошибка', 'Error') })) setTimeout(() => { throw new Error('uitest: deliberate error'); }, 0);
-    G.text(L('Перетащи пушку на такую же — склеятся.', 'Drop a blaster on a twin to tape them up.'), 108, 252, { align: 'center', color: 'P05', maxW: 200 });
-    G.text(log, 108, 330, { align: 'center', color: 'P04' });
-  };
-
-  G.scenes.register('uitest', {
-    hud: false,
-    enter() { enteredPage = -1; },
-    update() {},
-    draw() {
-      const X = G.px;
-      X.clear('uiDark');
-      if (enteredPage !== page) {
-        enteredPage = page;
-        G.ui.closeAll();
-        if (page === 2) G.ui.open('uitest_list');
-      }
-      if (page === 0) drawFonts();
-      else if (page === 1) drawButtons();
-      else if (page === 2) drawWindowsPage();
-      else drawDragPage();
-      // top tab bar
-      X.rect(0, 0, 216, 17, 'P01');
-      page = G.ui.tabs('uitest:pages', 2, 2, 212, 14, PAGES(), page);
-      G.text('uitest · ' + G.lang + ' · v' + G.VERSION, 108, 376, { align: 'center', font: 'small', color: 'P03' });
-    },
-  });
-  G.uitest = { setPage: (p) => { page = p; }, inv, slots };
-})();
-
-//# sourceURL=src/99_uitest.js
 </script>
 </body>
 </html>
