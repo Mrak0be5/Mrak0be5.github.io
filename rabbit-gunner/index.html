@@ -22,7 +22,7 @@
 <body>
 <canvas id="game" width="216" height="384" tabindex="0"></canvas>
 <noscript>Для игры нужен JavaScript. / This game needs JavaScript.</noscript>
-<script>window.BUILD_INFO = {"time": "2026-10-09 14:48", "hash": "99897fc8", "dev": false, "files": 30};</script>
+<script>window.BUILD_INFO = {"time": "2026-10-09 16:06", "hash": "f763921a", "dev": false, "files": 30};</script>
 <script>
 // Core: events, seeded rng, time, number/time formatting, i18n, action registry, stats-modifier hooks, easing,
 // simulation + scene registries, error capture, boot warm-up registry. Loaded first, so every later file can use these
@@ -5904,6 +5904,8 @@ _ 4 ###
     { id: 'quests', col: 'T', slot: 'tr0', label: 'menu.quests', icon: 'quests', visible: 'done' },
     { id: 'weekly', col: 'T', slot: 'tr1', label: 'menu.weekly', icon: 'weekly', visible: 'firstA' },
   ];
+  // Forever-locked features are not shown at all (owner request 2026-10-09: padlocks only take space).
+  D.hudButtons = D.hudButtons.filter((b) => !b.feature || !D.unlocks[b.feature] || D.unlocks[b.feature].scope !== 'locked');
   for (const b of D.hudButtons) b.title = b.label + '.title';
 })();
 
@@ -24070,8 +24072,8 @@ _ 4 ###
 //   G.mods.dirty() on every slot change; G.saveNow() after every summon / merge / equip / grant.
 // Windows: guns (Arsenal bottom sheet), newGun (New Gun popup queue: non-modal over the open sheet, dimmed and
 //   input-blocking alone), gunInfo ({gunId, mode: 'inv'|'slot'|'view'|'help', cell, slot}), collection.
-// Widget ids: guns.slot.1-3, guns.unequip.1-3, guns.cell.0-15, guns.summon, guns.info, guns.collection, guns.vault,
-//   guns.daily, guns.autoMerge, guns.stars, guns.stepup, guns.outside, newGun.tap, gunInfo.unequip, gunInfo.lock,
+// Widget ids: guns.slot.1-3, guns.unequip.1-3, guns.cell.0-15, guns.summon, guns.info, guns.collection,
+//   guns.daily, guns.stepup, guns.outside, newGun.tap, gunInfo.unequip,
 //   coll.cell.<gunId>.
 (() => {
   'use strict';
@@ -25175,20 +25177,12 @@ _ 4 ###
       }
       if (h.clicked) dailyAd();
     }
-    const am = { x: 3, y: 230, w: 24, h: 24 };
-    if (U.button('guns.autoMerge', am.x, am.y, am.w, am.h, { style: 'icon', icon: 'merge', locked: true, lockText: lockText('autoMerge') })) { /* locked */ }
-    const st = { x: 189, y: 188, w: 24, h: 24 };
-    if (U.button('guns.stars', st.x, st.y, st.w, st.h, { style: 'icon', icon: 'star', locked: true, lockText: lockText('slotStars') })) { /* locked */ }
   };
 
   const drawBar = (U, dp) => {
     const P = X(), y = LAY.barY, h = LAY.barH;
-    // Vault (LOCKED 40); also a drop target ("Available after Stage 40!")
-    U.button('guns.vault', 3, y, 44, h, { style: 'grey', label: G.t('gun.vault.btn'), locked: true, lockText: lockText('vault') });
-    if (dp && U.drag.over('guns.vault', 3, y, 44, h)) P.boxO(2, y - 1, 46, h + 2, 'P36', 3);
-    const pv = U.drag.dropTarget('guns.vault', 3, y, 44, h);
-    if (pv && pv.owner === 'guns') { const home = pv.src === 'c' ? cellRect(pv.i) : slotRect(pv.i); lockedTap('vault'); present.snap(pv.gunId, { x: G.input.fx, y: G.input.fy }, { x: home.x + home.w / 2, y: home.y + home.h / 2 }); }
-    if (U.button('guns.info', 49, y, 36, h, { style: 'blue', label: G.t('gun.info') })) openInfo({ mode: 'help' });
+    // Vault / auto-merge / slot stars / gun lock removed: forever locked in the clone (owner request 2026-10-09).
+    if (U.button('guns.info', 3, y, 82, h, { style: 'blue', label: G.t('gun.info') })) openInfo({ mode: 'help' });
     const dia = G.eco && G.eco.dia ? G.eco.dia() : 0, cost = COST();
     const afford = dia >= cost;
     const cl = U.button('guns.summon', 87, y, 72, h, { style: 'orange', sfx: false, pulse: afford && firstEmpty() >= 0 && tutStep() === 'gunBuy',
@@ -25432,9 +25426,7 @@ _ 4 ###
     }
     // buttons by mode
     const by = w.y + w.h - 26, bw = 96, bx = w.x + Math.floor((w.w - bw) / 2);
-    if (a.mode === 'inv') {
-      U.button('gunInfo.lock', bx, by, bw, 20, { style: 'grey', label: G.t('gun.lock'), icon: 'lock', locked: true, lockText: lockText('gunLock') });
-    } else if (a.mode === 'slot') {
+    if (a.mode === 'slot') {
       const last = eqCount() <= 1;
       if (U.button('gunInfo.unequip', bx, by, bw, 20, { style: 'red', label: G.t('gun.unequip'), deny: last,
         onDeny: () => U.toast(G.t('gun.lastEquipped'), { sfx: false }) })) {
@@ -25841,7 +25833,7 @@ _ 4 ###
 // Windows: costumes, rebirth, pond, newFish {id, g}, fishInfo {id | odds}, quests {tab: 'pass'|'missions'}, daily
 //   {tutorial}, welcome (offline info), settings, ranking, rate, moonhop (S27 overlay), textInput {title, hint, onOk}.
 // Widget ids: rebirth.do · rebirth.super · rebirth.perm.<power|speed|money> · pond.free · pond.epic · pond.info ·
-//   pond.auto · pond.fish.<id> · newFish.ok · fishInfo.release · fishInfo.close · costumes.cell.<i> · costumes.buy|wear ·
+//   pond.fish.<id> · newFish.ok · fishInfo.release · fishInfo.close · costumes.cell.<i> · costumes.buy|wear ·
 //   quests.tab:0|1 · quests.vip · quests.lux · quests.pass.<free|epic>.<L> · quests.mission.<id> · quests.newSeason ·
 //   daily.claim · welcome.claim · settings.<music|sound|vibro|eco|lang.ru|lang.en|numbers|shake|lowfx|save|load|
 //   redeem|restore|writeUs|reset> · ranking.tab.<stage|boss|hunt|raid> · ranking.top · ranking.near · ranking.name ·
@@ -27036,8 +27028,7 @@ _ 4 ###
         subColor: !open ? '#ffffff' : canEpic ? P('textDark', '#2b2033') : TX.bad(), deny: !open || full || !canEpic,
         onDeny: () => { if (!open) lockTip(); else if (full) deny(T('fish.full')); else deny(T('common.notEnoughDia')); } })) G.act.fishCast('epic');
       y += 35;
-      if (G.ui.button('pond.info', x0, y, 97, 18, { style: 'blue', label: T('common.info'), icon: 'info' })) G.ui.open('fishInfo', { odds: true });
-      G.ui.button('pond.auto', x0 + 103, y, 97, 18, { style: 'grey', label: T('feat.fishAutoMerge'), font: 'small', icon: 'merge', locked: true, lockStage: 20 });
+      if (G.ui.button('pond.info', x0, y, 200, 18, { style: 'blue', label: T('common.info'), icon: 'info' })) G.ui.open('fishInfo', { odds: true });
     },
   };
   G.windows.newFish = {
@@ -27557,7 +27548,7 @@ _ 4 ###
     draw(a, w) {
       const x0 = w.cx, cw = w.cw;
       const bossOpen = unlocked('rankBoss') || record() >= 10;
-      const tabs = [['stage', 72, T('rank.stage')], ['boss', 72, T('rank.boss')], ['hunt', 27, null, 'slugs', 12], ['raid', 27, null, 'king', 40]];
+      const tabs = [['stage', Math.floor(cw / 2), T('rank.stage')], ['boss', cw - Math.floor(cw / 2), T('rank.boss')]];  // hunt/raid tabs removed (forever locked)
       let tx = x0;
       for (const [k, tw, lbl, ic, lockAt] of tabs) {
         const sel = rkTab === k;
@@ -27750,8 +27741,8 @@ _ 4 ###
 // Actions: G.act.buy(productId, {ui}) -> bool · G.act.watchAd(placement[, onReward, onCancel]) -> bool ·
 //   G.act.adSkip() · G.act.adClose() (interstitial ✕) · G.act.claimJar() -> n · G.act.restorePurchases()
 // Windows: 'shop' {focus: productId | sectionId} · 'stepup' · 'weekly' · 'jar' · 'purchase' {id, onDone} · 'ad'.
-// Widget ids: shop.tabs:0..2, shop.card.<id>, shop.buy.<id>, purchase.yes, purchase.no, stepup.buy.<id>,
-//   stepup.shop, weekly.tabs:0..2, weekly.buy.<id>, jar.claim, jar.shop, ad.skip, ad.close.
+// Widget ids: shop.tabs:0..1, shop.card.<id>, shop.buy.<id>, purchase.yes, purchase.no, stepup.buy.<id>,
+//   stepup.shop, weekly.tabs (only with 2+ open tabs), weekly.buy.<id>, jar.claim, jar.shop, ad.skip, ad.close.
 // State 'shop' / 'ads': spec 10 G5 fields (+ shop.weekly.seen, ads.daily{placement: n}, ads.stats.skipped/interShown).
 (() => {
   'use strict';
@@ -28671,7 +28662,8 @@ _ 4 ###
     let y = 4;
     for (const sec of SH().sections || []) {
       if (sec.hidden === 'untilRankB' && !stepUp.visible()) continue;
-      const prods = inSec(sec.id);
+      if (sec.locked) continue;  // forever-locked sections/cards are not shown (owner request 2026-10-09)
+      const prods = inSec(sec.id).filter((p) => !p.locked);
       if (!prods.length) continue;
       anchors[sec.id] = y;
       items.push({ type: 'head', sec, y, h: 13 });
@@ -28688,7 +28680,6 @@ _ 4 ###
   const TABS = [
     { key: 'shop.tab.special', icon: 'star', sec: 'special' },
     { key: 'shop.tab.gems', icon: 'crystal', sec: 'gems' },
-    { key: 'shop.tab.later', icon: 'lock', sec: 'pack7' },
   ];
   const drawAwning = (x, y, w) => {
     const P = X();
@@ -28984,7 +28975,7 @@ _ 4 ###
   };
 
   // ---------------------------------------------------------------------------------------------------------------
-  // Weekly Shop window (S19): tabs Blasters / VIP🔒20 / Sidekicks🔒12, 3 weekly gun packs with limits
+  // Weekly Shop window (S19): Blasters tab only (locked VIP / Sidekicks tabs hidden), 3 weekly gun packs with limits
   // ---------------------------------------------------------------------------------------------------------------
   const WTABS = () => ((SH().weekly && SH().weekly.tabs) || [{ id: 'gun', title: 'weekly.tab.gun' }]);
   const drawWeeklyCard = (p, x, y, w, h) => {
@@ -29022,14 +29013,12 @@ _ 4 ###
       const P = X();
       const x0 = w.cx, cw = w.cw;
       let y = w.cy + 1;
-      const tabs = WTABS();
-      const labels = tabs.map((tb) => {
-        const locked = !!tb.locked;
-        return { label: T(tb.title), icon: locked ? 'lock' : undefined, locked,
-          lockText: locked ? (record() >= tb.locked ? T('common.soon') : T('lock.tip', tb.locked)) : undefined };
-      });
-      G.ui.tabs('weekly.tabs', x0, y, cw, 14, labels, 0);
-      y += 18;
+      // forever-locked tabs (VIP / Sidekicks) are not shown; a lone tab needs no tab row
+      const tabs = WTABS().filter((tb) => !tb.locked);
+      if (tabs.length > 1) {
+        G.ui.tabs('weekly.tabs', x0, y, cw, 14, tabs.map((tb) => ({ label: T(tb.title) })), 0);
+        y += 18;
+      }
       // refresh timer
       const rs = T('weekly.resetIn', fmtTime(weekly.resetIn()));
       const rw = G.textW(rs) + 14;
