@@ -22,7 +22,7 @@
 <body>
 <canvas id="game" width="216" height="384" tabindex="0"></canvas>
 <noscript>Для игры нужен JavaScript. / This game needs JavaScript.</noscript>
-<script>window.BUILD_INFO = {"time": "2026-10-11 05:58", "hash": "6a6c67a3", "dev": false, "files": 40};</script>
+<script>window.BUILD_INFO = {"time": "2026-10-11 13:06", "hash": "0e610127", "dev": false, "files": 41};</script>
 <script>
 // Core: events, seeded rng, time, number/time formatting, i18n, action registry, stats-modifier hooks, easing,
 // simulation + scene registries, error capture, boot warm-up registry. Loaded first, so every later file can use these
@@ -4571,6 +4571,13 @@ $ 0 .##/##./.#./.##/##.
 //   scaling only; 01_pixel reads it live)}, nickname, nickChangedTs.
 // Wall clock: G.time.wallNow() (ms), G.dayKey(). Events: 'state:loaded' {fresh, awaySec, corrupt, error},
 //   'state:reset', 'day:change' {key, prev} (checked every 60 s and on focus), 'app:hide', 'app:resume' {awaySec}.
+// Защита от перевода часов (GDD 9.7, spec 16 §1), ключ состояния clock {ledger[], maxWall, strikes, lastStrike, flag}:
+//   G.clock.can(kind, key) — можно ли выдать (день новее key и непроверенных выдач вида < MAX_PENDING);
+//   G.clock.grant(kind) — запись в журнал после выдачи; G.clock.newDay(kind, key) = can + grant (суточные сбросы);
+//   G.clock.trust() 'none'|'derived'|'suspect', pending(kind), check(src), flagged(), flag() {at, why, n}, info(),
+//   clampAll(), lastBack(); G.clock.sys — «стенные − монотонные» мс (тесты подменяют). Сверка: загрузка, app:resume,
+//   day:change, раз в CHECK_SEC. События 'clock:grant', 'clock:back' {at, src, backSec, n, strike, flagged, clamped},
+//   'clock:flag' {at, why, n}. Пометка дублируется в '<KEY>.mark' и переживает сброс и импорт.
 (() => {
   'use strict';
   const G = window.G = window.G || {};
@@ -4730,6 +4737,7 @@ $ 0 .##/##./.#./.##/##.
     m.version = G.VERSION;
     if (!G.flags.lang) G.lang = m.settings.lang === 'ru' || m.settings.lang === 'en' ? m.settings.lang : G.autoLang();
     try { document.documentElement.lang = G.lang; } catch (e) { /* ignore */ }
+    clockLoad(!!raw);                       // сверка часов до state:loaded (spec 16 §1)
     lastDay = G.dayKey();
     G.emit('state:loaded', { fresh: info.fresh, awaySec: info.awaySec, corrupt: info.corrupt, error: info.error });
     return info;
@@ -4758,6 +4766,7 @@ $ 0 .##/##./.#./.##/##.
     if (qaNoSave() && !o.force) return false;
     const m = G.S.meta;
     if (m) m.lastSeen = G.time.wallNow();
+    clockSeen(G.time.wallNow());
     let s;
     try { s = serialize(); } catch (e) { G.reportError(e, 'save serialize'); return false; }
     const ok = store.set(KEY, s);
@@ -4807,8 +4816,12 @@ $ 0 .##/##./.#./.##/##.
     G.state.failed = [];
     blocked = false;
     Object.assign(info, { fresh: true, awaySec: 0, corrupt: false, error: null });
+    const keepClock = G.S.clock;            // пометка и страйки за перевод часов сбросом не снимаются (spec 16 §1.7)
     for (const k of order) G.S[k] = defs[k].defaults();
     G.S.meta.created = G.time.wallNow();
+    if (isObj(keepClock) && isObj(G.S.clock)) {
+      for (const f of ['flag', 'strikes', 'lastStrike', 'maxWall']) if (keepClock[f] !== undefined) G.S.clock[f] = keepClock[f];
+    }
     G.emit('state:reset');
     if (o.reload !== false && !(G.flags && G.flags.qa)) { suppressSave = true; location.reload(); }
   };
@@ -4853,6 +4866,7 @@ $ 0 .##/##./.#./.##/##.
     if (autoT >= 5) { autoT = 0; if (!qaNoSave()) G.save(); }
     dayT += dt;
     if (dayT >= 60) { dayT = 0; checkDay(); }
+    clockTick(dt);
   };
   const onHide = () => {
     if (!loaded || suppressSave) return;
@@ -4873,6 +4887,213 @@ $ 0 .##/##./.#./.##/##.
   window.addEventListener('pagehide', onHide);
   window.addEventListener('beforeunload', () => { if (loaded && !suppressSave && !qaNoSave()) G.save(); });
   window.addEventListener('focus', () => { if (loaded) checkDay(); });
+
+  // ---------- защита от перевода часов (GDD 9.7, spec 16 §1) ----------
+  // Журнал выдач по времени: {k вид, w стенное время мс, t доверие (0 нет данных / 1 derived / 2 suspect),
+  // s номер сессии, m монотонные с, v проверена, x попала в откат}. Последние D.clock.LEDGER записей.
+  const CDEF = { GAIN_TOL: 1800, SAME_TOL: 300, LEDGER: 32, LEAD_DAYS: 1, STRIKES: 2, DECAY_DAYS: 60, CHECK_SEC: 60,
+    MAX_PENDING: 3, JUMP_SEC: 300 };
+  const CK = () => Object.assign({}, CDEF, (G.D && G.D.clock) || {});
+  G.state.register('clock', () => ({ ledger: [], maxWall: 0, strikes: 0, lastStrike: 0, flag: null }), { version: 1 });
+  const MARK = KEY + '.mark';             // копия пометки нарушителя: переживает сброс прогресса и импорт
+  const TRUST = ['none', 'derived', 'suspect'];
+  // сохранённые даты, которые обрезаются до «не дальше LEAD_DAYS вперёд» (ключи дня и метки в мс)
+  const CLAMP_KEYS = ['daily.lastClaimDayKey', 'fish.freeDay', 'missions.dayKey', 'guns.dailyAdGunDay', 'modes.mineDay',
+    'ads.dayKey', 'shop.deals.dayKey', 'eco.auto.adDay', 'rebirth.superAdDay', 'rebirth.superIapDay', 'raid.day'];
+  const CLAMP_MS = ['shop.piggy.lastTickTs', 'pass.startTs', 'meta.lastSeen', 'meta.nickChangedTs'];
+  const CLAMP_WEEK = ['raid.week', 'shop.weekly.weekIdx', 'shop.deals.weekIdx'];   // номера недель (D.weekIdx)
+  let trust = 0, sessMax = 0, base = null, checkT = 0, waitShown = false, lastBack = null, toastLater = null;
+  const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
+  const C = () => G.S.clock;
+  const sess = () => (G.S.meta && G.S.meta.sessions) || 0;
+  const mono = () => (typeof performance !== 'undefined' && performance.now ? performance.now() / 1000 : G.time.real);
+  const DAYKEY = /^\d{4}-\d{2}-\d{2}$/;
+  const addMonths = (ms, k) => { const d = new Date(ms); d.setMonth(d.getMonth() + k); return d.getTime(); };
+  const sanitizeClock = () => {
+    let c = C();
+    if (!isObj(c)) c = G.S.clock = G.state.defaults('clock');
+    const L = CK().LEDGER;
+    c.ledger = (Array.isArray(c.ledger) ? c.ledger : []).filter((e) => isObj(e) && typeof e.k === 'string' && isNum(e.w))
+      .map((e) => ({ k: e.k, w: e.w, t: isNum(e.t) ? e.t : 1, s: isNum(e.s) ? e.s : 0, m: isNum(e.m) ? e.m : 0,
+        v: e.v ? 1 : 0, x: e.x ? 1 : 0 }));
+    if (c.ledger.length > L) c.ledger.splice(0, c.ledger.length - L);
+    if (!isNum(c.maxWall) || c.maxWall < 0) c.maxWall = 0;
+    c.strikes = Math.max(0, Math.floor(isNum(c.strikes) ? c.strikes : 0));
+    if (!isNum(c.lastStrike)) c.lastStrike = 0;
+    if (c.flag !== null && !(isObj(c.flag) && isNum(c.flag.at))) c.flag = null;
+    return c;
+  };
+  const pathOf = (p) => {
+    const a = p.split('.');
+    let o = G.S;
+    for (let i = 0; i < a.length - 1; i++) { o = o ? o[a[i]] : null; if (!isObj(o)) return null; }
+    return { o, k: a[a.length - 1] };
+  };
+  // даты из будущего -> не дальше LEAD_DAYS вперёд; возвращает список обрезанных путей
+  const clampAll = (now) => {
+    const K = CK(), lim = now + K.LEAD_DAYS * 86400000, lk = G.dayKey(lim), out = [];
+    for (const p of CLAMP_KEYS) {
+      const r = pathOf(p);
+      if (r && typeof r.o[r.k] === 'string' && DAYKEY.test(r.o[r.k]) && r.o[r.k] > lk) { r.o[r.k] = lk; out.push(p); }
+    }
+    for (const p of CLAMP_MS) {
+      const r = pathOf(p);
+      if (r && isNum(r.o[r.k]) && r.o[r.k] > lim) { r.o[r.k] = lim; out.push(p); }
+    }
+    const lw = G.D && typeof G.D.weekIdx === 'function' ? G.D.weekIdx(new Date(lim)) : null;
+    if (isNum(lw)) for (const p of CLAMP_WEEK) {
+      const r = pathOf(p);
+      if (r && isNum(r.o[r.k]) && r.o[r.k] > lw) { r.o[r.k] = lw; out.push(p); }
+    }
+    const ps = G.S.pass;                   // сезон не длиннее одного срока от начала
+    if (isObj(ps) && isNum(ps.startTs) && ps.startTs > 0 && isNum(ps.endTs)) {
+      const end = addMonths(ps.startTs, (G.D && G.D.pass && G.D.pass.SEASON_MONTHS) || 1);
+      if (ps.endTs > end) { ps.endTs = end; out.push('pass.endTs'); }
+    }
+    return out;
+  };
+  const clockToast = (key) => {
+    if (G.ready && G.ui && G.ui.toast) G.ui.toast(G.t(key), { deny: true });
+    else toastLater = key;
+  };
+  const markFlag = (now, why, n) => {
+    const c = C();
+    c.flag = { at: now, why, n };
+    store.set(MARK, JSON.stringify(c.flag));
+    G.emit('clock:flag', Object.assign({}, c.flag));
+  };
+  // часы ушли назад: обрезать даты, сбросить максимумы, выдачи из будущего -> страйк
+  const goneBack = (now, src) => {
+    const c = C(), K = CK(), s = sess();
+    const bad = c.ledger.filter((e) => !e.x && e.w - now > (e.s === s ? K.SAME_TOL : K.GAIN_TOL) * 1000);
+    const clamped = clampAll(now);
+    const was = Math.max(sessMax, c.maxWall);
+    sessMax = now;
+    c.maxWall = now;
+    let flagged = false, strike = false;
+    if (bad.length) {
+      for (const e of bad) e.x = 1;
+      if (c.lastStrike && now - c.lastStrike > K.DECAY_DAYS * 86400000) c.strikes = 0;
+      c.strikes++;
+      c.lastStrike = now;
+      strike = true;
+      if (c.strikes >= K.STRIKES && !c.flag) { markFlag(now, 'clock', bad.length); flagged = true; }
+      clockToast(c.flag ? 'clock.flagged' : 'clock.strike');
+    }
+    lastBack = { at: now, src, backSec: Math.round((was - now) / 1000), n: bad.length, strike, flagged, clamped };
+    G.emit('clock:back', Object.assign({}, lastBack));
+    if (G.ready && !qaNoSave()) G.save();
+    return lastBack;
+  };
+  // сверка: скачок вперёд по монотонным часам -> не верим часам до перезапуска; откат -> goneBack
+  const check = (src) => {
+    if (!loaded || !isObj(G.S.clock)) return null;
+    const c = C(), K = CK(), now = G.time.wallNow();
+    if (base !== null) {
+      const sys = G.clock.sys(), drift = (sys - base) / 1000;
+      if (Math.abs(drift) > K.JUMP_SEC) { if (drift > 0) trust = 2; base = sys; }
+    }
+    if (sessMax - now > K.SAME_TOL * 1000) return goneBack(now, src || 'check');
+    if (now > sessMax) sessMax = now;
+    if (now > c.maxWall) c.maxWall = now;
+    return null;
+  };
+  const restoreMark = (c) => {
+    if (c.flag || (G.flags && G.flags.fresh && !G.state._forceLoad)) return;
+    try {
+      const f = JSON.parse(store.get(MARK) || 'null');
+      if (isObj(f) && isNum(f.at)) c.flag = { at: f.at, why: String(f.why || 'clock'), n: f.n | 0 };
+    } catch (e) { /* испорченная копия пометки: игнор */ }
+  };
+  // вызывается из G.load до 'state:loaded'
+  const clockLoad = (hasRaw) => {
+    const c = sanitizeClock(), K = CK(), now = G.time.wallNow();
+    restoreMark(c);
+    const hist = Math.max(c.maxWall, (hasRaw && G.S.meta && G.S.meta.lastSeen) || 0);
+    trust = hasRaw && (c.maxWall > 0 || c.ledger.length) ? 1 : 0;
+    base = G.clock.sys();
+    checkT = 0;
+    waitShown = false;
+    lastBack = null;
+    sessMax = now;
+    if (hist - now > K.GAIN_TOL * 1000) goneBack(now, 'load');
+    else { clampAll(now); if (now > c.maxWall) c.maxWall = now; }
+    // новая сессия при честных часах: выдачи не из будущего считаются проверенными
+    if (trust === 1) for (const e of c.ledger) if (!e.v && !e.x && e.w <= now + K.GAIN_TOL * 1000) e.v = 1;
+  };
+  const clockSeen = (now) => {
+    const c = G.S.clock;
+    if (!loaded || !isObj(c)) return;
+    if (now > c.maxWall) c.maxWall = now;
+    if (now > sessMax) sessMax = now;
+  };
+  const clockTick = (dt) => {
+    checkT += dt;
+    if (checkT >= CK().CHECK_SEC) { checkT = 0; check('tick'); }
+  };
+  const pending = (kind) => (isObj(G.S.clock) ? C().ledger.filter((e) => !e.v && !e.x && (!kind || e.k === kind)).length : 0);
+  G.clock = {
+    TRUST,
+    // системные «стенные минус монотонные» мс: скачок значения = перевод часов внутри сессии (тесты подменяют)
+    sys: () => Date.now() - (typeof performance !== 'undefined' && performance.now ? performance.now() : 0),
+    trust: () => TRUST[trust],
+    check,
+    pending,
+    // можно ли выдать награду вида kind; key — сохранённый ключ дня прошлой выдачи (тогда нужен день новее)
+    can(kind, key) {
+      if (key && G.dayKey() <= key) return false;
+      if (pending(kind) >= CK().MAX_PENDING) {
+        if (!waitShown && G.ready) { waitShown = true; clockToast('clock.wait'); }
+        return false;
+      }
+      return true;
+    },
+    // записать выдачу в журнал (после самой выдачи)
+    grant(kind) {
+      if (!loaded || !isObj(G.S.clock)) return null;
+      check('grant');
+      const c = C(), now = G.time.wallNow();
+      const e = { k: String(kind), w: now, t: trust, s: sess(), m: Math.round(mono() * 10) / 10, v: trust === 2 ? 0 : 1, x: 0 };
+      c.ledger.push(e);
+      const L = CK().LEDGER;
+      if (c.ledger.length > L) c.ledger.splice(0, c.ledger.length - L);
+      if (now > sessMax) sessMax = now;
+      if (now > c.maxWall) c.maxWall = now;
+      G.emit('clock:grant', Object.assign({}, e));
+      return e;
+    },
+    // суточный сброс: true -> сбросить счётчики и записать выдачу; пустой key (первый запуск) — без журнала
+    newDay(kind, key) {
+      if (!key) return true;
+      if (!G.clock.can(kind, key)) return false;
+      G.clock.grant(kind);
+      return true;
+    },
+    flagged: () => !!(isObj(G.S.clock) && G.S.clock.flag),
+    flag: () => (isObj(G.S.clock) && G.S.clock.flag ? Object.assign({}, G.S.clock.flag) : null),
+    clampKey: (k) => { const lk = G.dayKey(G.time.wallNow() + CK().LEAD_DAYS * 86400000); return typeof k === 'string' && k > lk ? lk : k; },
+    clampAll: () => clampAll(G.time.wallNow()),
+    lastBack: () => (lastBack ? Object.assign({}, lastBack) : null),
+    info() {
+      const c = isObj(G.S.clock) ? C() : { ledger: [], strikes: 0, flag: null, maxWall: 0, lastStrike: 0 };
+      return { trust: TRUST[trust], strikes: c.strikes, lastStrike: c.lastStrike, flag: c.flag ? Object.assign({}, c.flag) : null,
+        pending: pending(), ledger: c.ledger.length, maxWall: c.maxWall, sessMax, lastBack: G.clock.lastBack() };
+    },
+    // QA: снять пометку и страйки (в игре пометка не снимается)
+    qaClear() {
+      if (!(G.flags && G.flags.qa)) return false;
+      const c = sanitizeClock();
+      c.flag = null; c.strikes = 0; c.lastStrike = 0; c.ledger = [];
+      store.del(MARK);
+      return true;
+    },
+  };
+  G.on('day:change', () => check('day'));
+  G.on('app:resume', () => {
+    check('resume');
+    base = G.clock.sys();
+  });
+  G.on('ready', () => { if (toastLater) { const k = toastLater; toastLater = null; clockToast(k); } });
 })();
 
 //# sourceURL=src/06_save.js
@@ -6815,6 +7036,19 @@ $ 0 .##/##./.#./.##/##.
     const d = toDate(date);
     return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime();
   };
+
+  // Защита от перевода часов (GDD 9.7, spec 16 §1). Секунды, если не сказано иное.
+  //   GAIN_TOL — допуск выдачи из прошлой сессии; SAME_TOL — из этой же сессии (по монотонным часам);
+  //   LEDGER — длина журнала выдач; LEAD_DAYS — сохранённые даты не дальше стольких суток вперёд;
+  //   STRIKES — страйков до пометки; DECAY_DAYS — страйки гаснут без новых нарушений; CHECK_SEC — сверка не чаще;
+  //   MAX_PENDING — непроверенных выдач одного вида не больше (четвёртая ждёт сверки);
+  //   JUMP_SEC — расхождение стенных и монотонных часов, после которого часам устройства не верим до перезапуска.
+  D.clock = { GAIN_TOL: 1800, SAME_TOL: 300, LEDGER: 32, LEAD_DAYS: 1, STRIKES: 2, DECAY_DAYS: 60, CHECK_SEC: 60,
+    MAX_PENDING: 3, JUMP_SEC: 300 };
+
+  // Уведомления (GDD 9.4, spec 16 §2): COMEBACK_H — «давно не заходил» через столько часов; QUIET — тихие часы
+  // [с, до) по местному времени; TRIP_MIN — не раньше чем через столько секунд; LOG — сколько последних хранить.
+  D.notify = { TYPES: ['offline', 'comeback', 'trip'], COMEBACK_H: 72, QUIET: [21, 8], TRIP_MIN: 60, LOG: 5 };
 })();
 
 //# sourceURL=src/12_data_meta.js
@@ -7378,6 +7612,8 @@ $ 0 .##/##./.#./.##/##.
     ['set.shake', 'Тряска экрана', 'Screen shake'],
     ['set.lowfx', 'Экономная графика', 'Low effects'],
     ['set.pixel', 'Чёткие пиксели', 'Pixel-perfect'],
+    ['set.notify', 'Уведомления', 'Notifications'],
+    ['set.notifyBtn', 'Настроить', 'Set up'],
     ['set.save', 'Сохранить копию', 'Save copy'],
     ['set.load', 'Загрузить копию', 'Load copy'],
     ['set.saveQ', 'Сохранить копию? Старая копия будет заменена!', 'Save a copy? The old copy will be replaced!'],
@@ -7411,6 +7647,42 @@ $ 0 .##/##./.#./.##/##.
     ['rank.nameDone', 'Имя изменено.', 'Name changed.'],
     ['rank.cooldown', 'Имя можно менять раз в сутки.', 'The name can be changed once a day.'],
     ['rank.you', 'Ты', 'You'],
+    // ---- защита от перевода часов (GDD 9.7, spec 16 §1) ----
+    ['rank.closed', 'Рейтинг закрыт', 'Ranking closed'],
+    ['rank.closedWhy', 'Часы устройства переводили назад после наград. Валюта и прогресс на месте, но в таблицах тебя не будет.',
+      'The device clock was turned back after rewards. Your currency and progress stay, but you are off the boards.'],
+    ['rank.closedAt', 'Отмечено: {0}', 'Marked: {0}'],
+    ['rank.wait', 'Часы под сомнением: перезапусти игру.', 'Clock in doubt: restart the game.'],
+    ['clock.wait', 'Награда ждёт сверки часов. Перезапусти игру.', 'This reward waits for a clock check. Restart the game.'],
+    ['clock.strike', 'Часы устройства перевели назад. Ещё раз, и рейтинг закроется.', 'The device clock went back. Once more and the ranking closes.'],
+    ['clock.flagged', 'Часы снова перевели назад: рейтинг для тебя закрыт.', 'The clock went back again: the ranking is closed for you.'],
+    // ---- уведомления (GDD 9.4, spec 16 §2) ----
+    ['notify.title', 'Уведомления', 'Notifications'],
+    ['notify.offline', 'Офлайн-доход', 'Offline income'],
+    ['notify.offline.hint', 'Когда офлайн-доход набран до предела', 'When offline earnings hit the cap'],
+    ['notify.comeback', 'Давно не заходил', 'Long time no see'],
+    ['notify.comeback.hint', 'Через {0} {0|час|часа|часов} без игры', 'After {0} {0|hour|hours} away'],
+    ['notify.trip', 'Вылазка', 'Expedition'],
+    ['notify.trip.hint', 'Когда питомцы вернутся с вылазки', 'When the pets get back'],
+    ['notify.quiet', 'Тихие часы', 'Quiet hours'],
+    ['notify.quiet.hint', 'Не беспокоить с {0} до {1}', 'Silent from {0} to {1}'],
+    ['notify.perm', 'Браузер', 'Browser'],
+    ['notify.perm.granted', 'разрешено', 'allowed'],
+    ['notify.perm.denied', 'запрещено', 'blocked'],
+    ['notify.perm.default', 'не спрошено', 'not asked'],
+    ['notify.perm.none', 'нет поддержки', 'not supported'],
+    ['notify.perm.ask', 'Разрешить', 'Allow'],
+    ['notify.plan', 'Если выйти сейчас', 'If you leave now'],
+    ['notify.planNone', 'Ничего не запланировано', 'Nothing scheduled'],
+    ['notify.log', 'Последние', 'Recent'],
+    ['notify.logNone', 'Пока не было', 'None yet'],
+    ['notify.missed', 'Пока тебя не было: {0} {0|уведомление|уведомления|уведомлений}', 'While you were away: {0} {0|notification|notifications}'],
+    ['notify.offline.t', 'Огород ломится!', 'The garden is bursting!'],
+    ['notify.offline.b', 'Офлайн-доход набран до предела. Заходи забрать!', 'Offline earnings are maxed out. Come grab them!'],
+    ['notify.comeback.t', 'Кролики скучают', 'The bunnies miss you'],
+    ['notify.comeback.b', 'Капуста копится, слизни наглеют. Пора назад!', 'Cabbage piles up, slugs get bold. Hop back in!'],
+    ['notify.trip.t', 'Питомцы дома!', 'Pets are home!'],
+    ['notify.trip.b', 'Вылазка закончилась, добыча ждёт в рюкзаке.', 'The expedition is over, loot waits in the backpack.'],
     ['boot.loading', 'Загрузка…', 'Loading…'],
     ['boot.error', 'Не удалось прочитать сохранение.', "Couldn't read the save."],
     ['boot.retry', 'Повторить', 'Retry'],
@@ -7773,9 +8045,11 @@ $ 0 .##/##./.#./.##/##.
     EMERGE: 0.25,
     SWEEP_LEVELS: 100, SWEEP_SAFETY: 1.5,
     SCALE: 4.267,                            // px на 1 u: камера Охоты дальше основной в 45/40 раза
+    // пробег пули в Охоте — общий cv('BULLET_MAX') 50 u: [code] Bullet.MaxTravelDistance — константа на все режимы (spec 15 §5)
     ARENA: { SPAWN_R: 65, FENCE_R: 20, DANGER_R: 26, SQUAD_R: 14, RANGE: 60,
       SQUAD: [{ x: 0, y: 0 }, { x: -3, y: -2 }, { x: 3, y: -2 }] },
-    SLUG: { V: 1.2, V_BIG: 0.9, R: 1.5, R_BIG: 2.25 },
+    // коллайдер по видимому спрайту 14×10 px (полуширина 1,64 u при SCALE 4,267) + запас под пулю (spec 15 §5)
+    SLUG: { V: 1.2, V_BIG: 0.9, R: 2, R_BIG: 3 },
     ALARM_GAP: 1.5, ENDING: 0.8, BANNER_TAP: 0.6,
     BOARD_SEED: 0x5106,
   };
@@ -8564,7 +8838,7 @@ $ 0 .##/##./.#./.##/##.
     packOwned: () => ent('autoUpgradePack'),
     adLeft: () => S().auto.adLeftSec,
     adUsedToday: () => S().auto.adDay === today(),
-    adOk: () => !auto.packOwned() && S().auto.adLeftSec <= 0 && S().auto.adDay !== today(),
+    adOk: () => !auto.packOwned() && S().auto.adLeftSec <= 0 && (!S().auto.adDay || today() > S().auto.adDay),   // spec 16 §1
     active: () => (auto.packOwned() && !!S().auto.packOn) || S().auto.adLeftSec > 0,
     running: () => auto.active() && !!RUNS_IN[modeNow()],
     pending: () => pending('auto'),
@@ -8581,7 +8855,7 @@ $ 0 .##/##./.#./.##/##.
     startAd() {
       if (!auto.adOk() || pending('auto')) return false;
       adPending.auto = G.time.session;
-      return showAd('auto_upgrade', () => { delete adPending.auto; if (S().auto.adDay !== today()) auto.grant(AUTO_AD_SEC()); },
+      return showAd('auto_upgrade', () => { delete adPending.auto; if (!S().auto.adDay || today() > S().auto.adDay) auto.grant(AUTO_AD_SEC()); },
         () => { delete adPending.auto; });
     },
     toggle() {
@@ -29459,7 +29733,12 @@ $ 0 .##/##./.#./.##/##.
   const vaultOn = () => featOn('vault');
   const lockOn = () => featOn('gunLock');
   const starsOn = () => featOn('slotStars');
-  const dailyReady = () => dailyVisible() && S().dailyAdGunDay !== dayKey();
+  // день новее прошлой выдачи (откат часов не обнуляет) и сверка часов пропускает (spec 16 §1)
+  const gunDayFree = () => {
+    const k = S().dailyAdGunDay || '';
+    return (!k || dayKey() > k) && (!G.clock || G.clock.can('gun'));
+  };
+  const dailyReady = () => dailyVisible() && gunDayFree();
   const tutStep = () => {
     const t = G.S.tut;
     if (!t || t.step === undefined || t.step === null) return 'done';
@@ -29847,7 +30126,7 @@ $ 0 .##/##./.#./.##/##.
   // Daily ad C gun (spec 03 §13.2, spec 06 §2 #10): record ≥ 4, once per local calendar day, backpack check first.
   const dailyGrant = () => {
     const s = S();
-    if (s.dailyAdGunDay === dayKey()) return false;
+    if (!gunDayFree()) return false;
     const cell = firstEmpty();
     if (cell < 0) return refuse('gun.invFull');
     const pool = (D().adGuns && D().adGuns.daily && D().adGuns.daily.pool) || [5, 6, 7, 8, 9];
@@ -29855,6 +30134,7 @@ $ 0 .##/##./.#./.##/##.
     s.inventory[cell] = id;
     s.invLocked[cell] = false;
     s.dailyAdGunDay = dayKey();
+    if (G.clock) G.clock.grant('gun');
     const acq = acquire(id, 'daily', cell);
     sfx('summon');
     if (acq.newBest) { sfx('newrank', { delay: 0.6 }); try { G.haptic('newrank'); } catch (e) { /* no vibration */ } }
@@ -31262,8 +31542,11 @@ $ 0 .##/##./.#./.##/##.
   G.state.register('modes', () => ({ chLevel: 1, chOfferCount: 0, mineDay: '', mineUsed: 0,
     mineBest: 0, bossLevel: 1, seen: {}, active: null }), { version: 1 });
   let run = null;
+  // новый день: только вперёд и после сверки часов (spec 16 §1); перевод часов назад входы не возвращает
   const resetDay = () => {
-    if (S().mineDay !== G.dayKey()) { S().mineDay = G.dayKey(); S().mineUsed = 0; }
+    const k = S().mineDay, d = G.dayKey();
+    if (k === d) return;
+    if (!k || (d > k && (!G.clock || G.clock.newDay('mine', k)))) { S().mineDay = d; S().mineUsed = 0; }
   };
   const mineMax = () => ent('minePack') ? D().mine.ENTRIES_PACK : D().mine.ENTRIES;
   const mineLeft = () => { resetDay(); return Math.max(0, mineMax() - S().mineUsed); };
@@ -31666,6 +31949,7 @@ $ 0 .##/##./.#./.##/##.
 //   G.meta.dailyClaimable() · badge('rebirth'|'quests'|'daily'|'pond') (also G.hudBadges.daily|quests|rebirth|fish)
 //   G.meta.offline(awaySec, {window, src}) — the Welcome Back trigger (spec 10 G2): G.stage.runOffline + window
 //   G.meta.eco() / setEco(on) forward to the HUD (40 owns the Eco overlay S05)
+//   G.meta.rankClosed() — рейтинг закрыт пометкой нарушителя часов (G.clock.flagged(), spec 16 §1.8): строки игрока нет
 // Acts (bot / QA, return true/false): G.act.rebirth(super) · permBuy(key, n) · fishCast('free'|'ad'|'epic') ·
 //   fishMerge(idA, idB) · fishDelete(id) · costumeBuy(i) · costumeWear(i) · claimMission(id) · claimPass(tier, lvl) ·
 //   claimDaily() · setEco(on) · newSeason() · rebirthPaid() · fishAutoMerge(on). Spec 05 aliases: buyPerm,
@@ -31679,7 +31963,7 @@ $ 0 .##/##./.#./.##/##.
 // Widget ids: rebirth.do · rebirth.super · rebirth.perm.<power|speed|money> · pond.free · pond.epic · pond.info · pond.auto ·
 //   pond.fish.<id> · newFish.ok · fishInfo.release · fishInfo.close · costumes.cell.<i> · costumes.buy|wear ·
 //   quests.tab:0|1 · quests.vip · quests.lux · quests.pass.<free|epic>.<L> · quests.mission.<id> · quests.newSeason ·
-//   daily.claim · welcome.claim · settings.<music|sound|vibro|eco|lang.ru|lang.en|numbers|shake|lowfx|save|load|
+//   daily.claim · welcome.claim · settings.<music|sound|vibro|eco|lang.ru|lang.en|numbers|shake|lowfx|notify|save|load|
 //   redeem|restore|writeUs|reset> · ranking.tab.<stage|boss|hunt|raid> · ranking.top · ranking.near · ranking.name ·
 //   rate.star.<1..5> · rate.later · textInput.field · textInput.ok · textInput.cancel
 // Session popups (spec 06 §14 / 07 §2.3, 'ready'): season rollover → Welcome Back → Daily Gift; none before tutorial
@@ -31903,9 +32187,9 @@ $ 0 .##/##./.#./.##/##.
   const rebirth = G.rebirth = Object.assign(G.rebirth || {}, {
     points(isSuper) { const p = pos(); return RB().points(p.stage, p.sub, !!isSuper, rr()); },
     superState() {
-      const r = G.S.rebirth, d = today();
-      if (r.superAdDay !== d) return 'ad';
-      if (unlocked('paidSuper') && r.superIapDay !== d) return 'buy';
+      const r = G.S.rebirth, d = today(), fresh = (k) => !k || d > k;   // день только вперёд (spec 16 §1)
+      if (fresh(r.superAdDay)) return 'ad';
+      if (unlocked('paidSuper') && fresh(r.superIapDay)) return 'buy';
       return 'used';
     },
     canDo: () => unlocked('rebirth') && !anim && !inMode() && !adPending(),
@@ -32021,7 +32305,8 @@ $ 0 .##/##./.#./.##/##.
   let fishCache = null;
   const fishDay = () => {
     const f = G.S.fish, d = today();
-    if (f.freeDay !== d) { if (!f.freeDay || d > f.freeDay) { f.freeUsed = 0; f.freeDay = d; } }   // date going back: no reset
+    if (f.freeDay === d) return;                                    // перевод часов назад не обнуляет (spec 16 §1)
+    if (!f.freeDay || (d > f.freeDay && (!G.clock || G.clock.newDay('fish', f.freeDay)))) { f.freeUsed = 0; f.freeDay = d; }
   };
   const fishChanged = () => { fishCache = null; G.mods.dirty(); };
   meta.fishStats = () => {
@@ -32154,11 +32439,9 @@ $ 0 .##/##./.#./.##/##.
   const CNT = { trees: 'trees', clears: 'subClears', rebirths: 'rebirths', mine: 'mine' };
   const missionsDay = () => {
     const m = G.S.missions, d = today();
-    if (m.dayKey === d) return;
-    if (!m.dayKey || d > m.dayKey) {
-      m.trees = m.subClears = m.rebirths = m.mine = 0;
-      m.status.fill(0);
-    }
+    if (m.dayKey === d || (m.dayKey && d < m.dayKey)) return;     // часы назад: ни сброса, ни смены дня (spec 16 §1)
+    m.trees = m.subClears = m.rebirths = m.mine = 0;
+    m.status.fill(0);
     m.dayKey = d;
   };
   const refreshMissions = () => {
@@ -32316,7 +32599,9 @@ $ 0 .##/##./.#./.##/##.
     const p = G.S.pass;
     passInit();
     if (wall() < p.endTs) return false;
+    if (G.clock && !G.clock.can('season')) return false;           // сезон по часам ждёт сверки (spec 16 §1)
     meta.newSeason();
+    if (G.clock) G.clock.grant('season');
     if (popup && tutDone() && !popsOff() && G.ui) G.ui.queue('quests', { tab: 'pass' });
     return true;
   };
@@ -32324,7 +32609,7 @@ $ 0 .##/##./.#./.##/##.
   // =================================================================================================================
   // Daily Gift (spec 06 §8, spec 10 G3)
   // =================================================================================================================
-  meta.dailyClaimable = () => today() > (G.S.daily.lastClaimDayKey || '');
+  meta.dailyClaimable = () => today() > (G.S.daily.lastClaimDayKey || '') && (!G.clock || G.clock.can('daily'));
   meta.dailyDay = () => G.S.daily.dayIndex % 7;
   let dailyFxAt = null;
   G.act.claimDaily = () => {
@@ -32332,6 +32617,7 @@ $ 0 .##/##./.#./.##/##.
     const d = G.S.daily, i = d.dayIndex % 7, n = D().daily.REWARDS[i];
     d.dayIndex = (i + 1) % 7;
     d.lastClaimDayKey = today();
+    if (G.clock) G.clock.grant('daily');
     addDia(n, 'daily');
     G.emit('daily:claim', { day: i + 1, dia: n });
     save();
@@ -33335,6 +33621,13 @@ $ 0 .##/##./.#./.##/##.
       y += RH;
       tog('shake', 'shake', 'shake');
       tog('lowfx', 'lowfx', 'lowfx', (v) => { s.lowfx = v; call(G.fx, 'setLow', v); });
+      // уведомления (GDD 9.4, spec 16 §2): переключатели видов и тихие часы — в окне notify (49_notify.js)
+      if (G.windows.notify) {
+        row('notify', 'bell');
+        const nl = T('set.notifyBtn');
+        if (G.ui.button('settings.notify', x0 + cw - 66, y + 4, 64, 14, { style: 'blue', label: nl, font: fitFont(nl, 60), sfx: 'select' })) G.ui.open('notify', {});
+        y += RH;
+      }
       // save / load copy
       y += 6;
       const bw = Math.floor((cw - 4) / 2);
@@ -33443,6 +33736,8 @@ $ 0 .##/##./.#./.##/##.
     const m = G.S.modes;
     return m && finite(m.bossLevel) ? Math.max(0, m.bossLevel - 1) : 0;
   };
+  const rankClosed = () => !!(G.clock && G.clock.flagged());
+  meta.rankClosed = rankClosed;
   const board = (kind) => {
     const created = (G.S.meta && G.S.meta.created) || 1;
     const seed = kind === 'boss' ? 0xB055 : kind === 'hunt' ? 0x5106 : kind === 'raid' ? 0x8A1D : 0x57A6E;
@@ -33465,7 +33760,8 @@ $ 0 .##/##./.#./.##/##.
     const myName = (G.S.meta && G.S.meta.nickname) || T('rank.you');
     const huntBest = () => (G.S.hunt && finite(G.S.hunt.best) ? G.S.hunt.best : 0);
     const raidBest = () => (G.S.raid && finite(G.S.raid.best) && (!D().weekIdx || G.S.raid.week === D().weekIdx()) ? G.S.raid.best : 0);
-    rows.push({ name: myName, v: kind === 'boss' ? bossBest() : kind === 'hunt' ? huntBest() : kind === 'raid' ? raidBest() : recN(), me: true });
+    // нарушитель (перевод часов, spec 16 §1.8) в таблицы не попадает; валюта и прогресс не трогаются
+    if (!rankClosed()) rows.push({ name: myName, v: kind === 'boss' ? bossBest() : kind === 'hunt' ? huntBest() : kind === 'raid' ? raidBest() : recN(), me: true });
     rows.sort((p, q) => q.v - p.v || (p.me ? -1 : q.me ? 1 : 0));
     rows.forEach((r, i) => { r.place = i + 1; });
     return rows;
@@ -33512,14 +33808,30 @@ $ 0 .##/##./.#./.##/##.
         tx += tw;
       }
       let y = w.cy + 19;
-      const hw = Math.floor((cw - 2) / 2);
-      if (G.ui.button('ranking.top', x0, y, hw, 14, { style: rkNear ? 'grey' : 'blue', label: T('rank.top30'), font: 'small', sfx: 'select' })) rkNear = false;
-      if (G.ui.button('ranking.near', x0 + hw + 2, y, hw, 14, { style: rkNear ? 'blue' : 'grey', label: T('rank.near'), font: 'small', sfx: 'select' })) rkNear = true;
-      y += 18;
+      const closed = rankClosed();
+      if (closed) {
+        // пометка нарушителя (spec 16 §1.8): вместо «Топ-30 / Рядом со мной» — плашка с причиной и датой
+        rkNear = false;
+        const fl = G.clock.flag() || {};
+        const lines = G.textWrap(T('rank.closedWhy'), cw - 10, 'small');
+        const ph = 26 + lines.length * 8;
+        G.px.panel(x0, y, cw, ph, 'card', { fill: P('P35', '#fff3a3'), rim: P('P36', '#e8323c') });
+        G.px.padlock(x0 + 5, y + 4);
+        text(T('rank.closed'), x0 + 16, y + 4, { color: P('P29', '#5c1a0a'), maxW: cw - 20 });
+        lines.forEach((ln, i) => text(ln, x0 + 5, y + 15 + i * 8, { font: 'small', color: TX.dark() }));
+        text(T('rank.closedAt', fmtDate(fl.at || 0)), x0 + cw - 5, y + ph - 10, { align: 'right', font: 'small', color: TX.soft() });
+        y += ph + 3;
+      } else {
+        const hw = Math.floor((cw - 2) / 2);
+        if (G.ui.button('ranking.top', x0, y, hw, 14, { style: rkNear ? 'grey' : 'blue', label: T('rank.top30'), font: 'small', sfx: 'select' })) rkNear = false;
+        if (G.ui.button('ranking.near', x0 + hw + 2, y, hw, 14, { style: rkNear ? 'blue' : 'grey', label: T('rank.near'), font: 'small', sfx: 'select' })) rkNear = true;
+        y += 18;
+      }
       const rows = board(rkTab);
       const meIdx = rows.findIndex((r) => r.me);
       const shown = rkNear ? rows.slice(Math.max(0, Math.min(rows.length - 9, meIdx - 4)), Math.max(0, Math.min(rows.length - 9, meIdx - 4)) + 9) : rows;
-      const foot = rkTab === 'raid' ? 8 : 0;           // строка «Новый король через …» под таблицей рейда
+      const doubt = !closed && G.clock && G.clock.trust() === 'suspect';   // часы под сомнением до перезапуска
+      const foot = (rkTab === 'raid' ? 8 : 0) + (doubt ? 8 : 0);   // «Новый король через …» и «Часы под сомнением»
       const RH = 18, listH = w.y + w.h - 30 - y - foot;
       const medal = [P('P34', '#ffd84a'), P('P05', '#c9c2d1'), P('P45', '#d9773a')];
       G.ui.scroll('ranking.list.' + (rkNear ? 'n' : 't'), x0, y, cw, listH, shown.length * RH + 2, (off, ty) => {
@@ -33533,11 +33845,14 @@ $ 0 .##/##./.#./.##/##.
           text(rankVal(rkTab, r.v), x0 + cw - 5, ry + 5, { align: 'right', color: r.me ? P('P29', '#5c1a0a') : TX.soft() });
         });
       });
-      if (foot) {
+      let fy = y + listH + 2;
+      if (rkTab === 'raid') {
         const wk = call(G.raid, 'week');
         const left = wk && finite(wk.leftMs) ? wk.leftMs / 1000 : 0;
-        text(T('raid.weekLeft', G.fmtTime(left)), x0 + cw / 2, y + listH + 2, { align: 'center', font: 'small', color: TX.soft(), maxW: cw });
+        text(T('raid.weekLeft', G.fmtTime(left)), x0 + cw / 2, fy, { align: 'center', font: 'small', color: TX.soft(), maxW: cw });
+        fy += 8;
       }
+      if (doubt) text(T('rank.wait'), x0 + cw / 2, fy, { align: 'center', font: 'small', color: TX.bad(), maxW: cw });
       if (G.ui.button('ranking.name', x0 + cw / 2 - 52, w.y + w.h - 25, 104, 18, { style: 'green', label: T('rank.changeName'), font: fitFont(T('rank.changeName'), 98) })) {
         const m = G.S.meta;
         const cd = (D().ranking && D().ranking.RENAME_COOLDOWN) || 86400;
@@ -34096,7 +34411,7 @@ $ 0 .##/##./.#./.##/##.
     markSeen() { if (!S().weekly.seen) { S().weekly.seen = true; saveNow(); } },
     sync() {
       const w = weekly.idx(), st = S().weekly;
-      if (st.weekIdx !== w) { st.weekIdx = w; st.bought = inSec('weeklyShop').map(() => 0); }
+      if (st.weekIdx !== w && !(finite(st.weekIdx) && w < st.weekIdx)) { st.weekIdx = w; st.bought = inSec('weeklyShop').map(() => 0); }
     },
     // товары вкладки; счётчики покупок — по общему списку раздела (gun 0–2, pet 3–5)
     products: (tab = 'gun') => inSec('weeklyShop', tab),
@@ -34125,8 +34440,8 @@ $ 0 .##/##./.#./.##/##.
   const deals = shop.deals = {
     sync() {
       const d = S().deals, dk = G.D.dayKey(), wk = G.D.weekIdx();
-      if (d.dayKey !== dk) { d.dayKey = dk; d.day = {}; }
-      if (d.weekIdx !== wk) { d.weekIdx = wk; d.week = {}; }
+      if (d.dayKey !== dk && (!d.dayKey || dk > d.dayKey)) { d.dayKey = dk; d.day = {}; }   // часы назад: без сброса
+      if (d.weekIdx !== wk && !(finite(d.weekIdx) && wk < d.weekIdx)) { d.weekIdx = wk; d.week = {}; }
       return d;
     },
     count(p) {
@@ -34169,6 +34484,8 @@ $ 0 .##/##./.#./.##/##.
       const add = Math.min(cap - pg.stored, ticks * rate);
       pg.stored += add;
       if (pg.stored >= cap) pg.remSec = 0;
+      // крупный прирост по стенным часам — в журнал выдач (spec 16 §1); тики каждые 60 с журнал не забивают
+      if (add > 0 && G.clock && el - pg.remSec > ((G.D.clock && G.D.clock.SAME_TOL) || 300)) G.clock.grant('piggy');
       return add;
     },
     stored: () => { jar.tick(); return S().piggy.stored; },
@@ -34394,7 +34711,7 @@ $ 0 .##/##./.#./.##/##.
   };
   const adsDay = () => {
     const a = A(), k = today();
-    if (a.dayKey !== k) {
+    if (a.dayKey !== k && (!a.dayKey || k > a.dayKey)) {          // перевод часов назад лимиты не обнуляет (spec 16 §1)
       a.dayKey = k;
       a.daily = {};
       a.inter = { rebirth: 0, mine: 0, challenge: 0, boss: 0, hunt: 0 };
@@ -39499,12 +39816,13 @@ $ 0 .##/##./.#./.##/##.
   const syncDay = () => {
     const s = S(), k = dayNow();
     if (s.day === k) return false;
+    if (s.day && (G.clock ? !G.clock.newDay('raid', s.day) : k < s.day)) return false;   // часы назад / сверка (spec 16 §1)
     s.day = k; s.used = 0; s.ad = 0; s.ticket = 0;
     return true;
   };
   const syncWeek = () => {
     const s = S(), w = weekNow();
-    if (s.week === w) return false;
+    if (s.week === w || (s.week >= 0 && w < s.week)) return false;   // часы назад: неделя не сбрасывается (spec 16 §1)
     s.week = w; s.tries = 0; s.best = 0;
     s.claimed = new Array(8).fill(false);
     s.claimed2 = new Array(8).fill(false);
@@ -40597,6 +40915,276 @@ $ 0 .##/##./.#./.##/##.
 //# sourceURL=src/48_raid.js
 </script>
 <script>
+// Локальные уведомления (owner: notify): GDD 9.4, spec 16 §2. Сети и пушей с сервера нет — только симуляция:
+//   при уходе со страницы (app:hide) строится план из трёх видов, при возвращении он снимается.
+//   offline  — офлайн-доход набран до предела: уход + G.stage.offlineCap() (нет при идущем режиме: доход не копится);
+//   comeback — не заходил D.notify.COMEBACK_H часов;
+//   trip     — питомцы вернулись из Вылазки: ближайшее G.trip.nextBack(), если до него не меньше TRIP_MIN с.
+//   Время в тихих часах D.notify.QUIET [с, до) переносится на ближайшее «до» (08:00 по местному времени).
+//   Пока вкладка жива в фоне и браузер разрешил, пункт показывается настоящим Notification по таймеру (не в ?qa и ?bot).
+//   Вкладку закрыли — таймеры гибнут; при следующем входе пункты, чьё время прошло, считаются доставленными
+//   (внутриигровая очередь): попадают в журнал (последние D.notify.LOG) и в тост «Пока тебя не было: N».
+// State 'notify' v1: {on {offline, comeback, trip}, quiet, plan [{k, at, raw, q, f}], log [{k, at, real}]}.
+//   at — время показа (после тихих часов), raw — исходное, q — сдвинут тихими часами, f/real — показан настоящим API.
+// API G.notify: plan(now) -> [{k, at, raw, q}] (предпросмотр, без сохранения) · scheduled() · log() · inQuiet(ms)
+//   · quietShift(ms) · perm() 'granted'|'denied'|'default'|'none' · ask() · info().
+// G.act.notifySet(type, on): type — вид из D.notify.TYPES или 'quiet'.
+// События: 'notify:plan' {plan}, 'notify:fire' {k, at}, 'notify:missed' {n, list}.
+// Окно notify (tall): переключатели видов и тихих часов, разрешение браузера, план «если выйти сейчас», журнал.
+// Иконка 'bell' рисуется кодом через G.art.iconExt (16 и 9 px).
+(() => {
+  'use strict';
+  const G = window.G = window.G || {};
+
+  const DN = () => Object.assign({ TYPES: ['offline', 'comeback', 'trip'], COMEBACK_H: 72, QUIET: [21, 8], TRIP_MIN: 60, LOG: 5 },
+    (G.D && G.D.notify) || {});
+  const TYPES = () => DN().TYPES;
+  const ICON = { offline: 'stopwatch', comeback: 'rate', trip: 'trip' };
+  const T = (k, ...a) => G.t(k, ...a);
+  const P = (k, d) => (G.PAL && G.PAL[k]) || d;
+  const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+  const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
+  const call = (o, f, ...a) => { try { return o && typeof o[f] === 'function' ? o[f](...a) : undefined; } catch (e) { G.reportError(e, 'notify ' + f); return undefined; } };
+  const save = () => { try { G.saveNow(); } catch (e) { /* ignore */ } };
+  const wall = () => G.time.wallNow();
+
+  const defaults = () => ({ on: { offline: true, comeback: true, trip: true }, quiet: true, plan: [], log: [] });
+  G.state.register('notify', defaults, { version: 1 });
+
+  // повреждённые поля чинятся при чтении
+  const S = () => {
+    let s = G.S.notify;
+    if (!isObj(s)) s = G.S.notify = defaults();
+    if (!isObj(s.on)) s.on = {};
+    for (const k of TYPES()) s.on[k] = s.on[k] !== false;
+    s.quiet = s.quiet !== false;
+    const okK = (k) => TYPES().indexOf(k) >= 0;
+    s.plan = (Array.isArray(s.plan) ? s.plan : []).filter((e) => isObj(e) && okK(e.k) && isNum(e.at))
+      .map((e) => ({ k: e.k, at: e.at, raw: isNum(e.raw) ? e.raw : e.at, q: e.q ? 1 : 0, f: e.f ? 1 : 0 }));
+    s.log = (Array.isArray(s.log) ? s.log : []).filter((e) => isObj(e) && okK(e.k) && isNum(e.at))
+      .map((e) => ({ k: e.k, at: e.at, real: e.real ? 1 : 0 })).slice(-DN().LOG);
+    return s;
+  };
+
+  // ---------------------------------------------------------------------------------------------------- тихие часы
+  const inQuiet = (ms) => {
+    const [a, b] = DN().QUIET, h = new Date(ms).getHours();
+    return a > b ? (h >= a || h < b) : (h >= a && h < b);
+  };
+  const quietShift = (ms) => {
+    if (!inQuiet(ms)) return ms;
+    const b = DN().QUIET[1], d = new Date(ms);
+    if (d.getHours() >= b) d.setDate(d.getDate() + 1);
+    d.setHours(b, 0, 0, 0);
+    return d.getTime();
+  };
+
+  // ----------------------------------------------------------------------------------------------------------- план
+  const tripSec = () => {
+    if (!G.trip || !call(G.trip, 'opened')) return null;
+    const l = call(G.trip, 'nextBack');
+    return isNum(l) && l >= DN().TRIP_MIN ? l : null;
+  };
+  const offlineSec = () => {
+    if (!G.stage || typeof G.stage.offlineCap !== 'function') return null;
+    if (G.modes && typeof G.modes.active === 'function' && G.modes.active()) return null;   // в режиме доход не копится
+    const c = call(G.stage, 'offlineCap');
+    return isNum(c) && c > 0 ? c : null;
+  };
+  const plan = (now) => {
+    const s = S(), K = DN(), out = [];
+    now = isNum(now) ? now : wall();
+    const add = (k, sec) => {
+      if (!s.on[k] || !isNum(sec)) return;
+      const raw = now + Math.round(sec * 1000), at = s.quiet ? quietShift(raw) : raw;
+      out.push({ k, at, raw, q: at !== raw ? 1 : 0 });
+    };
+    add('offline', offlineSec());
+    add('comeback', K.COMEBACK_H * 3600);
+    add('trip', tripSec());
+    out.sort((a, b) => a.at - b.at || TYPES().indexOf(a.k) - TYPES().indexOf(b.k));
+    return out;
+  };
+
+  // ----------------------------------------------------------------------------------------- настоящий Notification
+  const perm = () => {
+    try { return typeof Notification === 'undefined' ? 'none' : String(Notification.permission || 'default'); } catch (e) { return 'none'; }
+  };
+  const realOk = () => perm() === 'granted' && !(G.flags && (G.flags.qa || G.flags.bot));
+  let timers = [];
+  const clearTimers = () => { for (const id of timers) { try { clearTimeout(id); } catch (e) { /* ignore */ } } timers = []; };
+  const show = (e) => {
+    try {
+      const n = new Notification(T('notify.' + e.k + '.t'), { body: T('notify.' + e.k + '.b'), tag: 'earsplitters-' + e.k });
+      n.onclick = () => { try { window.focus(); n.close(); } catch (er) { /* ignore */ } };
+      return true;
+    } catch (er) { return false; }
+  };
+  const arm = (now) => {
+    clearTimers();
+    if (!realOk() || typeof setTimeout !== 'function') return;
+    for (const e of S().plan) {
+      const ms = e.at - now;
+      if (ms < 0 || ms > 0x7fffffff) continue;
+      timers.push(setTimeout(() => {
+        const cur = S().plan.find((p) => p.k === e.k && p.at === e.at);
+        if (!cur || cur.f) return;
+        if (show(cur)) { cur.f = 1; G.emit('notify:fire', { k: cur.k, at: cur.at }); save(); }
+      }, ms));
+    }
+  };
+  const ask = () => {
+    if (perm() !== 'default') return false;
+    try {
+      const r = Notification.requestPermission();
+      if (r && typeof r.then === 'function') r.then(() => {}, () => {});
+      return true;
+    } catch (e) { return false; }
+  };
+
+  // ----------------------------------------------------------------------------------------- уход и возвращение
+  let missedLater = 0;
+  const tutDone = () => !(G.S.tut && G.S.tut.step && G.S.tut.step !== 'done');
+  const missedToast = (n) => {
+    if (!n) return;
+    if (!G.ready || !G.ui || !G.ui.toast) { missedLater += n; return; }
+    if (tutDone()) G.ui.toast(T('notify.missed', n), { icon: 'bell' });
+  };
+  // при возвращении: таймеры снять, наступившие пункты — в журнал, остальные отменить
+  const settle = () => {
+    clearTimers();
+    const s = S(), now = wall(), due = s.plan.filter((e) => e.at <= now);
+    s.plan = [];
+    if (!due.length) return 0;
+    for (const e of due) s.log.push({ k: e.k, at: e.at, real: e.f ? 1 : 0 });
+    if (s.log.length > DN().LOG) s.log.splice(0, s.log.length - DN().LOG);
+    G.emit('notify:missed', { n: due.length, list: due.map((e) => ({ k: e.k, at: e.at, real: e.f ? 1 : 0 })) });
+    missedToast(due.length);
+    return due.length;
+  };
+  G.on('app:hide', () => {
+    if (!G.S.notify) return;
+    const now = wall();
+    S().plan = plan(now).map((e) => Object.assign({ f: 0 }, e));
+    arm(now);
+    G.emit('notify:plan', { plan: S().plan.map((e) => Object.assign({}, e)) });
+  });
+  G.on('app:resume', () => { if (G.S.notify) settle(); });
+  G.on('state:loaded', () => { missedLater = 0; S(); settle(); });
+  G.on('state:reset', () => { clearTimers(); missedLater = 0; });
+  G.on('ready', () => { if (missedLater) { const n = missedLater; missedLater = 0; missedToast(n); } });
+
+  G.notify = {
+    plan: (now) => plan(now).map((e) => Object.assign({}, e)),
+    scheduled: () => S().plan.map((e) => Object.assign({}, e)),
+    log: () => S().log.map((e) => Object.assign({}, e)),
+    inQuiet, quietShift, perm, ask,
+    info: () => { const s = S(); return { on: Object.assign({}, s.on), quiet: s.quiet, perm: perm(), plan: s.plan.length, log: s.log.length, timers: timers.length }; },
+  };
+
+  G.act = G.act || {};
+  G.act.notifySet = (type, on) => {
+    const s = S();
+    if (type === 'quiet') s.quiet = !!on;
+    else if (TYPES().indexOf(type) >= 0) s.on[type] = !!on;
+    else return false;
+    save();
+    return true;
+  };
+
+  // ----------------------------------------------------------------------------------------------- иконка 'bell'
+  const BELL16 = ['................', '.......KK.......', '......KyyK......', '.....KyaayK.....', '....KyayyyyK....',
+    '....KyayyyyK....', '....KyyyyyyK....', '...KyyyyyyyyK...', '...KyyyyyyyyK...', '..KyyyyyyyyyyK..', '.KyyyyyyyyyyyyK.',
+    '.KooooooooooooK.', '..KKKKKKKKKKKK..', '......KbbK......', '.......KK.......', '................'];
+  const BELL9 = ['....K....', '...KyK...', '..KyayK..', '..KyyyK..', '.KyyyyyK.', 'KyyyyyyyK', 'KKKKKKKKK', '...KbK...', '....K....'];
+  const LEG = { K: 'P00', y: 'P34', a: 'P35', o: 'P33', b: 'P17' };
+  const LEG_OFF = { K: 'P00', y: 'P04', a: 'P05', o: 'P03', b: 'P03' };
+  const bell = (ctx, x, y, size, o) => {
+    o = o || {};
+    const rows = size >= 14 ? BELL16 : BELL9, n = rows.length;
+    const k = size >= 32 ? Math.floor(size / 16) : 1, s = (o.scale || 1) * k;
+    const off = Math.max(0, Math.floor((size - n * k) / 2)) * (o.scale || 1);
+    const leg = o.disabled || o.locked ? LEG_OFF : LEG;
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+      const c = leg[rows[j][i]];
+      if (!c) continue;
+      ctx.fillStyle = G.col ? G.col(c) : c;
+      ctx.fillRect(x + off + i * s, y + off + j * s, s, s);
+    }
+    return true;
+  };
+  if (G.art && G.art.iconExt && !G.art.iconExt.bell) G.art.iconExt.bell = bell;
+
+  // --------------------------------------------------------------------------------------------------------- окно
+  const TX = { dark: () => P('textDark', '#2b2033'), soft: () => P('P16', '#6b4226'), good: () => P('P22', '#2f5e3a'), bad: () => P('btnRed', '#e04848') };
+  const text = (s, x, y, o) => G.text(String(s), Math.round(x), Math.round(y), o || {});
+  const icon = (name, x, y, size, o) => G.ui.icon(name, Math.round(x), Math.round(y), Object.assign({ size: size || 16 }, o || {}));
+  const fit = (s, w, font) => {
+    s = String(s);
+    if (G.textW(s, font || 'main') <= w) return s;
+    let t = s;
+    while (t.length > 1 && G.textW(t + '…', font || 'main') > w) t = t.slice(0, -1);
+    return t + '…';
+  };
+  const p2 = (v) => String(v).padStart(2, '0');
+  const fmtDate = (ms) => { const d = new Date(ms); return p2(d.getDate()) + '.' + p2(d.getMonth() + 1) + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()); };
+  const hh = (h) => p2(h) + ':00';
+
+  G.windows = G.windows || {};
+  G.windows.notify = {
+    rect: 'tall', single: true, title: () => T('notify.title'),
+    draw(a, w) {
+      const s = S(), K = DN(), x0 = w.cx, cw = w.cw;
+      let y = w.cy + 1;
+      const RH = 25;
+      const line = () => G.px.rect(x0, y + RH - 1, cw, 1, P('P18', '#d1a265'));
+      const row = (id, ic, title, hint, val, set) => {
+        line();
+        icon(ic, x0 + 2, y + 4, 16);
+        text(fit(title, cw - 60), x0 + 22, y + 3, { color: TX.dark() });
+        text(fit(hint, cw - 56, 'small'), x0 + 22, y + 14, { font: 'small', color: TX.soft() });
+        const v = G.ui.toggle('notify.' + id, x0 + cw - 26, y + 6, !!val, { w: 22, h: 12 });
+        if (v !== !!val) set(v);
+        y += RH;
+      };
+      for (const k of TYPES()) {
+        const hint = k === 'comeback' ? T('notify.comeback.hint', K.COMEBACK_H) : T('notify.' + k + '.hint');
+        row(k, ICON[k] || 'bell', T('notify.' + k), hint, s.on[k], (v) => G.act.notifySet(k, v));
+      }
+      row('quiet', 'moon', T('notify.quiet'), T('notify.quiet.hint', hh(K.QUIET[0]), hh(K.QUIET[1])), s.quiet, (v) => G.act.notifySet('quiet', v));
+      // разрешение браузера
+      line();
+      icon('bell', x0 + 2, y + 4, 16, { disabled: perm() !== 'granted' });
+      const pm = perm();
+      text(T('notify.perm'), x0 + 22, y + 3, { color: TX.dark() });
+      text(fit(T('notify.perm.' + pm), cw - 90, 'small'), x0 + 22, y + 14, { font: 'small', color: pm === 'granted' ? TX.good() : pm === 'denied' ? TX.bad() : TX.soft() });
+      if (pm === 'default' && G.ui.button('notify.ask', x0 + cw - 66, y + 5, 64, 14, { style: 'blue', label: fit(T('notify.perm.ask'), 60, 'small'), font: 'small' })) ask();
+      y += RH + 4;
+      // если выйти сейчас
+      const now = wall(), pl = plan(now);
+      const list = (head, items, none, at) => {
+        text(head, x0 + 2, y, { color: TX.dark() });
+        y += 11;
+        if (!items.length) { text(fit(none, cw - 8, 'small'), x0 + 4, y, { font: 'small', color: TX.soft() }); y += 10; return; }
+        for (const e of items) {
+          icon(ICON[e.k] || 'bell', x0 + 3, y - 1, 9);
+          text(fit(T('notify.' + e.k), cw - 90, 'small'), x0 + 15, y, { font: 'small', color: TX.dark() });
+          if (at(e)) icon('moon', x0 + cw - 66, y - 1, 9);
+          text(fmtDate(e.at), x0 + cw - 3, y, { align: 'right', font: 'small', color: TX.soft() });
+          y += 10;
+        }
+      };
+      list(T('notify.plan'), pl, T('notify.planNone'), (e) => e.q);
+      y += 5;
+      G.px.rect(x0, y - 3, cw, 1, P('P18', '#d1a265'));
+      list(T('notify.log'), s.log.slice().reverse(), T('notify.logNone'), () => false);
+    },
+  };
+})();
+
+//# sourceURL=src/49_notify.js
+</script>
+<script>
 // Boot, frame loop, QA API, debug and error overlays, boot-error dialog. (G.sim / G.scenes / G.boot live in 00_core.js.)
 //   Frame: latch input -> G.ui.beginFrame -> fixed sim steps (accumulator, 1/60 s × G.time.scale) -> UI clock
 //        (G.ui.update, screen shake: once per frame on real time, so window/toast animations stay smooth at any refresh
@@ -41199,8 +41787,9 @@ $ 0 .##/##./.#./.##/##.
   'use strict';
   const G = window.G = window.G || {};
   let policy = null, liveAccumulator = 0, batch = false;
-  const checkpoints = [1, 2, 3, 5, 8, 10, 15, 20, 25, 30, 35, 40, 50, 60, 90, 120];
+  const checkpoints = [1, 2, 3, 5, 8, 10, 15, 20, 25, 30, 35, 40, 50, 60, 90, 120, 180, 240, 360, 480, 720, 1080, 1440, 2160, 2880, 4320];
   const now = () => G.time.session;
+  const HUNT_STEP = 1.5;                                 // рост мощи между обычными заходами Охоты (spec 15)
   const score = (id) => { const gun = typeof id === 'number' ? G.D.guns[id] : id; return gun.dmg * gun.cpWeight / gun.interval; };
   const close = (name) => { if (G.ui.isOpen(name)) G.ui.close(name, 'bot'); };
   const snapshot = (p) => ({ minute: +((now() - p.start) / 60).toFixed(3),
@@ -41233,7 +41822,7 @@ $ 0 .##/##./.#./.##/##.
   };
   const create = (options = {}) => ({ start: now(), runStart: now(), attemptStart: now(), income: 0,
     ads: !!options.ads, events: [], snapshots: [], nextSnapshot: 0, failed: false, nextGun: now(), banks: [0, 0, 0], nextHunt: 0,
-    huntLevelT: null, huntStuck: false, huntEver: false, chLater: false });
+    huntLevelT: null, huntStuck: false, huntEver: false, huntP: 0, chLater: false, mergeBusy: false, bossDay: '' });
   const mergeSpare = () => {
     // автосклейка (spec 12) клеит только при открытом Арсенале; бот его закрывает, значит клеит сам
     if (G.guns.autoBusy && G.guns.autoBusy() && G.ui.top() === 'guns') return false;
@@ -41258,10 +41847,13 @@ $ 0 .##/##./.#./.##/##.
     }
     return false;
   };
-  // Питомцы (spec 11 §12.1): младшая пара одного ранга < 9 в ячейках, занятые пропускаются
+  // Питомцы (spec 11 §12.1, GDD 8.1): младшая пара одного ранга < 9 среди ячеек и слотов, занятые пропускаются.
+  // Надетый тоже сливается (слияние в слот — DEFAULT №10): цель — слот, иначе D в слоте копят на B в 2,5 раза дольше
   const petMergeLowest = () => {
-    const inv = G.pets.inv(), by = {};
-    inv.forEach((c, i) => { if (c && !c.busy && c.k < 9) (by[c.k] = by[c.k] || []).push(i); });
+    const by = {};
+    const add = (c, ref) => { if (c && !c.busy && c.k < 9) (by[c.k] = by[c.k] || []).push(ref); };
+    G.pets.slots().forEach((c, i) => add(c, { slot: i }));
+    G.pets.inv().forEach((c, i) => add(c, { cell: i }));
     for (const k of Object.keys(by).map(Number).sort((a, b) => a - b)) {
       const l = by[k];
       if (l.length >= 2) return G.act.petMerge(l[1], l[0]);
@@ -41288,14 +41880,29 @@ $ 0 .##/##./.#./.##/##.
       p.events.push({ t: +(now() - p.start).toFixed(3), event: 'stuck', data: { mode: 'hunt', wave: mode.wave, lv: mode.lv, sec: 180 } });
     }
   };
+  // Мощь отряда в Охоте (флаги hunt: без Силы и Скорости забега) — та же сумма, что видит игрок по рангам и Силе Сброса
+  const huntPower = () => { const st = G.calc('hunt', G.stage.n()); return st && st.dps > 0 ? st.dps : 0; };
   // Заход Охоты (этап 12): «Мигом!» при готовом наборе (spec 12), иначе обычный старт. Отряд держит центр сам,
-  // итог забирается по общей ветке G.modes.info(). Не вышло (окно, тост) — повтор через 5 с, а не через 20 минут
+  // итог забирается по общей ветке G.modes.info(). Не вышло (окно, тост) — повтор через 5 с.
+  // Прогресс волны сохраняется (решение №5), без роста мощи заход — пустой прорыв. Новый обычный заход — когда мощь
+  // выросла в max(1,5; need(w, L) / need(w, L−1)) раза, где w, L — сохранённый прогресс (D.hunt.need, spec 11 §4.2:
+  // L2/L1 ×2,45, L3/L2 ×1,51, L4/L3 ×1,73, L5/L4 ×1,77). Прошлый заход прошёл L−1 и прорвался на L; с одним ×1,5
+  // заход с прорванного L5 бывал пустым (spec 15 §4, DEFAULT №32 spec 11)
+  const huntStep = () => {
+    const H = G.D.hunt, w = G.hunt.wave ? G.hunt.wave() : 1, L = G.hunt.lv ? G.hunt.lv() : 1;
+    if (!(H && H.need) || !(L >= 2)) return HUNT_STEP;
+    const r = H.need(w, L) / H.need(w, L - 1);
+    return Number.isFinite(r) && r > HUNT_STEP ? r : HUNT_STEP;
+  };
+  const huntReady = (p) => now() >= p.nextHunt && !(p.huntP > 0 && huntPower() < huntStep() * p.huntP &&
+    !(G.hunt.sweep && G.hunt.sweep.can && G.hunt.sweep.can()));
   const huntTry = (p) => {
     if (!(G.hunt && G.hunt.unlocked()) || G.scenes.name !== 'stage' || G.stage.phase() !== 'play' || G.ui.top()) return false;
-    let ok = false;
-    if (G.hunt.sweep && G.hunt.sweep.can && G.hunt.sweep.can()) ok = !!G.act.huntSweep();
+    let ok = false, quick = false;
+    if (G.hunt.sweep && G.hunt.sweep.can && G.hunt.sweep.can()) ok = quick = !!G.act.huntSweep();
     if (!ok) ok = !!G.act.startMode('hunt') || G.ui.isOpen('huntExplain') || !!G.modes.info();
-    p.nextHunt = now() + (ok ? 1200 : 5);
+    p.nextHunt = now() + (ok ? 60 : 5);
+    if (ok && !quick) p.huntP = huntPower();
     if (ok) p.huntEver = true;
     return ok;
   };
@@ -41328,6 +41935,54 @@ $ 0 .##/##./.#./.##/##.
     }
     if (p.ads && e.canAd && !(G.ads.active && G.ads.active())) { G.act.raidAdEntry(); return true; }
     return false;
+  };
+  // Кристаллы: костюм или призыв (spec 15 §4, GDD 8.2 / 8.4). Сравнивается прирост ln(урона отряда) на 100 кристаллов.
+  // Костюм — младший некупленный i за 100·i: урон ×(1 + 0,16(S+i)) / (1 + 0,16S), S = Σ индексов купленных.
+  // Призыв (100) даёт D; поднять младшую надетую пушку с ранга r до r+1 стоит 2^r призывов. Пустой слот — призыв всегда
+  const rankScore = [];
+  const rankAvg = (r) => {
+    if (rankScore[r] === undefined) {
+      const l = G.D.guns.filter((g) => g.rank === r);
+      rankScore[r] = l.length ? l.reduce((a, g) => a + score(g), 0) / l.length : 0;
+    }
+    return rankScore[r];
+  };
+  const skinNext = () => { const o = G.S.skins.owned; for (let i = 1; i < o.length; i++) if (!o[i]) return i; return 0; };
+  const skinGain = (i) => {
+    const e = G.D.skin.effects, s = G.meta.skinSum();
+    return Math.log(e(s + i).dmgMul / e(s).dmgMul) / i;
+  };
+  const summonGain = () => {
+    const eq = G.S.guns.equipped;
+    if (eq.some((id) => id === null)) return Infinity;
+    let lo = eq[0], sum = 0;
+    for (const id of eq) { sum += score(id); if (score(id) < score(lo)) lo = id; }
+    const r = G.D.guns[lo].rank, up = rankAvg(r + 1) - score(lo);
+    return up > 0 && sum > 0 ? Math.log(1 + up / sum) / 2 ** r : 0;
+  };
+  // костюм, если его прирост не меньше призыва; тогда кристаллы копятся на него, призыв не идёт
+  const skinWanted = () => { const i = skinNext(); return i > 0 && skinGain(i) >= summonGain() ? i : 0; };
+  // Рыбки (spec 05 §4, с этапа 6): бесплатные забросы дня (3), с роликами fish_gacha — ещё 2 (B1); младшая пара
+  // одного сорта сливается сразу (слияние всегда выгодно, GDD 8.4). Эпический заброс за кристаллы бот не берёт
+  const fishPolicy = (p) => {
+    if (!G.stage.unlocked('fish')) return false;
+    const F = G.D.fish, by = {};
+    for (const f of G.S.fish.list) if (f.g < F.MAX_GRADE) (by[f.g] = by[f.g] || []).push(f.id);
+    for (const g of Object.keys(by).map(Number).sort((a, b) => a - b)) {
+      if (by[g].length >= 2 && G.act.fishMerge(by[g][1], by[g][0])) return true;
+    }
+    if (G.meta.fishCount() >= F.MAX || G.ui.top()) return false;
+    const kind = G.meta.fishFree().kind;
+    if (kind === 'free') return !!G.act.fishCast('free');
+    if (kind === 'ad' && p.ads && !(G.ads.active && G.ads.active())) { G.act.fishCast('free'); return !!(G.ads.active && G.ads.active()); }
+    return false;
+  };
+  // Босс (GDD 6.2, с этапа 10): раз в игровой день бои подряд до первого поражения; итог — общая ветка claimMode
+  // (B1 — ×3 за ролик boss_bonus). Сначала склейка пушек: так бой идёт с полной мощью
+  const bossPolicy = (p) => {
+    if (!G.stage.unlocked('boss') || p.bossDay === G.dayKey() || p.mergeBusy) return false;
+    if (G.scenes.name !== 'stage' || G.stage.phase() !== 'play' || G.ui.top()) return false;
+    return !!G.act.startMode('boss');
   };
   // «Мигом!» (spec 12 §12): при готовом наборе auto — мгновенная зачистка, иначе обычный старт
   const startOrQuick = (m) => (G.modes.quick && G.modes.quick.can && G.modes.quick.can(m) ? G.act.quickClear(m) : G.act.startMode(m));
@@ -41378,16 +42033,21 @@ $ 0 .##/##./.#./.##/##.
       return;
     }
     if (step !== 'done') return;
-    for (const name of ['guns', 'daily', 'quests', 'rate', 'welcome', 'fishNew', 'pond', 'pets', 'petInfo', 'petAlbum', 'hunt', 'weekly', 'charms', 'charmReveal', 'charmInfo', 'trip', 'tripPick',
+    for (const name of ['guns', 'daily', 'quests', 'rate', 'welcome', 'newFish', 'fishInfo', 'pond', 'costumes', 'pets', 'petInfo', 'petAlbum', 'hunt', 'weekly', 'charms', 'charmReveal', 'charmInfo', 'trip', 'tripPick',
       'vault', 'star', 'raidBank', 'raid', 'raidPick', 'raidMissions']) close(name);
     G.act.equipBest(score);
     sharpenPolicy();                                     // камни есть только после этапа 40: до него без бросков G.rng
     if (now() >= p.nextGun) {
-      if (mergeSpare()) { p.nextGun = now() + 2; return; }
-      if (G.eco.dia() >= 100 && G.S.guns.inventory.includes(-1)) {
+      p.mergeBusy = mergeSpare();
+      if (p.mergeBusy) { p.nextGun = now() + 2; return; }
+      const skin = skinWanted();
+      if (skin) {
+        if (G.eco.dia() >= 100 * skin && G.act.costumeBuy(skin)) { p.nextGun = now() + 4; return; }
+      } else if (G.eco.dia() >= 100 && G.S.guns.inventory.includes(-1)) {
         if (G.act.summon()) { p.nextGun = now() + 4; return; }
       }
     }
+    if (fishPolicy(p)) return;
     for (const m of G.meta.missions()) if (m.claimable) G.act.claimMission(m.id);
     for (let i = 0; i < 100; i++) {
       const n = G.meta.passNext();
@@ -41397,15 +42057,15 @@ $ 0 .##/##./.#./.##/##.
     // первый заход: питомец за ролик (секунды) раньше, Шахта и Challenge — после Охоты
     if (huntFirst) {
       if (petPolicy(p)) return;
-      if (now() >= p.nextHunt && huntTry(p)) return;
+      if (huntReady(p) && huntTry(p)) return;
     }
     if (G.stage.unlocked('mine') && G.modes.mineLeft() > 0 && G.scenes.name === 'stage' && G.stage.phase() === 'play' && !G.ui.top()) {
       startOrQuick('mine'); return;
     }
     if (petPolicy(p)) return;
     if (raidPolicy(p)) return;
-    // дальше Охота раз в 20 минут
-    if (now() >= p.nextHunt && huntTry(p)) return;
+    // дальше Охота — когда мощь выросла на шаг уровня (см. huntReady)
+    if (huntReady(p) && huntTry(p)) return;
     // отложенный Challenge (см. выше) — сразу после первого захода
     if (p.chLater && !huntFirst && G.scenes.name === 'stage' && G.stage.phase() === 'play' && !G.ui.top()) {
       p.chLater = false;
@@ -41432,22 +42092,26 @@ $ 0 .##/##./.#./.##/##.
       for (let t = 0; t < 4; t++) if (G.charms.buyN(t) > 0) G.act.charmSummon(t, 'all', { ui: false });
       for (const c of G.charms.cards(3)) for (let i = 0; i < 400 && G.charms.canUp(c.id); i++) G.act.charmUpgrade(c.id);
     }
+    if (bossPolicy(p)) return;
     if (p.ads) {
       for (const key of ['power', 'speed', 'money']) if (G.eco.buff(key).time <= 600 && G.eco.buff(key).adOk) { G.eco.buffAd(key); return; }
       if (G.guns.rookie().state === 'SEALED') { G.act.gunRookie(); return; }
       if (G.guns.dailyReady()) G.act.gunDaily();
+      // автопрокачка за ролик auto_upgrade (раз в день, 600 с): покупки те же, что делает бот, — ради полноты рекламы B1
+      if (G.eco.auto.adOk() && !(G.ads.active && G.ads.active())) G.act.autoAd();
     }
   };
   G.on('*', (name, e) => {
     const p = policy;
     if (!p) return;
-    if (/^(stage:(sub|subClear|clear|fail|newMax)|mode:(start|end)|gun:(summon|merge|equip)|upgrade:buy|dia:(gain|spend)|rebirth|unlock|ad:(shown|watch)|mission:claim|pass:claim|tut:step|hunt:(start|wave|over|sweep)|petCoins:gain|pet:(summon|merge|equip)|pack:(on|expire|tripCut)|autoMerge:toggle|charms:(summon|upgrade|skip)|trip:(send|back|claim|end|ad)|vault:(put|take|buy)|gun:lock|star:try|stones:spend|raid:(start|end|mission|entry))$/.test(name)) {
+    if (/^(stage:(sub|subClear|clear|fail|newMax)|mode:(start|end)|gun:(summon|merge|equip)|upgrade:buy|dia:(gain|spend)|rebirth|unlock|ad:(shown|watch)|mission:claim|pass:claim|tut:step|hunt:(start|wave|over|sweep)|petCoins:gain|pet:(summon|merge|equip)|pack:(on|expire|tripCut)|autoMerge:toggle|charms:(summon|upgrade|skip)|trip:(send|back|claim|end|ad)|vault:(put|take|buy)|gun:lock|star:try|stones:spend|raid:(start|end|mission|entry)|skin:buy|fish:(summon|merge)|auto:on)$/.test(name)) {
       p.events.push({ t: +(now() - p.start).toFixed(3), event: name, data: e ? JSON.parse(JSON.stringify(e)) : null });
     }
     if (name === 'stage:sub') { p.attemptStart = now(); p.income = 0; }
     if (name === 'hunt:level' || name === 'hunt:start') { p.huntLevelT = now(); p.huntStuck = false; }
     if (name === 'money:gain' && e.src === 'kill' && !G.modes.active()) p.income += e.n;
     if (name === 'stage:fail') p.failed = true;
+    if (name === 'mode:end' && e && e.mode === 'boss' && !e.win) p.bossDay = G.dayKey();   // поражение — до завтра
     if (name === 'rebirth') {
       p.runStart = now();
       const keys = ['power', 'speed', 'money'], split = [0.95, 0.01, 0.04];
