@@ -22,7 +22,7 @@
 <body>
 <canvas id="game" width="216" height="384" tabindex="0"></canvas>
 <noscript>Для игры нужен JavaScript. / This game needs JavaScript.</noscript>
-<script>window.BUILD_INFO = {"time": "2026-10-11 13:06", "hash": "0e610127", "dev": false, "files": 41};</script>
+<script>window.BUILD_INFO = {"time": "2026-10-11 22:12", "hash": "f098adc9", "dev": false, "files": 42};</script>
 <script>
 // Core: events, seeded rng, time, number/time formatting, i18n, action registry, stats-modifier hooks, easing,
 // simulation + scene registries, error capture, boot warm-up registry. Loaded first, so every later file can use these
@@ -72,6 +72,12 @@
   G.dist = (x1, y1, x2, y2) => Math.hypot(x2 - x1, y2 - y1);
   G.inRect = (px, py, x, y, w, h) => px >= x && py >= y && px < x + w && py < y + h;
   G.noop = () => {};
+  // Предел чисел (spec 17 §8). Оригинал считает в BigNum (мантисса + порядок), клон — в double. Всё, что перерастает
+  // Number.MAX_VALUE, насыщается до G.NUM_MAX: число остаётся конечным, в JSON сохранения не становится null, G.fmt
+  // выводит его как «∞». G.sat: ±Infinity → ±NUM_MAX, NaN / null / undefined → 0. G.isMax(p): цена-маркер «MAX» (≥ NUM_MAX).
+  const NUM_MAX = G.NUM_MAX = Number.MAX_VALUE;
+  G.sat = (v) => { v = +v; return v < NUM_MAX ? (v > -NUM_MAX ? v : v === v ? -NUM_MAX : 0) : v === v ? NUM_MAX : 0; };
+  G.isMax = (v) => !(v < NUM_MAX);
 
   const E = G.ease = {
     linear: (t) => t,
@@ -261,7 +267,8 @@
     }
     if (typeof v !== 'number') v = v === null || v === undefined || v === '' ? NaN : Number(v);
     if (v !== v) { G.warnOnce('fmtNaN', 'G.fmt: not a number:', v); return '0'; }   // caller bug: show 0, log once
-    if (!isFinite(v)) return v < 0 ? '-∞' : '∞';
+    if (v >= NUM_MAX) return '∞';            // насыщенное G.sat число и Infinity (spec 17 §8)
+    if (v <= -NUM_MAX) return '-∞';
     if (v <= -1) return '-' + G.fmt(-v);
     if (v < 1000) return String(Math.max(0, Math.floor(v)));       // -0.5 -> '0' (never '-0')
     const s = v.toExponential(14);           // 15 significant digits strip float noise (4290 -> 4.29a, not 4.28a)
@@ -277,6 +284,7 @@
     [1e78, '1z'], [1e81, '1aa'], [1e156, '1az'], [1e159, '1ba'], [Infinity, '∞'], [-4290, '-4.29a'],
     ['1e2106', '1zz'], ['8.1e2354', '8.1e2354'], [1.23456e15, '1.23e'], [123456789, '123.45b'],
     [-0.5, '0'], [-0, '0'], [-1, '-1'], [NaN, '0'], [undefined, '0'], ['abc', '0'], ['12', '12'], [-Infinity, '-∞'],
+    [Number.MAX_VALUE, '∞'], [-Number.MAX_VALUE, '-∞'], [1.7e308, '170cx'],
   ];
   G.fmt.selfTest = () => {
     const fail = [];
@@ -284,12 +292,32 @@
       const got = G.fmt(inp);
       if (got !== exp) fail.push({ in: String(inp), exp, got });
     }
-    return { pass: G.fmt.vectors.length - fail.length, total: G.fmt.vectors.length, fail };
+    for (const [v, d, trim, exp] of G.fmtDec.vectors) {     // десятичные дроби: только точка
+      const got = G.fmtDec(v, d, trim);
+      if (got !== exp) fail.push({ in: `fmtDec(${v}, ${d}, ${trim})`, exp, got });
+    }
+    const total = G.fmt.vectors.length + G.fmtDec.vectors.length;
+    return { pass: total - fail.length, total, fail };
   };
   G.fmtPct = (x) => G.fmt(Math.floor(x * 100 + 1e-7)) + '%';
   // Две значащие цифры (окно заточки, spec 14 §8.10): 1.5 → '1.5', 70.75 → '71', 4290 → '4.3a', ∞ → '∞'
   G.fmt2 = (v) => (typeof v !== 'number' || !Number.isFinite(v) ? G.fmt(v) : v < 1000 ? String(Number(v.toPrecision(2)))
     : G.fmt(Number(v.toPrecision(2))));
+  // Единый десятичный разделитель (spec 17 §13): точка в RU и EN, как в оригинале («4.29a», «×1.96»).
+  // Все дробные выводы идут через G.fmt / G.fmt2 / G.fmtDec; запятую по языку не подставляем.
+  G.fmt.DEC = '.';
+  // d знаков после точки; trim — без хвостовых нулей (0.60 → '0.6', 2.00 → '2'); ±∞ и NaN — как G.fmt
+  G.fmtDec = (v, d = 1, trim = true) => {
+    v = +v;
+    if (!Number.isFinite(v)) return G.fmt(v);
+    const p = Math.pow(10, d);
+    let s = (Math.round(v * p) / p).toFixed(d);
+    if (trim && d > 0) s = s.replace(/\.?0+$/, '');
+    if (s === '-0') s = '0';
+    return G.fmt.DEC === '.' ? s : s.replace('.', G.fmt.DEC);
+  };
+  G.fmtDec.vectors = [[5.94, 1, true, '5.9'], [3.6149, 2, false, '3.61'], [1.96, 2, true, '1.96'], [0.6, 2, true, '0.6'],
+    [1, 2, true, '1'], [2, 2, false, '2.00'], [22.5, 1, true, '22.5'], [-0.01, 1, true, '0'], [999.996, 2, false, '1000.00']];
   const pad2 = (n) => String(n).padStart(2, '0');
   // Clock style: '2:41' below 1 h, then '2h 03m' / '2ч 03м', then '1d 02h'. Countdown semantics (ceil).
   // mode 'hm' forces hours+minutes ('0ч 45м'); 'ms' forces m:ss.
@@ -1316,7 +1344,7 @@ _ 4 ###
 ] 0 ##/.#/.#/.#/##
 < 1 ..#/.#./..#
 > 1 #../.#./#..
-* 1 #.#/.#./#.#
+* 0 .#./###/#.#
 # 0 #.#/###/#.#/###/#.#
 ; 1 .#/../.#/#.
 & 0 .#./#.#/.#./#.#/.##
@@ -4682,7 +4710,8 @@ $ 0 .##/##./.#./.##/##.
   G.state.register('meta', () => ({
     version: G.VERSION, created: 0, lastSeen: 0, totalPlay: 0, sessions: 0,
     settings: { music: true, sound: true, vibration: true, eco: false, lang: 'auto', numbers: 'all', shake: true, lowfx: false,
-      pixelPerfect: false },
+      pixelPerfect: false, forcedAds: false, forcedAdsLate: false,     // «Обязательная реклама (демо)», spec 17 §5/§18
+      forcedAdsTune: null },   // её параметры (spec 17 §20): null или {minStage, cooldown, whole, afterRw, caps {seg1|late: {место: n}}}
     nickname: '', nickChangedTs: 0,
   }), { version: 1 });
 
@@ -4758,8 +4787,11 @@ $ 0 .##/##./.#./.##/##.
         out._v[k] = defs[k].version;
       }
     }
-    return JSON.stringify(out);
+    return JSON.stringify(out, numSafe);
   };
+  // Предел чисел (spec 17 §8): ±Infinity в сейв не пишем как null — насыщаем до ±Number.MAX_VALUE, NaN → 0
+  const numSafe = (k, v) => (typeof v !== 'number' || (v < Infinity && v > -Infinity) ? v
+    : v === v ? (v > 0 ? Number.MAX_VALUE : -Number.MAX_VALUE) : 0);
   const qaNoSave = () => G.flags && G.flags.qa && !G.flags.save;
   G.save = (o = {}) => {
     if (!loaded || blocked || suppressSave) return false;
@@ -4899,7 +4931,8 @@ $ 0 .##/##./.#./.##/##.
   const TRUST = ['none', 'derived', 'suspect'];
   // сохранённые даты, которые обрезаются до «не дальше LEAD_DAYS вперёд» (ключи дня и метки в мс)
   const CLAMP_KEYS = ['daily.lastClaimDayKey', 'fish.freeDay', 'missions.dayKey', 'guns.dailyAdGunDay', 'modes.mineDay',
-    'ads.dayKey', 'shop.deals.dayKey', 'eco.auto.adDay', 'rebirth.superAdDay', 'rebirth.superIapDay', 'raid.day'];
+    'ads.dayKey', 'shop.deals.dayKey', 'eco.auto.adDay', 'rebirth.superAdDay', 'rebirth.superIapDay', 'raid.day',
+    'extras.offDay'];
   const CLAMP_MS = ['shop.piggy.lastTickTs', 'pass.startTs', 'meta.lastSeen', 'meta.nickChangedTs'];
   const CLAMP_WEEK = ['raid.week', 'shop.weekly.weekIdx', 'shop.deals.weekIdx'];   // номера недель (D.weekIdx)
   let trust = 0, sessMax = 0, base = null, checkT = 0, waitShown = false, lastBack = null, toastLater = null;
@@ -5877,8 +5910,14 @@ $ 0 .##/##./.#./.##/##.
   const G = window.G = window.G || {};
   const D = G.D = G.D || {};
 
-  // m × 10^e as the nearest double (string parse rounds correctly; overflow -> Infinity, spec 10 C2).
-  const num = (m, e) => (e === 0 ? m : parseFloat(m + 'e' + e));
+  // m × 10^e as the nearest double (string parse rounds correctly). Переполнение double насыщается до G.NUM_MAX
+  // (spec 17 §8; было Infinity, spec 10 C2): таблицы, HP и цены остаются конечными, G.fmt пишет «∞».
+  const NUM_MAX = Number.MAX_VALUE;
+  if (!G.sat) G.sat = (v) => { v = +v; return v < NUM_MAX ? (v > -NUM_MAX ? v : v === v ? -NUM_MAX : 0) : v === v ? NUM_MAX : 0; };
+  if (!G.isMax) G.isMax = (v) => !(v < NUM_MAX);
+  if (!G.NUM_MAX) G.NUM_MAX = NUM_MAX;
+  const sat = G.sat;
+  const num = (m, e) => sat(e === 0 ? m : parseFloat(m + 'e' + e));
   D.num = num;
   const clampInt = (v, lo, hi) => Math.max(lo, Math.min(hi, Math.floor(v) || lo));
 
@@ -5991,7 +6030,7 @@ $ 0 .##/##./.#./.##/##.
     // Expected sub-stage HP: N × mean type mul × HP (+ golden 35 × HP on N-5). 1-1 → 8 700.
     expectedHP(stage, sub) {
       const hp = D.stage.HP(stage);
-      return trees(stage, sub) * AVG_MUL[clampInt(sub, 1, 5) - 1] * hp + (sub === 5 ? 35 * hp : 0);
+      return sat(trees(stage, sub) * AVG_MUL[clampInt(sub, 1, 5) - 1] * hp + (sub === 5 ? 35 * hp : 0));
     },
     // Tree grid of one attempt (spec 01 §6). rng() in [0, 1). Returns regular trees (golden spawns later at
     // goldenAt(aMax)). Each: {i, a, b, x, y, type}.
@@ -6112,7 +6151,7 @@ $ 0 .##/##./.#./.##/##.
       if (pe < 0) { m = Number(pm / 10n ** BigInt(-pe)); e = 0; } else { m = Number(pm / 10n); e = pe + 1; }
       priceM[n] = m; priceE[n] = e; PRICE[n] = num(m, e);
       pctM[n] = Number(wm); pctE[n] = we; POWER_PCT[n] = num(Number(wm), we);
-      PRICE_SUM[n + 1] = PRICE_SUM[n] + PRICE[n];
+      PRICE_SUM[n + 1] = sat(PRICE_SUM[n] + PRICE[n]);
       SPEED_PCT[n] = 100 + 8 * n;
     }
   }
@@ -6122,11 +6161,14 @@ $ 0 .##/##./.#./.##/##.
     PRICE_BASE: 50, PRICE_GROWTH: 1.38, PRICE_GROWTH_F32: Math.fround(1.38), PRICE_SOFTCAP: 5000, PRICE_LATE: 2,
     POWER_MUL: 1.08, SPEED_ADD: 8,
     PRICE, POWER_PCT, SPEED_PCT, PRICE_SUM, priceM, priceE, pctM, pctE,
-    price: (lv) => (lv >= MAX_LV ? Infinity : PRICE[lvIdx(lv)]),  // cost of lv → lv+1; Infinity = MAX
+    price: (lv) => (lv >= MAX_LV ? NUM_MAX : PRICE[lvIdx(lv)]),   // cost of lv → lv+1; G.isMax(price) = MAX (spec 17 §8)
     pct: (lv) => POWER_PCT[lvIdx(lv)],                             // Power% = Money% (100 = 100 %)
     speed: (lv) => 100 + 8 * lvIdx(lv),                            // Speed% (100 = 100 %)
     value: (key, lv) => (key === 'speed' ? 100 + 8 * lvIdx(lv) : POWER_PCT[lvIdx(lv)]),  // card value, no "%"
-    totalCost: (from, to) => PRICE_SUM[lvIdx(to)] - PRICE_SUM[lvIdx(from)],
+    totalCost: (from, to) => {                                     // за пределом double — NUM_MAX («∞»), не NUM_MAX − NUM_MAX = 0
+      const a = lvIdx(from), b = lvIdx(to);
+      return PRICE_SUM[b] < NUM_MAX || b <= a ? PRICE_SUM[b] - PRICE_SUM[a] : NUM_MAX;
+    },
     // UI timings (spec 02 §4.3, 07 §0.3)
     HOLD_DELAY: 0.4, HOLD_REPEAT: 0.1, FILL_REFRESH: 0.1, PUNCH: 0.25, FX_PUNCH_MIN: 0.1,
   };
@@ -6157,6 +6199,10 @@ $ 0 .##/##./.#./.##/##.
     FX_MIN_INTERVAL: 0.05, FX_MIN_DIST2: 2.25, FX_MAX_FRAME: 3,
     TEXT_CD: { dmg: 0.12, crit: 0.12, money: 0.2 }, TEXT_BUCKET: 1.5,
     TEXT_DUR: { dmg: 1.0, crit: 1.0, money: 1.5, dia: 1.5 }, OFFSET_SCALE: 0.02, TEXT_POOL: 80,
+    // сводка и лимит цифр урона (GDD 16 «Агрегация» #38, spec 17 §9): ≥ TEXT_SOFT живых — корзина не чаще
+    // TEXT_AGG_CD; при TEXT_LIVE новые ждут места; > TEXT_AGG_N попаданий в одной цифре — «16.4a ×12»;
+    // TEXT_FADE — px таяния у верхней кромки зоны цифр (numbersArea)
+    TEXT_LIVE: 20, TEXT_SOFT: 12, TEXT_AGG_CD: 0.25, TEXT_AGG_N: 3, TEXT_FADE: 8,
     BOUNCE: { dur: 0.2, sx: 0.9, sy: 1.1 }, HIT_FLASH: 0.05, TREE_DEATH: 0.35,
     GUN_RECOIL: { dur: 0.2, sx: 0.7, sy: 1.1, arm: 0.6 },
     POOL_BULLETS: 27, POOL_HITFX: 10, SFX_GAP: 0.05, SHOT_SFX_VOL: 0.3,
@@ -6570,7 +6616,8 @@ $ 0 .##/##./.#./.##/##.
   const PERM_SOFT = 15000;
   const permPrice = (L) => (L < PERM_SOFT ? Math.floor(3 * (L + 1) ** 1.6)
     : Math.floor(Math.floor(3 * PERM_SOFT ** 1.6) * 1.0019 ** (L - (PERM_SOFT - 1))));   // whole Moonstones
-  const permPct = (N) => Math.floor((1.05 ** N - 1) * 100 + 1e-9);
+  // 1.05^N перерастает double на N ≈ 14 549: дальше процент насыщается до G.NUM_MAX (spec 17 §8)
+  const permPct = (N) => G.sat(Math.floor((1.05 ** N - 1) * 100 + 1e-9));
   const permSum = [0];
   const permTotal = (N) => {                                   // RP needed to go 0 → N
     N = Math.max(0, Math.min(20000, N | 0));
@@ -6579,9 +6626,9 @@ $ 0 .##/##./.#./.##/##.
   };
   D.perm = {
     KEYS: ['power', 'speed', 'money'], MAX: 20000, PRICE_BASE: 3, PRICE_EXP: 1.6, SOFTCAP: PERM_SOFT,
-    price: (L) => (L >= 20000 ? Infinity : permPrice(L)),
+    price: (L) => (L >= 20000 ? G.NUM_MAX : permPrice(L)),   // G.isMax(price) = MAX (spec 17 §8)
     pct: permPct,                                // Power / Money bonus %, compound: floor((1.05^N − 1)·100)
-    mul: (N) => (100 + permPct(N)) / 100,        // damage / money multiplier (1 + pct/100)
+    mul: (N) => { const p = permPct(N); return G.isMax(p) ? p : (100 + p) / 100; },   // damage / money multiplier (1 + pct/100)
     speedAdd: (N) => 5 * N,                      // percentage points added to S%
     total: permTotal,
     maxLevel(points, from) {                     // highest level reachable from `from` with `points`
@@ -6608,7 +6655,8 @@ $ 0 .##/##./.#./.##/##.
     FREE_PER_DAY: 5, FREE_NO_AD: 3, AD_TYPE: 7, EPIC_COST: 200,
     ODDS: [60, 30, 10],                          // D / C / B for free casts; epic shifts +1 (C / B / A)
     roll: (epic, r) => { const x = r * 100, g = x < 60 ? 0 : x < 90 ? 1 : 2; return epic ? g + 1 : g; },
-    MERGE_PX: 10, PRESS_SCALE: 0.9, PRESS_TIME: 0.08, NEW_POPUP: 1.833,
+    MERGE_PX: 20,                                // DEFAULT по удобству пальца, не пересчёт «20» оригинала (spec 17 §11)
+    PRESS_SCALE: 0.9, PRESS_TIME: 0.08, NEW_POPUP: 1.833,
     SWIM: { speed: [15, 35], vertical: 0.3, heading: [2, 5], px: [4, 9] },
     grades: [
       F(0, 'D', 'guppy', 'Lop Guppy', 'Ушастый гуппи', 4, 1, 8, 8, 6, ['P10', 'P40']),
@@ -6702,8 +6750,8 @@ $ 0 .##/##./.#./.##/##.
       baseHP: stageHP, baseRew: stageREW,                   // identical to the main-stage type-0 tree of stage N
       treeHP: (N, t) => (D.stage ? D.stage.treeHP(N, t) : NaN),
       treeMoney: (N, t) => (D.stage ? D.stage.treeMoney(N, t) : NaN),
-      expTotalHP: (N) => chTrees(N) * stageHP(N) * 1.93,
-      needDps: (N) => chTrees(N) * stageHP(N) * 1.93 / 60,
+      expTotalHP: (N) => G.sat(chTrees(N) * stageHP(N) * 1.93),
+      needDps: (N) => G.sat(chTrees(N) * stageHP(N) * 1.93 / 60),
       ARENA_R: 75, CLAMP_R: 74, RING_R0: 22, RING_R1: 70, VIGNETTE: [70, 75],
       OFFER_EVERY: 2, PULSE_PERIOD: 0.8,
       // DEFAULT: ведомые в 'attack' подходят к своему дереву до 10 u, как ведущий (AutoStopDistance). Без этого они били
@@ -6984,10 +7032,28 @@ $ 0 .##/##./.#./.##/##.
       trip_cooldown: A(13, 'Adventure_CoolDown', { where: 'trip', perDay: 2, unlock: 35, sec: -1800 }),
       raid_enter: A(15, 'Raid_Enter', { where: 'raid', perDay: 1, unlock: 40, scope: 'in' }),   // 3-й вход к Королю (spec 14 §11.1)
     },
-    // Interstitials: OFF in the clone; the checks apply only if QA turns them on (spec 10 G10, spec 06 §4).
+    // Межстраничная реклама — сегмент 1 оригинала (GDD 11.4, spec 17 §5): с этапа 12, 6 показов в день после
+    // Сброса и 2 после Шахты, без перерыва и без общего лимита. По умолчанию ВЫКЛ (сегмент 0); включается
+    // настройкой «Обязательная реклама (демо)» или ?inter=1. 0 у COOLDOWN/CAP_WHOLE/AFTER_REWARDED — без ограничения,
+    // 0 в CAPS — в этом месте никогда. Баннер-полоса показывается вместе с включённым режимом (или ?banner=1).
+    // CAPS_LATE — профиль «Все режимы» (поздние версии оригинала, spec 17 §18): ролик ещё и после Разноса, Хищной
+    // девятки и Слизнебоя. Серверные лимиты неизвестны — DEFAULT 10 в день на место.
     inter: {
-      ENABLED: false, BANNER: false, MIN_STAGE: 12, COOLDOWN: 120, CAP_WHOLE: 4, AFTER_REWARDED: 60,
-      CAPS: { rebirth: 3, mine: 1, challenge: 0, boss: 0, hunt: 0 }, NEVER_AFTER_SUPER: true,
+      ENABLED: false, BANNER: false, MIN_STAGE: 12, COOLDOWN: 0, CAP_WHOLE: 0, AFTER_REWARDED: 0,
+      CAPS: { rebirth: 6, mine: 2, challenge: 0, boss: 0, hunt: 0 }, NEVER_AFTER_SUPER: true, WAIT_SEC: 30,
+      CAPS_LATE: { rebirth: 6, mine: 2, challenge: 10, boss: 10, hunt: 10 }, LATE_MODES: ['challenge', 'boss', 'hunt'],
+      // Настраиваемые параметры (spec 17 §20): в оригинале их задаёт сервер (порог этапа, перерыв между роликами,
+      // лимит места в день, общий лимит в день). Здесь игрок двигает их по этим ступеням в окне «Параметры рекламы»
+      // (adsTune); переопределения лежат в settings.forcedAdsTune, без них действуют значения профиля выше.
+      // 0 у COOLDOWN / CAP_WHOLE / AFTER_REWARDED — без ограничения, 0 у CAP — в этом месте никогда. Секунды.
+      PLACES: ['rebirth', 'mine', 'challenge', 'boss', 'hunt'],
+      TUNE: {
+        MIN_STAGE: [1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50, 60, 80, 100],
+        COOLDOWN: [0, 30, 60, 90, 120, 180, 300, 600, 900],
+        CAP_WHOLE: [0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 30, 50],
+        AFTER_REWARDED: [0, 30, 60, 120, 180, 300],
+        CAP: [0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 30],
+      },
     },
   };
 
@@ -6998,7 +7064,7 @@ $ 0 .##/##./.#./.##/##.
   D.locked = [];   // этап 40 открыт целиком: рейд, сейф, заточка, замок, камни (spec 14 §2.3)
 
   // Settings defaults (spec 10 G5 keys; lang 'auto' = RU if the browser language starts with "ru", else EN).
-  D.settingsDefaults = { music: true, sound: true, vibration: true, eco: false, lang: 'auto', numbers: 'all', shake: true, lowfx: false, pixelPerfect: false };
+  D.settingsDefaults = { music: true, sound: true, vibration: true, eco: false, lang: 'auto', numbers: 'all', shake: true, lowfx: false, pixelPerfect: false, forcedAds: false, forcedAdsLate: false, forcedAdsTune: null };
   D.NUMBERS_MODES = ['all', 'some', 'off'];
 
   // Local ranking (spec 06 §13, IN-SIM): 29 seeded bot names; nickname rules. Names are invented player handles:
@@ -7009,7 +7075,49 @@ $ 0 .##/##./.#./.##/##.
       'EarMuffin', 'LopLegend', 'Cabbage King', 'Radish99', 'TinyStomp', 'Rusty Paws', 'Burrow Boss', 'Hopscotch7',
       'Turnip Twister', 'Mud Muncher', 'Морковыч', 'Parsnip Pete', 'Biscuit', 'Stomper2', 'Moonhop', 'Pepper',
       'DillPickle', 'Juniper', 'Капустян', 'Pebble', 'Seedling', 'Quickfoot'],
+    // Фильтр ника (GDD 9.5, spec 17 §2): корни мата и оскорблений. Сравнение без регистра (ё = е, й = и), после замены
+    // похожих букв и цифр; повтор буквы не спасает («fuuuck»). '^' — корень только в начале слова, '$' — только в конце
+    // (дальше могут быть цифры); иначе ложные срабатывания («Asuka», «Chuy», «Курода»). Короткие и многозначные корни
+    // (лох, ass, dick …) не берём: мешают обычным словам. «Gandon», «Hui», «Idiotas» блокируются намеренно (DEFAULT).
+    BAD_LAT: ['fuck', 'shit', 'bitch', 'cunt', 'whore', 'slut', 'asshole', 'bastard', 'retard', 'nigger', 'nigga',
+      'faggot', 'penis', 'porn', 'dildo', '^wank', 'twat', '^nazi', 'hitler', 'moron', 'idiot', '^cyka', '^suka',
+      'blyat', 'blyad', '^blya', '^huy', '^huj', '^hui$', 'nahuy', 'nahui', 'nahuj', 'pohuy', 'pohui', 'pohuj', 'pizd',
+      'pidor', 'pidar', 'mudak', 'zalup', 'gandon', '^eblan', '^ebat', '^ebal', 'zaeb'],
+    BAD_CYR: ['хуй', 'хуе', 'хуя', 'пизд', 'бляд', 'блят', '^бля$', '^ебан', '^ебат', '^ебал', '^еблан', 'уеб', 'заеб',
+      'выеб', 'поеб', 'наеб', 'съеб', 'долбоеб', '^сука', 'мудак', 'мудил', 'пидор', 'пидар', 'пидр', 'педераст',
+      'гандон', 'гондон', 'шлюх', 'залуп', 'дерьм', 'говн', 'жоп', 'дебил', 'идиот', '^урод', 'нацист', 'фашист',
+      'гитлер', 'дроч', 'мраз', 'тварь'],
+    // Исключения — настоящие имена и фамилии, в которых случайно есть корень. Вырезаются из слова до проверки корней;
+    // только с якорем '^' или '$', без повторов букв. «Huy» и «Huynh» (вьетнамские имена) — только целым словом.
+    BAD_EXCEPT: ['shita$', '^nazim', '^nazir', '^huy$', '^huynh$', '^slutsk', '^moroni$', '^sukachev', '^сукачев'],
   };
+
+  // Коды подарков (GDD 9.8, spec 17 §1). Хранится не сам код, а FNV-1a 32 бит от кода в верхнем регистре без пробелов
+  // (G.codes.hash). reward: dia — кристаллы {gem}, petCoins — клевер {clover}. until — последний день действия
+  // включительно (местная дата; при переведённых назад часах берётся самое позднее виденное время). MAX_LEN — длина поля.
+  D.codes = {
+    MAX_LEN: 16,
+    list: [
+      { h: 'aff5fc57', reward: { dia: 150 } },                                // бессрочный
+      { h: 'b70d761c', reward: { dia: 300, petCoins: 30 }, until: '2030-12-31' },   // далёкий срок
+      { h: 'c0465fb9', reward: { dia: 500 }, until: '2026-01-31' },           // уже истёк
+    ],
+  };
+
+  // Задания партнёров (GDD 9.8 / 11.4, spec 17 §3) — только демо: без брендов, ссылок и настоящих проверок.
+  // STAGE — открывается с этапа; DAY_CAP — всего заданий в день; SPIN — секунды «проверки»; cd — перезарядка (с);
+  // perDay — сколько раз в день это задание; dia — награда кристаллами.
+  D.offers = {
+    STAGE: 10, DAY_CAP: 4, SPIN: 1.2,
+    list: [
+      { id: 'quiz', dia: 15, cd: 4 * 3600, perDay: 2, icon: 'quests' },
+      { id: 'farm', dia: 40, cd: 12 * 3600, perDay: 1, icon: 'cabbage' },
+      { id: 'puzzle', dia: 60, cd: 24 * 3600, perDay: 1, icon: 'chest' },
+    ],
+  };
+
+  // Проверка обновления (GDD 9.6, spec 17 §4): DELAY — секунд после запуска до тихого запроса страницы.
+  D.update = { DELAY: 5 };
 
   // ---------------------------------------------------------------------------------------------------------------
   // Calendar helpers (spec 06 §0, spec 10 C19, G6): local date keys, week index from the Monday epoch.
@@ -7299,6 +7407,7 @@ $ 0 .##/##./.#./.##/##.
     ['gun.vaultFull', 'Норка-сейф полна.', 'The vault is full.'],
     ['gun.vaultOrder', 'Сначала открой предыдущую ячейку.', 'Open the previous cell first.'],
     ['gun.odds', 'Ящик хлама: ранг D 100% (каждая пушка D 20%)', 'Junk Crate: rank D 100% (each D blaster 20%)'],
+    ['gun.mergeOdds', 'Склейка 2 пушек одного ранга: ранг выше, любая из {0} — {1}%. {2} — предел.', 'Merging 2 same-rank blasters: next rank, each of {0} at {1}%. {2} is the cap.'],
     ['gun.rankLabel', '{0} · {1}', '{0} · {1}'],
     ['gun.dmgShort', '{0}', '{0}'],
     ['gun.intShort', '{0}с', '{0}s'],
@@ -7339,7 +7448,7 @@ $ 0 .##/##./.#./.##/##.
     ['skin.totals', 'Все костюмы: урон +{0}% · скор. +{1}% · капуста +{2}%', 'All costumes: dmg +{0}% · rate +{1}% · cabbage +{2}%'],
     ['fish.title', 'Пруд удачи', 'Lucky Pond'],
     ['fish.count', 'Рыбки {0}/20', 'Fish {0}/20'],
-    ['fish.totals', 'Урон +{0}% · крит {1}% · крит. урон {2}%', 'Dmg +{0}% · crit {1}% · crit dmg {2}%'],
+    ['fish.totals', 'Урон +{0}% · крит {1}%\nКрит. урон {2}%', 'Dmg +{0}% · crit {1}%\nCrit dmg {2}%'],  // 2 строки: справа Крош с удочкой
     ['fish.free', 'Бесплатный заброс', 'Free Cast'],
     ['fish.epic', 'Золотая наживка', 'Golden Bait'],
     ['fish.ad', 'Реклама ▶', 'Watch ad ▶'],
@@ -7412,6 +7521,7 @@ $ 0 .##/##./.#./.##/##.
     ['boss.goal', 'Одолей хищника за 60 секунд! Сила и Скорость тут не действуют.', 'Beat the Big Bad in 60 s! Power & Speed upgrades are off.'],
     ['boss.win', 'Хищник повержен!', 'Big Bad down!'],
     ['boss.best', 'Лучший: ур. {0}', 'Best: Lv. {0}'],
+    ['boss.bestNone', 'Хищник ещё не побеждён', 'No Big Bad beaten yet'],
     ['boss.arena', 'Лавовый ринг', 'Lava Ring'],
     ['mode.exitq', 'Уйти? Награды не будет.', 'Leave? No reward.'],
     ['mode.exitqMine', 'Уйти? Вход уже потрачен, награды не будет.', 'Leave? The entry is already spent, no reward.'],
@@ -7436,9 +7546,9 @@ $ 0 .##/##./.#./.##/##.
     ['shop.sec.gems', 'Кристаллы', 'Crystals'],
     ['shop.sec.later', 'Ещё впереди', 'Further ahead'],
     ['shop.noForced', 'Без лишней рекламы', 'No forced ads'],
-    ['shop.noForced.d', 'Убирает рекламу между экранами (реклама за награды остаётся). + банка 1 {gem}/мин', 'Removes between-screen ads (reward ads stay). + jar 1 {gem}/min'],
+    ['shop.noForced.d', 'Убирает рекламу между экранами и баннер (реклама за награды остаётся). +\u00a0банка\u00a01\u00a0{gem}/мин', 'Removes between-screen ads and the banner (reward ads stay). +\u00a0jar\u00a01\u00a0{gem}/min'],
     ['shop.noAds', 'Совсем без рекламы', 'No ads at all'],
-    ['shop.noAds.d', 'Никакой рекламы: награды за рекламу — сразу. + банка 1 {gem}/мин', 'No ads: ad rewards are instant. + jar 1 {gem}/min'],
+    ['shop.noAds.d', 'Никакой рекламы: награды за рекламу — сразу. +\u00a0банка\u00a01\u00a0{gem}/мин', 'No ads: ad rewards are instant. +\u00a0jar\u00a01\u00a0{gem}/min'],
     ['shop.buffPack', 'Вечные баффы', 'Forever buffs'],
     ['shop.buffPack.d', 'Все 3 баффа навсегда ×4: Сила, Скорость и Капуста.', 'All 3 buffs forever at ×4: Power, Speed and Cabbage.'],
     ['shop.autoPack', 'Вечный автокач', 'Forever Auto-Pump'],
@@ -7639,6 +7749,7 @@ $ 0 .##/##./.#./.##/##.
     ['rank.stage', 'Рекорд этапа', 'Best stage'],
     ['rank.boss', 'Уровень босса', 'Boss level'],
     ['rank.top30', 'Топ-30', 'Top 30'],
+    ['rank.top5', 'Топ-5', 'Top 5'],
     ['rank.near', 'Рядом со мной', 'Near me'],
     ['rank.changeName', 'Сменить имя', 'Change name'],
     ['rank.nameRules', 'Имя: от 3 до 25 символов, менять раз в сутки.', 'Name: 3 to 25 characters, once a day.'],
@@ -7683,6 +7794,73 @@ $ 0 .##/##./.#./.##/##.
     ['notify.comeback.b', 'Капуста копится, слизни наглеют. Пора назад!', 'Cabbage piles up, slugs get bold. Hop back in!'],
     ['notify.trip.t', 'Питомцы дома!', 'Pets are home!'],
     ['notify.trip.b', 'Вылазка закончилась, добыча ждёт в рюкзаке.', 'The expedition is over, loot waits in the backpack.'],
+
+    // ---- spec 17: коды подарков, фильтр ника, задания партнёров (демо), обновление, обязательная реклама (демо) ----
+    ['set.forcedAds', 'Обяз. реклама (демо)', 'Forced ads (demo)'],
+    ['set.forcedAdsOn', 'Демо: реклама после Лунного прыжка и Кристальной норы с этапа {0}.', 'Demo: ads after Moon Hop and the Crystal Burrow from Stage {0}.'],
+    ['set.forcedAdsOff', 'Обязательная реклама выключена.', 'Forced ads are off.'],
+    ['set.forcedAdsLate', 'Демо: реклама после Лунного прыжка, Кристальной норы, Разноса, Хищной девятки и Слизнебоя с этапа {0}.',
+      'Demo: ads after Moon Hop, the Crystal Burrow, Mayhem Minute, the Big Bad Nine and Slug Rush from Stage {0}.'],
+    ['set.adsMode.off', 'Выкл', 'Off'],
+    ['set.adsMode.seg1', 'Прыжок, нора', 'Hop, Burrow'],
+    ['set.adsMode.late', 'Все режимы', 'All modes'],
+    // параметры обязательной рекламы (spec 17 §20): окно adsTune
+    ['adsTune.title', 'Параметры рекламы', 'Ad settings'],
+    ['adsTune.note', 'Демо: в оригинале эти числа задаёт сервер. Синие — изменены тобой.', 'Demo: in the original a server sets these. Blue ones are yours.'],
+    ['adsTune.minStage', 'С этапа', 'From Stage'],
+    ['adsTune.minStage.hint', 'рекорд для рекламы', 'record for ads, banner'],
+    ['adsTune.cooldown', 'Перерыв', 'Break'],
+    ['adsTune.cooldown.hint', 'между двумя роликами', 'between two ads'],
+    ['adsTune.whole', 'Всего в день', 'Per day, total'],
+    ['adsTune.whole.hint', 'все места · сегодня {0}', 'all places · today {0}'],
+    ['adsTune.afterRw', 'После награды', 'After a reward'],
+    ['adsTune.afterRw.hint', 'после ролика-награды', 'after a reward ad'],
+    ['adsTune.caps', 'В день по местам: {0}', 'Per day by place: {0}'],
+    ['adsTune.today', 'сегодня {0} из {1}', 'today {0} of {1}'],
+    ['adsTune.never', 'здесь не показывать', 'never here'],
+    ['adsTune.none', 'нет', 'none'],
+    ['adsTune.sec', '{0} с', '{0}s'],
+    ['adsTune.min', '{0} мин', '{0}m'],
+    ['adsTune.reset', 'Сбросить', 'Reset'],
+    ['adsTune.resetDone', 'Параметры рекламы как в профиле.', 'Ad settings are back to the profile.'],
+    ['set.partners', 'Задания партнёров', 'Partner tasks'],
+    ['set.partnersBtn', 'Открыть', 'Open'],
+    ['code.title', 'Подарок по коду', 'Code gift'],
+    ['code.got', 'Получено: {0}', 'Received: {0}'],
+    ['code.used', 'Код уже использован.', 'Code already used.'],
+    ['code.expired', 'Срок действия кода истёк.', 'This code has expired.'],
+    ['rank.nameChars', 'Можно: буквы, цифры, пробел, точка, _\u00a0и\u00a0-', 'Only letters, digits, spaces, dots, _\u00a0and\u00a0-'],
+    // ошибки ника: {0} — NAME_MIN, {1} — NAME_MAX (G.t(key, min, max), 43_meta)
+    ['rank.nameEmpty', 'Имя не введено.', 'Enter a name.'],
+    ['rank.nameShort', 'Слишком короткое имя: минимум {0}\u00a0{0|символ|символа|символов}.', 'Too short: at least {0}\u00a0{0|character|characters}.'],
+    ['rank.nameLong', 'Слишком длинное имя: не больше {1}\u00a0{1|символа|символов|символов}.', 'Too long: at most {1}\u00a0{1|character|characters}.'],
+    ['rank.nameSame', 'Это уже твоё имя.', 'That is already your name.'],
+    ['rank.nameSpaces', 'Без пробелов по краям и двойных пробелов.', 'No leading, trailing or double spaces.'],
+    ['rank.nameLetter', 'В имени нужна хотя бы одна буква.', 'The name needs at least one letter.'],
+    ['offer.title', 'Задания партнёров', 'Partner tasks'],
+    ['offer.note', 'Демо: партнёров нет, проверка понарошку', 'Demo: no real partners or checks'],
+    ['offer.quiz', 'Опрос про овощи', 'Veggie survey'],
+    ['offer.quiz.d', 'Пять вопросов о капусте и морковке', 'Five questions about cabbage and carrots'],
+    ['offer.farm', 'Норная ферма', 'Burrow Farm'],
+    ['offer.farm.d', 'Дорастить грядку до 5-го уровня', 'Grow a garden bed to level 5'],
+    ['offer.puzzle', 'Морковный пазл', 'Carrot Puzzle'],
+    ['offer.puzzle.d', 'Собрать 20 картинок с ушастыми', 'Solve 20 bunny picture puzzles'],
+    ['offer.do', 'Выполнить', 'Complete'],
+    ['offer.wait', 'Через {0}', 'In {0}'],
+    ['offer.doneToday', 'На сегодня всё', 'Done for today'],
+    ['offer.left', 'Сегодня: {0}/{1}', 'Today: {0}/{1}'],
+    ['offer.ask', 'Отметить задание «{0}» выполненным? Это демо: ничего не проверяется.', 'Mark "{0}" as complete? This is a demo: nothing is checked.'],
+    ['offer.checking', 'Проверка (демо)…', 'Checking (demo)…'],
+    ['offer.got', 'Задание засчитано!', 'Task complete!'],
+    ['offer.dayLimit', 'На сегодня задания закончились.', 'No more tasks today.'],
+    ['offer.cooldown', 'Это задание снова будет через {0}.', 'This task returns in {0}.'],
+    ['upd.title', 'Обновление', 'Update'],
+    ['upd.text', 'Доступна новая версия игры.', 'A new version of the game is available.'],
+    ['upd.build', 'Сборка {0}', 'Build {0}'],
+    ['upd.reload', 'Обновить', 'Update'],
+    ['upd.done', 'Игра обновлена до v{0}', 'Game updated to v{0}'],
+    ['purchase.forcedOn', 'Сейчас включена обязательная реклама (демо). Покупка выключит её вместе с баннером.', 'Forced ads (demo) are on now. This purchase turns them off, banner included.'],
+    ['purchase.forcedOff', 'Обязательная реклама и баннер отключены.', 'Forced ads and the banner are off.'],
     ['boot.loading', 'Загрузка…', 'Loading…'],
     ['boot.error', 'Не удалось прочитать сохранение.', "Couldn't read the save."],
     ['boot.retry', 'Повторить', 'Retry'],
@@ -8046,14 +8224,14 @@ $ 0 .##/##./.#./.##/##.
     SWEEP_LEVELS: 100, SWEEP_SAFETY: 1.5,
     SCALE: 4.267,                            // px на 1 u: камера Охоты дальше основной в 45/40 раза
     // пробег пули в Охоте — общий cv('BULLET_MAX') 50 u: [code] Bullet.MaxTravelDistance — константа на все режимы (spec 15 §5)
-    ARENA: { SPAWN_R: 65, FENCE_R: 20, DANGER_R: 26, SQUAD_R: 14, RANGE: 60,
+    ARENA: { SPAWN_R: 65, FENCE_R: 20, DANGER_R: 26, SQUAD_R: 14, RANGE: 60, RAYS: 60,   // веер 60 лучей по 6° (GDD 3.4)
       SQUAD: [{ x: 0, y: 0 }, { x: -3, y: -2 }, { x: 3, y: -2 }] },
     // коллайдер по видимому спрайту 14×10 px (полуширина 1,64 u при SCALE 4,267) + запас под пулю (spec 15 §5)
     SLUG: { V: 1.2, V_BIG: 0.9, R: 2, R_BIG: 3 },
     ALARM_GAP: 1.5, ENDING: 0.8, BANNER_TAP: 0.6,
     BOARD_SEED: 0x5106,
   };
-  // HP волны: ×3 за волну с округлением мантиссы (spec 11 §4.3); с волны 651 — Infinity
+  // HP волны: ×3 за волну с округлением мантиссы (spec 11 §4.3); с волны 651 — G.NUM_MAX («∞», spec 17 §8)
   D.hunt.waveHP = (w) => {
     w = Math.max(1, Math.min(D.hunt.MAX_WAVE, Math.floor(+w) || 1));
     if (HUNT_HP[w] === undefined) {
@@ -8065,9 +8243,9 @@ $ 0 .##/##./.#./.##/##.
   };
   D.hunt.slugHP = (w, L, big) => {
     const v = D.hunt.waveHP(w) * D.hunt.LEVELS.m[Math.max(1, Math.min(5, L | 0)) - 1] * (big ? D.hunt.BIG_HP : 1);
-    return v < 1e15 ? Math.floor(v) : v;
+    return v < 1e15 ? Math.floor(v) : G.sat(v);
   };
-  D.hunt.need = (w, L) => D.hunt.waveHP(w) * D.hunt.LEVELS.m[L - 1] * D.hunt.SWEEP_SAFETY / D.hunt.LEVELS.int[L - 1];
+  D.hunt.need = (w, L) => G.sat(D.hunt.waveHP(w) * D.hunt.LEVELS.m[L - 1] * D.hunt.SWEEP_SAFETY / D.hunt.LEVELS.int[L - 1]);
   Object.freeze(D.hunt.ARENA); Object.freeze(D.hunt.SLUG);
 
   // ---------------------------------------------------------------------------------------------------------------
@@ -8257,7 +8435,7 @@ $ 0 .##/##./.#./.##/##.
 // Данные рейда «Король слизней», сейфа и заточки (owner: data, spec 14 Приложение А, §4.1–4.2, §8.13).
 // Только числа, строки и чистые функции, без состояния.
 //   D.raid: входы (FREE/AD/TICKET), типы слабости TYPES + weakOf(week), ×10 WEAK_X, Z-пушка помощника Z_BASE + b,
-//     hp(L) — HP полосы (гладкая кривая по опорам GDD 6.6, мантисса до 0.1, с L184 → Infinity),
+//     hp(L) — HP полосы (гладкая кривая по опорам GDD 6.6, мантисса до 0.1, с L184 → G.NUM_MAX),
 //     stonesPer(L) / stonesFor(bars) — камни за полосы, BANK — ступени копилки, MISSIONS — задания недели,
 //     цвета и раскладка арены для боя, nextWeekMs(date) — следующий понедельник 00:00 по местному времени.
 //   D.modes.raid = {UNLOCK, TIME} — только для G.modes.timeOf('raid'); в D.modes.KEYS рейда нет (§2.3).
@@ -8291,7 +8469,7 @@ $ 0 .##/##./.#./.##/##.
       const x = this.lgHp(L) + Math.log10(this.HP_SCALE);
       let e = Math.floor(x), m = Math.round(10 ** (x - e) * 10) / 10;   // мантисса до 0.1
       if (m >= 10) { m = 1; e++; }
-      return Number(m.toFixed(1) + 'e' + e);       // 1e9, 3e9, 9.2e9 … ; с L184 → Infinity
+      return G.sat(Number(m.toFixed(1) + 'e' + e));   // 1e9, 3e9, 9.2e9 … ; с L184 → G.NUM_MAX («∞», spec 17 §8)
     },
     stonesPer: (L) => (L <= 10 ? 25 : L <= 20 ? 20 : L <= 30 ? 10 : 5),
     stonesFor(bars) { let s = 0; for (let L = 1; L <= bars; L++) s += this.stonesPer(L); return s; },
@@ -8442,7 +8620,7 @@ $ 0 .##/##./.#./.##/##.
 //   G.eco.upg(key) -> {key, i, lvl, price, value, maxed, affordable, frac, buffMult}   key 'power'|'speed'|'money'
 //   G.eco.buy(key, src = 'tap') -> bool   src 'tap'|'hold'|'auto'|'offline'. Refuses silently (spec 02 §4.4 step 1;
 //        the HUD adds the deny FIX for discrete taps). Emits upgrade:buy {key, lvl, src, price}; G.mods.dirty().
-//   G.eco.price(lv) (Infinity = MAX) · G.eco.value(key, lv) · G.eco.lv(key) · G.eco.KEYS
+//   G.eco.price(lv) (G.NUM_MAX = MAX, проверка G.isMax; spec 17 §8) · G.eco.value(key, lv) · G.eco.lv(key) · G.eco.KEYS
 //   G.eco.pickLowest(levels[3]) -> 0|1|2|-1 (lowest level, ties P→S→M) · G.eco.buyLowest(src)
 //   G.eco.setRun({money, lv: [P, S, M]}) apply an offline-sim result (no events except eco:change)
 //   G.eco.resetRun()  money = 0, levels 0/0/0 (Moon Hop; also done on the `rebirth` event, idempotent).
@@ -8503,6 +8681,8 @@ $ 0 .##/##./.#./.##/##.
 
   const finite = (n) => typeof n === 'number' && n === n && n !== Infinity && n !== -Infinity;
   const num = (v, d = 0) => (finite(+v) ? +v : d);
+  // Предел чисел (spec 17 §8): кошельки, цены и урон насыщаются на G.NUM_MAX, Infinity/NaN в состояние не попадают
+  const NUM_MAX = G.NUM_MAX, sat = G.sat, isMax = G.isMax;
   const sanitize = () => {
     const e = S();
     if (!e) return;
@@ -8530,7 +8710,7 @@ $ 0 .##/##./.#./.##/##.
   const maxLv = () => (U() ? U().MAX_LV : 10000);
   const price = (lv) => {
     const u = U();
-    if (!u) return lv >= 10000 ? Infinity : Math.floor(50 * Math.pow(1.38, lv));
+    if (!u) return lv >= 10000 ? NUM_MAX : sat(Math.floor(50 * Math.pow(1.38, lv)));
     return u.price(lv);
   };
   const pct = (lv) => (U() ? U().pct(lv) : 100);
@@ -8623,8 +8803,8 @@ $ 0 .##/##./.#./.##/##.
     n = num(n);
     if (!(n > 0)) return 0;
     const e = S();
-    e.money += n;
-    e.totals.money = num(e.totals.money) + n;
+    e.money = sat(e.money + n);
+    e.totals.money = sat(num(e.totals.money) + n);
     bump();
     G.emit('money:gain', { n, src });
     return n;
@@ -8632,20 +8812,20 @@ $ 0 .##/##./.#./.##/##.
   eco.spendMoney = (n, reason = '') => {
     n = num(n, Infinity);
     const e = S();
-    if (!(n >= 0) || !finite(n) || e.money < n) return false;
+    if (!(n >= 0) || isMax(n) || e.money < n) return false;
     e.money -= n;
     bump();
     G.emit('money:spend', { n, reason });
     return true;
   };
-  eco.canAfford = (n) => finite(+n) && S().money >= +n;
-  eco.canAffordDia = (n) => finite(+n) && S().dia >= +n;
+  eco.canAfford = (n) => finite(+n) && !isMax(+n) && S().money >= +n;
+  eco.canAffordDia = (n) => finite(+n) && !isMax(+n) && S().dia >= +n;
   eco.addDia = (n, src = '') => {
     n = Math.floor(num(n));
     if (!(n > 0)) return 0;
     const e = S();
-    e.dia += n;
-    e.totals.dia = num(e.totals.dia) + n;
+    e.dia = sat(e.dia + n);
+    e.totals.dia = sat(num(e.totals.dia) + n);
     bump();
     G.emit('dia:gain', { n, src });
     saveNow();
@@ -8664,7 +8844,7 @@ $ 0 .##/##./.#./.##/##.
   eco.addPetCoins = (n, src = '') => {
     n = Math.floor(num(n));
     if (!(n > 0)) return 0;
-    S().petCoins = (S().petCoins || 0) + n;
+    S().petCoins = sat((S().petCoins || 0) + n);
     bump();
     G.emit('petCoins:gain', { n, src });
     saveNow();
@@ -8676,8 +8856,8 @@ $ 0 .##/##./.#./.##/##.
     n = Math.floor(num(n));
     if (!(n > 0)) return 0;
     const e = S();
-    e.stones = (e.stones || 0) + n;
-    e.totals.stones = num(e.totals.stones) + n;
+    e.stones = sat((e.stones || 0) + n);
+    e.totals.stones = sat(num(e.totals.stones) + n);
     bump();
     G.emit('stones:gain', { n, src });
     saveNow();
@@ -8775,7 +8955,7 @@ $ 0 .##/##./.#./.##/##.
     if (i === undefined) return null;
     const lvl = S().upgLv[i];
     const p = price(lvl);
-    const maxed = lvl >= maxLv() || !finite(p);
+    const maxed = lvl >= maxLv() || isMax(p);
     const money = S().money;
     return {
       key, i, lvl, price: p, value: value(key, lvl), maxed,
@@ -8793,7 +8973,7 @@ $ 0 .##/##./.#./.##/##.
     const lvl = e.upgLv[i];
     if (lvl >= maxLv()) return false;
     const p = price(lvl);
-    if (!finite(p) || e.money < p) return false;
+    if (isMax(p) || e.money < p) return false;
     e.money -= p;
     e.upgLv[i] = lvl + 1;
     bump();
@@ -8886,9 +9066,10 @@ $ 0 .##/##./.#./.##/##.
     offline: { runPower: 1, runSpeed: 1, penalty: 1, rebirth: 1, dmgIsOne: 0, buffs: 0 },
   };
   const flagsOf = (mode) => (D().modeFlags && D().modeFlags[mode]) || FLAGS_DEFAULT[mode] || FLAGS_DEFAULT.main;
-  // floor with a tiny relative epsilon (products of decimal factors such as 25 × 1.16 = 28.999…)
-  const floorE = (x) => Math.floor(x + 1e-9 + Math.abs(x) * 1e-12);
-  const permPct = (N) => (N > 0 ? Math.floor((Math.pow(1.05, N) - 1) * 100 + 1e-7) : 0);   // spec 05 §3.1
+  // floor with a tiny relative epsilon (products of decimal factors such as 25 × 1.16 = 28.999…);
+  // выше G.NUM_MAX — насыщение (spec 17 §8), NaN → 0
+  const floorE = (x) => { const v = Math.floor(x + 1e-9 + Math.abs(x) * 1e-12); return v < NUM_MAX ? v : v === v ? NUM_MAX : 0; };
+  const permPct = (N) => (N > 0 ? sat(Math.floor((Math.pow(1.05, N) - 1) * 100 + 1e-7)) : 0);   // spec 05 §3.1; с N≈14 549 — G.NUM_MAX
   const gunData = (id) => (D().gun ? D().gun(id) : null);
   const OFF_T = { single: 1, pierce: 10, laser: 10, blast: 5, missile: 5, bp: 5 };          // spec 10 C5
   const targetsOf = (g) => (g.type === 'shot' ? (g.pellets || 1) : (g.offlineTargets || OFF_T[g.type] || 1));
@@ -8962,36 +9143,43 @@ $ 0 .##/##./.#./.##/##.
         // pre = floor(d × P%/100 × permP × (1 + 0.16 ΣI) × (1 + fishD/100) × relP‰); integer-percent products stay exact.
         // При relP = 1000 — прежняя формула: расчёты до амулетов совпадают бит в бит (spec 13 §13.5)
         const X = g.dmg * Ppct * permPn * (100 + 16 * sumI) * (100 + fishD);
-        const pre = floorE(relP === 1000 ? X / 1e8 : X * relP / 1e11);
+        // произведение вышло за double — тот же расчёт с делителем вперёд (только у края, spec 17 §8)
+        const pre = X < Infinity ? floorE(relP === 1000 ? X / 1e8 : X * relP / 1e11)
+          : floorE(g.dmg * Ppct / 1e8 * permPn * (100 + 16 * sumI) * (100 + fishD) * relP / 1000);
         // звезда слота s (4-й — помощник: самая низкая из трёх); при ×1 — прежнее число бит в бит
         const star = s < 3 ? stars[s] : Math.min(stars[0], stars[1], stars[2]);
         const starMul = starMulOf(star);
         const weakX = weakType && g.type === weakType ? W : 1;
-        const shot = F.dmgIsOne ? 1 : (starMul === 1 ? pre * bM[1] : floorE(pre * bM[1] * starMul)) * weakX;
-        const critShot = F.dmgIsOne ? 1 : floorE(relC === 1000 ? shot * (125 + fishCD) / 100 : shot * (125 + fishCD) * relC / 1e5);
+        const shot = F.dmgIsOne ? 1 : sat((starMul === 1 ? pre * bM[1] : floorE(pre * bM[1] * starMul)) * weakX);
+        const critShot = F.dmgIsOne ? 1 : shot < 1e300 ? floorE(relC === 1000 ? shot * (125 + fishCD) / 100 : shot * (125 + fishCD) * relC / 1e5)
+          : floorE(shot / 100 * (125 + fishCD) * relC / 1000);
         const critPct = F.dmgIsOne ? 0 : fishC;
         const interval = G.clamp(g.interval / (Spct / 100) / bM[2], 0.05, 2.0);
         const c = critPct / 100;
-        const E = shot * (1 - c) + critShot * c;
+        const E = sat(shot * (1 - c) + critShot * c);
         const pellets = g.pellets || 1;
         const targets = targetsOf(g);
         const st = {
           slot: s, gunId: id, type: g.type, pellets, dmg: g.dmg, gi: g.interval, pre, shot, critShot, critPct, interval, star, starMul, weakX,
-          dps: E * pellets / interval, dpsSingle: E * pellets / interval, dpsArea: E * targets / interval, targets,
+          dps: sat(E * pellets / interval), dpsSingle: sat(E * pellets / interval), dpsArea: sat(E * targets / interval), targets,
         };
         guns.push(st);
         slots[s] = st;
-        dps += st.dps; dpsArea += st.dpsArea; dpsSingle += st.dpsSingle;
+        dps = sat(dps + st.dps); dpsArea = sat(dpsArea + st.dpsArea); dpsSingle = sat(dpsSingle + st.dpsSingle);
       }
       // ×1e-8 → multiplier (before buff); питомцы — ещё один целый процент
-      const moneyPctProd = pct(lvM) * permMn * (100 + 5 * sumI) * (100 + pet.money);
+      let moneyPctProd = pct(lvM) * permMn * (100 + 5 * sumI) * (100 + pet.money);
       // амулеты капусты — ещё множитель в ‰; при relM = 1000 — прежние делители
-      const mulM = relM === 1000 ? 1 / 1e8 : relM / 1e11;
+      let mulM = relM === 1000 ? 1 / 1e8 : relM / 1e11;
+      // произведение вышло за double: делитель вперёд, деньги за убийство — через общий путь с ‰ (spec 17 §8)
+      const mOv = !(moneyPctProd < Infinity);
+      if (mOv) { moneyPctProd = sat(pct(lvM) / 1e8 * permMn * (100 + 5 * sumI) * (100 + pet.money)); mulM = relM / 1e3; }
       out = {
         mode, stageNo, flags: F, guns, slots, stars: stars.slice(), weak: weakType,
-        moneyMul: relM === 1000 ? moneyPctProd / 1e8 * bM[0] : moneyPctProd * mulM * bM[0],
-        money: relM === 1000 ? (base) => floorE(num(base) * moneyPctProd * bM[0] / 1e8)     // money per kill (relic = 1)
-          : (base) => floorE(num(base) * moneyPctProd * bM[0] * relM / 1e11),
+        moneyMul: sat(relM === 1000 && !mOv ? moneyPctProd / 1e8 * bM[0] : moneyPctProd * mulM * bM[0]),
+        money: mOv ? (base) => floorE(num(base) * moneyPctProd * bM[0] * mulM)
+          : relM === 1000 ? (base) => floorE(num(base) * moneyPctProd * bM[0] / 1e8)     // money per kill (relic = 1)
+            : (base) => floorE(num(base) * moneyPctProd * bM[0] * relM / 1e11),
         moveMul: (replay ? 2 : 1) * (100 + pet.move + movePct) / 100,
         petMoney: pet.money, petMove: pet.move, replay: !!replay, relP, relM, relC, movePct,
         speedPct: Spct, speedPctAdd: 10 * sumI + sAdd, critChance: F.dmgIsOne ? 0 : fishC, critDmgPct: fishCD,
@@ -9115,10 +9303,16 @@ $ 0 .##/##./.#./.##/##.
 //     pickLeaderTarget(b, leader) -> target | null,      // override leader move-target choice (default: nearest alive)
 //     onDamage(t, dealt, src, b), onKill(t, {money, src}, b), drawBg(ctx, b) (custom background)
 //     camFixed: {x, y} неподвижная камера · range: дальность прицела (u, иначе CBD.RANGE) ·
+//     rays: число лучей веера поиска цели (иначе D.combat.RAYS = 36; Охота 60) — GDD 3.4, spec 17 §7 ·
 //     scale: px на 1 u для позиций (иначе PPU 4,8; спрайты в натуральном размере) — Охота spec 11
 //     equipped: () => [id|null ×3|4] — свой отряд вместо надетых пушек (рейд: G.raid.squadIds, 4-й = помощник)
 //     noBubbles: [3] — без реплик и «говорящих» лиц для этих who (Дед Бабах, spec 14 §7.5)
 //     weakType: 'pierce'|… — попадания этим типом пушки показывают цифры пресетом 'weak' (золотые P34; рейд spec 14 §7.5)
+//     numbersArea: [[x, y, w, h], …] | () => […] — экранная зона цифр (объединение прямоугольников, обычно поле под HUD):
+//       у верхней кромки зоны цифра тает за TEXT_FADE px и выше кромки не рисуется, дуга цифры у кромки опускается;
+//       цифры урона в зоне не ложатся на уже нарисованные — встают под ними, не влезли до основания цели — не видны
+//       (деньги рисуются всегда).
+//       Этап — G.hud.numberArea(), режимы — поле под строками сверху (spec 17 §9). По умолчанию весь экран.
 //     numbersTop: 58 — цифры урона не поднимаются выше этой экранной y (рейд: под строками HUD 0..57); по умолчанию нет.
 //       Заодно режим «строк»: цифры по очереди в 3 строки через 7 px, разброс x ±16, жизнь 0.6 с, не чаще 0.25 с на
 //       пресет и не больше 6 живых цифр урона (старейшая уходит), чтобы они не слипались под HUD
@@ -9163,12 +9357,13 @@ $ 0 .##/##./.#./.##/##.
     MIN_SPEED: 0.15, VEL_SMOOTH: 8, ARRIVE: 0.5, ZOFF_MAX: 15, ZOFF_MIN: 3, ZOFF_FULL: 10, AI_IDEAL: 15, AI_MAX: 20,
     AI_MIN_ENEMY: 5, AI_HYST: 0.12, AI_MIN_STATE: 0.3, AI_FIDGET: [1.5, 3], AI_NEAR_LEADER: 4.5, REPOSITION_STEP: 3,
     CRUMB_STEP: 0.5, CRUMB_MAX: 100, CRUMB_LOOKAHEAD: 5, FORMATION_R: 2.5, SEPARATION_R: 1.8, SEPARATION_F: 3,
-    JOIN_R: 2.5, WARP_IN: 0.3, WARP_OUT: 0.3, SCAN_PERIOD: 0.1, RANGE: 40, AIM_RATE: 30, RETICLE_MAX: 3,
+    JOIN_R: 2.5, WARP_IN: 0.3, WARP_OUT: 0.3, SCAN_PERIOD: 0.1, RANGE: 40, RAYS: 36, AIM_RATE: 30, RETICLE_MAX: 3,
     SPREAD_MIN: 2, SPREAD_MAX: 20, SPREAD_GROW: 5.4, SPREAD_SHRINK: 16.2, SPREAD_GRACE: 0.1, PELLET_FAN: 10,
     BULLET_SPEED: 70, BULLET_MAX: 50, BULLET_H: 2, MISSILE_SPEED: 50,
     missileApex: (d) => 1 + 2 * Math.max(0, Math.min(1, d / 40)),
     TEXT_CD: { dmg: 0.12, crit: 0.12, money: 0.2 }, TEXT_BUCKET: 1.5, TEXT_DUR: { dmg: 1.0, crit: 1.0, money: 1.5 },
-    TEXT_POOL: 80, TREE_DEATH: 0.35, GUN_RECOIL: { dur: 0.2 },
+    TEXT_POOL: 80, TEXT_LIVE: 20, TEXT_SOFT: 12, TEXT_AGG_CD: 0.25, TEXT_AGG_N: 3, TEXT_FADE: 8,
+    TREE_DEATH: 0.35, GUN_RECOIL: { dur: 0.2 },
   };
   const M = () => G.MAP || MAPD;
   const C = () => (G.D && G.D.combat) || CBD;
@@ -9253,7 +9448,24 @@ $ 0 .##/##./.#./.##/##.
     clear() { this.cells.clear(); }
   }
 
-  const tmpA = [], tmpB = [];
+  const tmpA = [], tmpB = [], tmpR = [];
+  // плашки цифр, нарисованных в этом кадре (spec 17 §9): x0, x1, y0, y1; общий буфер без аллокаций,
+  // читается сразу после draw (battle.numBoxes / numBoxN — для QA)
+  const NUM_BOX_MAX = 160, NBOX = new Float64Array(NUM_BOX_MAX * 4);
+  // кэш вееров по числу лучей: шаг, φ0 = 45° mod шаг и cos/sin каждого луча (spec 17 §7); функции Math — в
+  // локальных константах: в контексте vm (бот, тесты) каждое обращение к глобальному Math идёт медленным путём
+  const FANS = new Map(), mAtan2 = Math.atan2, mRound = Math.round, mSqrt = Math.sqrt;
+  const fanOf = (rays) => {
+    const n = rays > 0 ? rays | 0 : 36;
+    let f = FANS.get(n);
+    if (!f) {
+      const step = PI * 2 / n, ph0 = (PI / 4) % step, dir = new Float64Array(2 * n);
+      for (let k = 0; k < n; k++) { dir[2 * k] = Math.cos(ph0 + k * step); dir[2 * k + 1] = Math.sin(ph0 + k * step); }
+      f = { n, step, ph0, dir };
+      FANS.set(n, f);
+    }
+    return f;
+  };
   const P1 = {}, P2 = {};
   let uid = 0;
 
@@ -9278,6 +9490,7 @@ $ 0 .##/##./.#./.##/##.
       this.nRegAlive = 0;
       this.bullets = [];
       this.numbers = [];
+      this.liveDmg = 0;          // живых цифр урона и крита (не денег) — для TEXT_SOFT / TEXT_LIVE (spec 17 §9)
       this.buckets = new Map();
       this.squad = [];
       this.speakers = [];
@@ -9309,6 +9522,7 @@ $ 0 .##/##./.#./.##/##.
       this.clearTargets();
       this.clearBullets();
       this.numbers.length = 0;
+      this.liveDmg = 0;
       this.buckets.clear();
       this.frozen = false;
       this.forcePose = null;
@@ -9350,8 +9564,9 @@ $ 0 .##/##./.#./.##/##.
       if (o.hpBar === undefined && t.kind === 'ore') t.hpBar = false;      // ores show cracks instead (07 §6.5)
       t.id = ++uid;
       t.seed = o.seed !== undefined ? o.seed : t.id * 7919;
-      t.hp = fin(+t.hp, 1);
-      t.maxHp = o.maxHp || t.hp;
+      // HP выше double («∞») — G.NUM_MAX, а не 1; NaN → 1 (spec 17 §8)
+      t.hp = +t.hp; t.hp = t.hp === t.hp ? G.sat(t.hp) : 1;
+      t.maxHp = G.sat(o.maxHp) || t.hp;
       t.alive = t.hp > 0;
       t.deadAt = -1; t.hitAt = -9; t.hits = 0;
       t.born = this.time;
@@ -9381,7 +9596,7 @@ $ 0 .##/##./.#./.##/##.
       this.grid.remove(t);
       const j = this.mobiles.indexOf(t);
       if (j >= 0) this.mobiles.splice(j, 1);
-      for (const r of this.squad) { if (r.target === t) r.target = null; if (r.moveTarget === t) r.moveTarget = null; }
+      for (const r of this.squad) { if (r.target === t) r.target = null; if (r.near === t) r.near = null; if (r.moveTarget === t) r.moveTarget = null; }
     }
     clearTargets() {
       this.targets.length = 0;
@@ -9390,7 +9605,7 @@ $ 0 .##/##./.#./.##/##.
       this.nAlive = 0;
       this.nRegAlive = 0;
       this.maxR = 2.5;
-      for (const r of this.squad) { r.target = null; r.moveTarget = null; r.lastMove = null; }
+      for (const r of this.squad) { r.target = null; r.near = null; r.moveTarget = null; r.lastMove = null; }
     }
     clearBullets() { this.bullets.length = 0; }
     aliveList(out) { out.length = 0; for (const t of this.targets) if (t.alive) out.push(t); return out; }
@@ -9411,6 +9626,52 @@ $ 0 .##/##./.#./.##/##.
         for (const t of this.targets) consider(t);
       }
       return best && bd <= maxR * maxR ? best : null;
+    }
+    // Веер лучей (GDD 3.4, spec 17 §7): `rays` лучей через 360°/rays длиной `range` из (x, y); луч 0 смотрит вдоль
+    // полосы a (мировой +Z оригинала), углы φ0 + k·шаг, φ0 = 45° mod шаг. Physics.Raycast даёт первое попадание по
+    // лучу, кот берёт ближайшее из всех: это минимум точки входа луча в окружность цели. Аналитически: у цели под
+    // углом θ ближе всех ближайший по углу луч (Δ ≤ шаг/2); он попадает, если d·sin|Δ| ≤ r, вход d·cosΔ − √(r² − d²sin²Δ).
+    // Цели между лучами (мелкие и далёкие) не видны, как в оригинале. Внутри окружности (d ≤ r) — вход 0 (DEFAULT:
+    // Unity не видит коллайдер, внутри которого начался луч; у нас кролик может стоять в кроне — стреляет в неё).
+    // Равенство — большая полоса a, как у nearest. Без аллокаций: сетка в tmpR, направления лучей — в кэше FANS
+    // (cos/sin на луч), дальние цели отсеиваются по квадрату расстояния до sqrt и atan2.
+    rayPick(x, y, range, rays, skip) {
+      const fan = fanOf(rays), n = fan.n, step = fan.step, ph0 = fan.ph0, dir = fan.dir;
+      let best = null, be = Infinity;
+      let list = this.targets, cnt = list.length;
+      if (this.nAlive > 160 && range < 1e6) {
+        const q = range + this.maxR;
+        tmpR.length = 0;
+        this.grid.query(x - q, y - q, x + q, y + q, tmpR);
+        list = tmpR; cnt = tmpR.length;
+      }
+      for (let i = 0; i < cnt; i++) {
+        const t = list[i];
+        if (!t.alive || t === skip || t.untargetable) continue;
+        const dx = t.x - x, dy = t.y - y, R = t.r > 0 ? t.r : 0, d2 = dx * dx + dy * dy, lim = range + R;
+        if (d2 > lim * lim) continue;                       // край цели дальше дальности
+        let e;
+        if (d2 <= R * R) e = 0;
+        else {
+          let k = mRound((mAtan2(dy, dx) - ph0) / step) | 0;   // ближайший по углу луч (целое, без −0)
+          if (k < 0) k += n; else if (k >= n) k -= n;
+          const cx = dir[2 * k], cy = dir[2 * k + 1];
+          let perp = dx * cy - dy * cx;                     // d·sin|Δ|
+          if (perp < 0) perp = -perp;
+          if (perp > R) continue;                           // луч прошёл мимо
+          e = dx * cx + dy * cy - mSqrt(R * R - perp * perp);
+          if (e > range) continue;
+        }
+        if (e < be - 1e-9 || (e - be <= 1e-9 && best && (t.x + t.y) > (best.x + best.y))) { be = e; best = t; }
+      }
+      if (list === tmpR) tmpR.length = 0;
+      return best;
+    }
+    // захват держится, пока цель жива и до её края не дальше дальности прицела
+    inReach(r, t, range) {
+      if (!t || !t.alive || t.untargetable) return false;
+      const dx = t.x - r.x, dy = t.y - r.y, lim = range + (t.r > 0 ? t.r : 0);
+      return dx * dx + dy * dy <= lim * lim;
     }
 
     // ---------------------------------------------------------------- squad
@@ -9454,7 +9715,7 @@ $ 0 .##/##./.#./.##/##.
     }
     newRabbit(slot, gunId, x, y) {
       return {
-        slot, who: slot, gunId, x, y, vx: 0, vy: 0, target: null, moveTarget: null, lastMove: null, scan: rnd() * 0.1,
+        slot, who: slot, gunId, x, y, vx: 0, vy: 0, target: null, near: null, moveTarget: null, lastMove: null, scan: rnd() * 0.1,
         retarget: 0, cd: 0, gunChanged: true, cone: cv('SPREAD_MIN'), lastFire: -9, recoilT: 0, recoilDur: 0.2, kickT: 0,
         aim: 0, flip: false, flipHold: 0, state: 'idle', stateT: 0, fidgetAt: 1.5 + frnd() * 1.5, fidgetT: 9,
         repX: 0, repY: 0, repLeft: 0, warpT: 9, leaving: false, animT: frnd() * 2, moving: false, flashes: 0, muzzle: 0,
@@ -9483,7 +9744,7 @@ $ 0 .##/##./.#./.##/##.
         if (r.leaving) continue;
         const p = pts[Math.min(i, pts.length - 1)] || { x: 0, y: 0 };
         r.x = p.x; r.y = p.y; r.vx = 0; r.vy = 0;
-        r.target = null; r.moveTarget = null; r.lastMove = null; r.retarget = 0; r.scan = 0;
+        r.target = null; r.near = null; r.moveTarget = null; r.lastMove = null; r.retarget = 0; r.scan = 0;
         r.state = 'idle'; r.stateT = 0; r.hist.length = 0;
         r.warpT = o.instant ? 9 : 0;
         i++;
@@ -9776,16 +10037,16 @@ $ 0 .##/##./.#./.##/##.
       const S = this.slotStats(st, r);
       const interval = Math.max(0.05, S.interval || 0.6);
       if (r.gunChanged) { r.gunChanged = false; r.cd = rnd() * interval; }
-      // target scan every 0.1 s: keep the lock while alive and in range
+      // поиск цели (GDD 3.4, spec 17 §7): раз в 0.1 с веер лучей → r.near (HandleRaycastTimer); каждый кадр захват
+      // держится, пока цель жива и в дальности, иначе берётся r.near последнего веера (ResolveAttackTarget)
       const range = this.o.range || cv('RANGE');
       r.scan -= dt;
-      if (r.target && !r.target.alive) r.target = null;
       if (r.scan <= 0) {
         r.scan += cv('SCAN_PERIOD');
         if (r.scan < 0) r.scan = 0;
-        const T = r.target;
-        if (!T || Math.hypot(T.x - r.x, T.y - r.y) > range) r.target = this.frozen ? null : this.nearest(r.x, r.y, range);
+        r.near = this.frozen ? null : this.rayPick(r.x, r.y, range, this.o.rays || cv('RAYS'));
       }
+      if (!this.inReach(r, r.target, range)) r.target = !this.frozen && this.inReach(r, r.near, range) ? r.near : null;
       const ok = !this.frozen && !r.leaving && r.warpT >= cv('WARP_IN') && r.target && r.target.alive && !this.hideSquad;
       // aim (screen angle) and facing
       const K = M().K;
@@ -9963,6 +10224,7 @@ $ 0 .##/##./.#./.##/##.
     damage(t, dmg, crit, src) {
       if (!t || !t.alive || !(dmg > 0)) return false;
       if (this.mode === 'mine') { dmg = 1; crit = false; }
+      else if (!(dmg < G.NUM_MAX)) dmg = G.NUM_MAX;              // spec 17 §8: выстрел «∞» снимает полосу «∞»
       const before = t.hp;
       const dealt = Math.min(dmg, before);
       t.hp = before - dmg;
@@ -10034,41 +10296,52 @@ $ 0 .##/##./.#./.##/##.
     }
 
     // ---------------------------------------------------------------- floating numbers (07 §7.4, 10 C9)
+    // Сводка и лимит (GDD 16 «Агрегация», spec 17 §9): попадания одной цели копятся в корзине (пресет × клетка
+    // TEXT_BUCKET) и выходят одной цифрой не чаще TEXT_CD; когда живых цифр урона ≥ TEXT_SOFT — не чаще TEXT_AGG_CD,
+    // при TEXT_LIVE новые ждут места. Больше TEXT_AGG_N попаданий в одной цифре — сводная «16.4a ×12».
+    // Деньги не копятся сверх TEXT_CD и не ждут: их вытесняет только общий пул TEXT_POOL, как раньше.
     addNumber(preset, value, t, big) {
       const set = numbersSetting();
       if (set === 'off' || (set === 'some' && (preset === 'dmg' || preset === 'weak'))) return;
       const cell = cv('TEXT_BUCKET') || 1.5;
       const key = preset + ':' + Math.floor(t.x / cell) + ':' + Math.floor(t.y / cell);
       let b = this.buckets.get(key);
-      if (!b) { b = { last: -99, pending: 0, x: t.x, y: t.y, hPx: t.hPx, preset, big: false }; this.buckets.set(key, b); }
+      if (!b) { b = { last: -99, pending: 0, n: 0, x: t.x, y: t.y, hPx: t.hPx, preset, big: false }; this.buckets.set(key, b); }
       b.x = t.x; b.y = t.y; b.hPx = t.hPx; b.big = b.big || !!big;
+      b.pending += value; b.n++;
+      if (this.time - b.last >= this.numCd(b.preset)) this.flushBucket(b);
+    }
+    flushBucket(b) {
+      if (!this.spawnNumber(b.preset, b.pending, b.x, b.y, b.hPx, b.big, b.n)) return false;
+      b.pending = 0; b.n = 0; b.last = this.time; b.big = false;
+      return true;
+    }
+    numCd(preset) {
       const cd = this.laneCd((C().TEXT_CD || CBD.TEXT_CD)[preset] || 0.12, preset);
-      if (this.time - b.last >= cd) {
-        this.spawnNumber(preset, value + b.pending, b.x, b.y, b.hPx, b.big);
-        b.pending = 0; b.last = this.time; b.big = false;
-      } else b.pending += value;
+      if (preset === 'money' || this.o.numbersTop !== undefined || this.liveDmg < cv('TEXT_SOFT')) return cd;
+      return Math.max(cd, cv('TEXT_AGG_CD'));
     }
     // режим строк (numbersTop): цифры урона реже, чем в обычном бою
     laneCd(cd, preset) { return this.o.numbersTop !== undefined && preset !== 'money' ? Math.max(cd, 0.25) : cd; }
-    spawnNumber(preset, value, x, y, hPx, big) {
+    dropNumber(i) { if (this.numbers[i].preset !== 'money') this.liveDmg--; this.numbers.splice(i, 1); }
+    spawnNumber(preset, value, x, y, hPx, big, hits) {
       const pool = cv('TEXT_POOL') || 80;
       const lanes = this.o.numbersTop !== undefined && preset !== 'money';
       if (lanes) {
-        let live = 0;
-        for (const n of this.numbers) if (n.preset !== 'money') live++;
-        for (let i = 0; live >= 6 && i < this.numbers.length;) {
-          if (this.numbers[i].preset !== 'money') { this.numbers.splice(i, 1); live--; } else i++;
+        for (let i = 0; this.liveDmg >= 6 && i < this.numbers.length;) {
+          if (this.numbers[i].preset !== 'money') this.dropNumber(i); else i++;
         }
-      }
+      } else if (preset !== 'money' && this.liveDmg >= cv('TEXT_LIVE')) return false;   // ждёт места в корзине
       if (this.numbers.length >= pool) {
         let idx = this.numbers.findIndex((n) => n.preset === 'dmg' || n.preset === 'weak');
         if (idx < 0) idx = this.numbers.findIndex((n) => n.preset === 'crit');
-        if (idx >= 0) this.numbers.splice(idx, 1);
-        else if (preset !== 'money') return;
+        if (idx >= 0) this.dropNumber(idx);
+        else if (preset !== 'money') return false;
       }
       const fan = Math.floor(frnd() * 50);
+      const agg = !lanes && preset !== 'money' && hits > cv('TEXT_AGG_N');
       const n = {
-        preset, text: (G.fmt ? G.fmt(value) : String(Math.floor(value))) + (preset === 'crit' ? '!' : ''), x, y,
+        preset, text: (G.fmt ? G.fmt(value) : String(Math.floor(value))) + (preset === 'crit' ? '!' : '') + (agg ? ' ×' + hits : ''), x, y,
         oy: (hPx || 16) + 2, jx: (frnd() * 2 - 1) * 2.4, t: 0, life: preset === 'money' ? 1.5 : 1.0,
         dx: (fan / 49 * 2 - 1) * 38, peak: 17 + frnd() * 12, big: !!big, lane: 0,
       };
@@ -10077,19 +10350,26 @@ $ 0 .##/##./.#./.##/##.
         n.lane = this.laneI; n.jx = (frnd() * 2 - 1) * 16; n.dx = (fan / 49 * 2 - 1) * 20; n.life = 0.6;
       }
       this.numbers.push(n);
+      if (preset !== 'money') this.liveDmg++;
+      return true;
     }
     updateNumbers(dt) {
       const N = this.numbers;
-      for (let i = N.length - 1; i >= 0; i--) { N[i].t += dt; if (N[i].t >= N[i].life) N.splice(i, 1); }
+      for (let i = N.length - 1; i >= 0; i--) { N[i].t += dt; if (N[i].t >= N[i].life) this.dropNumber(i); }
       if (!this.buckets.size) return;
-      const CD = C().TEXT_CD || CBD.TEXT_CD;
       for (const [k, b] of this.buckets) {
-        const cd = this.laneCd(CD[b.preset] || 0.12, b.preset);
-        if (b.pending > 0 && this.time - b.last >= cd) {
-          this.spawnNumber(b.preset, b.pending, b.x, b.y, b.hPx, b.big);
-          b.pending = 0; b.last = this.time; b.big = false;
-        } else if (b.pending <= 0 && this.time - b.last > 2) this.buckets.delete(k);
+        if (b.pending > 0 && this.time - b.last >= this.numCd(b.preset)) this.flushBucket(b);
+        else if (b.pending <= 0 && this.time - b.last > 2) this.buckets.delete(k);
       }
+    }
+    // верх зоны цифр над отрезком [x0, x1] экрана: самая низкая из верхних кромок под его концами (вне зоны — Infinity)
+    numTop(area, x0, x1) {
+      let t0 = Infinity, t1 = Infinity;
+      for (const r of area) {
+        if (x0 >= r[0] && x0 <= r[0] + r[2] && r[1] < t0) t0 = r[1];
+        if (x1 >= r[0] && x1 <= r[0] + r[2] && r[1] < t1) t1 = r[1];
+      }
+      return t0 > t1 ? t0 : t1;
     }
 
     // ---------------------------------------------------------------- drawing
@@ -10271,9 +10551,13 @@ $ 0 .##/##./.#./.##/##.
       }
     }
     drawNumbers(ctx) {
+      this.numBoxN = 0;
       if (!this.numbers.length || !G.text) return;
       const cam = this.cam;
       const ink = (G.PAL && G.PAL.P00) || '#17111d';
+      const ao = this.o.numbersArea, area = typeof ao === 'function' ? ao() : ao;
+      const fade = cv('TEXT_FADE') || 8, W = G.W || 216;
+      let nb = 0;
       for (const n of this.numbers) {
         // tau 0..1 за жизнь цифры (обычная цифра живёт 1 с, в режиме строк — 0.6 с)
         const tau = n.preset === 'money' ? n.t / 1.5 : n.t / (n.life || 1);
@@ -10292,6 +10576,33 @@ $ 0 .##/##./.#./.##/##.
         else if (n.preset === 'money') { font = n.big ? 'main' : 'small'; scale = n.big && pop ? 2 : 1; color = 'P26'; }
         else if (n.preset === 'weak') { color = 'P34'; if (pop) font = 'main'; }
         else if (pop) font = 'main';
+        const hw = ((G.textW ? G.textW(n.text, font, scale) : n.text.length * 4) + (n.preset === 'money' ? 8 : 0)) / 2;
+        const th = (font === 'main' ? 7 : 5) * scale + 2;     // высота с обводкой
+        const hb = hw + 1;                                    // полуширина с обводкой (рамка в NBOX)
+        if (area) {
+          // зона HUD (spec 17 §9): дуга у кромки опускается, у кромки цифра тает, выше кромки её нет
+          const top = this.numTop(area, Math.max(0, sx - hw), Math.min(W - 1, sx + hw));
+          if (top === Infinity) continue;
+          const apex = p.y - n.oy - n.peak;
+          if (apex < top + fade) sy += Math.round(Math.min(top + fade - apex, n.peak + n.oy / 2));
+          if (n.preset !== 'money') {
+            // без наложения: опущенные у кромки цифры иначе собираются в одну строку. Цифра встаёт под уже
+            // нарисованной; сдвиг n.pd только растёт (без дрожи между кадрами); ниже основания цели — не рисуется.
+            // Рамки с обводкой (hb = hw + 1) и нестрогие сравнения: между цифрами остаётся хотя бы 1 px зазора
+            let y = sy + (n.pd || 0);
+            for (let k = 0; k < nb; k++) {
+              const o = k * 4;
+              if (sx + hb >= NBOX[o] && sx - hb <= NBOX[o + 1] && y + th >= NBOX[o + 2] && y <= NBOX[o + 3]) { y = NBOX[o + 3] + 1; k = -1; }
+            }
+            if (y > p.y) continue;
+            n.pd = y - sy; sy = y;
+          }
+          if (sy < top + fade) { if (sy <= top) continue; a = stepA(a * (sy - top) / fade); if (a <= 0) continue; }
+        }
+        if (nb < NUM_BOX_MAX) {
+          const o = nb * 4;
+          NBOX[o] = sx - hb; NBOX[o + 1] = sx + hb; NBOX[o + 2] = sy; NBOX[o + 3] = sy + th; nb++;
+        }
         const opts = { font, scale, color: G.col ? G.col(color) : color, outline: ink, align: 'center', alpha: a };
         if (n.preset === 'money') {
           const w = G.textW ? G.textW(n.text, font, scale) : 10;
@@ -10305,6 +10616,7 @@ $ 0 .##/##./.#./.##/##.
           }
         } else G.text(n.text, sx, sy, opts);
       }
+      this.numBoxes = NBOX; this.numBoxN = nb;
     }
     // floating joystick on the field + tap on a rabbit (spec 01 §8); HUD / windows own their input first
     handleInput(ctx) {
@@ -10502,6 +10814,7 @@ $ 0 .##/##./.#./.##/##.
     if (!G.Battle) return null;
     F.battle = new G.Battle({
       mode: 'main', stageNo: S().cur, biome: biomeOf(S().cur), fxUpdate: false, cries: true,
+      numbersArea: () => (G.hud && G.hud.numberArea ? G.hud.numberArea() : null),   // цифры не заходят в HUD (spec 17 §9)
       onDamage: (t, dealt) => {
         if (!t.regular) return;
         const s = S();
@@ -10532,7 +10845,7 @@ $ 0 .##/##./.#./.##/##.
           kind: 'tree', type: p.type, x: p.x, y: p.y, hp, money: DS.treeMoney(s.cur, p.type), r: mapv('treeR', 2.5),
           regular: true, biome, popDelay: Math.min(0.3, i * 0.01),
         });
-        total += hp;
+        total = G.sat(total + hp);                       // этап ≥ 4 600: HP дерева — G.NUM_MAX (spec 17 §8)
         if (p.a > aMax) aMax = p.a;
       });
     }
@@ -10917,7 +11230,9 @@ $ 0 .##/##./.#./.##/##.
     const AVG = DS.AVG_MUL || [1.16, 1.46, 1.94, 2.48, 2.82];
     const scale = off('TIME_SCALE'), delay = off('CLEAR_DELAY'), walkPer = off('WALK_PER_TREE');
     const lim = limit(), wallNeed = lim + delay;
-    const price = (l) => (G.eco && G.eco.price ? G.eco.price(l) : (G.D.upg ? G.D.upg.price(l) : Infinity));
+    const price = (l) => (G.eco && G.eco.price ? G.eco.price(l) : (G.D.upg ? G.D.upg.price(l) : G.NUM_MAX));
+    // a·b/c без переполнения промежуточного произведения; итог насыщается на G.NUM_MAX (spec 17 §8)
+    const sat = G.sat, mdiv = (a, b, c) => { const v = a * b / c; return v < Infinity ? v : sat(a * (b / c)); };
     const pick = (L) => {
       if (G.eco && G.eco.pickLowest) return G.eco.pickLowest(L);
       let best = 0; for (let i = 1; i < 3; i++) if (L[i] < L[best]) best = i; return best;
@@ -10934,18 +11249,18 @@ $ 0 .##/##./.#./.##/##.
       if (!(dpsA > 0) || !(dpsS > 0)) break;
       const N = DS.trees(stage, sub), A = AVG[sub - 1], HP = DS.HP(stage), REW = DS.REW(stage);
       const walk = N * walkPer / (n < rec ? 2 : 1);
-      const Treg = Math.max(N * A * HP / dpsA, walk) * scale;
-      const Tgold = sub === 5 ? off('GOLDEN_HP_MUL') * HP / dpsS * scale : 0;
-      const Mreg = N * A * REW * st.moneyMul;
-      const Mgold = sub === 5 ? off('GOLDEN_MONEY_MUL') * REW * st.moneyMul : 0;
+      const Treg = sat(Math.max(mdiv(N * A, HP, dpsA), walk) * scale);
+      const Tgold = sub === 5 ? sat(mdiv(off('GOLDEN_HP_MUL'), HP, dpsS) * scale) : 0;
+      const Mreg = sat(N * A * REW * st.moneyMul);
+      const Mgold = sub === 5 ? sat(off('GOLDEN_MONEY_MUL') * REW * st.moneyMul) : 0;
       let need, gain, cleared;
-      if (Treg + Tgold <= lim) { need = Treg + Tgold + delay; gain = Mreg + Mgold; cleared = true; }
+      if (Treg + Tgold <= lim) { need = Treg + Tgold + delay; gain = sat(Mreg + Mgold); cleared = true; }
       else if (Treg <= lim) { need = wallNeed; gain = Mreg; cleared = false; }
-      else { need = wallNeed; gain = Mreg * lim / Treg; cleared = false; }
-      if (need > t) { const part = gain * t / need; gained += part; wallet += part; t = 0; break; }
+      else { need = wallNeed; gain = mdiv(Mreg, lim, Treg); cleared = false; }
+      if (need > t) { const part = mdiv(gain, t, need); gained = sat(gained + part); wallet = sat(wallet + part); t = 0; break; }
       t -= need;
-      gained += gain;
-      wallet += gain;
+      gained = sat(gained + gain);
+      wallet = sat(wallet + gain);
       if (cleared && n + 1 <= rec) {
         const p = posOf(n + 1);
         stage = p.stage; sub = p.sub;
@@ -10957,8 +11272,8 @@ $ 0 .##/##./.#./.##/##.
         const i = pick(lv);
         if (i < 0) break;
         const p = price(lv[i]);
-        if (!(p <= wallet)) break;
-        wallet -= p; spent += p; lv[i]++;
+        if (G.isMax(p) || !(p <= wallet)) break;               // MAX-уровень не покупается и при полном кошельке
+        wallet -= p; spent = sat(spent + p); lv[i]++;
       }
     }
     res.iterations = it;
@@ -22622,6 +22937,11 @@ $ 0 .##/##./.#./.##/##.
 //   G.art.moonHop(ctx, t, {super, squad: [{x, y, who, gunId, flip}], counter: {x, y}, skin, emit}) full-screen rebirth
 //       overlay (2.0 s + 0.3 s fade from white; G.art.moonHop.APPLY = 2.0); draws the squad itself; false when done.
 //       The 6 moonstones emit 'fx:arrive' {kind: 'moon', i, last} as they reach the counter (emit: false = silent).
+//       Слои по времени: 0,6 с (Glow) — хранитель взлетает над отрядом; 1,2 с (Lift) — поднимает лапу, отряд на ракете;
+//       камни летят из его лапы к счётчику; 2,0 с — Сброс (GDD 15.6 Angel_Rebirth / Angel_SuperRebirth).
+//   G.art.angelBunny(ctx, x, y, {t, paw 0|1, super, alpha}) кролик-хранитель (нимб, крылья 4 кадра/с, покачивание 2 px
+//       раз в 1 с), (x, y) = точка под ногами; super = золотые крылья и шарф. G.art.angelBunny.paw(x, y, t) -> {x, y}
+//       кончик поднятой лапы.
 //   G.art.moonHopIllu(ctx, x, y, t, {super, costume}) 64×64 window illustration (top-left at x, y).
 //       {paid} (с super) — платное суперлуние: золотой ободок и 6 бегущих искр (spec 12 §9.3), то же у moonHop.
 //   G.art.carrotRocket(ctx, x, y, {t, flame 0..2, angle, k}) rocket sprite, (x, y) = nozzle centre.
@@ -23970,10 +24290,72 @@ $ 0 .##/##./.#./.##/##.
   const clamp01 = (k) => Math.max(0, Math.min(1, k));
 
   // ---------------------------------------------------------------------------------------------------------------
+  // Лунный кролик-хранитель (Сброс, GDD 7.1 / 15.6, spec 07 §6.6): своя замена кота-ангела оригинала. Белый лунный
+  // кролик с золотым нимбом над ушами, фиолетовым шарфом со звёздами и золотым полумесяцем, глаза закрыты, ноги висят.
+  // Крылья — отдельные холсты (2 кадра взмаха по 0,25 с), правая лапа — 2 состояния (опущена / поднята).
+  // Суперлуние: золотые крылья, шарф и нимб. Тело 26×39 px с нимбом, размах крыльев ≈ 48 px.
+  // ---------------------------------------------------------------------------------------------------------------
+  const ANGEL_FUR = ['P06', 'P07', 'P05'];
+  const angelBody = (paw, gold) => outlined('mh.angel' + paw + (gold ? 'g' : ''), 26, 39, (P) => {
+    P.fill(Df(E(13, 3.2, 6.5, 2.3), E(13, 3.2, 4.3, 0.9)), gold ? ['P06', 'P35', 'P34'] : ['P35', 'P34', 'P18'], { hl: 'tl' });  // нимб
+    P.fill(Po(8.5, 19, 7.5, 9, 8.5, 6.5, 10.5, 6.5, 11.5, 9, 11.8, 18), ANGEL_FUR, { hl: 'tl' });           // левое ухо
+    P.fill(Po(14.2, 18, 15, 9, 16.5, 6.8, 18.5, 7.5, 18.5, 10, 17.5, 19), ANGEL_FUR, { hl: 'tl' });         // правое, наружу
+    P.fill(Po(9.3, 17, 9, 9.5, 10, 8, 10.6, 9.5, 10.6, 17), 'P40', { clip: true });
+    P.fill(Po(15.3, 17, 16, 10, 17, 8.5, 17.4, 10, 16.6, 17), 'P40', { clip: true });
+    P.fill(U(E(13, 32, 6, 5.5), E(10.5, 37, 2, 1.3), E(15.5, 37, 2, 1.3)), ANGEL_FUR, { hl: 'tl', thick: true });  // тело, ноги
+    P.fill(E(13, 33.5, 2.4, 2.6), 'P07', { clip: true });                                                   // светлый животик
+    P.fill(U(E(13, 21.5, 6.5, 5.2), E(7.8, 23.5, 1.8, 1.6), E(18.2, 23.5, 1.8, 1.6)), ANGEL_FUR, { hl: 'tl', sep: true });  // голова
+    P.pts('P00', 9, 21, 10, 22, 11, 21, 15, 21, 16, 22, 17, 21);                                             // закрытые глаза ‿ ‿
+    P.px(13, 23, 'P39').pts('P03', 12, 24, 14, 24);
+    P.pts('P40', 8, 23, 18, 23);
+    const sc = gold ? ['P35', 'P34', 'P18'] : ['P43', 'P42', 'P37'];
+    P.fill(U(Po(7, 26.5, 19.5, 26.5, 19, 29.5, 7.5, 29.5), Po(7.5, 28.5, 10.5, 28.5, 9.5, 34.5, 6.5, 34)), sc, { sep: true, hl: 'tl' });  // шарф
+    P.pts(gold ? 'P06' : 'P35', 9, 27, 17, 28);                                                              // звёздочки
+    P.pts('P34', 12, 30, 12, 31, 13, 32, 14, 32).px(12, 30, 'P35');                                          // кулон-полумесяц
+    P.fill(E(7.4, 32.5, 1.7, 2.6), ANGEL_FUR, { sep: true, hl: 'tl' });                                       // левая лапа
+    if (paw) {                                                                                               // правая вверх
+      P.fill(U(Po(17, 30, 19.5, 28.5, 22.8, 20.5, 20.6, 19.5), E(22, 18.8, 2.1, 1.9)), ANGEL_FUR, { sep: true, hl: 'tl' });
+      P.px(22, 18, 'P40');
+    } else P.fill(E(18.6, 32.5, 1.7, 2.6), ANGEL_FUR, { sep: true, hl: 'tl' });
+  });
+  // Крыло левой стороны (корень справа внизу), кадр 0 — вверх, 1 — вниз; правое — зеркало.
+  const angelWing = (f, gold) => outlined('mh.wing' + f + (gold ? 'g' : ''), 14, 13, (P) => {
+    const c = gold ? ['P35', 'P34', 'P18'] : ['P06', 'P08', 'P05'];
+    if (f === 0) {
+      P.fill(Po(13.5, 10, 10, 3, 5, 0.5, 1, 2, 3.5, 4.5, 0.5, 6.5, 4, 8, 2, 10.5, 7, 11, 13.5, 12.5), c, { hl: 'tl' });
+      P.line(11, 9, 5, 4, c[2]).line(11, 10, 4, 9, c[2]);
+    } else {
+      P.fill(Po(13.5, 3, 9, 1.5, 4, 2.5, 0.5, 5.5, 3, 7, 1, 9.5, 4.5, 10, 3.5, 12.5, 9, 11.5, 13.5, 7.5), c, { hl: 'tl' });
+      P.line(11, 4, 4, 5, c[2]).line(11, 6, 4, 9, c[2]);
+    }
+  });
+  const ANGEL = { W: 28, H: 41, PAW: { x: 9, y: -21 }, SHOULDER: 5, WING_Y: -12 };
+  // (x, y) — середина под ногами. o: {t (взмах 2 × 0,25 с, парение 2 px шагом 1,0 с), paw: 0|1, super, alpha 0..1}.
+  G.art.angelBunny = (ctx, x, y, o) => {
+    o = o || {};
+    const t = o.t || 0, gold = !!o.super, a = o.alpha === undefined ? 1 : stepA(o.alpha);
+    if (a <= 0) return;
+    const f = Math.floor(t / 0.25) % 2;
+    const bob = Math.floor(t / 1.0) % 2 ? 2 : 0;
+    x = Math.round(x); y = Math.round(y) - bob;
+    const k = ctx.globalAlpha;
+    ctx.globalAlpha = k * a;
+    const w = angelWing(f, gold), b = angelBody(o.paw ? 1 : 0, gold);
+    const wy = y + ANGEL.WING_Y - (f ? 4 : 9);
+    ctx.drawImage(w, x - ANGEL.SHOULDER - w.width + 4, wy);
+    ctx.save(); ctx.translate(x + ANGEL.SHOULDER - 4, 0); ctx.scale(-1, 1); ctx.drawImage(w, -w.width, wy); ctx.restore();
+    ctx.drawImage(b, x - 14, y - b.height + 1);
+    ctx.globalAlpha = k;
+  };
+  // Точка поднятой лапы относительно (x, y) ангела: отсюда вылетают лунные камни (L7).
+  G.art.angelBunny.paw = (x, y, t) => ({ x: Math.round(x) + ANGEL.PAW.x, y: Math.round(y) - (Math.floor((t || 0) / 1.0) % 2 ? 2 : 0) + ANGEL.PAW.y });
+
+  // ---------------------------------------------------------------------------------------------------------------
   // Moon Hop overlay (rebirth #52 / Supermoon #53, 2.0 s + 0.3 s fade). Layers one every 0.2 s (spec 07 + 10 C29):
-  //  L0 0.0 dim to night · L1 0.2 glow under the squad · L2 0.4 motes rise · L3 0.6 rocket lands · L4 0.8 light pillar
-  //  L5 1.0 rabbits hop on and ride up · L6 1.2 three rings · L7 1.4 moonstones fly to the counter · L8 1.7 white
-  //  ramps · L9 1.9 hold white (rebirth applies at 2.0 s) → 2.0–2.3 fade from white.
+  //  L0 0.0 dim to night · L1 0.2 glow under the squad · L2 0.4 motes rise · L3 0.6 rocket lands + лунный
+  //  кролик-хранитель взлетает из свечения над отрядом (событие оригинала Glow) · L4 0.8 light pillar · L5 1.0 rabbits
+  //  hop on and ride up · L6 1.2 three rings, хранитель поднимает лапу (Lift) · L7 1.4 moonstones fly from his paw to
+  //  the counter · L8 1.7 white ramps · L9 1.9 hold white (rebirth applies at 2.0 s) → 2.0–2.3 fade from white.
   // opts: {super, squad: [{x, y, who?}], counter: {x, y}, skin, w, h}. The overlay draws the squad itself, so the
   // caller may hide its own squad while it runs. Returns false once finished.
   // ---------------------------------------------------------------------------------------------------------------
@@ -23982,12 +24364,20 @@ $ 0 .##/##./.#./.##/##.
   // above the white flash so all six visibly reach the counter (last one by 2.2 s, before the overlay ends).
   const STONES = [0, 1, 2, 3, 4, 5].map((i) => ({ t0: MH.STONES_AT + i * 0.04, dur: 0.4 + hash(i, 9) * 0.2, cx: (hash(i, 10) - 0.5) * 60 }));
   const STONES_END = Math.max(...STONES.map((st) => st.t0 + st.dur));
+  // Хранитель (L3 0.6): взлетает из свечения (ноги над головами отряда, gy − 30) на gy − 80 к 1.0, проявляясь за 0.15 с.
+  const angelAt = (t, gx, gy) => {
+    const k = ease.out(clamp01((t - 0.6) / 0.4));
+    return { x: gx, y: Math.max(44, Math.round(gy - 30 - 50 * k)), a: clamp01((t - 0.6) / 0.15) };
+  };
+  // Камни стартуют из поднятой лапы (точка на момент 1.4 с, чтобы старт не дрожал от парения).
+  const stonesFrom = (gx, gy) => { const p = angelAt(MH.STONES_AT, gx, gy); return G.art.angelBunny.paw(p.x, p.y, MH.STONES_AT - 0.6); };
   const drawStones = (ctx, t, gx, gy, counter) => {
+    const src = stonesFrom(gx, gy);
     STONES.forEach((st, i) => {
       const k = clamp01((t - st.t0) / st.dur);
       if (t < st.t0 || k >= 1) return;
       const e = ease.in(k);
-      const sx = gx + (i - 2.5) * 4, sy = gy - 20;
+      const sx = src.x + (i - 2.5) * 2, sy = src.y;
       const cx = (sx + counter.x) / 2 + st.cx, cy = (sy + counter.y) / 2 - 40;
       drawMoonstone(ctx, (1 - e) * (1 - e) * sx + 2 * (1 - e) * e * cx + e * e * counter.x,
         (1 - e) * (1 - e) * sy + 2 * (1 - e) * e * cy + e * e * counter.y);
@@ -24094,6 +24484,27 @@ $ 0 .##/##./.#./.##/##.
         const mx = gx + Math.round((hash(i, 7) - 0.5) * 64), my = gy + 4 - Math.round(hash(i, 8) * 30) - Math.round(k * 20);
         ctx.fillStyle = col(k < 0.5 ? glowB : glowA);
         ctx.fillRect(mx, my, 1, k < 0.25 && i % 3 === 0 ? 2 : 1);
+      }
+    }
+    // L3 хранитель над отрядом: мягкий ореол, взмахи крыльев; L6 1.2 лапа вверх и искры у лапы до 1.7
+    if (t >= 0.6) {
+      const an = angelAt(t, gx, gy);
+      const pul = Math.floor(t / 0.25) % 2;
+      ctx.globalAlpha = stepA(an.a * 0.25);
+      R.disc(ctx, an.x, an.y - 16, 20 + pul, glowA);
+      ctx.globalAlpha = stepA(an.a * 0.5);
+      R.disc(ctx, an.x, an.y - 16, 13, glowB);
+      ctx.globalAlpha = 1;
+      G.art.angelBunny(ctx, an.x, an.y, { t: t - 0.6, paw: t >= 1.2 ? 1 : 0, super: sup, alpha: an.a });
+      if (t >= 1.2 && t < 1.7) {
+        const p = G.art.angelBunny.paw(an.x, an.y, t - 0.6);
+        for (let i = 0; i < 4; i++) {
+          const ang = (t - 1.2) * 6 + i * Math.PI / 2, r = 4 + ((Math.floor(t / 0.1) + i) % 2) * 2;
+          const sx = Math.round(p.x + Math.cos(ang) * r), sy = Math.round(p.y + Math.sin(ang) * r);
+          ctx.fillStyle = col(i % 2 ? glowA : glowB);
+          ctx.fillRect(sx, sy, 1, 1);
+          if (i % 2 === 0) { ctx.fillRect(sx - 1, sy, 3, 1); ctx.fillRect(sx, sy - 1, 1, 3); }
+        }
       }
     }
     // L3 rocket lands on the pad (0.6 → 0.85), waits, L5 riders hop on (1.0 → 1.15) and it launches (1.15 →)
@@ -24293,6 +24704,22 @@ $ 0 .##/##./.#./.##/##.
   G.previews.push({
     name: 'moonhop_illu', w: 4 * 68, h: 68,
     draw(ctx, t) { for (let i = 0; i < 4; i++) G.art.moonHopIllu(ctx, i * 68, 0, t + i * 0.5, { super: i === 3 }); },
+  });
+  // Хранитель: взмах вверх / вниз, лапа опущена / поднята, суперлуние; ×1 и ×3 (крупно, чтобы проверять пиксели)
+  G.previews.push({
+    name: 'angel_bunny', w: 6 * 56, h: 60 + 3 * 60,
+    draw(ctx) {
+      ctx.fillStyle = col('P12'); ctx.fillRect(0, 0, 6 * 56, 300);
+      const V = [[0, 0, false], [0.3, 0, false], [0, 1, false], [0.3, 1, false], [0, 1, true], [0.3, 1, true]];
+      V.forEach(([t, paw, sup], i) => G.art.angelBunny(ctx, i * 56 + 28, 52, { t, paw, super: sup }));
+      const tmp = newCanvas(56, 60), tc = tmp.getContext('2d');
+      [[0, 0, false], [0.3, 1, false], [0, 1, true]].forEach(([t, paw, sup], i) => {
+        tc.clearRect(0, 0, 56, 60); tc.fillStyle = col('P12'); tc.fillRect(0, 0, 56, 60);
+        G.art.angelBunny(tc, 28, 54, { t, paw, super: sup });
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(tmp, 0, 4, 56, 56, i * 112, 60, 112, 112);
+      });
+    },
   });
   G.previews.push({
     name: 'rocket', w: 120, h: 90,
@@ -28311,6 +28738,7 @@ $ 0 .##/##./.#./.##/##.
 //                             here from stage:subClear / stage:fail (G.hud.drawsBanners = true), + confetti #69, dim #70.
 //   Unlock toasts (spec 10 G7) from `unlock {feature}`: queued, shown after TRANSITION 0.3 s apart, button pop + NEW.
 //   G.hud.rect(id) -> {x, y, w, h} layout rect of a HUD widget even when hidden ('btn.guns', 'card.power', 'money' …)
+//   G.hud.adBanner() -> {x, y, w, h} | null   рекламная полоса обязательной рекламы (демо, spec 17 §5), когда показана
 //   G.hud.visible(btnId) -> bool (spec 10 G8 + tutorial step) · G.hud.pop(btnId) · G.hud.counterPos(kind)
 //   G.hud.open(btnId) opens the button's window (what a tap does) · Upgrade echo FX #45 spawns at G.stage.squadScreen().
 //   Badges: other modules register G.hudBadges[btnId] = () => true | n | 'new' | null (red dot / number / NEW), e.g.
@@ -28468,7 +28896,7 @@ $ 0 .##/##./.#./.##/##.
     if (!fin(+pct)) {
       const p = call(st, 'progress');
       if (fin(+p)) pct = p <= 1 ? p * 100 : p;
-      else pct = s.totalHp > 0 ? Math.min(99, Math.floor(100 * numOr(s.progressHp, 0) / s.totalHp)) : 0;
+      else pct = s.totalHp > 0 ? Math.min(99, Math.floor(numOr(s.progressHp, 0) / s.totalHp * 100)) : 0;
     }
     if (bn && bn.kind === 'clear') pct = 100;
     let phase = call(st, 'phase');
@@ -29053,6 +29481,12 @@ $ 0 .##/##./.#./.##/##.
     if (COUNTER[s]) return Object.assign({}, COUNTER[s]);
     return null;
   };
+  // Зона цифр урона на этапе (spec 17 §9): поле под верхней полосой HUD (полосы, трек, «Этап», счётчики, Эко,
+  // правые кнопки) и правее левого столбца верхних кнопок; снизу — до лотка карт. Боковые столбцы кнопок
+  // непрозрачны и рисуются поверх поля, как UI-холст оригинала поверх мира, — их не вырезаем.
+  const NUM_TOP = Math.max(TOP.tr1.y + TOP.tr1.h, TOP.eco.y + TOP.eco.h, COUNTER.dia.y + COUNTER.dia.h) + 1;
+  const NUM_TL = { x: TOP.tl0.x + TOP.tl0.w + 2, y: TOP.tl3.y + TOP.tl3.h + 2 };
+  hud.numberArea = () => [[0, NUM_TL.y, G.W, 318 - NUM_TL.y], [NUM_TL.x, NUM_TOP, G.W - NUM_TL.x, NUM_TL.y - NUM_TOP]];
 
   // ---------------------------------------------------------------------------------------------------------------
   // MAYHEM (super buff) indicator: persistent pill above the cards + a one-time announcement (spec 09 §12.1, 07 #50)
@@ -29071,6 +29505,16 @@ $ 0 .##/##./.#./.##/##.
     }
     return w;
   };
+  // Рекламная полоса «обязательной рекламы» (демо, spec 17 §5): между колонками боковых кнопок, над картами;
+  // тапы по ней не доходят до поля. Рисует G.ads.drawBanner (45_shop); пилюля РАЗНОСА при ней поднимается.
+  const AD_BANNER = { x: 32, y: 302, w: 152, h: 13 };
+  const adBannerOn = () => !!(G.ads && typeof G.ads.banner === 'function' && G.ads.banner());
+  const drawAdBanner = () => {
+    if (!adBannerOn() || typeof G.ads.drawBanner !== 'function') return;
+    const b = AD_BANNER;
+    if (G.ads.drawBanner(b.x, b.y, b.w, b.h)) G.ui.block(b.x, b.y, b.w, b.h);
+  };
+  hud.adBanner = () => (adBannerOn() ? Object.assign({}, AD_BANNER) : null);
   const drawMayhem = () => {
     const eco = G.eco;
     if (!eco || !eco.superActive()) return;
@@ -29079,7 +29523,7 @@ $ 0 .##/##./.#./.##/##.
     const m = eco.buffMin();
     const tstr = fin(m) ? G.fmtTime(m, 'ms') : '';
     const tw = G.textW(lbl, 'small') + (tstr ? 4 + G.textW(tstr, 'small') : 0);
-    const w = tw + 12, x = Math.round(108 - w / 2), y = 307;
+    const w = tw + 12, x = Math.round(108 - w / 2), y = adBannerOn() ? 290 : 307;   // над рекламной полосой (spec 17 §5)
     const ph = Math.floor(uiT() / 0.1);
     px.box(x, y, w, 10, px.rgba('P00', 0.78), 3);
     px.boxO(x, y, w, 10, P(RAINBOW[ph % 6]), 3);
@@ -29303,6 +29747,7 @@ $ 0 .##/##./.#./.##/##.
     hud.drawCounters(ctx);
     drawButtons();
     drawEcoPill();
+    drawAdBanner();
     drawMayhem();
     drawTray();
     drawCards();
@@ -29582,7 +30027,7 @@ $ 0 .##/##./.#./.##/##.
   const rankColor = (k) => (G.RANK_COLORS && G.RANK_COLORS[k]) || (G.PAL && G.PAL['R' + k]) || '#cfa270';
   const wall = () => (G.time && G.time.wallNow ? G.time.wallNow() : Date.now());
   const dayKey = () => (G.dayKey ? G.dayKey() : (D().dayKey ? D().dayKey() : ''));
-  const fmtInt = (v) => String(+(+v).toFixed(2));                       // 0.6 -> '0.6', 0.25, 1, 0.05
+  const fmtInt = (v) => G.fmtDec(v, 2);                                 // 0.6 -> '0.6', 0.25, 1, 0.05 (G.fmtDec)
   const typeKey = (id, part) => { const g = gunOf(id); const t = g && D().gunTypes && D().gunTypes[g.type]; return t ? t[part + 'Key'] : 'gun.type.single.' + part; };
   const rankName = (k) => (D().ranks && D().ranks[k] ? G.nameOf(D().ranks[k]) : '');
   const rankCode = (k) => (D().ranks && D().ranks[k] ? D().ranks[k].code : 'D');
@@ -31149,9 +31594,15 @@ $ 0 .##/##./.#./.##/##.
     y += 15;
     const odds = G.textWrap(G.t('gun.odds'), w.cw, 'main');
     odds.forEach((ln, j) => txt(ln, w.cx, y + j * 9, { color: 'textDark' }));
-    y += odds.length * 9 + 5;
+    y += odds.length * 9 + 3;
+    // шансы склейки (spec 03 §9, spec 17 §19): результат — любая из пушек следующего ранга поровну (D.merge.result)
+    const nNext = (D().gunsOfRank ? D().gunsOfRank(1).length : 5) || 5;
+    const mo = G.textWrap(G.t('gun.mergeOdds', nNext, Math.round(100 / nNext), rankCode(MAXR())), w.cw, 'main');
+    mo.forEach((ln, j) => txt(ln, w.cx, y + j * 9, { color: 'textDark' }));
+    y += mo.length * 9 + 5;
     const mt = G.textWrap(G.t('gun.mergeTip'), w.cw, 'main');
     mt.forEach((ln, j) => txt(ln, w.cx, y + j * 9, { color: 'P22' }));
+    w.helpBottom = y + mt.length * 9;   // низ текста (тест: карточка влезает в окно)
   };
   const drawInfo = (a, w) => {
     const U = ui(), P = X(), s = S();
@@ -31577,12 +32028,14 @@ $ 0 .##/##./.#./.##/##.
     const st = G.calc ? G.calc('challenge', G.stage.n()) : null;
     for (const g of (st && st.guns) || []) {
       if (!(g.interval > 0.001)) continue;
-      const c = g.critPct, E = (g.shot * (100 - c) + g.critShot * c) / 100;
+      const c = g.critPct;
+      let E = (g.shot * (100 - c) + g.critShot * c) / 100;
+      if (!(E < Infinity)) E = G.sat(g.shot / 100 * (100 - c) + g.critShot / 100 * c);   // предел double (spec 17 §8)
       const gd = G.D.gun ? G.D.gun(g.gunId) : null;
       const w = Math.max(1, (gd && gd.cpWeight) || g.pellets || 1);
-      cp += E * w / g.interval;
+      cp = G.sat(cp + E * w / g.interval);
     }
-    return +cp.toPrecision(5);
+    return G.sat(+cp.toPrecision(5));                  // «1.7977e+308» уже Infinity → G.NUM_MAX: «∞» отряда против «∞» режима — 100 %
   };
   const quickNeed = (m) => {
     const q = PKD().QUICK || {};
@@ -31593,7 +32046,9 @@ $ 0 .##/##./.#./.##/##.
   const quickPct = (m) => {
     if (m === 'mine') return S().mineBest > 0 && mineLeft() > 0 ? 100 : 0;
     const need = quickNeed(m);
-    return need > 0 ? Math.floor(quickCP() * 100 / need) : 0;
+    if (!(need > 0)) return 0;
+    const cp = quickCP(), v = cp * 100 / need;
+    return Math.floor(v < Infinity ? v : cp / need * 100);
   };
   const busy = (m) => run || !unlocked(m) || !G.scenes || G.scenes.name !== 'stage' || G.stage.phase() !== 'play' ||
     (G.S.tut && G.S.tut.step !== 'done');
@@ -31642,6 +32097,8 @@ $ 0 .##/##./.#./.##/##.
       arena: { challenge: 'mayhem', mine: 'burrow', boss: 'lavaring' }[r.mode],
       bounds: { type: 'circle', r: d.CLAMP_R || d.ARENA_R }, spawn: r.mode === 'boss' ? d.SPAWN_SQUAD : { x: 0, y: 0 },
       followerReach: d.FOLLOWER_REACH || 0,
+      // цифры урона — под строками режима сверху (y 20…52) и над лотком карт испытания (spec 17 §9)
+      numbersArea: [[0, 55, G.W, (r.mode === 'challenge' ? 318 : G.H) - 55]],
       onKill(t) {
         r.killed++;
         if (r.mode === 'mine') {
@@ -31818,13 +32275,92 @@ $ 0 .##/##./.#./.##/##.
   };
   for (const m of D().KEYS) G.scenes.register(m, { hud: false,
     enter() { if (!run || run.mode !== m) { G.scenes.go('stage'); return; } build(); run.phase = 'fight'; run.phaseTime = 0; }, update, draw });
+  // строка награды; золотое «×2» справа при активных «Наградах» (spec 12 §8.4)
+  const rewardLine = (m, cx, y) => {
+    const rs = G.t('res.reward') + ' {gem} ' + rewardOf(m, 0), k = packOn('reward') ? (PKD().REWARD[m] || 1) : 1;
+    if (k > 1) {
+      // «×2» золотом на тёмной плашке: с обводкой P00 крестик «×» сливался в пятно
+      const ms = G.t('pack.mult', k), tw = G.textW(rs), mw = G.textW(ms);
+      const x0 = Math.round(cx - (tw + 3 + mw + 4) / 2), mx = x0 + tw + 3;
+      G.text(rs, x0, y, { color: 'textDark' });
+      G.px.box(mx, y - 2, mw + 4, 11, 'P02', 2);
+      G.text(ms, mx + 2, y, { color: 'P35' });
+    } else G.text(rs, cx, y, { align: 'center', color: 'textDark' });
+  };
+  // «Старт» или «Старт» + «Мигом!» с полосой силы (spec 12 §8.4); y — верх кнопок, ряд по центру cx
+  const startRow = (m, cx, y) => {
+    if (packOn('auto') && !tutorial()) {
+      if (G.ui.button('mode.start', cx - 84, y, 82, 26, { style: 'orange', label: G.t('mode.start'), disabled: m === 'mine' && !mineLeft() })) startMode(m);
+      const why = quickWhy(m), pct = quickPct(m);
+      const sub = m === 'mine' ? '{gem}' + G.fmt(rewardOf('mine', S().mineBest)) : G.t('mode.quickPct', Math.min(999, pct));
+      if (G.ui.button('mode.quick', cx + 2, y, 82, 26, { style: why ? 'grey' : 'green', label: G.t('mode.quick'), sub,
+        subColor: m === 'mine' ? undefined : pct >= 100 ? 'P27' : 'btnRed', deny: !!why,
+        onDeny: () => { const q = quickWhy(m); if (q && q !== 'busy') G.ui.toast(quickMsg(m, q), { sfx: false }); } })) quickClear(m);
+      // полоса силы 82×2 прямыми прямоугольниками: у ui.bar 1 px рамки, при h 2 заливки не видно
+      if (m !== 'mine') {
+        G.px.rect(cx + 2, y + 28, 82, 2, 'P01');
+        G.px.rect(cx + 2, y + 28, Math.round(82 * Math.max(0, Math.min(1, pct / 100))), 2, pct >= 100 ? 'P27' : 'P32');
+      }
+    } else if (G.ui.button('mode.start', cx - 52, y + 2, 104, 24, { style: 'orange', label: G.t('mode.start'), pulse: tutorial(), disabled: m === 'mine' && !mineLeft() })) startMode(m);
+  };
+  // мини-рейтинг окна Хищника «Топ-5 / Рядом» (GDD 9.5, 6.4; spec 17 §17): строки G.meta.board('boss');
+  // 'near' — пять строк вокруг игрока, null при закрытом рейтинге (нарушитель часов, spec 16 §1.8)
+  const bossBoard = (tab) => {
+    let rows = null;
+    try { rows = G.meta && G.meta.board ? G.meta.board('boss') : null; } catch (e) { rows = null; }
+    if (!rows || !rows.length) rows = [{ place: 1, name: (G.S.meta && G.S.meta.nickname) || G.t('rank.you'), v: S().bossLevel - 1, me: true }];
+    if (tab !== 'near') return rows.slice(0, 5);
+    const me = rows.findIndex((r) => r.me);
+    if (me < 0) return null;
+    const s = Math.max(0, Math.min(rows.length - 5, me - 2));
+    return rows.slice(s, s + 5);
+  };
+  const ellipsize = (s, wd, font) => {
+    if (G.textW(s, font) <= wd) return s;
+    let t = s;
+    while (t.length > 1 && G.textW(t + '…', font) > wd) t = t.slice(0, -1);
+    return t + '…';
+  };
+  let bossTab = 0;
+  // окно Хищника высокое ('tall' 4, 20, 208×348): арт, цель, награда, рекорд, «Топ-5 / Рядом», старт как у Слизнебоя
+  const drawBossWin = (w) => {
+    const d = D().boss, lv = level('boss'), cx = w.x + w.w / 2, y0 = w.y, bx = w.x + 4;
+    G.art.boss(G.ctx, cx, y0 + 70, { variant: d.variant(lv), state: 'idle', t: w.t });
+    if (G.shop && G.shop.drawPackBanner) G.shop.drawPackBanner('boss', w, { x: w.x + 150, y: y0 + 20 });
+    G.textWrap(goalText('boss'), 196, 'main').slice(0, 3).forEach((s, i) => G.text(s, cx, y0 + 78 + i * 10, { align: 'center', color: 'textDark' }));
+    G.text(G.fmt(d.HP(lv)), cx, y0 + 111, { align: 'center', color: 'textDark' });
+    rewardLine('boss', cx, y0 + 123);
+    const best = Math.max(0, S().bossLevel - 1);
+    G.text(best > 0 ? G.t('boss.best', best) : G.t('boss.bestNone'), cx, y0 + 136, { align: 'center', font: 'small', color: 'textDark', maxW: 196 });
+    bossTab = G.ui.tabs('mode.board', bx, y0 + 148, 200, 16, [G.t('rank.top5'), G.t('rank.near')], bossTab, { font: 'small' });
+    const rows = bossBoard(bossTab ? 'near' : 'top'), ry0 = y0 + 168;
+    if (!rows) {
+      // рейтинг закрыт: вместо строк — причина, как в окне «Рейтинг» (43_meta.js)
+      G.px.panel(bx, ry0 + 1, 200, 78, 'card');
+      G.text(G.t('rank.closed'), cx, ry0 + 7, { align: 'center', color: 'P29', maxW: 190 });
+      G.textWrap(G.t('rank.closedWhy'), 188, 'small').slice(0, 6).forEach((s, i) => G.text(s, cx, ry0 + 20 + i * 8, { align: 'center', font: 'small', color: 'textDark' }));
+    } else {
+      const val = (v) => (G.meta && G.meta.rankVal ? G.meta.rankVal('boss', v) : G.t('stat.lvText', v));
+      rows.forEach((row, i) => {
+        const ry = ry0 + 16 * i;
+        G.px.panel(bx, ry + 1, 200, 14, 'card', row.me ? { fill: 'P35', rim: 'gold' } : undefined);
+        const col = row.me ? 'P29' : 'textDark';
+        G.text(String(row.place), bx + 11, ry + 5, { align: 'center', font: 'small', color: col });
+        G.text(ellipsize(String(row.name), 104, 'main'), bx + 22, ry + 4, { color: col });
+        G.text(val(row.v), bx + 195, ry + 4, { align: 'right', color: col, maxW: 60 });
+      });
+    }
+    startRow('boss', cx, y0 + 280);
+  };
+  const MODE_RECT = { x: 12, y: 78, w: 192, h: 230 };
   G.windows.mode = {
-    rect: { x: 12, y: 78, w: 192, h: 230 }, title: (a) => title(a.mode || 'challenge'),
+    rect: (a) => (a && a.mode === 'boss' ? 'tall' : MODE_RECT), title: (a) => title(a.mode || 'challenge'),
     closable: () => !tutorial(), outsideClose: false,
+    onOpen(a) { if (a && a.mode === 'boss') bossTab = 0; },
     draw(a, w) {
       const m = a.mode || 'challenge', d = D()[m], cx = w.x + w.w / 2;
-      if (m === 'boss') G.art.boss(G.ctx, cx, w.y + 78, { variant: d.variant(level(m)), state: 'idle', t: w.t });
-      else if (m === 'mine') G.art.ore(G.ctx, cx, w.y + 70, { kind: 'crystal' });
+      if (m === 'boss') { drawBossWin(w); return; }
+      if (m === 'mine') G.art.ore(G.ctx, cx, w.y + 70, { kind: 'crystal' });
       else G.art.target(G.ctx, cx, w.y + 70, { biome: d.biome(level(m)), type: 0, t: w.t, scale: 0.7 });
       const lines = G.textWrap(goalText(m), 170, 'main');
       lines.forEach((s, i) => G.text(s, cx, w.y + 90 + i * 10, { align: 'center', color: 'textDark' }));
@@ -31833,34 +32369,9 @@ $ 0 .##/##./.#./.##/##.
         tip.forEach((s, i) => G.text(s, cx, w.y + 125 + i * 7, { align: 'center', font: 'small', color: 'textDark' }));
         G.text(G.t('mine.entries', mineLeft(), mineMax()), cx, w.y + 150, { align: 'center', color: 'textDark' });
         if (G.ui.button('mode.more', w.x + 30, w.y + 162, 132, 18, { style: 'blue', label: G.t('mine.more') })) G.ui.open('shop', { focus: 'minePack' });
-      } else {
-        if (m === 'boss') G.text(G.fmt(d.HP(level(m))), cx, w.y + 138, { align: 'center', color: 'textDark' });
-        // строка награды; золотое «×2» справа при активных «Наградах» (spec 12 §8.4)
-        const rs = G.t('res.reward') + ' {gem} ' + rewardOf(m, 0), k = packOn('reward') ? (PKD().REWARD[m] || 1) : 1;
-        if (k > 1) {
-          // «×2» золотом на тёмной плашке: с обводкой P00 крестик «×» сливался в пятно
-          const ms = G.t('pack.mult', k), tw = G.textW(rs), mw = G.textW(ms);
-          const x0 = Math.round(cx - (tw + 3 + mw + 4) / 2), mx = x0 + tw + 3;
-          G.text(rs, x0, w.y + 152, { color: 'textDark' });
-          G.px.box(mx, w.y + 150, mw + 4, 11, 'P02', 2);
-          G.text(ms, mx + 2, w.y + 152, { color: 'P35' });
-        } else G.text(rs, cx, w.y + 152, { align: 'center', color: 'textDark' });
-      }
+      } else rewardLine(m, cx, w.y + 152);
       if (G.shop && G.shop.drawPackBanner) G.shop.drawPackBanner(m, w);
-      if (packOn('auto') && !tutorial()) {
-        // «Мигом!» рядом со стартом (spec 12 §8.4), полоса силы под кнопкой
-        if (G.ui.button('mode.start', w.x + 12, w.y + 192, 82, 26, { style: 'orange', label: G.t('mode.start'), disabled: m === 'mine' && !mineLeft() })) startMode(m);
-        const why = quickWhy(m), pct = quickPct(m);
-        const sub = m === 'mine' ? '{gem}' + G.fmt(rewardOf('mine', S().mineBest)) : G.t('mode.quickPct', Math.min(999, pct));
-        if (G.ui.button('mode.quick', w.x + 98, w.y + 192, 82, 26, { style: why ? 'grey' : 'green', label: G.t('mode.quick'), sub,
-          subColor: m === 'mine' ? undefined : pct >= 100 ? 'P27' : 'btnRed', deny: !!why,
-          onDeny: () => { const y = quickWhy(m); if (y && y !== 'busy') G.ui.toast(quickMsg(m, y), { sfx: false }); } })) quickClear(m);
-        // полоса силы 82×2 прямыми прямоугольниками: у ui.bar 1 px рамки, при h 2 заливки не видно
-        if (m !== 'mine') {
-          G.px.rect(w.x + 98, w.y + 220, 82, 2, 'P01');
-          G.px.rect(w.x + 98, w.y + 220, Math.round(82 * Math.max(0, Math.min(1, pct / 100))), 2, pct >= 100 ? 'P27' : 'P32');
-        }
-      } else if (G.ui.button('mode.start', w.x + 44, w.y + 194, 104, 24, { style: 'orange', label: G.t('mode.start'), pulse: tutorial(), disabled: m === 'mine' && !mineLeft() })) startMode(m);
+      startRow(m, cx, w.y + 192);
     },
   };
   G.windows.modeResult = {
@@ -31872,7 +32383,7 @@ $ 0 .##/##./.#./.##/##.
       const r = run, d = D()[r.mode], auto = ent('removeAllAds'), cx = w.x + w.w / 2;
       G.art.rabbit(G.ctx, cx, w.y + 78, { who: 0, pose: r.win ? 'cheer' : 'cry', t: w.t, costume: G.S.skins.equipped });
       G.text(G.t('res.reward') + ' {gem} ' + Math.floor(G.ui.countUp('mode.reward', r.reward * (r.win ? d.AD_MULT : 1), 0.6)), cx, w.y + 98, { align: 'center', color: 'textDark' });
-      if (!auto && r.win && G.ui.button('mode.removeAds', w.x + 6, w.y + 197, 180, 14, { style: 'link', font: 'small', label: G.t('res.removeAds') })) G.ui.open('shop', { focus: 'removeAllAds' });
+      if (!auto && r.win && G.ui.button('mode.removeAds', w.x + 6, w.y + 197, 180, 14, { style: 'link', font: 'small', label: G.t('res.removeAds'), textColor: 'P16', shadow: false })) G.ui.open('shop', { focus: 'removeAllAds' });
       if (r.mode === 'mine' && r.points > S().mineBest) G.text(G.t('mine.best'), cx, w.y + 112, { align: 'center', color: 'textDark' });
       const disabled = w.t < 0.5 || !!r.claimPending;
       if (r.win) {
@@ -31892,7 +32403,7 @@ $ 0 .##/##./.#./.##/##.
     return G.ads.show(d.placement, () => { if (run === r) { r.claimPending = false; award(d.AD_MULT); } }, () => { if (run === r) r.claimPending = false; });
   };
   G.modes = { active: () => run, info: () => run && ({ mode: run.mode, level: run.level, phase: run.phase, timer: run.timer, points: run.points, killed: run.killed, total: run.total, win: run.win }),
-    mineLeft, mineMax, mineLayout, bossBest: () => S().bossLevel - 1, get battle() { return run && run.battle; },
+    mineLeft, mineMax, mineLayout, bossBest: () => S().bossLevel - 1, bossBoard, get battle() { return run && run.battle; },
     timeOf, rewardOf,
     quick: { cp: quickCP, need: quickNeed, pct: quickPct, why: quickWhy, can: (m) => quickWhy(m) === '' } };
   G.on('state:loaded', () => {
@@ -31959,12 +32470,14 @@ $ 0 .##/##./.#./.##/##.
 //   mission:done {id} · mission:claim {id, xp} · pass:claim {level, track} · pass:level {level} · pass:season {no} ·
 //   daily:claim {day, dia} · offline:shown {money, subs, lv0, lv1, to, atRecord}
 // Windows: costumes, rebirth, pond, newFish {id, g}, fishInfo {id | odds}, quests {tab: 'pass'|'missions'}, daily
-//   {tutorial}, welcome (offline info), settings, ranking, rate, moonhop (S27 overlay), textInput {title, hint, onOk}.
+//   {tutorial}, welcome (offline info), settings, adsTune (параметры обязательной рекламы, spec 17 §20), ranking, rate,
+//   moonhop (S27 overlay), textInput {title, hint, onOk}.
 // Widget ids: rebirth.do · rebirth.super · rebirth.perm.<power|speed|money> · pond.free · pond.epic · pond.info · pond.auto ·
 //   pond.fish.<id> · newFish.ok · fishInfo.release · fishInfo.close · costumes.cell.<i> · costumes.buy|wear ·
 //   quests.tab:0|1 · quests.vip · quests.lux · quests.pass.<free|epic>.<L> · quests.mission.<id> · quests.newSeason ·
-//   daily.claim · welcome.claim · settings.<music|sound|vibro|eco|lang.ru|lang.en|numbers|shake|lowfx|notify|save|load|
-//   redeem|restore|writeUs|reset> · ranking.tab.<stage|boss|hunt|raid> · ranking.top · ranking.near · ranking.name ·
+//   daily.claim · welcome.claim · settings.<music|sound|vibro|eco|lang.ru|lang.en|numbers|shake|lowfx|notify|forcedAds|
+//   adsTune|partners|save|load|redeem|restore|writeUs|reset> · adsTune.<minus|plus>.<minStage|cooldown|whole|afterRw|cap.<место>> ·
+//   adsTune.reset · ranking.tab.<stage|boss|hunt|raid> · ranking.top · ranking.near · ranking.name ·
 //   rate.star.<1..5> · rate.later · textInput.field · textInput.ok · textInput.cancel
 // Session popups (spec 06 §14 / 07 §2.3, 'ready'): season rollover → Welcome Back → Daily Gift; none before tutorial
 // Done except the Day-1 gift (no ✕ until claimed, spec 10 G3). ?nopop=1 or ?win= suppress them (screenshots).
@@ -32236,8 +32749,8 @@ $ 0 .##/##./.#./.##/##.
     anim.applied = true;
     const r = G.S.rebirth, pts = anim.points, sup = anim.super;
     r.count += 1;
-    r.rp += pts;
-    r.totalRp += pts;
+    r.rp = G.sat(r.rp + pts);
+    r.totalRp = G.sat(r.totalRp + pts);
     if (G.eco && typeof G.eco.resetRun === 'function') G.eco.resetRun();
     else if (G.S.eco) { G.S.eco.money = 0; G.S.eco.upgLv = [0, 0, 0]; }
     if (G.stage && typeof G.stage.resetForRebirth === 'function') {
@@ -32255,7 +32768,7 @@ $ 0 .##/##./.#./.##/##.
     G.emit('rebirth', { points: pts, super: sup, paid: !!anim.paid, n: anim.n, count: r.count, perm: Object.assign({}, r.lv) });
     if (anim.paid) r.superIapDay = today(); else if (sup) r.superAdDay = today();
     save();
-    if (!sup) call(G.ads, 'inter', 'rebirth', () => {}, { super: false });   // off by default (spec 10 G10)
+    // обязательная реклама после обычного прыжка — по событию 'rebirth' в 45_shop, когда этап снова на экране (spec 17 §5)
   };
   let rateQueued = false;
   simAdd((dt) => {
@@ -32267,7 +32780,7 @@ $ 0 .##/##./.#./.##/##.
   }, 85, { always: true, name: 'meta.moonhop' });
 
   meta.permLv = (key) => ((G.S.rebirth && G.S.rebirth.lv && G.S.rebirth.lv[key]) | 0);
-  meta.permPrice = (key) => (D().perm ? D().perm.price(meta.permLv(key)) : Infinity);
+  meta.permPrice = (key) => (D().perm ? D().perm.price(meta.permLv(key)) : G.NUM_MAX);   // G.NUM_MAX = MAX (spec 17 §8)
   meta.permPct = (key) => (key === 'speed' ? 5 * meta.permLv(key) : (D().perm ? D().perm.pct(meta.permLv(key)) : 0));
   meta.speedAdd = () => 5 * meta.permLv('speed');
   G.act.permBuy = (key, count = 1) => {
@@ -32276,7 +32789,7 @@ $ 0 .##/##./.#./.##/##.
     let n = 0;
     for (let i = 0; i < Math.max(1, count | 0); i++) {
       const L = r.lv[key] | 0, price = D().perm.price(L);
-      if (!finite(price) || L >= D().perm.MAX || r.rp < price) break;
+      if (G.isMax(price) || L >= D().perm.MAX || r.rp < price) break;
       r.rp -= price;
       r.lv[key] = L + 1;
       n++;
@@ -32688,7 +33201,7 @@ $ 0 .##/##./.#./.##/##.
       case 'rebirth': {
         if (!unlocked('rebirth')) return false;
         const r = G.S.rebirth;
-        return (rebirth.superState() === 'ad' && rebirth.points(true) > 0) || PERM_KEYS.some((k) => r.rp >= meta.permPrice(k));
+        return (rebirth.superState() === 'ad' && rebirth.points(true) > 0) || PERM_KEYS.some((k) => { const p = meta.permPrice(k); return !G.isMax(p) && r.rp >= p; });
       }
       case 'quests': return meta.questsClaimable();
       case 'daily': return meta.dailyClaimable();
@@ -32817,7 +33330,7 @@ $ 0 .##/##./.#./.##/##.
   const PERM_NAME = { power: 'rb.card.power', speed: 'rb.card.speed', money: 'rb.card.money' };
   const drawPermCard = (key, x, y, w, h, t) => {
     const r = G.S.rebirth, L = meta.permLv(key), price = meta.permPrice(key);
-    const maxed = !finite(price) || L >= ((D().perm && D().perm.MAX) || 20000);
+    const maxed = G.isMax(price) || L >= ((D().perm && D().perm.MAX) || 20000);
     const ok = !maxed && r.rp >= price;
     G.px.panel(x, y, w, h, 'card');
     const fl = permFlash[key] !== undefined ? t - permFlash[key] : 9;
@@ -33061,7 +33574,7 @@ $ 0 .##/##./.#./.##/##.
   const dropFish = (payload, cx, cy) => {
     const wr = water(), f = fishById(payload.fishId);
     if (!f) return;
-    let target = null, bd = ((FD() && FD().MERGE_PX) || 10) + 0.001;
+    let target = null, bd = ((FD() && FD().MERGE_PX) || 20) + 0.001;  // склейка ближе MERGE_PX (DEFAULT 20 px), побеждает ближайшая
     for (const o of G.S.fish.list) {
       if (o === f || o.g !== f.g) continue;
       const p = fishPx(o, wr), d = Math.hypot(p.x - cx, p.y - cy);
@@ -33135,7 +33648,9 @@ $ 0 .##/##./.#./.##/##.
       const st = meta.fishStats();
       text(T('fish.count', f.list.length), x0 + 2, y0 + 2, { color: f.list.length >= F.MAX ? TX.bad() : TX.dark() });
       const free = meta.fishFree();
-      text(T('fish.totals', fmt(st.dmg), fmt(st.crit), fmt(st.critDmg)), x0 + 2, y0 + 13, { font: 'small', color: TX.soft(), maxW: cw - 34 });
+      // три стата (как All_Damage / All_CriPer / All_CriVal оригинала) — две строки слева: правый край шапки занимают
+      // Крош и удочка, леска не должна идти по тексту (кадр final_pond_auto)
+      text(T('fish.totals', fmt(st.dmg), fmt(st.crit), fmt(st.critDmg)), x0 + 2, y0 + 12, { font: 'small', color: TX.soft(), maxW: cw - 64, lineH: 7 });
       // tank
       const c = ctx();
       if (art('pondBg', c, TANK.x, TANK.y, TANK.w, TANK.h, w.t) === false) {
@@ -33196,10 +33711,12 @@ $ 0 .##/##./.#./.##/##.
       if (pl && pl.fishId) dropFish(pl, inp.fx - pl.dx, inp.fy - pl.dy);
       if (drag.active && drag.active.fishId) {
         const fi = fishById(drag.active.fishId);
+        // подсветка цели склейки (Fusion_Alert): ближе MERGE_PX — яркое кольцо, в 12 px за порогом — тонкое «почти»
+        const mr = (F && F.MERGE_PX) || 20;
         if (fi) for (const o of f.list) {
           if (o === fi || o.g !== fi.g) continue;
           const p = fishPx(o, wr), d = Math.hypot(p.x - (inp.fx - drag.active.dx), p.y - (inp.fy - drag.active.dy));
-          if (d < 24) G.px.ellipse(Math.round(p.x), Math.round(p.y), d < ((F && F.MERGE_PX) || 10) ? 10 : 8, d < 10 ? 6 : 5, P('gold', '#ffd34a'));
+          if (d < mr + 12) G.px.ellipse(Math.round(p.x), Math.round(p.y), d < mr ? 10 : 8, d < mr ? 6 : 5, P('gold', '#ffd34a'));
         }
       }
       if (!open) {
@@ -33580,21 +34097,24 @@ $ 0 .##/##./.#./.##/##.
   // S43 Settings (spec 07 §3.25, spec 06 §11) + text input dialog
   // =================================================================================================================
   const NUM = ['all', 'some', 'off'];
+  const ADS_MODES = ['off', 'seg1', 'late'];
   G.windows.settings = {
     rect: 'tall', title: () => T('set.title'),
     draw(a, w) {
       const x0 = w.cx, cw = w.cw, s = settings();
       let y = w.cy + 1;
-      const RH = 22;
-      const row = (key, ic) => {
+      const RH = 20;
+      // maxW — ширина подписи: длинная переходит на мелкий шрифт, потом обрезается «…»
+      const row = (key, ic, maxW) => {
         G.px.rect(x0, y + RH - 1, cw, 1, P('P18', '#d1a265'));
-        icon(ic, x0 + 2, y + 3, 16);
-        text(T('set.' + key), x0 + 22, y + 7, { color: TX.dark() });
+        icon(ic, x0 + 2, y + 2, 16);
+        const lb = T('set.' + key), mw = maxW || cw - 60, f = fitFont(lb, mw);
+        text(ellipsize(lb, mw, f), x0 + 22, y + (f === 'small' ? 7 : 6), { color: TX.dark(), font: f });
       };
       const tog = (key, field, ic, onSet) => {
-        row(key, ic);
-        const v = G.ui.toggle('settings.' + key, x0 + cw - 26, y + 5, !!s[field], { w: 22, h: 12 });
-        text(v ? T('set.on') : T('set.off'), x0 + cw - 30, y + 8, { align: 'right', font: 'small', color: v ? P('P22', '#2f5e3a') : TX.soft() });
+        row(key, ic, cw - 64);
+        const v = G.ui.toggle('settings.' + key, x0 + cw - 26, y + 4, !!s[field], { w: 22, h: 12 });
+        text(v ? T('set.on') : T('set.off'), x0 + cw - 30, y + 7, { align: 'right', font: 'small', color: v ? P('P22', '#2f5e3a') : TX.soft() });
         if (v !== !!s[field]) { if (onSet) onSet(v); else s[field] = v; save(); }
         y += RH;
       };
@@ -33607,7 +34127,7 @@ $ 0 .##/##./.#./.##/##.
       const cur = G.lang;
       for (const [i, l] of [[0, 'ru'], [1, 'en']]) {
         const bx = x0 + cw - 66 + i * 34;
-        if (G.ui.button('settings.lang.' + l, bx, y + 4, 32, 14, { style: cur === l ? 'blue' : 'grey', label: l.toUpperCase(), font: 'small' }) && cur !== l) {
+        if (G.ui.button('settings.lang.' + l, bx, y + 3, 32, 14, { style: cur === l ? 'blue' : 'grey', label: l.toUpperCase(), font: 'small' }) && cur !== l) {
           if (G.setLang) G.setLang(l); else { G.lang = l; s.lang = l; }
           save();
         }
@@ -33617,7 +34137,7 @@ $ 0 .##/##./.#./.##/##.
       row('numbers', 'numbers');
       const nm = NUM.indexOf(s.numbers) < 0 ? 'all' : s.numbers;
       const nl = T('set.numbers.' + nm);
-      if (G.ui.button('settings.numbers', x0 + cw - 86, y + 4, 84, 14, { style: 'blue', label: nl, font: fitFont(nl, 80), sfx: 'select' })) { s.numbers = NUM[(NUM.indexOf(nm) + 1) % 3]; save(); }
+      if (G.ui.button('settings.numbers', x0 + cw - 86, y + 3, 84, 14, { style: 'blue', label: nl, font: fitFont(nl, 80), sfx: 'select' })) { s.numbers = NUM[(NUM.indexOf(nm) + 1) % 3]; save(); }
       y += RH;
       tog('shake', 'shake', 'shake');
       tog('lowfx', 'lowfx', 'lowfx', (v) => { s.lowfx = v; call(G.fx, 'setLow', v); });
@@ -33625,7 +34145,44 @@ $ 0 .##/##./.#./.##/##.
       if (G.windows.notify) {
         row('notify', 'bell');
         const nl = T('set.notifyBtn');
-        if (G.ui.button('settings.notify', x0 + cw - 66, y + 4, 64, 14, { style: 'blue', label: nl, font: fitFont(nl, 60), sfx: 'select' })) G.ui.open('notify', {});
+        if (G.ui.button('settings.notify', x0 + cw - 66, y + 3, 64, 14, { style: 'blue', label: nl, font: fitFont(nl, 60), sfx: 'select' })) G.ui.open('notify', {});
+        y += RH;
+      }
+      // обязательная реклама (демо, spec 17 §5): после покупки отключения — пилюля «Куплено» вместо переключателя
+      if (G.ads && G.act.setForcedAds) {
+        if (G.ads.interBlocked && G.ads.interBlocked()) {
+          row('forcedAds', 'noAds', cw - 64);
+          const ol = T('common.owned'), ow = Math.min(60, G.textW(ol, 'small') + 8);
+          G.px.box(x0 + cw - ow - 2, y + 4, ow, 12, P('cardOk', '#5fbf6a'), 2);
+          text(ol, x0 + cw - 2 - ow / 2, y + 7, { align: 'center', font: 'small', color: P('P06', '#ffffff') });
+          y += RH;
+        } else {
+          // профиль по кругу Выкл → «Прыжок, нора» (сегмент 1) → «Все режимы» (spec 17 §18) → Выкл; шестерёнка —
+          // окно параметров adsTune (spec 17 §20), оранжевая, если игрок что-то поменял
+          const tune = !!(G.windows.adsTune && G.act.setAdsTune);
+          row('forcedAds', 'ad', tune ? cw - 111 : cw - 72);   // с шестерёнкой: подпись от x0 + 22 до x0 + cw - 89
+          const pf = s.forcedAds === true ? (s.forcedAdsLate === true ? 'late' : 'seg1') : 'off';
+          const al = T('set.adsMode.' + pf);
+          if (tune && G.ui.button('settings.adsTune', x0 + cw - 86, y + 3, 18, 14, { style: G.ads.tuned() ? 'orange' : 'blue', icon: 'gear',
+            iconSize: 9, sfx: 'select' })) G.ui.open('adsTune', {});
+          if (G.ui.button('settings.forcedAds', x0 + cw - 66, y + 3, 64, 14, { style: pf === 'off' ? 'grey' : 'blue', label: al,
+            font: fitFont(al, 60), sfx: 'select' })) {
+            const nx = ADS_MODES[(ADS_MODES.indexOf(pf) + 1) % ADS_MODES.length];
+            const ms = G.ads.interCfg ? G.ads.interCfg(nx === 'late' ? 'late' : 'seg1').minStage : ((D().ads && D().ads.inter && D().ads.inter.MIN_STAGE) || 12);
+            if (G.act.setForcedAds(nx === 'off' ? false : nx)) {
+              toast(nx === 'off' ? T('set.forcedAdsOff') : T(nx === 'late' ? 'set.forcedAdsLate' : 'set.forcedAdsOn', ms));
+            }
+          }
+          y += RH;
+        }
+      }
+      // задания партнёров (демо, spec 17 §3): с этапа D.offers.STAGE
+      if (G.windows.offers) {
+        const ost = (D().offers && D().offers.STAGE) || 10, olk = record() < ost;
+        row('partners', 'gift', cw - 72);
+        const pl = T('set.partnersBtn');
+        if (G.ui.button('settings.partners', x0 + cw - 66, y + 3, 64, 14, { style: olk ? 'grey' : 'blue', label: pl, font: fitFont(pl, 60), sfx: 'select',
+          icon: olk ? 'lock' : undefined, deny: olk, onDeny: () => deny(T('lock.tip', ost)) })) G.ui.open('offers', {});
         y += RH;
       }
       // save / load copy
@@ -33644,8 +34201,14 @@ $ 0 .##/##./.#./.##/##.
       text(sl, x0 + cw / 2, y, { align: 'center', font: 'small', color: TX.soft(), maxW: cw });
       y += 12;
       if (G.ui.button('settings.redeem', x0, y, bw, 20, { style: 'blue', label: T('set.redeem'), font: fitFont(T('set.redeem'), bw - 6) })) {
-        G.ui.open('textInput', { title: T('set.redeem'), ok: T('set.redeemBtn'), hint: T('set.code'), max: 16,
-          onOk: (v) => { if (!String(v || '').trim()) { deny(T('set.redeemEmpty')); return false; } deny(T('set.redeemInvalid')); return true; } });
+        // коды подарков (GDD 9.8, spec 17 §1): проверка и выдача — G.act.redeemCode (50_extras); ошибка оставляет окно
+        G.ui.open('textInput', { title: T('set.redeem'), ok: T('set.redeemBtn'), hint: T('set.code'), max: (D().codes && D().codes.MAX_LEN) || 16,
+          onOk: (v) => {
+            if (!G.act.redeemCode) { if (!String(v || '').trim()) { deny(T('set.redeemEmpty')); return false; } deny(T('set.redeemInvalid')); return true; }
+            const r = G.act.redeemCode(v);
+            if (!r.ok) { deny(r.msg); return false; }
+            return true;
+          } });
       }
       if (G.ui.button('settings.restore', x0 + bw + 4, y, bw, 20, { style: 'blue', label: T('set.restore'), font: fitFont(T('set.restore'), bw - 6) })) {
         if (G.shop && typeof G.shop.restore === 'function') G.shop.restore();
@@ -33689,6 +34252,77 @@ $ 0 .##/##./.#./.##/##.
     const keep = a.onOk ? a.onOk(v) : true;
     if (keep !== false) w.close('ok');
   };
+  // Параметры обязательной рекламы (spec 17 §20): в оригинале их задаёт сервер, здесь — игрок. Ступени — D.ads.inter.TUNE,
+  // логика и хранение — G.ads.interCfg / G.act.setAdsTune (45_shop). Лимиты мест — текущего профиля (выкл — сегмент 1).
+  const TUNE_ROWS = [['minStage', 'trophy'], ['cooldown', 'stopwatch'], ['whole', 'ad'], ['afterRw', 'gift']];
+  const TUNE_MODE = { rebirth: 'menu.rebirth.title', mine: 'menu.mine.title', challenge: 'menu.play.title', boss: 'menu.boss.title', hunt: 'menu.hunt.title' };
+  const tuneFmt = (key, v) => {
+    if (key === 'minStage') return String(v);
+    if (key === 'whole') return v > 0 ? String(v) : '∞';
+    if (key === 'cooldown' || key === 'afterRw') {
+      if (!(v > 0)) return T('adsTune.none');
+      return v % 60 === 0 ? T('adsTune.min', v / 60) : T('adsTune.sec', v);
+    }
+    return String(v);
+  };
+  G.windows.adsTune = {
+    rect: 'tall', single: true, title: () => T('adsTune.title'),
+    draw(a, w) {
+      const A = G.ads, x0 = w.cx, cw = w.cw;
+      if (!A || !A.interCfg) return;
+      let y = w.cy + 1;
+      const hint = G.textWrap(T('adsTune.note'), cw - 4, 'small');
+      hint.forEach((ln, i) => text(ln, x0 + cw / 2, y + i * 7, { align: 'center', font: 'small', color: TX.soft() }));
+      y += hint.length * 7 + 3;
+      // степпер «−  значение  +» справа; значение синее, если отличается от профиля
+      const stepper = (key, cy) => {
+        const v = A.tuneGet(key), L = A.tuneList(key), dflt = A.tuneIsDefault(key);
+        const lo = v <= L[0] || (key === 'minStage' && v <= 1), hi = v >= L[L.length - 1];
+        const bx = x0 + cw - 72;
+        if (G.ui.button('adsTune.minus.' + key, bx, cy, 16, 14, { style: lo ? 'grey' : 'blue', label: '-', disabled: lo, sfx: 'select' })) A.tuneStep(key, -1);
+        const vs = tuneFmt(key, v), f = fitFont(vs, 34);
+        text(vs, bx + 36, cy + (f === 'small' ? 4 : 3), { align: 'center', font: f, color: dflt ? TX.dark() : P('btnBlue', '#3b7dd8') });
+        if (G.ui.button('adsTune.plus.' + key, bx + 56, cy, 16, 14, { style: hi ? 'grey' : 'blue', label: '+', disabled: hi, sfx: 'select' })) A.tuneStep(key, 1);
+      };
+      const RH = 24, lw = cw - 98;
+      for (const [key, ic] of TUNE_ROWS) {
+        G.px.rect(x0, y + RH - 1, cw, 1, P('P18', '#d1a265'));
+        icon(ic, x0 + 2, y + 3, 16);
+        const lb = T('adsTune.' + key), f = fitFont(lb, lw);
+        text(ellipsize(lb, lw, f), x0 + 22, y + 3, { color: TX.dark(), font: f });
+        const hs = key === 'whole' ? T('adsTune.whole.hint', A.interToday()) : T('adsTune.' + key + '.hint');
+        text(ellipsize(hs, lw, 'small'), x0 + 22, y + 13, { font: 'small', color: TX.soft() });
+        stepper(key, y + 5);
+        y += RH;
+      }
+      // лимиты мест в день — профиль, который правим
+      y += 5;
+      const prof = A.tuneProfile();
+      const hd = T('adsTune.caps', T('set.adsMode.' + prof));
+      text(ellipsize(hd, cw - 4, fitFont(hd, cw - 4)), x0 + 2, y, { color: TX.dark(), font: fitFont(hd, cw - 4) });
+      y += 11;
+      const RC = 21;
+      for (const pl of A.tuneKeys().filter((k) => k.indexOf('cap.') === 0).map((k) => k.slice(4))) {
+        G.px.rect(x0, y + RC - 1, cw, 1, P('P18', '#d1a265'));
+        const nm = T(TUNE_MODE[pl] || ('menu.' + pl + '.title')), f = fitFont(nm, lw);
+        text(ellipsize(nm, lw, f), x0 + 4, y + 2, { color: TX.dark(), font: f });
+        const cap = A.tuneGet('cap.' + pl);
+        const ts = cap > 0 ? T('adsTune.today', A.interToday(pl), cap) : T('adsTune.never');
+        text(ellipsize(ts, lw, 'small'), x0 + 4, y + 12, { font: 'small', color: cap > 0 ? TX.soft() : TX.bad() });
+        stepper('cap.' + pl, y + 3);
+        y += RC;
+      }
+      y += 6;
+      const tuned = A.tuned();
+      const rl = T('adsTune.reset');
+      if (G.ui.button('adsTune.reset', x0 + cw / 2 - 50, y, 100, 18, { style: tuned ? 'orange' : 'grey', label: rl, font: fitFont(rl, 94),
+        disabled: !tuned, sfx: 'select' })) {
+        if (G.act.setAdsTune('reset')) toast(T('adsTune.resetDone'));
+      }
+      w.tuneBottom = y + 18;   // тест: всё влезает в окно
+    },
+  };
+
   G.windows.textInput = {
     rect: 'dialog', title: (a) => a.title || '', closable: false, single: true,
     onOpen(a) { a.value = a.value || ''; },
@@ -33715,8 +34349,9 @@ $ 0 .##/##./.#./.##/##.
       if (Math.floor(w.t * 2) % 2 === 0) G.px.rect(x0 + 5 + G.textW(shown, 'main'), fy + 3, 1, 9, TX.dark());
       if (a.hint) text(a.hint, x0 + cw / 2, fy + 20, { align: 'center', font: 'small', color: TX.soft(), maxW: cw });
       const bw = Math.floor((w.w - 26) / 2), by = w.y + w.h - 25;
-      if (G.ui.button('textInput.cancel', w.x + 9, by, bw, 18, { style: 'grey', label: T('common.cancel') })) w.close('cancel');
-      if (G.ui.button('textInput.ok', w.x + w.w - 9 - bw, by, bw, 18, { style: 'green', label: a.ok || T('common.ok') })) submitText(a, w);
+      const lc = T('common.cancel'), lo = a.ok || T('common.ok');   // длинная подпись («Активировать») — мелким шрифтом
+      if (G.ui.button('textInput.cancel', w.x + 9, by, bw, 18, { style: 'grey', label: lc, font: fitFont(lc, bw - 6) })) w.close('cancel');
+      if (G.ui.button('textInput.ok', w.x + w.w - 9 - bw, by, bw, 18, { style: 'green', label: lo, font: fitFont(lo, bw - 6) })) submitText(a, w);
     },
   };
 
@@ -33860,10 +34495,15 @@ $ 0 .##/##./.#./.##/##.
         else {
           G.ui.open('textInput', { title: T('rank.changeName'), hint: T('rank.nameRules'), max: (D().ranking && D().ranking.NAME_MAX) || 25, value: m.nickname || '',
             onOk: (v) => {
-              v = String(v || '').trim();
+              v = String(v || '');
               const mn = (D().ranking && D().ranking.NAME_MIN) || 3, mx = (D().ranking && D().ranking.NAME_MAX) || 25;
-              if (v.length < mn || v.length > mx) { deny(T('rank.nameRules')); return false; }
-              if (((D().ranking && D().ranking.names) || []).some((n) => n.toLowerCase() === v.toLowerCase())) { deny(T('rank.nameTaken')); return false; }
+              // фильтр ника (GDD 9.5, spec 17 §2): пусто, то же имя, длина, символы, пробелы, буквы, запрещённые корни,
+              // имена ботов — G.nick (50_extras). Ошибка оставляет окно открытым и не тратит суточный кулдаун.
+              if (G.nick && G.nick.check) { const bad = G.nick.check(v, m.nickname || ''); if (bad) { deny(T(bad, mn, mx)); return false; } } else {
+                v = v.trim();
+                if (v.length < mn || v.length > mx) { deny(T('rank.nameRules')); return false; }
+                if (((D().ranking && D().ranking.names) || []).some((n) => n.toLowerCase() === v.toLowerCase())) { deny(T('rank.nameTaken')); return false; }
+              }
               m.nickname = v;
               m.nickChangedTs = wall();
               save();
@@ -33987,10 +34627,25 @@ $ 0 .##/##./.#./.##/##.
 //   G.ads.used(pl) / left(pl) (Infinity = no cap) / cap(pl) / auto() (= removeAllAds) / interBlocked() / active()
 //      -> {placement, kind, t, dur, left} | null / skip() / finishNow() (QA) / register(pl, fn) (G.act.watchAd hook)
 //   G.ads.inter(place, onDone, {super}) -> bool   interstitial 'rebirth'|'mine'|'challenge'|'boss'|'hunt'.
-//      OFF unless G.ads.CFG.INTERSTITIALS (?inter=1); then spec 06 §4 checks (record ≥ 12, 120 s cooldown, caps
-//      3/1/0/0/0, 4 a day, none within 60 s of a rewarded ad, never after Super). onDone(shown) always fires.
-//   G.ads.canInter(place, o) · G.ads.banner() -> bool (CFG.BANNER, off) · G.ads.drawBanner(x, y, w, h)
-//   G.ads.CFG = {INTERSTITIALS, BANNER, SIM_SEC, SKIP_AFTER, INTER_SIM_SEC, FAIL_RATE}  (?adsec= ?adfail= ?inter=1)
+//      Обязательная реклама (демо, spec 17 §5) — сегмент 1 оригинала. ВЫКЛ, пока G.ads.forced() ложно: настройка
+//      «Обязательная реклама (демо)» (G.S.meta.settings.forcedAds), D.ads.inter.ENABLED или ?inter=1; у бота — только
+//      ?inter=1 (тогда и ролики, и баннер, как у игрока). Проверки spec 06 §4: этап ≥ 12, 6 в день после Лунного
+//      прыжка и 2 после Кристальной норы, без перерыва и общего лимита, не после суперлуния. Профиль «Все режимы»
+//      (spec 17 §18: settings.forcedAdsLate или ?inter=late) берёт лимиты CAPS_LATE — ещё по 10 в день после Разноса,
+//      Хищной девятки и Слизнебоя. Показ отложен (interQ): ролик идёт, когда этап снова на экране без окон и режимов
+//      (не дольше WAIT_SEC). Счётчики дня — только вперёд (spec 16). onDone(shown) always fires.
+//   G.ads.forced() · profile() -> '' | 'seg1' | 'late' · caps() -> {place: n} · canInter(place, o) · interQueued() ·
+//      banner() -> bool (CFG.BANNER) · drawBanner(x, y, w, h)
+//   G.act.setForcedAds(on) -> bool (false: отключено покупкой); on — false | true (= 'seg1') | 'seg1' | 'late';
+//      событие 'ads:forced' {on, late}
+//   Параметры (spec 17 §20, в оригинале их задаёт сервер): G.ads.interCfg(prof) -> {minStage, cooldown, whole, afterRw,
+//      caps} — профиль + переопределения игрока settings.forcedAdsTune (бот их не видит) · interDefaults(prof) ·
+//      tuneProfile() ('seg1' | 'late') · tuneKeys() · tuneList(key) (ступени D.ads.inter.TUNE) · tuneGet(key) ·
+//      tuneIsDefault(key) · tuneStep(key, ±1) · tuned() · interToday(place?) — показов сегодня.
+//      G.act.setAdsTune(key, v | null) — key 'minStage' | 'cooldown' | 'whole' | 'afterRw' | 'cap.<место>' | 'reset';
+//      событие 'ads:tune' {key, value, profile}. Окно — 'adsTune' (43_meta).
+//   G.ads.CFG = {INTERSTITIALS, BANNER (геттеры), SIM_SEC, SKIP_AFTER, INTER_SIM_SEC, FAIL_RATE}  (?adsec= ?adfail=
+//      ?inter=1 ?inter=late ?banner=1)
 //
 // G.shop.ent(name) -> bool   removeForcedAds | removeAllAds | buffPack | autoUpgradePack | minePack | diaBombBought |
 //      vip | luxury (the last two read G.S.pass).
@@ -34701,14 +35356,105 @@ $ 0 .##/##./.#./.##/##.
   // ---------------------------------------------------------------------------------------------------------------
   const ads = G.ads = G.ads || {};
   const adCfg = AD();
+  // Обязательная реклама (spec 17 §5): ?inter=1, D.ads.inter.ENABLED или настройка «Обязательная реклама (демо)».
+  // Бот видит её только с ?inter=1 (ролики и баннер), без флага его прогон и баланс не меняются; покупка
+  // removeForcedAds/removeAllAds выключает всё.
+  const botRun = () => !!(G.flags && G.flags.bot);
+  const setts = () => (G.S && G.S.meta && G.S.meta.settings) || null;
+  ads.forced = () => flagOn('inter') || (!botRun() && (!!(AD().inter && AD().inter.ENABLED)
+    || !!(setts() && setts().forcedAds === true)));
+  // Профиль (spec 17 §18): '' — выкл; 'seg1' — сегмент 1 (Лунный прыжок и нора); 'late' — «Все режимы», как в поздних
+  // версиях оригинала: ещё после Разноса, Хищной девятки и Слизнебоя. Бот без ?inter=late всегда 'seg1'.
+  ads.profile = () => {
+    if (!ads.forced()) return '';
+    if (param('inter') === 'late') return 'late';
+    const st = setts();
+    return !botRun() && st && st.forcedAds === true && st.forcedAdsLate === true ? 'late' : 'seg1';
+  };
+  const num0 = (v) => (finite(+v) && +v > 0 ? +v : 0);   // 0 — «без ограничения» / «никогда» (см. canInter)
+  // Лимиты мест профиля из данных (без настроек игрока): 'late' — CAPS_LATE, иначе CAPS (сегмент 1).
+  const profileCaps = (prof) => {
+    const C = AD().inter || {};
+    return (prof === 'late' && C.CAPS_LATE) || C.CAPS || {};
+  };
+  // Настраиваемые параметры (spec 17 §20). В оригинале порог этапа, перерыв, лимиты мест и общий дневной лимит задаёт
+  // сервер; здесь — переопределения игрока settings.forcedAdsTune поверх значений профиля (окно adsTune в 43_meta).
+  // Формат: {minStage, cooldown, whole, afterRw, caps: {seg1: {место: n}, late: {место: n}}}; лимиты мест у каждого
+  // профиля свои. Битое поле (не число, ∞, NaN) не действует, число округляется и зажимается в ступени D.ads.inter.TUNE.
+  // Бот настройку не видит: у него всегда значения профиля.
+  const TUNE_KEYS = ['minStage', 'cooldown', 'whole', 'afterRw'];
+  const TUNE_SRC = { minStage: 'MIN_STAGE', cooldown: 'COOLDOWN', whole: 'CAP_WHOLE', afterRw: 'AFTER_REWARDED', cap: 'CAP' };
+  const PLACES = () => (AD().inter && AD().inter.PLACES) || ['rebirth', 'mine', 'challenge', 'boss', 'hunt'];
+  const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+  const tuneList = (kind) => {
+    const L = AD().inter && AD().inter.TUNE && AD().inter.TUNE[TUNE_SRC[kind]];
+    return Array.isArray(L) && L.length ? L : [0];
+  };
+  const tuneVal = (kind, v) => {
+    if (!finite(v)) return null;
+    const L = tuneList(kind);
+    return clamp(Math.round(v), L[0], L[L.length - 1]);
+  };
+  const tuneOf = () => { const st = setts(); return st && isObj(st.forcedAdsTune) ? st.forcedAdsTune : null; };
+  ads.tuneKeys = () => TUNE_KEYS.concat(PLACES().map((pl) => 'cap.' + pl));
+  ads.tuneList = (key) => tuneList(String(key).indexOf('cap.') === 0 ? 'cap' : key).slice();
+  // Профиль, чьи лимиты мест правит окно: текущий, а при выключенной рекламе — сегмент 1.
+  ads.tuneProfile = () => {
+    const p = ads.profile();
+    if (p) return p;
+    const st = setts();
+    return st && st.forcedAdsLate === true ? 'late' : 'seg1';
+  };
+  // Значения профиля без настроек игрока (prof: 'seg1' | 'late'; по умолчанию — tuneProfile()).
+  ads.interDefaults = (prof) => {
+    const C = AD().inter || {}, p = prof || ads.tuneProfile();
+    return { minStage: num0(C.MIN_STAGE) || 12, cooldown: num0(C.COOLDOWN), whole: num0(C.CAP_WHOLE),
+      afterRw: num0(C.AFTER_REWARDED), caps: Object.assign({}, profileCaps(p)) };
+  };
+  // Действующие значения: профиль + переопределения игрока (кроме бота). Их читают canInter, очередь и баннер.
+  ads.interCfg = (prof) => {
+    const p = prof || ads.tuneProfile(), out = ads.interDefaults(p), tu = botRun() ? null : tuneOf();
+    if (!tu) return out;
+    for (const k of TUNE_KEYS) { const v = tuneVal(k, tu[k]); if (v !== null) out[k] = k === 'minStage' ? Math.max(1, v) : v; }
+    const cc = isObj(tu.caps) && isObj(tu.caps[p]) ? tu.caps[p] : null;
+    if (cc) for (const pl of PLACES()) { const v = tuneVal('cap', cc[pl]); if (v !== null) out.caps[pl] = v; }
+    return out;
+  };
+  ads.caps = () => ads.interCfg().caps;
+  // Есть ли хоть одно действующее переопределение (кнопка-шестерёнка в настройках подсвечивается).
+  ads.tuned = () => {
+    if (!tuneOf()) return false;
+    const p = ads.tuneProfile(), a = ads.interCfg(p), d = ads.interDefaults(p);
+    return TUNE_KEYS.some((k) => a[k] !== d[k]) || PLACES().some((pl) => num0(a.caps[pl]) !== num0(d.caps[pl]));
+  };
+  // Текущее значение параметра key ('minStage' | 'cooldown' | 'whole' | 'afterRw' | 'cap.<место>').
+  ads.tuneGet = (key) => {
+    const c = ads.interCfg(), k = String(key);
+    return k.indexOf('cap.') === 0 ? num0(c.caps[k.slice(4)]) : c[k];
+  };
+  ads.tuneIsDefault = (key) => {
+    const d = ads.interDefaults(), k = String(key);
+    return ads.tuneGet(key) === (k.indexOf('cap.') === 0 ? num0(d.caps[k.slice(4)]) : d[k]);
+  };
+  // Шаг по ступеням: dir > 0 — следующая ступень больше текущего значения, dir < 0 — предыдущая. false — край.
+  ads.tuneStep = (key, dir) => {
+    const L = ads.tuneList(key), cur = ads.tuneGet(key);
+    if (cur === undefined) return false;
+    let nx = null;
+    if (dir > 0) { for (const v of L) if (v > cur) { nx = v; break; } } else { for (let i = L.length - 1; i >= 0; i--) if (L[i] < cur) { nx = L[i]; break; } }
+    if (nx === null || (String(key) === 'minStage' && nx < 1)) return false;
+    return G.act.setAdsTune(key, nx);
+  };
   ads.CFG = {
-    INTERSTITIALS: flagOn('inter') || !!(adCfg.inter && adCfg.inter.ENABLED),
-    BANNER: flagOn('banner') || !!(adCfg.inter && adCfg.inter.BANNER),
     SIM_SEC: clamp(numParam('adsec', adCfg.SIM_SEC || 4), 0.2, 5),
     SKIP_AFTER: adCfg.SKIP_AFTER !== undefined ? adCfg.SKIP_AFTER : 1,
     INTER_SIM_SEC: adCfg.INTER_SIM_SEC || 2,
     FAIL_RATE: clamp(numParam('adfail', adCfg.FAIL_RATE || 0), 0, 1),
   };
+  // INTERSTITIALS / BANNER читаются на лету: настройку можно переключить в любой момент
+  Object.defineProperty(ads.CFG, 'INTERSTITIALS', { enumerable: true, get: () => ads.forced() });
+  Object.defineProperty(ads.CFG, 'BANNER', { enumerable: true,
+    get: () => flagOn('banner') || (!botRun() && !!(AD().inter && AD().inter.BANNER)) || ads.forced() });
   const adsDay = () => {
     const a = A(), k = today();
     if (a.dayKey !== k && (!a.dayKey || k > a.dayKey)) {          // перевод часов назад лимиты не обнуляет (spec 16 §1)
@@ -34786,18 +35532,23 @@ $ 0 .##/##./.#./.##/##.
   ads.closeInter = () => (cur && cur.kind === 'inter' && cur.t >= cur.dur ? (completeAd(), true) : false);
   ads.finishNow = () => { if (!cur) return false; cur.t = cur.dur; completeAd(); return true; };
 
+  // Проверки spec 06 §4 со значениями сегмента 1 (spec 17 §5). 0 у COOLDOWN / CAP_WHOLE / AFTER_REWARDED — без
+  // ограничения; CAPS[place] 0 — в этом месте никогда. Счётчики дня — adsDay() (сброс только вперёд, spec 16 §1).
+  // Значения проверок 3–7 — ads.interCfg(): профиль + настройки игрока (spec 17 §20).
   ads.canInter = (place, o = {}) => {
     const C = AD().inter || {};
     if (!ads.CFG.INTERSTITIALS) return false;
     if (ads.interBlocked()) return false;                                   // 1
     if (cur || hasWin('ad')) return false;                                   // 2
     if (o.super && C.NEVER_AFTER_SUPER !== false) return false;
-    if (record() < (C.MIN_STAGE || 12)) return false;                        // 3
+    const F = ads.interCfg();
+    if (record() < F.minStage) return false;                                 // 3
     const a = adsDay(), now = wallMs();
-    if (a.lastInterTs && (now - a.lastInterTs) / 1000 < (C.COOLDOWN || 120)) return false;              // 4
-    if ((a.inter[place] || 0) >= ((C.CAPS && C.CAPS[place]) || 0)) return false;                        // 5
-    if (a.interWhole >= (C.CAP_WHOLE || 4)) return false;                                                // 6
-    if (a.lastRewardedTs && (now - a.lastRewardedTs) / 1000 < (C.AFTER_REWARDED || 60)) return false;  // 7
+    const cd = F.cooldown, whole = F.whole, afterRw = F.afterRw;
+    if (cd && a.lastInterTs && (now - a.lastInterTs) / 1000 < cd) return false;                         // 4
+    if ((a.inter[place] || 0) >= num0(F.caps[place])) return false;                                     // 5
+    if (whole && a.interWhole >= whole) return false;                                                    // 6
+    if (afterRw && a.lastRewardedTs && (now - a.lastRewardedTs) / 1000 < afterRw) return false;          // 7
     return true;
   };
   ads.inter = (place, onDone, o = {}) => {
@@ -34812,14 +35563,98 @@ $ 0 .##/##./.#./.##/##.
     G.emit('ad:shown', { placement: place, kind: 'inter', auto: false });
     return true;
   };
-  ads.banner = () => !!ads.CFG.BANNER && !ads.interBlocked() && record() >= ((AD().inter && AD().inter.MIN_STAGE) || 12);
+  ads.banner = () => !!ads.CFG.BANNER && !ads.interBlocked() && record() >= ads.interCfg().minStage;
+  // Сегодняшние показы: place — место, без аргумента — всего (для окна adsTune).
+  ads.interToday = (place) => { const a = adsDay(); return place ? (a.inter[place] || 0) : (a.interWhole || 0); };
+  // Баннер-полоса (сегмент 1, spec 17 §5): тёмная плашка «РЕКЛАМА (демо)» с бегущим блеском; рисует 40_hud.
   ads.drawBanner = (x, y, w, h) => {
     if (!ads.banner()) return false;
     const P = X();
     P.box(x, y, w, h, 'P00', 1);
     P.box(x + 1, y + 1, w - 2, h - 2, 'P02', 1);
     P.dither(x + 1, y + 1, w - 2, h - 2, 'P01', 0.5, 0);
+    const gx = Math.floor(((uiT() * 40) % (w + 30)) - 15);
+    if (gx > 1 && gx < w - 4) P.alphaRect(x + gx, y + 1, 3, h - 2, 'P05', 0.18);
     G.text(T('ad.label'), x + Math.floor(w / 2), y + Math.floor((h - 7) / 2), { align: 'center', color: 'P05' });
+    return true;
+  };
+  // Отложенный показ: после Лунного прыжка (не суперлуние и не платный) и после режимов ролик ждёт, пока игрок
+  // вернётся на этап без окон и режимов (tick ниже), но не дольше WAIT_SEC. Место с лимитом 0 в текущем профиле в
+  // очередь не встаёт (сегмент 1: после Разноса, Хищной девятки и Слизнебоя — никогда).
+  let interQ = null;
+  const interWant = (place) => {
+    if (!ads.CFG.INTERSTITIALS || ads.interBlocked()) return;   // бот: INTERSTITIALS истинно только с ?inter=1
+    if (!num0(ads.caps()[place])) return;
+    interQ = { place, t: 0 };
+  };
+  const interTick = (sec) => {
+    if (!interQ) return;
+    interQ.t += sec;
+    const C = AD().inter || {};
+    if (interQ.t > (num0(C.WAIT_SEC) || 30) || !ads.CFG.INTERSTITIALS || ads.interBlocked()) { interQ = null; return; }
+    if (!G.ready || !G.scenes || G.scenes.name !== 'stage' || cur) return;
+    if (G.ui.top() || (G.ui.queued && G.ui.queued().length) || (G.modes && G.modes.active && G.modes.active())) return;
+    const q = interQ;
+    interQ = null;
+    ads.inter(q.place, () => {}, {});
+  };
+  ads.interQueued = () => (interQ ? interQ.place : null);
+  G.on('rebirth', (e) => { if (e && !e.super && !e.paid) interWant('rebirth'); });
+  // Конец режима (победа, поражение, выход и быстрое прохождение — DEFAULT, как у норы): mine — в обоих профилях,
+  // challenge/boss/hunt — только в профиле «Все режимы» (у сегмента 1 лимит 0). Король (raid) — никогда.
+  const INTER_MODES = ['mine', 'challenge', 'boss', 'hunt'];
+  G.on('mode:end', (e) => { if (e && INTER_MODES.indexOf(e.mode) >= 0) interWant(e.mode); });
+  G.on('state:loaded', () => { interQ = null; });
+  G.on('state:reset', () => { interQ = null; });
+  // «Обязательная реклама (демо)»: false — выкл, true/'seg1' — сегмент 1, 'late' — «Все режимы». После покупки
+  // отключения рекламы включить нельзя (false). При переходе на профиль с лимитом 0 у места очередь снимается.
+  G.act = G.act || {};
+  G.act.setForcedAds = (on) => {
+    const st = setts();
+    if (!st) return false;
+    if (on && ads.interBlocked()) return false;
+    const late = on === 'late';
+    st.forcedAds = !!on;
+    st.forcedAdsLate = late;
+    if (!on || (interQ && !num0(ads.caps()[interQ.place]))) interQ = null;
+    saveNow();
+    G.emit('ads:forced', { on: !!on, late });
+    return true;
+  };
+  // Параметры обязательной рекламы (spec 17 §20): key — 'minStage' | 'cooldown' | 'whole' | 'afterRw' | 'cap.<место>'
+  // (лимит места в текущем профиле tuneProfile()), v — число или null (вернуть значение профиля). key 'reset' (или
+  // null) — сбросить все переопределения. Значение, равное профильному, переопределение удаляет. При лимите 0 у
+  // места в очереди очередь снимается. -> bool; событие 'ads:tune' {key, value, profile}.
+  G.act.setAdsTune = (key, v) => {
+    const st = setts();
+    if (!st) return false;
+    const prof = ads.tuneProfile();
+    if (key === null || key === undefined || key === 'reset') {
+      st.forcedAdsTune = null;
+    } else {
+      const k = String(key), capPl = k.indexOf('cap.') === 0 ? k.slice(4) : null;
+      if (capPl !== null ? PLACES().indexOf(capPl) < 0 : TUNE_KEYS.indexOf(k) < 0) return false;
+      let val = null;
+      if (v !== null && v !== undefined) {
+        val = tuneVal(capPl !== null ? 'cap' : k, typeof v === 'number' ? v : NaN);
+        if (val === null) return false;
+        if (k === 'minStage') val = Math.max(1, val);
+      }
+      const tu = tuneOf() ? JSON.parse(JSON.stringify(tuneOf())) : {};
+      const d = ads.interDefaults(prof);
+      if (capPl !== null) {
+        if (!isObj(tu.caps)) tu.caps = {};
+        if (!isObj(tu.caps[prof])) tu.caps[prof] = {};
+        if (val === null || val === num0(d.caps[capPl])) delete tu.caps[prof][capPl]; else tu.caps[prof][capPl] = val;
+        if (!Object.keys(tu.caps[prof]).length) delete tu.caps[prof];
+        if (!Object.keys(tu.caps).length) delete tu.caps;
+      } else if (val === null || val === d[k]) delete tu[k];
+      else tu[k] = val;
+      st.forcedAdsTune = Object.keys(tu).length ? tu : null;
+    }
+    if (interQ && !num0(ads.caps()[interQ.place])) interQ = null;
+    saveNow();
+    G.emit('ads:tune', { key: key === null || key === undefined ? 'reset' : String(key), value: key && key !== 'reset' ? ads.tuneGet(key) : null, profile: prof });
     return true;
   };
 
@@ -35303,9 +36138,23 @@ $ 0 .##/##./.#./.##/##.
     if (!a.lines || a.lang !== G.lang) { a.lines = G.textWrap(contents(p).join(' \n'), 156).slice(0, 5); a.lang = G.lang; }
     return a.lines;
   };
+  // Покупка отключения рекламы при включённой обязательной рекламе (spec 17 §5): красная строка «покупка выключит
+  // её вместе с баннером», после покупки — зелёная «отключены». Флаг фиксируется при открытии: высота окна не прыгает.
+  const FORCED_IDS = ['removeForcedAds', 'removeAllAds'];
+  const forcedLines = (a) => {
+    if (a.forced === undefined) a.forced = FORCED_IDS.indexOf(a.id) >= 0 && ads.forced() && !ads.interBlocked();
+    if (!a.forced) return null;
+    if (!a.fl || a.flLang !== G.lang) {
+      const wr = (k) => G.textWrap(T(k), 156, 'small').slice(0, 3);
+      a.fl = { on: wr('purchase.forcedOn'), off: wr('purchase.forcedOff') };
+      a.flLang = G.lang;
+    }
+    return a.fl;
+  };
+  const forcedH = (a) => { const f = forcedLines(a); return f ? Math.max(f.on.length, f.off.length) * 7 + 3 : 0; };
   const purchaseRect = (a) => {
     const n = purchaseLines(a).length;
-    const h = 19 + 40 + n * 9 + 4 + 16 + 4 + 9 + 6 + 18 + 8;
+    const h = 19 + 40 + n * 9 + 4 + forcedH(a) + 16 + 4 + 9 + 6 + 18 + 8;
     return { x: 20, y: Math.round(188 - h / 2), w: 176, h };
   };
   const purchaseFinish = (a, w) => {
@@ -35391,6 +36240,12 @@ $ 0 .##/##./.#./.##/##.
       const lines = purchaseLines(a);
       lines.forEach((ln, i) => G.text(ln, cx, y + i * 9, { align: 'center', color: 'P02' }));
       y += lines.length * 9 + 4;
+      const fl = forcedLines(a);
+      if (fl) {
+        const done = a.phase === 'done', fls = done ? fl.off : fl.on;
+        fls.forEach((ln, i) => G.text(ln, cx, y + i * 7, { align: 'center', font: 'small', color: done ? 'btnGreenD' : 'btnRed' }));
+        y += forcedH(a);
+      }
       G.text(SH().fmtPrice(p.price), cx, y, { align: 'center', scale: 2, color: 'btnGreenD', outline: 'P00' });
       y += 20;
       const note = T('purchase.note');
@@ -36124,6 +36979,7 @@ $ 0 .##/##./.#./.##/##.
     weekly.sync();
     stepUp.visible();
     adsDay();
+    interTick(1);
     if (cur && cur.state === 'queued' && !hasWin('ad') && (G.ui.queued ? G.ui.queued().indexOf('ad') < 0 : true)) cancelAd('dropped');
     if (PS()) {
       packs.check();
@@ -36241,7 +37097,7 @@ $ 0 .##/##./.#./.##/##.
   const adLeft = () => (G.ads && typeof G.ads.left === 'function' ? G.ads.left('daily_pet') : 0);
   const midnightLeft = () => Math.max(0, ((G.D && G.D.nextMidnight ? G.D.nextMidnight() : wall() + 3600e3) - wall()) / 1000);
   // Множитель ленты: 2 знака до 10, 1 знак до 100, дальше целый (§8.2)
-  const fmtMul = (v) => (v < 10 ? v.toFixed(2) : v < 100 ? v.toFixed(1) : String(Math.round(v)));
+  const fmtMul = (v) => (v < 10 ? G.fmtDec(v, 2, false) : v < 100 ? G.fmtDec(v, 1, false) : String(Math.round(v)));   // точка: G.fmtDec
 
   // ================================================================================================== состояние
   const defaults = () => ({
@@ -37557,7 +38413,7 @@ $ 0 .##/##./.#./.##/##.
     if (r.battle) r.battle.destroy();
     const b = r.battle = new G.Battle({ mode: 'hunt', stageNo: r.wave, biome: 0, scale: d.SCALE,
       bounds: { type: 'circle', r: A.SQUAD_R }, spawn: A.SQUAD.map((p) => ({ x: p.x, y: p.y })), camFixed: { x: 0, y: 0 },
-      range: A.RANGE, pay: false, numbers: false, edgeArrow: false, drawBg,
+      range: A.RANGE, rays: A.RAYS || 60, pay: false, numbers: false, edgeArrow: false, drawBg,
       // «Сам»: лидер идёт к слизню, ближайшему к центру, и упирается в r 14; «Вручную»: стоит (§3.2.4)
       pickLeaderTarget: (bt) => (S().auto ? bt.nearest(0, 0, Infinity) : null),
       onDamage: (t, dealt) => knock(t, dealt),
@@ -37583,7 +38439,7 @@ $ 0 .##/##./.#./.##/##.
       hPx: big ? 14 : 10, pop: 0, deathLife: popDur(), regular: true, draw: drawSlugT, hitFx: slugHitFx, deathFx: slugDeathFx,
       data: { hunt: true, big, kind: r.wave % 10, v: big ? d.SLUG.V_BIG : d.SLUG.V, kb: 0, kbT: 0, rec: d.RECOVER,
         phase: G.frand() * TAU, age: 0, popT: -1, danger: false, flip: Math.cos(a) > 0 } });
-    if (!Number.isFinite(hp)) t.hp = hp;               // волна 651+: бессмертный слизень (§3.2.3)
+    // волна 651+: HP — G.NUM_MAX («∞», spec 17 §8); addTarget его сохраняет, снять может только выстрел «∞»
     r.slugs.push(t);
     r.spawned++;
   };
@@ -37778,7 +38634,7 @@ $ 0 .##/##./.#./.##/##.
     need: (w, L) => D().need(w, L),
     levels: () => plan().levels,
     waves: () => plan().wave - S().wave,
-    pct: () => Math.floor(cp() * 100 / D().need(S().wave, S().lv)),
+    pct: () => { const c = cp(), n = D().need(S().wave, S().lv), v = c * 100 / n; return Math.floor(v < Infinity ? v : c / n * 100); },
     why: () => (!(G.stage && G.stage.unlocked('plusPacks')) ? 'locked' : !packActive('auto') ? 'pack'
       : (startWhy() || S().run) ? 'busy' : plan().levels > 0 ? '' : 'low'),
     can: () => sweep.why() === '',
@@ -38076,7 +38932,7 @@ $ 0 .##/##./.#./.##/##.
       } else {
         if (G.ui.button('hunt.claim', w.x + 36, w.y + 140, 120, 24, { style: 'gold', label, icon: 'adPlay', disabled })) G.act.huntClaim(true);
         if (G.ui.button('hunt.no', w.x + 36, w.y + 170, 120, 20, { style: 'grey', label: T('res.no'), disabled })) G.act.huntClaim(false);
-        if (G.ui.button('hunt.removeAds', w.x + 6, w.y + 196, 180, 14, { style: 'link', font: 'small', label: T('res.removeAds') })) G.ui.open('shop', { focus: 'removeAllAds' });
+        if (G.ui.button('hunt.removeAds', w.x + 6, w.y + 196, 180, 14, { style: 'link', font: 'small', label: T('res.removeAds'), textColor: 'P16', shadow: false })) G.ui.open('shop', { focus: 'removeAllAds' });
       }
     },
   };
@@ -38408,15 +39264,10 @@ $ 0 .##/##./.#./.##/##.
   };
 
   // ================================================================================================== числа
-  const dec = () => (G.lang === 'ru' ? ',' : '.');
-  // d знаков после запятой, без хвостовых нулей
-  const fmtNum = (v, d) => {
-    let s = (Math.round(v * Math.pow(10, d)) / Math.pow(10, d)).toFixed(d);
-    if (d > 0) s = s.replace(/\.?0+$/, '');
-    return s.replace('.', dec());
-  };
+  // d знаков после точки, без хвостовых нулей; разделитель общий для RU и EN (G.fmtDec, spec 17 §13)
+  const fmtNum = (v, d) => G.fmtDec(v, d);
   const UNITS = [[1e9, 'charms.fmtB'], [1e6, 'charms.fmtM'], [1e3, 'charms.fmtK']];
-  // Короткая форма ≥ 1000: «5,9 млн» / «5.9M»; округление до 1000 переходит в следующую единицу
+  // Короткая форма ≥ 1000: «5.9 млн» / «5.9M»; округление до 1000 переходит в следующую единицу
   const shortNum = (v) => {
     for (let i = UNITS.length - 1; i >= 0; i--) {
       const [u, key] = UNITS[i];
@@ -38428,10 +39279,10 @@ $ 0 .##/##./.#./.##/##.
     }
     return fmtNum(v, 1);
   };
-  // Множитель сводки (§8.3): до ×999 — два знака («3,61»), дальше коротко
+  // Множитель сводки (§8.3): до ×999 — два знака («3.61»), дальше коротко
   const fmtMul = (pm) => {
     const v = (+pm || 0) / 1000;
-    if (v < 999.995) return v.toFixed(2).replace('.', dec());
+    if (v < 999.995) return G.fmtDec(v, 2, false);
     return shortNum(v);
   };
   const valNum = (c, L) => {
@@ -40212,22 +41063,21 @@ $ 0 .##/##./.#./.##/##.
     // §8.4: «над короной, ниже строк HUD» — подъём 4 px вместо 14, чтобы надпись не заходила в полосу HUD (0..57)
     if (G.ui) G.ui.float('+' + G.fmt(stones) + ' {whetstone}', 108, 62, { color: 'P34', font: 'small', rise: 4 });
   };
-  // R11: лишний урон переходит на следующую полосу; с L184 полоса бесконечна и переноса нет (§4.1)
+  // R11: лишний урон переходит на следующую полосу (§4.1). С L184 HP полосы — G.NUM_MAX («∞», spec 17 §8):
+  // переноса на неё нет, а снять её может только выстрел «∞» (раньше полоса была Infinity и не снималась вовсе)
   const barOverflow = (r, t) => {
-    if (!Number.isFinite(t.maxHp)) { t.hp = Infinity; return; }
     if (Number.isNaN(t.hp)) { t.hp = t.maxHp; return; }
     if (t.hp < -Number.MAX_VALUE) t.hp = -Number.MAX_VALUE;
-    while (t.hp <= 0 && Number.isFinite(t.maxHp)) {
+    while (t.hp <= 0) {
       const s1 = DR.stonesPer(r.level);
       r.bars++; r.level++; r.stones += s1; r.bank += DR.BANK_PER_BAR;
-      t.maxHp = DR.hp(r.level); t.hp += t.maxHp;
+      t.maxHp = DR.hp(r.level); t.hp = G.isMax(t.maxHp) ? t.maxHp : t.hp + t.maxHp;
       G.emit('raid:bar', { level: r.level, stones: s1, bank: DR.BANK_PER_BAR });
       // эффекты: до 3 полос за 0.25 с — каждая отдельно, сверх — одной вспышкой с суммой (§8.4)
       if (r.time - r.fxT > 0.25) { r.fxT = r.time; r.fxN = 0; }
       if (r.fxN < 3) { r.fxN++; barFx(r, 1, s1); } else { r.pend++; r.pendStones += s1; }
     }
     if (Number.isNaN(t.hp)) t.hp = t.maxHp;
-    if (!Number.isFinite(t.maxHp)) t.hp = Infinity;
     if (r.bestBefore > 0 && r.level > r.bestBefore && !r.newBestShown) {
       r.newBestShown = true; r.bestT = r.time;
       // §8.4 просит 108, 40: с подъёмом 14 px надпись ложится на таймер и HP — ставим в свободный правый угол шапки
@@ -40466,7 +41316,7 @@ $ 0 .##/##./.#./.##/##.
     P.rectO(x + 1, y - 14, 3, 3, 'P34');
   });
   const drawBar = (ctx, r) => {
-    const t = r.king, frac = t && Number.isFinite(t.maxHp) && t.maxHp > 0 ? G.clamp(t.hp / t.maxHp, 0, 1) : 1;
+    const t = r.king, frac = t && t.maxHp > 0 ? G.clamp(t.hp / t.maxHp, 0, 1) : 1;
     const flash = r.flashT < 0.15;
     // арт рисует только полосу (flash — число > 0.5), подпись «УР. N» — всегда наша
     if (!callArt('raidBar', ctx, 0, 2, 216, 9, { level: r.level, frac, t: r.time, flash: flash ? 1 : 0 })) {
@@ -40500,7 +41350,7 @@ $ 0 .##/##./.#./.##/##.
     const pulse = hot && Math.floor(r.time * 4) % 2 === 0;
     G.text(G.fmtTime(Math.ceil(left), 'ms'), 108, 26, { align: 'center', color: hot ? (pulse ? 'P41' : 'P36') : 'P06', outline: 'P00' });
     const hp = t ? Math.max(0, t.hp) : 0, mx = t ? t.maxHp : 0;
-    G.text(fit(T('raid.hp', G.fmt(hp), Number.isFinite(mx) ? G.fmt(mx) : '∞'), 200, 'small'), 108, 36, { align: 'center', font: 'small', color: 'P06', outline: 'P00' });
+    G.text(fit(T('raid.hp', G.fmt(hp), G.fmt(mx)), 200, 'small'), 108, 36, { align: 'center', font: 'small', color: 'P06', outline: 'P00' });
     const nb = r.newBestShown && r.week === s.week;
     G.text(fit(T('raid.fightBest', Math.max(r.week === s.week ? s.best : 0, r.level)), 200, 'small'), 108, 43,
       { align: 'center', font: 'small', color: nb ? 'P34' : 'P05', outline: 'P00' });
@@ -41185,6 +42035,566 @@ $ 0 .##/##./.#./.##/##.
 //# sourceURL=src/49_notify.js
 </script>
 <script>
+// Мелкие системы из GDD 9.5 / 9.6 / 9.8 / 11.4 (owner extras), spec 17. Сети, партнёров и платежей нет — только
+// симуляция; обязательная реклама и баннер (spec 17 §5) живут в 45_shop.js и 40_hud.js.
+//   §1 коды подарков: в D.codes хранится FNV-1a от кода (регистр и пробелы не важны), награда и срок; использованные
+//      коды — в сохранении. Ввод — окно textInput из настроек (43_meta), удача — окно codeGot с анимацией.
+//   §2 фильтр ника: пусто, то же имя, длина, символы, пробелы, хотя бы одна буква, корни мата и оскорблений
+//      (D.ranking.BAD_LAT / BAD_CYR) после замены похожих букв и цифр за вычетом исключений (BAD_EXCEPT — настоящие
+//      имена), имена ботов. Вызывается окном смены имени (43_meta); ошибка не тратит суточный кулдаун.
+//   §3 задания партнёров (демо): окна offers и offerDo; награда — кристаллы; перезарядка, лимит в день на задание и
+//      общий лимит D.offers.DAY_CAP; суточный сброс только вперёд через G.clock.newDay (spec 16).
+//   §4 проверка обновления: только http(s), не ?qa и не ?bot, один раз за сессию через D.update.DELAY с после 'ready':
+//      тихий fetch своей страницы без query, разбор window.BUILD_INFO; хэш другой и время новее -> окно update
+//      («Обновить» перезагружает, «Позже» — до следующего запуска). Ошибки сети молча. Офлайн (file://) не трогается.
+//      Сменился хэш сборки с прошлого запуска -> тост «Игра обновлена до vX».
+// State 'extras' v1: {codes {hash: ts}, offers {id: {last, n}}, offDay, offN, build}.
+// API G.codes: hash(raw) · norm(raw) · check(raw) -> {ok, msg, key, h, reward} без выдачи · used() -> [hash].
+// API G.nick: check(raw, cur) -> '' | ключ строки ошибки (текст: G.t(key, NAME_MIN, NAME_MAX)) · bad(raw) -> bool
+//   (запрещённый корень) · variants(raw) -> [строка, латиница, кириллица].
+// API G.offers: list() -> [{id, dia, cd, perDay, icon, st}] · status(id) -> {ok, reason, left, n, perDay, total, cap}.
+// API G.upd: info() -> {allowed, checked, later, found, shown} · parse(html) -> {hash, time} | null · check() -> Promise
+//   · found(info) -> bool (окно поставлено в очередь) · fake(hash, time) — QA (= __qa.fakeUpdate), без проверки протокола.
+// G.act.redeemCode(raw) -> {ok, msg, reward} · G.act.offerDo(id) -> {ok, msg, dia}.
+// События: 'code:redeem' {h, reward}, 'offer:done' {id, dia}, 'update:found' {hash, time}, 'update:reload'.
+(() => {
+  'use strict';
+  const G = window.G = window.G || {};
+
+  const T = (k, ...a) => G.t(k, ...a);
+  const D = () => G.D || {};
+  const P = (k, d) => (G.PAL && G.PAL[k]) || d;
+  const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+  const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
+  const call = (o, f, ...a) => { try { return o && typeof o[f] === 'function' ? o[f](...a) : undefined; } catch (e) { G.reportError(e, 'extras ' + f); return undefined; } };
+  const save = () => { try { G.saveNow(); } catch (e) { /* ignore */ } };
+  const wall = () => G.time.wallNow();
+  const sfx = (n) => { try { G.sfx(n); } catch (e) { /* ignore */ } };
+  const toast = (s, o) => { if (G.ui && G.ui.toast) G.ui.toast(s, o || {}); };
+  const deny = (s) => toast(s, { deny: true });
+  const qaBot = () => !!(G.flags && (G.flags.qa || G.flags.bot));
+  const tutDone = () => !(G.S.tut && G.S.tut.step && G.S.tut.step !== 'done');
+  const record = () => {
+    const v = call(G.stage, 'max');
+    if (isNum(+v) && +v > 0) return +v;
+    const s = G.S.stage;
+    return (s && (s.max || s.cur)) || 1;
+  };
+
+  const defaults = () => ({ codes: {}, offers: {}, offDay: '', offN: 0, build: '' });
+  G.state.register('extras', defaults, { version: 1 });
+
+  // повреждённые поля чинятся при чтении
+  const DAYKEY = /^\d{4}-\d{2}-\d{2}$/;
+  const S = () => {
+    let s = G.S.extras;
+    if (!isObj(s)) s = G.S.extras = defaults();
+    if (!isObj(s.codes)) s.codes = {};
+    for (const k of Object.keys(s.codes)) if (!/^[0-9a-f]{8}$/.test(k) || !isNum(s.codes[k])) delete s.codes[k];
+    if (!isObj(s.offers)) s.offers = {};
+    for (const k of Object.keys(s.offers)) {
+      const e = s.offers[k];
+      if (!isObj(e)) { delete s.offers[k]; continue; }
+      e.last = isNum(e.last) && e.last > 0 ? e.last : 0;
+      e.n = isNum(e.n) && e.n > 0 ? Math.floor(e.n) : 0;
+    }
+    if (typeof s.offDay !== 'string' || (s.offDay && !DAYKEY.test(s.offDay))) s.offDay = '';
+    s.offN = isNum(s.offN) && s.offN > 0 ? Math.floor(s.offN) : 0;
+    if (typeof s.build !== 'string') s.build = '';
+    return s;
+  };
+
+  // =================================================================================================================
+  // §1 Коды подарков (GDD 9.8)
+  // =================================================================================================================
+  const DC = () => Object.assign({ MAX_LEN: 16, list: [] }, D().codes || {});
+  const norm = (raw) => String(raw == null ? '' : raw).replace(/\s+/g, '').toUpperCase();
+  // FNV-1a 32 бит по кодам символов нормализованной строки
+  const hash = (raw) => {
+    const s = norm(raw);
+    let h = 0x811c9dc5;
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    return ('0000000' + h.toString(16)).slice(-8);
+  };
+  // «сегодня» для срока кода: часы, переведённые назад, не оживляют истёкший код. Берётся самая поздняя известная
+  // метка: стенные часы, clock.maxWall, выдачи журнала clock (их w переживает откат, spec 16 §1) и время введённых
+  // кодов. Без сервера новое сохранение с часами в прошлом код всё же примет — см. spec 17 §1.
+  const codeToday = () => {
+    let hi = wall();
+    const ck = G.S.clock;
+    if (isObj(ck)) {
+      if (isNum(ck.maxWall) && ck.maxWall > hi) hi = ck.maxWall;
+      if (Array.isArray(ck.ledger)) for (const e of ck.ledger) if (isObj(e) && isNum(e.w) && e.w > hi) hi = e.w;
+    }
+    const used = S().codes;
+    for (const k of Object.keys(used)) if (used[k] > hi) hi = used[k];
+    return G.dayKey(hi);
+  };
+  const rewardText = (r) => {
+    const out = [];
+    if (r && r.dia > 0) out.push('+' + G.fmt(r.dia) + ' {gem}');
+    if (r && r.petCoins > 0) out.push('+' + G.fmt(r.petCoins) + ' {clover}');
+    return out.join('  ');
+  };
+  const codeCheck = (raw) => {
+    const n = norm(raw);
+    if (!n) return { ok: false, key: 'set.redeemEmpty' };
+    const K = DC();
+    if (n.length > K.MAX_LEN) return { ok: false, key: 'set.redeemInvalid' };
+    const h = hash(n);
+    const c = (K.list || []).find((e) => isObj(e) && e.h === h);
+    if (!c) return { ok: false, key: 'set.redeemInvalid', h };
+    if (S().codes[h]) return { ok: false, key: 'code.used', h };
+    if (c.until && codeToday() > c.until) return { ok: false, key: 'code.expired', h };
+    return { ok: true, key: '', h, reward: Object.assign({}, c.reward || {}) };
+  };
+  G.codes = {
+    norm, hash,
+    check: (raw) => { const r = codeCheck(raw); r.msg = r.key ? T(r.key) : ''; return r; },
+    used: () => Object.keys(S().codes),
+    rewardText,
+  };
+
+  G.act = G.act || {};
+  G.act.redeemCode = (raw) => {
+    const r = codeCheck(raw);
+    if (!r.ok) return { ok: false, msg: T(r.key), key: r.key };
+    if (G.clock && !G.clock.can('code')) return { ok: false, msg: T('clock.wait'), key: 'clock.wait' };
+    const rw = r.reward;
+    if (rw.dia > 0 && G.eco) G.eco.addDia(rw.dia, 'code');
+    if (rw.petCoins > 0 && G.eco && G.eco.addPetCoins) G.eco.addPetCoins(rw.petCoins, 'code');
+    S().codes[r.h] = wall();
+    if (G.clock) G.clock.grant('code');
+    save();
+    G.emit('code:redeem', { h: r.h, reward: Object.assign({}, rw) });
+    if (G.ready && G.ui && G.windows.codeGot) G.ui.open('codeGot', { reward: Object.assign({}, rw) });
+    else toast(T('code.got', rewardText(rw)), { icon: 'gift' });
+    return { ok: true, msg: T('code.got', rewardText(rw)), reward: Object.assign({}, rw) };
+  };
+
+  // =================================================================================================================
+  // §2 Фильтр ника (GDD 9.5)
+  // =================================================================================================================
+  const NAME_OK = /^[A-Za-zА-Яа-яЁё0-9 _.\-]+$/;
+  const SEP = /[ _.\-]+/;
+  // похожие буквы и цифры -> латиница / кириллица; з/z и д/d — для смешанных слов («пиzда», «piзda»)
+  const TO_LAT = { 'а': 'a', 'в': 'b', 'е': 'e', 'к': 'k', 'м': 'm', 'н': 'h', 'о': 'o', 'р': 'p', 'с': 'c', 'т': 't', 'у': 'y',
+    'х': 'x', 'и': 'u', 'п': 'n', 'г': 'r', 'ь': 'b', 'з': 'z', 'д': 'd',
+    '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '8': 'b', '9': 'g' };
+  const TO_CYR = { 'a': 'а', 'b': 'в', 'c': 'с', 'e': 'е', 'h': 'н', 'k': 'к', 'm': 'м', 'n': 'п', 'o': 'о', 'p': 'р', 'r': 'г',
+    't': 'т', 'u': 'и', 'x': 'х', 'y': 'у', 'z': 'з', 'd': 'д', '0': 'о', '1': 'и', '3': 'з', '4': 'ч', '6': 'б', '8': 'в' };
+  const mapStr = (s, m) => { let o = ''; for (const ch of s) o += m[ch] || ch; return o; };
+  // нижний регистр, ё -> е, й -> и («хуи» = «хуй», «xyu» -> «хуи»)
+  const nickNorm = (s) => String(s == null ? '' : s).toLowerCase().replace(/ё/g, 'е').replace(/й/g, 'и');
+  const mapAll = (base) => [base, mapStr(base, TO_LAT), mapStr(base, TO_CYR)];
+  const variants = (raw) => mapAll(nickNorm(raw));
+  // корень -> регэксп. '^' — начало слова, '$' — конец слова (дальше только цифры). rep: каждая буква может
+  // повторяться («fuuuck») — у корней да, у исключений нет
+  const toRe = (r, rep) => {
+    if (typeof r !== 'string') return null;
+    const start = r[0] === '^', end = r.length > 1 && r[r.length - 1] === '$';
+    const body = nickNorm(r.slice(start ? 1 : 0, end ? -1 : undefined));
+    if (!body) return null;
+    const pat = Array.from(body).map((ch) => ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + (rep ? '+' : '')).join('');
+    return new RegExp((start ? '^' : '') + pat + (end ? '(?=[0-9]*$)' : ''));
+  };
+  let lists = null, listSrc = null;
+  const getLists = () => {
+    const R = D().ranking || {};
+    const bad = (R.BAD_LAT || []).concat(R.BAD_CYR || []), exc = R.BAD_EXCEPT || [];
+    const key = bad.join('|') + '#' + exc.join('|');
+    if (lists && listSrc === key) return lists;
+    listSrc = key;
+    // исключение без якоря вырезало бы середину слова и склеило соседние буквы — такие не берём
+    lists = { roots: bad.map((r) => toRe(r, true)).filter(Boolean),
+      exc: exc.filter((r) => typeof r === 'string' && /^\^|\$$/.test(r)).map((r) => toRe(r, false)).filter(Boolean) };
+    return lists;
+  };
+  // исключения (настоящие имена и фамилии: «Yamashita», «Nazira», «Сукачев») вырезаются из каждого слова до проверки
+  // корней — и в исходной строке, и в каждом варианте с подменой букв
+  const isBad = (raw) => {
+    const L = getLists();
+    const clean = (w) => { for (const e of L.exc) w = w.replace(e, ''); return w; };
+    const base = nickNorm(raw).split(SEP).map(clean).join(' ');
+    for (const v of mapAll(base)) {
+      const words = v.split(SEP).map(clean).filter(Boolean);
+      const joined = words.join('');
+      for (const r of L.roots) {
+        if (r.test(joined)) return true;
+        for (const w of words) if (r.test(w)) return true;
+      }
+    }
+    return false;
+  };
+  // -> '' или ключ строки. cur — текущий ник: то же имя не меняется и не тратит суточный кулдаун (Alert_SameNickname).
+  // Для текста ошибки: G.t(key, NAME_MIN, NAME_MAX).
+  const nickCheck = (raw, cur) => {
+    const v = String(raw == null ? '' : raw);
+    const R = D().ranking || {}, mn = R.NAME_MIN || 3, mx = R.NAME_MAX || 25;
+    if (!v.trim()) return 'rank.nameEmpty';
+    if (cur != null && cur !== '' && v === String(cur)) return 'rank.nameSame';
+    if (v.length < mn) return 'rank.nameShort';
+    if (v.length > mx) return 'rank.nameLong';
+    if (!NAME_OK.test(v)) return 'rank.nameChars';
+    if (/^ | $| {2}/.test(v)) return 'rank.nameSpaces';
+    if (!/[A-Za-zА-Яа-яЁё]/.test(v)) return 'rank.nameLetter';
+    if (isBad(v)) return 'rank.nameBad';
+    if ((R.names || []).some((n) => String(n).toLowerCase() === v.toLowerCase())) return 'rank.nameTaken';
+    return '';
+  };
+  G.nick = { check: nickCheck, bad: isBad, variants };
+
+  // =================================================================================================================
+  // §3 Задания партнёров — демо (GDD 9.8 / 11.4)
+  // =================================================================================================================
+  const DO = () => Object.assign({ STAGE: 10, DAY_CAP: 4, SPIN: 1.2, list: [] }, D().offers || {});
+  const offerDef = (id) => (DO().list || []).find((o) => isObj(o) && o.id === id) || null;
+  // суточный сброс только вперёд: часы назад не возвращают задания (G.clock.newDay)
+  const dayRoll = () => {
+    const s = S(), dk = G.dayKey();
+    if (s.offDay === dk || (s.offDay && dk < s.offDay)) return;
+    if (G.clock && !G.clock.newDay('offerDay', s.offDay)) return;
+    s.offDay = dk;
+    s.offN = 0;
+    for (const k of Object.keys(s.offers)) s.offers[k].n = 0;
+  };
+  const offerStatus = (id) => {
+    const o = offerDef(id), K = DO();
+    if (!o) return { ok: false, reason: 'unknown', left: 0, n: 0, perDay: 0, total: 0, cap: K.DAY_CAP };
+    dayRoll();
+    const s = S(), e = s.offers[id] || { last: 0, n: 0 }, cd = Math.max(0, +o.cd || 0);
+    // перезарядка не длиннее cd: часы, ушедшие назад, не растягивают ожидание
+    const left = e.last ? Math.max(0, Math.min(cd, (e.last + cd * 1000 - wall()) / 1000)) : 0;
+    const out = { ok: false, reason: 'ok', left, n: e.n, perDay: o.perDay || 1, total: s.offN, cap: K.DAY_CAP };
+    if (record() < K.STAGE) out.reason = 'locked';
+    else if (s.offN >= K.DAY_CAP) out.reason = 'cap';
+    else if (e.n >= (o.perDay || 1)) out.reason = 'day';
+    else if (left > 0) out.reason = 'cd';
+    else out.ok = true;
+    return out;
+  };
+  const offerMsg = (st) => (st.reason === 'locked' ? T('lock.tip', DO().STAGE) : st.reason === 'cd' ? T('offer.cooldown', G.fmtTime(st.left))
+    : st.reason === 'cap' || st.reason === 'day' ? T('offer.dayLimit') : '');
+  G.offers = {
+    list: () => (DO().list || []).map((o) => Object.assign({}, o, { st: offerStatus(o.id) })),
+    status: offerStatus,
+    info: () => { dayRoll(); const s = S(); return { day: s.offDay, total: s.offN, cap: DO().DAY_CAP, offers: JSON.parse(JSON.stringify(s.offers)) }; },
+  };
+  G.act.offerDo = (id) => {
+    const o = offerDef(id);
+    if (!o) return { ok: false, msg: '', reason: 'unknown' };
+    const st = offerStatus(id);
+    if (!st.ok) return { ok: false, msg: offerMsg(st), reason: st.reason };
+    if (G.clock && !G.clock.can('offer')) return { ok: false, msg: T('clock.wait'), reason: 'clock' };
+    const s = S(), e = s.offers[id] = s.offers[id] || { last: 0, n: 0 };
+    e.last = wall();
+    e.n++;
+    s.offN++;
+    if (o.dia > 0 && G.eco) G.eco.addDia(o.dia, 'offer');
+    if (G.clock) G.clock.grant('offer');
+    save();
+    G.emit('offer:done', { id, dia: o.dia });
+    return { ok: true, msg: T('offer.got'), dia: o.dia };
+  };
+
+  // =================================================================================================================
+  // §4 Проверка обновления (GDD 9.6)
+  // =================================================================================================================
+  const BI = () => (typeof window !== 'undefined' && isObj(window.BUILD_INFO) ? window.BUILD_INFO : null);
+  const upd = { checked: false, later: false, found: null, shown: false };
+  const httpPage = () => { try { return /^https?:$/.test(location.protocol); } catch (e) { return false; } };
+  const allowed = () => httpPage() && !qaBot() && typeof fetch === 'function' && !!BI();
+  const parse = (html) => {
+    const m = /window\.BUILD_INFO\s*=\s*(\{[^<]*?\})\s*;/.exec(String(html == null ? '' : html));
+    if (!m) return null;
+    try {
+      const o = JSON.parse(m[1]);
+      return isObj(o) && typeof o.hash === 'string' && typeof o.time === 'string' ? { hash: o.hash, time: o.time } : null;
+    } catch (e) { return null; }
+  };
+  // найдена сборка: хэш другой и время новее -> окно (один раз, без «Позже», не посреди обучения)
+  const found = (info) => {
+    const cur = BI();
+    if (!isObj(info) || typeof info.hash !== 'string' || typeof info.time !== 'string' || !cur) return false;
+    if (info.hash === cur.hash || !(info.time > String(cur.time || ''))) return false;
+    upd.found = { hash: info.hash, time: info.time };
+    G.emit('update:found', Object.assign({}, upd.found));
+    if (upd.later || upd.shown || !tutDone() || !G.ui) return false;
+    if (G.ui.isOpen && G.ui.isOpen('update')) return false;
+    upd.shown = true;
+    G.ui.queue('update', Object.assign({}, upd.found));
+    return true;
+  };
+  const check = () => {
+    if (upd.checked || !allowed()) return Promise.resolve(null);
+    upd.checked = true;
+    let url = '';
+    try { url = location.origin + location.pathname; } catch (e) { return Promise.resolve(null); }
+    try {
+      return fetch(url, { cache: 'no-store' })
+        .then((r) => (r && r.ok ? r.text() : ''))
+        .then((html) => { const info = parse(html); if (info) found(info); return info; })
+        .catch(() => null);                                       // офлайн и ошибки сети — молча
+    } catch (e) { return Promise.resolve(null); }
+  };
+  G.upd = {
+    info: () => ({ allowed: allowed(), checked: upd.checked, later: upd.later, shown: upd.shown, found: upd.found ? Object.assign({}, upd.found) : null }),
+    parse, check, found,
+    fake: (h, time) => found({ hash: String(h == null ? '' : h), time: String(time == null ? '' : time) }),
+  };
+  // сменилась сборка с прошлого запуска -> тост; первый запуск и ?qa / ?bot — молча
+  const buildSeen = () => {
+    const s = S(), cur = BI();
+    if (!cur || typeof cur.hash !== 'string') return;
+    if (s.build && s.build !== cur.hash && !qaBot()) toast(T('upd.done', G.VERSION + ' · ' + (cur.time || '')), { icon: 'gift' });
+    if (s.build !== cur.hash) { s.build = cur.hash; if (!qaBot()) save(); }
+  };
+  G.on('state:loaded', () => { S(); });
+  G.on('ready', () => {
+    buildSeen();
+    if (allowed() && typeof setTimeout === 'function') setTimeout(() => { check(); }, Math.max(0, +(D().update && D().update.DELAY) || 5) * 1000);
+  });
+
+  // =================================================================================================================
+  // Окна
+  // =================================================================================================================
+  const TX = { dark: () => P('textDark', '#2b2033'), soft: () => P('P16', '#6b4226'), good: () => P('btnGreenD', '#2f8a3a'), bad: () => P('btnRed', '#e04848') };
+  const text = (s, x, y, o) => G.text(String(s), Math.round(x), Math.round(y), o || {});
+  const icon = (name, x, y, size, o) => G.ui.icon(name, Math.round(x), Math.round(y), Object.assign({ size: size || 16 }, o || {}));
+  const fit = (s, w, font) => {
+    s = String(s);
+    if (G.textW(s, font || 'main') <= w) return s;
+    let t = s;
+    while (t.length > 1 && G.textW(t + '…', font || 'main') > w) t = t.slice(0, -1);
+    return t + '…';
+  };
+  const fitFont = (s, w) => (G.textW(String(s), 'main') <= w ? 'main' : 'small');
+  const uiT = () => (G.ui && G.ui.time ? G.ui.time() : 0);
+  const tri = (col, ax, ay, bx, by, cx, cy) => {
+    const c = G.px.ctx();
+    c.fillStyle = G.px.c(col);
+    const y0 = Math.floor(Math.min(ay, by, cy)), y1 = Math.ceil(Math.max(ay, by, cy));
+    const E = [[ax, ay, bx, by], [bx, by, cx, cy], [cx, cy, ax, ay]];
+    for (let y = y0; y <= y1; y++) {
+      const yc = y + 0.5;
+      let l = 1e9, r = -1e9;
+      for (const [x0, ya, x1, yb] of E) {
+        if ((ya <= yc && yb > yc) || (yb <= yc && ya > yc)) {
+          const xx = x0 + ((yc - ya) * (x1 - x0)) / (yb - ya);
+          if (xx < l) l = xx;
+          if (xx > r) r = xx;
+        }
+      }
+      if (r > l) c.fillRect(Math.round(l), y, Math.max(1, Math.round(r) - Math.round(l)), 1);
+    }
+  };
+  // лучи обрезаются по области содержимого окна w: на заголовок и рамку не заходят
+  const rays = (w, cx, cy, r, n, rot, c1, c2) => {
+    const hw = Math.PI / n / 2;
+    G.px.clip(w.cx, w.cy, w.cw, w.ch);
+    for (let i = 0; i < n; i++) {
+      const a = rot + (i / n) * Math.PI * 2;
+      tri(i % 2 ? c2 : c1, cx, cy, cx + Math.cos(a - hw) * r, cy + Math.sin(a - hw) * r, cx + Math.cos(a + hw) * r, cy + Math.sin(a + hw) * r);
+    }
+    G.px.unclip();
+  };
+  const spinner = (cx, cy, t) => {
+    const on = Math.floor(t / 0.08) % 8;
+    for (let i = 0; i < 8; i++) {
+      const ang = (i / 8) * Math.PI * 2 - Math.PI / 2;
+      const px = Math.round(cx + Math.cos(ang) * 5), py = Math.round(cy + Math.sin(ang) * 5);
+      const d = (on - i + 8) % 8;
+      G.px.rect(px - 1, py - 1, 2, 2, d === 0 ? 'P06' : d < 3 ? 'P34' : 'P03');
+    }
+  };
+  const pill = (x, y, w, h, s, fill, color, font) => {
+    G.px.box(x, y, w, h, 'P00', 1);
+    G.px.rect(x + 1, y + 1, w - 2, h - 2, fill);
+    G.px.hline(x + 1, y + 1, w - 2, G.px.shade(P(fill, fill), 0.35));
+    text(s, x + w / 2, y + Math.floor((h - (font === 'small' ? 5 : 7)) / 2), { align: 'center', font: font || 'main', color });
+  };
+  const tile = (x, y, s, fill) => {
+    G.px.box(x, y, s, s, 'P00', 2);
+    G.px.box(x + 1, y + 1, s - 2, s - 2, fill, 1);
+    G.px.hline(x + 2, y + 1, s - 4, G.px.shade(P(fill, fill), 0.5));
+  };
+  const flyGems = (n, x, y) => { if (n > 0 && G.fx && G.fx.spawn) call(G.fx, 'spawn', 'gems', x, y, { n: Math.min(12, 4 + Math.round(n / 30)) }); };
+
+  G.windows = G.windows || {};
+
+  // ---- подарок по коду: лучи, «выпрыгивающие» награды, счётчик
+  G.windows.codeGot = {
+    rect: { x: 28, y: 128, w: 160, h: 124 }, single: true, outsideClose: false, title: () => T('code.title'),
+    onOpen(a) { a.t = 0; a.fx = false; sfx('reward'); },
+    update(dt, a, w) {
+      a.t = (a.t || 0) + dt;
+      if (!a.fx && a.t >= 0.25) { a.fx = true; flyGems((a.reward && a.reward.dia) || 0, w.x + w.w / 2, w.y + 48); }
+    },
+    onKey(k, a, w) { if (k === 'Enter' || k === 'Escape') { w.close('ok'); return true; } return false; },
+    draw(a, w) {
+      const r = a.reward || {}, cx = w.x + Math.floor(w.w / 2), y = w.cy + 2;
+      const parts = [];
+      if (r.dia > 0) parts.push({ ic: 'crystal', n: r.dia, id: 'dia' });
+      if (r.petCoins > 0) parts.push({ ic: 'clover', n: r.petCoins, id: 'pc' });
+      rays(w, cx, y + 20, 34, 12, uiT() * 0.8, 'P35', P('panel', '#f6e7c8'));
+      const step = 44, x0 = cx - Math.floor(((parts.length - 1) * step) / 2);
+      parts.forEach((p, i) => {
+        const t = (a.t || 0) - i * 0.12;
+        const k = t <= 0 ? 0 : G.kf(t, [[0, 0], [0.12, 1.3, 'outQuad'], [0.26, 1, 'inOutQuad']]);
+        if (k <= 0) return;
+        const c = G.px.ctx(), px = x0 + i * step;
+        c.save();
+        c.translate(px, y + 20); c.scale(k, k); c.translate(-px, -(y + 20));
+        tile(px - 15, y + 5, 30, P('cardOk', '#5fbf6a'));
+        icon(p.ic, px - 8, y + 12, 16);
+        c.restore();
+        const v = G.ui.countUp ? G.ui.countUp('codeGot.' + p.id, p.n, 0.5) : p.n;
+        text('+' + G.fmt(Math.round(v)), px, y + 38, { align: 'center', color: P('P06', '#ffffff'), outline: 'P00' });
+      });
+      text(fit(T('code.got', rewardText(r)), w.cw - 4), cx, y + 52, { align: 'center', color: TX.dark() });
+      if (G.ui.button('codeGot.ok', cx - 34, w.y + w.h - 25, 68, 18, { style: 'green', label: T('common.ok') })) w.close('ok');
+    },
+  };
+
+  // ---- задания партнёров: карточки с наградой, перезарядкой и лимитами
+  const offerFill = { quiz: '#9fd8f0', farm: '#b6d65c', puzzle: '#f2b25c' };
+  G.windows.offers = {
+    rect: 'tall', single: true, title: () => T('offer.title'),
+    draw(a, w) {
+      const x0 = w.cx, cw = w.cw, K = DO(), s = S();
+      let y = w.cy + 2;
+      dayRoll();
+      // пометка «демо»
+      const note = T('offer.note');
+      pill(x0, y, cw, 11, fit(note, cw - 6, 'small'), 'btnRed', P('P06', '#ffffff'), 'small');
+      y += 15;
+      text(T('offer.left', s.offN, K.DAY_CAP), x0 + 2, y, { color: TX.dark() });
+      icon('crystal', x0 + cw - 10, y - 1, 9);
+      text(G.fmt((G.S.eco && G.S.eco.dia) || 0), x0 + cw - 13, y, { align: 'right', color: TX.dark() });
+      y += 13;
+      const CH = 66;
+      for (const o of K.list || []) {
+        const st = offerStatus(o.id), dim = !st.ok;
+        G.px.panel(x0, y, cw, CH - 4, dim ? 'cardDark' : 'card');
+        tile(x0 + 5, y + 6, 26, dim ? P('P03', '#8b7f99') : (offerFill[o.id] || '#9fd8f0'));
+        icon(o.icon || 'gift', x0 + 10, y + 11, 16, { disabled: dim });
+        const nameC = dim ? P('P06', '#ffffff') : TX.dark(), softC = dim ? P('P04', '#c8bfd6') : TX.soft();
+        text(fit(T('offer.' + o.id), cw - 44), x0 + 36, y + 6, { color: nameC });
+        const desc = G.textWrap(T('offer.' + o.id + '.d'), cw - 44, 'small').slice(0, 2);
+        desc.forEach((ln, i) => text(ln, x0 + 36, y + 17 + i * 7, { font: 'small', color: softC }));
+        text('+' + G.fmt(o.dia) + ' {gem}', x0 + 36, y + 35, { color: dim ? P('P06', '#ffffff') : TX.good() });
+        text(T('offer.left', st.n, st.perDay), x0 + 36, y + 47, { font: 'small', color: softC });
+        const bw = 78, bx = x0 + cw - bw - 5, by = y + CH - 25;
+        let label = T('offer.do'), style = 'green';
+        if (st.reason === 'cd') { label = T('offer.wait', G.fmtTime(st.left)); style = 'grey'; }
+        else if (st.reason === 'day' || st.reason === 'cap') { label = T('offer.doneToday'); style = 'grey'; }
+        else if (st.reason === 'locked') { label = T('lock.tip', K.STAGE); style = 'grey'; }
+        if (G.ui.button('offers.do.' + o.id, bx, by, bw, 16, { style, label: fit(label, bw - 6, fitFont(label, bw - 6)), font: fitFont(label, bw - 6),
+          deny: !st.ok, onDeny: () => deny(offerMsg(st)), pulse: st.ok })) G.ui.open('offerDo', { id: o.id });
+        y += CH;
+      }
+    },
+  };
+
+  // ---- выполнение задания: подтверждение -> «проверка (демо)» -> награда (как окно покупки 45_shop)
+  const offerFinish = (a, w) => {
+    if (a.phase !== 'spin') return;
+    const r = G.act.offerDo(a.id);
+    if (!r.ok) { a.phase = 'fail'; if (r.msg) deny(r.msg); G.ui.close(w || 'offerDo', 'fail'); return; }
+    a.phase = 'done';
+    a.t = 0;
+    a.dia = r.dia;
+    sfx('reward');
+    flyGems(r.dia, w ? w.x + w.w / 2 : 108, w ? w.y + 40 : 160);
+  };
+  G.windows.offerDo = {
+    rect: { x: 24, y: 124, w: 168, h: 132 }, single: true, closable: false, outsideClose: false,
+    title: (a) => T('offer.' + a.id),
+    onOpen(a) { a.phase = 'ask'; a.t = 0; },
+    update(dt, a, w) {
+      a.t += dt;
+      if (a.phase === 'spin' && a.t >= (DO().SPIN || 1.2)) offerFinish(a, w);
+      else if (a.phase === 'done' && a.t >= 0.9) G.ui.close(w, 'done');
+    },
+    onClose(a) { if (a.phase === 'spin') offerFinish(a, null); },
+    onKey(k, a, w) {
+      if (k === 'Escape' && a.phase === 'ask') { a.phase = 'cancel'; w.close('no'); }
+      else if (k === 'Enter' && a.phase === 'ask') { a.phase = 'spin'; a.t = 0; }
+      return true;
+    },
+    draw(a, w) {
+      const o = offerDef(a.id);
+      if (!o) { G.ui.close(w, 'unknown'); return; }
+      const cx = w.x + Math.floor(w.w / 2), x0 = w.cx, cw = w.cw;
+      let y = w.cy + 2;
+      const pop = a.phase === 'done' ? G.kf(a.t, [[0, 1], [0.1, 1.3, 'outQuad'], [0.25, 1, 'inOutQuad']]) : 1;
+      if (a.phase === 'done') rays(w, cx, y + 14, 28, 12, uiT() * 0.8, 'P35', P('panel', '#f6e7c8'));
+      const c = G.px.ctx();
+      c.save();
+      if (pop !== 1) { c.translate(cx, y + 14); c.scale(pop, pop); c.translate(-cx, -(y + 14)); }
+      tile(cx - 14, y, 28, offerFill[o.id] || '#9fd8f0');
+      icon(o.icon || 'gift', cx - 8, y + 6, 16);
+      c.restore();
+      const dl = T('common.demo'), dw = G.textW(dl, 'small');
+      pill(x0 + cw - dw - 10, y, dw + 8, 9, dl, 'btnRed', P('P06', '#ffffff'), 'small');
+      y += 32;
+      if (a.phase === 'done') {
+        text(T('offer.got'), cx, y + 2, { align: 'center', color: TX.good() });
+        text('+' + G.fmt(a.dia || o.dia) + ' {gem}', cx, y + 15, { align: 'center', scale: 2, color: P('P06', '#ffffff'), outline: 'P00' });
+        return;
+      }
+      const lines = G.textWrap(T('offer.ask', T('offer.' + o.id)), cw - 4, 'small').slice(0, 4);
+      lines.forEach((ln, i) => text(ln, cx, y + i * 7, { align: 'center', font: 'small', color: TX.dark() }));
+      y += lines.length * 7 + 4;
+      text('+' + G.fmt(o.dia) + ' {gem}', cx, y, { align: 'center', color: TX.good() });
+      const by = w.y + w.h - 25, bw = 70;
+      if (a.phase === 'ask') {
+        if (G.ui.button('offerDo.no', w.x + 10, by, bw, 18, { style: 'grey', label: T('common.cancel') })) { a.phase = 'cancel'; w.close('no'); }
+        const dl = T('offer.do');
+        if (G.ui.button('offerDo.yes', w.x + w.w - 10 - bw, by, bw, 18, { style: 'green', label: dl, font: fitFont(dl, bw - 6), pulse: true })) {
+          const st = offerStatus(a.id);
+          if (!st.ok) deny(offerMsg(st));
+          else { a.phase = 'spin'; a.t = 0; }
+        }
+      } else if (a.phase === 'spin') {
+        const s = T('offer.checking'), tw = G.textW(s) + 16;
+        spinner(cx - Math.floor(tw / 2) + 5, by + 9, a.t);
+        text(s, cx - Math.floor(tw / 2) + 14, by + 5, { color: TX.dark() });
+      }
+    },
+  };
+
+  // ---- доступна новая версия
+  G.windows.update = {
+    rect: 'dialog', single: true, closable: false, outsideClose: false, title: () => T('upd.title'),
+    onKey(k, a, w) {
+      if (k === 'Escape') { upd.later = true; w.close('later'); return true; }
+      return false;
+    },
+    draw(a, w) {
+      const cx = w.x + Math.floor(w.w / 2), x0 = w.cx, cw = w.cw;
+      let y = w.cy + 4;
+      const bob = Math.round(Math.sin(uiT() * 4) * 1);
+      icon('gift', x0 + 4, y + bob, 16);
+      const lines = G.textWrap(T('upd.text'), cw - 26, 'main').slice(0, 3);
+      lines.forEach((ln, i) => text(ln, x0 + 24, y + i * 9, { color: TX.dark() }));
+      y += Math.max(20, lines.length * 9 + 4);
+      text(fit(T('upd.build', a.time || ''), cw - 4, 'small'), cx, y, { align: 'center', font: 'small', color: TX.soft() });
+      const bw = Math.floor((w.w - 26) / 2), by = w.y + w.h - 25;
+      const ll = T('common.later'), rl = T('upd.reload');
+      if (G.ui.button('update.later', w.x + 9, by, bw, 18, { style: 'grey', label: ll, font: fitFont(ll, bw - 6) })) { upd.later = true; w.close('later'); }
+      if (G.ui.button('update.reload', w.x + w.w - 9 - bw, by, bw, 18, { style: 'green', label: rl, font: fitFont(rl, bw - 6), pulse: true })) {
+        save();
+        G.emit('update:reload', { hash: a.hash, time: a.time });
+        try { location.reload(); } catch (e) { /* ignore */ }
+      }
+    },
+  };
+})();
+
+//# sourceURL=src/50_extras.js
+</script>
+<script>
 // Boot, frame loop, QA API, debug and error overlays, boot-error dialog. (G.sim / G.scenes / G.boot live in 00_core.js.)
 //   Frame: latch input -> G.ui.beginFrame -> fixed sim steps (accumulator, 1/60 s × G.time.scale) -> UI clock
 //        (G.ui.update, screen shake: once per frame on real time, so window/toast animations stay smooth at any refresh
@@ -41211,6 +42621,8 @@ $ 0 .##/##./.#./.##/##.
 //        Поле _qa фикстуры: now (стенные часы, местное время), awaySec (meta.lastSeen = now − awaySec),
 //        dailyClaimed (ежедневная награда уже взята сегодня). Данные: аргумент data, window.__FIXTURES[name] или
 //        синхронный XHR относительно страницы (file:// в qa.py открыт флагом --allow-file-access-from-files).
+//        fakeUpdate(hash, time) — как будто на сервере нашлась сборка {hash, time} (spec 17 §4): окно update, если хэш
+//        другой и время новее текущего window.BUILD_INFO; без сети и без проверки протокола.
 (() => {
   'use strict';
   const G = window.G = window.G || {};
@@ -41676,6 +43088,7 @@ $ 0 .##/##./.#./.##/##.
     deterministic: qaFrozen,
     errors: G.errors,
     state: () => JSON.parse(JSON.stringify(G.S)),
+    fakeUpdate: (hash, time) => (G.upd && G.upd.fake ? G.upd.fake(hash, time) : false),
     step(sec = 1) { return G.sim.run(sec); },
     act(name, ...args) {
       const f = G.act[name];
