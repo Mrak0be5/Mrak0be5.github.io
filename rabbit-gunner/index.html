@@ -22,7 +22,7 @@
 <body>
 <canvas id="game" width="216" height="384" tabindex="0"></canvas>
 <noscript>Для игры нужен JavaScript. / This game needs JavaScript.</noscript>
-<script>window.BUILD_INFO = {"time": "2026-10-12 16:58", "hash": "4a8af2a3", "dev": false, "files": 42};</script>
+<script>window.BUILD_INFO = {"time": "2026-10-12 17:12", "hash": "a36fbfc5", "dev": false, "files": 42};</script>
 <script>
 // Core: events, seeded rng, time, number/time formatting, i18n, action registry, stats-modifier hooks, easing,
 // simulation + scene registries, error capture, boot warm-up registry. Loaded first, so every later file can use these
@@ -2289,9 +2289,9 @@ $ 0 .##/##./.#./.##/##.
       ui.icon(o.icon, cx, lines === 2 ? top : top + Math.floor((blockH - iconSz) / 2), { size: iconSz, disabled: o.disabled });
       cx += iconSz + gap;
     }
-    if (lw) G.text(o.label, cx, lines === 2 ? top : top + Math.floor((blockH - capH) / 2), { font, scale: sc, color, shadow: shadow || undefined });
+    if (lw) G.text(o.label, cx, lines === 2 ? top : top + Math.floor((blockH - capH) / 2), { font, scale: sc, color, shadow: shadow || undefined, outline: o.outline });
     if (lines === 2) {
-      G.text(o.sub, x + Math.floor(w / 2), top + capH + 2, { align: 'center', color: o.subColor || color, shadow: shadow || undefined });
+      G.text(o.sub, x + Math.floor(w / 2), top + capH + 2, { align: 'center', color: o.subColor || color, shadow: shadow || undefined, outline: o.subOutline || o.outline });
     }
   };
 
@@ -19934,7 +19934,7 @@ $ 0 .##/##./.#./.##/##.
   // ------------------------------------------------------------------ mini bitmap font (rank codes, digits)
   const GLYPH3 = {
     A: ['.#.', '#.#', '###', '#.#', '#.#'], B: ['##.', '#.#', '##.', '#.#', '##.'], C: ['.##', '#..', '#..', '#..', '.##'],
-    D: ['##.', '#.#', '#.#', '#.#', '##.'], S: ['.##', '#..', '.#.', '..#', '##.'], X: ['#.#', '#.#', '.#.', '#.#', '#.#'],
+    D: ['##.', '#.#', '#.#', '#.#', '##.'], S: ['.##', '#..', '###', '..#', '##.'], X: ['#.#', '#.#', '.#.', '#.#', '#.#'],
     Z: ['###', '..#', '.#.', '#..', '###'], 0: ['###', '#.#', '#.#', '#.#', '###'], 1: ['.#.', '##.', '.#.', '.#.', '###'],
     2: ['##.', '..#', '.#.', '#..', '###'], 3: ['##.', '..#', '.#.', '..#', '##.'], 4: ['#.#', '#.#', '###', '..#', '..#'],
     5: ['###', '#..', '##.', '..#', '##.'], 6: ['.##', '#..', '###', '#.#', '###'], 7: ['###', '..#', '.#.', '.#.', '.#.'],
@@ -19982,7 +19982,8 @@ $ 0 .##/##./.#./.##/##.
     let big = (h || 9) >= 11;
     if (big && w && A.rankTextW(code, true) > w - 4) big = false;
     const tw = A.rankTextW(code, big);
-    w = Math.max(4, Math.round(w || tw + 6)); h = Math.max(4, Math.round(h || (big ? 11 : 9)));
+    // буквы не касаются обода: зазор ≥ 1 px со всех сторон (иначе ранги на карточках сливаются с обводкой)
+    w = Math.max(tw + 4, Math.round(w || tw + 6)); h = Math.max((big ? 7 : 5) + 4, Math.round(h || (big ? 11 : 9)));
     const t = o.t !== undefined ? o.t : now();
     const on = k >= 10 && o.glow !== false && glowOn(t);
     const fill = o.col ? col(o.col) : rankColor(k);
@@ -31747,7 +31748,7 @@ $ 0 .##/##./.#./.##/##.
         }
       }
       // spec 14 §8.9: в окне сейфа — как положить пушку (подсказка панели арсенала gun.vaultHint остаётся там)
-      txt(G.t('gun.vaultDrag'), 108, 296, { font: 'small', align: 'center', color: 'P04', maxW: 206 });
+      txt(G.t('gun.vaultDrag'), 108, 296, { font: 'small', align: 'center', color: 'P16', maxW: 206 });
       txt(G.t('gun.vaultCount', vaultUsed(), s.vaultOpen), 108, 310, { font: 'small', align: 'center', color: 'textDark' });
     },
   };
@@ -31881,7 +31882,7 @@ $ 0 .##/##./.#./.##/##.
     const cost = max ? 0 : sd.cost(L + 1), enough = stones >= cost;
     if (!max) {
       line(G.t('star.chance', sd.chanceAt(L + 1, s.starFail[slot])), 196, { font: 'main' });
-      if (L + 1 >= sd.PITY_FROM && s.starFail[slot] > 0) line(G.t('star.pity', s.starFail[slot]), 206, { color: 'P04' });
+      if (L + 1 >= sd.PITY_FROM && s.starFail[slot] > 0) line(G.t('star.pity', s.starFail[slot]), 206, { color: 'P16' });
       line(G.t('star.cost', G.fmt(cost)), 216);
     }
     line(G.t('star.have', G.fmt(stones)), 226, { color: enough ? 'textDark' : 'P36' });
@@ -31891,7 +31892,7 @@ $ 0 .##/##./.#./.##/##.
       withAlpha(fa, () => line(SW.msg.text, 242, { font: 'main', color: SW.msg.ok ? 'P24' : 'P36', outline: 'P00' }));
     }
     const rs = G.S.raid;
-    if (!rs || !rs.starTip) line(G.t('star.allModes'), 262, { color: 'P04' });
+    if (!rs || !rs.starTip) line(G.t('star.allModes'), 262, { color: 'P16' });
     // кнопка: green / grey (не хватает) / disabled на 20
     const bx = 52, by = 278;
     if (max) {
@@ -32298,7 +32299,7 @@ $ 0 .##/##./.#./.##/##.
       const why = quickWhy(m), pct = quickPct(m);
       const sub = m === 'mine' ? '{gem}' + G.fmt(rewardOf('mine', S().mineBest)) : G.t('mode.quickPct', Math.min(999, pct));
       if (G.ui.button('mode.quick', cx + 2, y, 82, 26, { style: why ? 'grey' : 'green', label: G.t('mode.quick'), sub,
-        subColor: m === 'mine' ? undefined : pct >= 100 ? 'P27' : 'btnRed', deny: !!why,
+        subColor: m === 'mine' ? undefined : pct >= 100 ? 'P27' : 'btnRed', subOutline: m === 'mine' ? undefined : 'P00', deny: !!why,
         onDeny: () => { const q = quickWhy(m); if (q && q !== 'busy') G.ui.toast(quickMsg(m, q), { sfx: false }); } })) quickClear(m);
       // полоса силы 82×2 прямыми прямоугольниками: у ui.bar 1 px рамки, при h 2 заливки не видно
       if (m !== 'mine') {
@@ -33346,7 +33347,7 @@ $ 0 .##/##./.#./.##/##.
     const bw = 62, bx = x + w - bw - 4, by = y + 4, id = 'rebirth.perm.' + key;
     const label = maxed ? T('rb.max') : '{carrot} ' + diaAmt(price);
     const clicked = G.ui.button(id, bx, by, bw, h - 8, { style: ok ? 'teal' : 'grey', label, deny: !ok, disabled: maxed,
-      textColor: ok ? '#ffffff' : P('cardNoPrice', '#ff6e6e'), sfx: false });
+      textColor: ok ? '#ffffff' : P('cardNoPrice', '#ff6e6e'), outline: ok ? undefined : 'P00', sfx: false });
     const reps = ok ? G.ui.holdRepeat(id, (D().perm && D().perm.HOLD_DELAY) || 0.4, (D().perm && D().perm.HOLD_REPEAT) || 0.04) : 0;
     const n = (clicked ? 1 : 0) + reps;
     if (n && G.act.permBuy(key, n)) { permFlash[key] = t; sfx('upgrade', { pitch: Math.min(12, L * 0.25) }); }
@@ -33743,7 +33744,7 @@ $ 0 .##/##./.#./.##/##.
         onDeny: () => { if (!open) lockTip(); else if (full) deny(T('fish.full')); else deny(T('fish.freeUsed')); } })) G.act.fishCast('free');
       const canEpic = dia() >= F.EPIC_COST;
       if (G.ui.button('pond.epic', x0 + 103, y, 97, 30, { style: open ? 'gold' : 'grey', label: T('fish.epic'), sub: '{gem} ' + F.EPIC_COST, font: fitFont(T('fish.epic'), 90),
-        subColor: !open ? '#ffffff' : canEpic ? P('textDark', '#2b2033') : TX.bad(), deny: !open || full || !canEpic,
+        subColor: !open ? '#ffffff' : canEpic ? P('textDark', '#2b2033') : TX.bad(), subOutline: open && !canEpic ? 'P00' : undefined, deny: !open || full || !canEpic,
         onDeny: () => { if (!open) lockTip(); else if (full) deny(T('fish.full')); else deny(T('common.notEnoughDia')); } })) G.act.fishCast('epic');
       y += 35;
       const fam = unlocked('fishAutoMerge');
@@ -38887,7 +38888,7 @@ $ 0 .##/##./.#./.##/##.
         const can = sweep.can();
         // «Мигом!» и полоса силы — как в окне режима (42_modes.js): sub btnRed / P27, полоса P32 / P27
         if (G.ui.button('hunt.quick', 110, 300, 82, 26, { style: can ? 'green' : 'grey', deny: !can, label: T('mode.quick'),
-          sub: T('mode.quickPct', Math.min(999, pct)), subColor: pct >= 100 ? 'P27' : 'btnRed', onDeny: () => G.act.huntSweep() })) G.act.huntSweep();
+          sub: T('mode.quickPct', Math.min(999, pct)), subColor: pct >= 100 ? 'P27' : 'btnRed', subOutline: 'P00', onDeny: () => G.act.huntSweep() })) G.act.huntSweep();
         G.px.rect(110, 328, 82, 2, 'P01');
         G.px.rect(110, 328, Math.round(82 * Math.max(0, Math.min(1, pct / 100))), 2, pct >= 100 ? 'P27' : 'P32');
       }
@@ -40823,8 +40824,8 @@ $ 0 .##/##./.#./.##/##.
         // §8.7: «всё куплено» — на кнопке, если влезает в 104 px; иначе «Куплено» и текст строками ниже
         const dn = T('raid.bank.done'), fm = G.textW(dn, 'main') <= 98, fs = fm || G.textW(dn, 'small') <= 98;
         U.button('raidBank.buy', bx, by, 104, 24, { style: 'grey', disabled: true, label: fs ? dn : T('common.owned'), font: fm || !fs ? 'main' : 'small' });
-        G.text(T('raid.bank.left', 0), cx, w.y + 150, { align: 'center', font: 'small', color: 'P04' });
-        if (!fs) G.textWrap(dn, w.cw - 8, 'small').forEach((ln, i) => G.text(ln, cx, w.y + 160 + i * 7, { align: 'center', font: 'small', color: 'P04' }));
+        G.text(T('raid.bank.left', 0), cx, w.y + 150, { align: 'center', font: 'small', color: 'P16' });
+        if (!fs) G.textWrap(dn, w.cw - 8, 'small').forEach((ln, i) => G.text(ln, cx, w.y + 160 + i * 7, { align: 'center', font: 'small', color: 'P16' }));
         return;
       }
       if (k.full) {
@@ -40832,7 +40833,7 @@ $ 0 .##/##./.#./.##/##.
       } else {
         U.button('raidBank.buy', bx, by, 104, 24, { style: 'grey', disabled: true, label: T('raid.bank.notYet', G.fmt(k.cap)) });
       }
-      G.text(T('raid.bank.left', k.buysLeft), cx, w.y + 150, { align: 'center', font: 'small', color: 'P04' });
+      G.text(T('raid.bank.left', k.buysLeft), cx, w.y + 150, { align: 'center', font: 'small', color: 'P16' });
     },
   };
 
@@ -41479,11 +41480,11 @@ $ 0 .##/##./.#./.##/##.
       const U = G.ui, P = G.px, s = S(), wk = week(), e = entries(), t = uiT();
       const nm = typeName(wk.weak, 'name');
       G.text(fit(T('raid.weak', nm), 200), 108, 40, { align: 'center', color: 'P34', outline: 'P00' });
-      G.text(fit(T('raid.weekLeft', G.fmtTime(Math.ceil(wk.leftMs / 1000))), 200, 'small'), 108, 50, { align: 'center', font: 'small', color: 'P04' });
+      G.text(fit(T('raid.weekLeft', G.fmtTime(Math.ceil(wk.leftMs / 1000))), 200, 'small'), 108, 50, { align: 'center', font: 'small', color: 'P16' });
       drawKing(ctx0(), 108, 128, { variant: wk.variant, state: 'idle', t, shadow: 'P01' });
       weakBadge(152, 62, 48, 12, wk.weak);
       G.text(fit(T('raid.best', s.best), 200), 108, 136, { align: 'center', color: TXT });
-      G.text(fit(T('raid.bestType', nm, s.bestByType[wk.weakIdx] || 0), 200, 'small'), 108, 146, { align: 'center', font: 'small', color: 'P04' });
+      G.text(fit(T('raid.bestType', nm, s.bestByType[wk.weakIdx] || 0), 200, 'small'), 108, 146, { align: 'center', font: 'small', color: 'P16' });
       G.text(T('raid.squad'), 14, 158, { font: 'small', color: TXT });
       G.text('{whetstone} ' + G.fmt(stonesNow()), 202, 158, { align: 'right', font: 'small', color: TXT });
       // отряд: 3 позиции + помощник
@@ -41546,7 +41547,7 @@ $ 0 .##/##./.#./.##/##.
       // входы и главная кнопка (§8.2.2)
       const noGuns = cands.length === 0;
       if (noGuns) G.text(fit(T('raid.noGuns'), 200, 'small'), 108, 284, { align: 'center', font: 'small', color: 'P36' });
-      else G.text(fit(T('raid.entries', e.left, e.max), 200, 'small'), 108, 284, { align: 'center', font: 'small', color: 'P04' });
+      else G.text(fit(T('raid.entries', e.left, e.max), 200, 'small'), 108, 284, { align: 'center', font: 'small', color: 'P16' });
       const emptySq = s.squad.every((v) => v === null);
       let hint = 'hint';
       if (e.left > 0) {
@@ -41563,10 +41564,10 @@ $ 0 .##/##./.#./.##/##.
         hint = 'again';
       }
       if (hint === 'again') {
-        G.text(fit(T('raid.againIn', G.fmtTime(Math.ceil(msToMidnight() / 1000))), 200, 'small'), 108, 330, { align: 'center', font: 'small', color: 'P04' });
+        G.text(fit(T('raid.againIn', G.fmtTime(Math.ceil(msToMidnight() / 1000))), 200, 'small'), 108, 330, { align: 'center', font: 'small', color: 'P16' });
       } else {
         const k = Math.floor(t / 4) % 2;
-        wrapLines(k ? T('raid.hintWeak', nm) : T('raid.hint'), 330, { color: 'P04' });
+        wrapLines(k ? T('raid.hintWeak', nm) : T('raid.hint'), 330, { color: 'P16' });
       }
     },
   };
@@ -41679,7 +41680,7 @@ $ 0 .##/##./.#./.##/##.
         const pr = G.shop && G.shop.price ? G.shop.price('raidMissionTicket') : '';
         if (U.button('raidM.ticket', 24, 276, 152, 22, { style: 'gold', label: fit(T('shop.raidMissions') + ' ' + pr, 146, 'small'), font: 'small' })) G.shop.buy('raidMissionTicket');
       }
-      G.text(fit(T('raid.m.reset', G.fmtTime(Math.ceil(week().leftMs / 1000))), 184, 'small'), 108, 302, { align: 'center', font: 'small', color: 'P04' });
+      G.text(fit(T('raid.m.reset', G.fmtTime(Math.ceil(week().leftMs / 1000))), 184, 'small'), 108, 302, { align: 'center', font: 'small', color: 'P16' });
     },
   };
 
