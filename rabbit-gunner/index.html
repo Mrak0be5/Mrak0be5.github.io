@@ -22,7 +22,7 @@
 <body>
 <canvas id="game" width="216" height="384" tabindex="0"></canvas>
 <noscript>Для игры нужен JavaScript. / This game needs JavaScript.</noscript>
-<script>window.BUILD_INFO = {"time": "2026-10-12 17:12", "hash": "a36fbfc5", "dev": false, "files": 42};</script>
+<script>window.BUILD_INFO = {"time": "2026-10-12 18:01", "hash": "923b523e", "dev": false, "files": 42};</script>
 <script>
 // Core: events, seeded rng, time, number/time formatting, i18n, action registry, stats-modifier hooks, easing,
 // simulation + scene registries, error capture, boot warm-up registry. Loaded first, so every later file can use these
@@ -72,12 +72,110 @@
   G.dist = (x1, y1, x2, y2) => Math.hypot(x2 - x1, y2 - y1);
   G.inRect = (px, py, x, y, w, h) => px >= x && py >= y && px < x + w && py < y + h;
   G.noop = () => {};
-  // Предел чисел (spec 17 §8). Оригинал считает в BigNum (мантисса + порядок), клон — в double. Всё, что перерастает
-  // Number.MAX_VALUE, насыщается до G.NUM_MAX: число остаётся конечным, в JSON сохранения не становится null, G.fmt
-  // выводит его как «∞». G.sat: ±Infinity → ±NUM_MAX, NaN / null / undefined → 0. G.isMax(p): цена-маркер «MAX» (≥ NUM_MAX).
+  // Предел чисел (spec 17 §8, §22). Оригинал считает в InfVal (мантисса + порядок), клон — так же: быстрый путь —
+  // обычный number, пока |v| < B_LIM (1e300); выше — неизменяемый Big {m: [1, 10) со знаком, e: целое}. Big.valueOf()
+  // = ±Infinity: сравнение Big с обычным числом через < > верно, непереведённое место деградирует до «∞»; Big с Big и
+  // арифметику — только через G.B.*. Big.toJSON() → '3.6e472' (сохранение; загрузка — G.B.from). Числа ≥ B_LIM всегда
+  // Big (G.B.* нормализуют), поэтому обычное число G.NUM_MAX — однозначный маркер «MAX» у цен: G.isMax(p).
+  // G.sat: ±Infinity → ±NUM_MAX, NaN / null / undefined → 0 — только для величин, которые остаются обычными числами.
   const NUM_MAX = G.NUM_MAX = Number.MAX_VALUE;
   G.sat = (v) => { v = +v; return v < NUM_MAX ? (v > -NUM_MAX ? v : v === v ? -NUM_MAX : 0) : v === v ? NUM_MAX : 0; };
-  G.isMax = (v) => !(v < NUM_MAX);
+  G.isMax = (v) => v === NUM_MAX;
+  const B_LIM = 1e300;
+  class Big {
+    constructor(m, e) { this.m = m; this.e = e; Object.freeze(this); }
+    valueOf() { return this.m > 0 ? Infinity : -Infinity; }
+    toJSON() { return this.m + 'e' + this.e; }
+    toString() { return this.toJSON(); }
+  }
+  const BIG_RE = /^\s*(-)?(\d+)(?:\.(\d*))?e([+-]?\d+)\s*$/i;
+  const fixM = (m, e) => {     // m ≠ 0 конечное → нормализованные (m, e) в PM / PE
+    const a = Math.abs(m);
+    if (a < 1 || a >= 10) { const k = Math.floor(Math.log10(a)); m /= 10 ** k; e += k; }
+    if (Math.abs(m) >= 10) { m /= 10; e++; } else if (Math.abs(m) < 1) { m *= 10; e--; }
+    PM = m; PE = e;
+  };
+  let PM = 0, PE = 0;
+  // (m, e) → number быстрого пути или Big
+  const mk = (m, e) => {
+    if (!m || m !== m) return 0;
+    fixM(m, e);
+    return PE < 300 ? PM * 10 ** PE : new Big(PM, PE);
+  };
+  // разложить number | Big в PM / PE (без аллокаций); ±Infinity — как ±Number.MAX_VALUE, NaN и |x| < 1e-300 — 0
+  const parts = (x) => {
+    if (x instanceof Big) { PM = x.m; PE = x.e; return; }
+    if (!(x === x) || x === 0 || (x < 1e-300 && x > -1e-300)) { PM = 0; PE = 0; return; }
+    if (x === Infinity || x === -Infinity) { PM = x > 0 ? 1.7976931348623157 : -1.7976931348623157; PE = 308; return; }
+    fixM(x, 0);
+  };
+  const fast = (r) => r < B_LIM && r > -B_LIM;
+  const fromLog = (L, sign = 1) => { const e = Math.floor(L); return mk(sign * 10 ** (L - e), e); };   // sign·10^L
+  const B = G.B = {
+    Big, LIM: B_LIM,
+    isBig: (x) => x instanceof Big,
+    // number | Big | строка '3.6e472' (сохранение) → number быстрого пути или Big; мусор → d
+    from: (x, d = 0) => {
+      if (x instanceof Big) return x;
+      if (typeof x === 'string') {
+        const v = Number(x);
+        if (v === v && fast(v)) return v;
+        const m = BIG_RE.exec(x);
+        if (!m) return v === v ? B.from(v, d) : d;
+        return mk((m[1] ? -1 : 1) * parseFloat(m[2] + '.' + (m[3] || '0')), +m[4]);
+      }
+      if (typeof x !== 'number' || x !== x) return d;
+      if (fast(x)) return x;
+      parts(x);
+      return mk(PM, PE);
+    },
+    add: (a, b) => {
+      if (typeof a === 'number' && typeof b === 'number') { const r = a + b; if (fast(r)) return r; }
+      parts(a); const am = PM, ae = PE; parts(b);
+      if (!am) return mk(PM, PE);
+      if (!PM) return mk(am, ae);
+      return ae >= PE ? (ae - PE > 17 ? mk(am, ae) : mk(am + PM * 10 ** (PE - ae), ae))
+        : (PE - ae > 17 ? mk(PM, PE) : mk(PM + am * 10 ** (ae - PE), PE));
+    },
+    neg: (a) => (a instanceof Big ? new Big(-a.m, a.e) : -a),
+    sub: (a, b) => (typeof a === 'number' && typeof b === 'number' && fast(a - b) ? a - b : B.add(a, B.neg(b))),
+    mul: (a, b) => {
+      if (typeof a === 'number' && typeof b === 'number') { const r = a * b; if (fast(r)) return r; }
+      parts(a); const am = PM, ae = PE; parts(b);
+      return mk(am * PM, ae + PE);
+    },
+    // деление на 0 → 0 (полоски и доли не получают Infinity / NaN)
+    div: (a, b) => {
+      if (typeof a === 'number' && typeof b === 'number') { const r = a / b; if (fast(r)) return r; }
+      parts(b); const bm = PM, be = PE; parts(a);
+      return bm ? mk(PM / bm, PE - be) : 0;
+    },
+    cmp: (a, b) => {
+      if (typeof a === 'number' && typeof b === 'number') return a < b ? -1 : a > b ? 1 : 0;
+      parts(a); const am = PM, ae = PE; parts(b);
+      const sa = Math.sign(am), sb = Math.sign(PM);
+      if (sa !== sb) return sa < sb ? -1 : 1;
+      if (!sa) return 0;
+      if (ae !== PE) return ae < PE ? -sa : sa;
+      return am < PM ? -1 : am > PM ? 1 : 0;
+    },
+    gt: (a, b) => B.cmp(a, b) > 0, gte: (a, b) => B.cmp(a, b) >= 0, lt: (a, b) => B.cmp(a, b) < 0, lte: (a, b) => B.cmp(a, b) <= 0,
+    max: (a, b) => (B.cmp(a, b) >= 0 ? a : b),
+    min: (a, b) => (B.cmp(a, b) <= 0 ? a : b),
+    floor: (a) => (a instanceof Big ? a : Math.floor(a)),
+    // в обычное число: Big → ±NUM_MAX (дискретные награды, уровни; дальше — как прежнее насыщение)
+    toNum: (a) => (a instanceof Big ? (a.m > 0 ? NUM_MAX : -NUM_MAX) : +a),
+    ratio: (a, b) => B.toNum(B.div(a, b)),            // a / b обычным числом (полоски, прогресс)
+    log10: (a) => (a instanceof Big ? a.e + Math.log10(a.m) : Math.log10(a)),
+    fromLog,                                          // 10^L
+    pow: (k, n) => B.mulPow(1, k, n),                 // k^n, k > 0
+    // a·k^n в лог-домене (цепочки цен и HP), k > 0; в быстром пути — обычное a * k ** n
+    mulPow: (a, k, n) => {
+      if (typeof a === 'number') { const r = a * k ** n; if (fast(r)) return r; }
+      parts(a);
+      return PM ? fromLog(PE + Math.log10(Math.abs(PM)) + n * Math.log10(k), Math.sign(PM)) : 0;
+    },
+  };
 
   const E = G.ease = {
     linear: (t) => t,
@@ -247,8 +345,12 @@
     const fr = d.slice(intLen, intLen + 2).replace(/0+$/, '');
     return d.slice(0, intLen) + (fr ? '.' + fr : '') + unitName(k);
   };
-  const BIG_RE = /^\s*(-)?(\d+)(?:\.(\d*))?e([+-]?\d+)\s*$/i;
   G.fmt = (v) => {
+    if (v instanceof Big) {                // Big: 15 значащих цифр мантиссы срезают шум (как у чисел ниже)
+      if (v.m < 0) return '-' + G.fmt(B.neg(v));
+      const s = v.m.toExponential(14), e = s.indexOf('e');
+      return fmtDigits(s.slice(0, e).replace('.', ''), v.e + +s.slice(e + 1));
+    }
     if (typeof v === 'string') {           // big values beyond doubles: '3.6e472'
       const m = BIG_RE.exec(v);
       if (m) {
@@ -285,6 +387,9 @@
     ['1e2106', '1zz'], ['8.1e2354', '8.1e2354'], [1.23456e15, '1.23e'], [123456789, '123.45b'],
     [-0.5, '0'], [-0, '0'], [-1, '-1'], [NaN, '0'], [undefined, '0'], ['abc', '0'], ['12', '12'], [-Infinity, '-∞'],
     [Number.MAX_VALUE, '∞'], [-Number.MAX_VALUE, '-∞'], [1.7e308, '170cx'],
+    // Big (spec 17 §22): буквенные единицы до zz, дальше 'd.dde<ex>'
+    [new Big(3.6, 472), '36fa'], [new Big(-3.6, 472), '-36fa'], [new Big(1, 2106), '1zz'], [new Big(8.1, 2354), '8.1e2354'],
+    [new Big(1.7976931348623157, 308), '179.76cx'], [new Big(9.999999999999999, 500), '1fk'], [new Big(1.2345, 300), '1.23cv'],
   ];
   G.fmt.selfTest = () => {
     const fail = [];
@@ -2413,6 +2518,7 @@ $ 0 .##/##./.#./.##/##.
 
   const counts = {};
   ui.countUp = (id, target, dur = 0.6) => {
+    if (G.B.isBig(target)) return target;              // G.B.Big — сразу итог, без анимации (spec 17 §22)
     let c = counts[id];
     if (!c || c.to !== target) {
       c = counts[id] = { from: c ? c.val : 0, to: target, t: 0, val: c ? c.val : 0, tick: 0 };
@@ -4664,7 +4770,11 @@ $ 0 .##/##./.#./.##/##.
       for (const k of Object.keys(def)) out[k] = merge(def[k], val[k]);
       return out;
     }
-    if (typeof def === 'number') return typeof val === 'number' && Number.isFinite(val) ? val : def;   // JSON null (NaN/∞) -> default
+    if (typeof def === 'number') {
+      // большие числа (spec 17 §22): Big пишется строкой 'XeY'; она и старые 1.79e308 (с 1e300) → G.B.Big
+      if (typeof val === 'string' || (typeof val === 'number' && Math.abs(val) >= G.B.LIM)) { const b = G.B.from(val, NaN); return b === b ? b : def; }
+      return typeof val === 'number' && Number.isFinite(val) ? val : def;   // JSON null (NaN/∞) -> default
+    }
     if (typeof def === typeof val) return val;
     return def;
   };
@@ -4789,7 +4899,7 @@ $ 0 .##/##./.#./.##/##.
     }
     return JSON.stringify(out, numSafe);
   };
-  // Предел чисел (spec 17 §8): ±Infinity в сейв не пишем как null — насыщаем до ±Number.MAX_VALUE, NaN → 0
+  // ±Infinity в сейв не пишем как null — насыщаем до ±Number.MAX_VALUE, NaN → 0; G.B.Big пишется строкой через toJSON (spec 17 §22)
   const numSafe = (k, v) => (typeof v !== 'number' || (v < Infinity && v > -Infinity) ? v
     : v === v ? (v > 0 ? Number.MAX_VALUE : -Number.MAX_VALUE) : 0);
   const qaNoSave = () => G.flags && G.flags.qa && !G.flags.save;
@@ -5902,7 +6012,7 @@ $ 0 .##/##./.#./.##/##.
 // Sources: spec 01 (stages, trees, biomes, map, combat constants, unlocks), spec 02 (upgrade tables, buffs, auto),
 // spec 09 §6 (land and target names), spec 10 (C2, C5, C10, C15, C21, G1, G2, G7, G8 overrides).
 // Exposes: G.D.stage, G.D.biomes, G.D.TARGET_TYPES, G.MAP, G.proj, G.unproj, G.stripAB, G.stripXY, G.D.upg
-// (+ aliases G.D.PRICE, G.D.POWER_PCT, G.D.SPEED_PCT: Float64Array[0 … 10000] indexed by level), G.D.combat,
+// (+ aliases G.D.PRICE, G.D.POWER_PCT, G.D.SPEED_PCT: arrays [0 … 10000] indexed by level; PRICE / POWER_PCT hold number | G.B.Big), G.D.combat,
 // G.D.modeFlags, G.D.buff, G.D.auto, G.D.flow, G.D.offline, G.D.unlocks, G.D.UNLOCK_STAGES, G.D.unlockedAt,
 // G.D.TUT_STEPS, G.D.hudButtons, G.D.num.
 (() => {
@@ -5910,14 +6020,12 @@ $ 0 .##/##./.#./.##/##.
   const G = window.G = window.G || {};
   const D = G.D = G.D || {};
 
-  // m × 10^e as the nearest double (string parse rounds correctly). Переполнение double насыщается до G.NUM_MAX
-  // (spec 17 §8; было Infinity, spec 10 C2): таблицы, HP и цены остаются конечными, G.fmt пишет «∞».
+  // m × 10^e as the nearest double (string parse rounds correctly); с 1e300 — G.B.Big (большие числа, spec 17 §22):
+  // таблицы, HP и цены растут дальше double, как InfVal оригинала (было: Infinity, spec 10 C2; насыщение, spec 17 §8).
   const NUM_MAX = Number.MAX_VALUE;
-  if (!G.sat) G.sat = (v) => { v = +v; return v < NUM_MAX ? (v > -NUM_MAX ? v : v === v ? -NUM_MAX : 0) : v === v ? NUM_MAX : 0; };
-  if (!G.isMax) G.isMax = (v) => !(v < NUM_MAX);
   if (!G.NUM_MAX) G.NUM_MAX = NUM_MAX;
-  const sat = G.sat;
-  const num = (m, e) => sat(e === 0 ? m : parseFloat(m + 'e' + e));
+  const B = G.B;
+  const num = (m, e) => (e === 0 ? m : B.from(m + 'e' + e));
   D.num = num;
   const clampInt = (v, lo, hi) => Math.max(lo, Math.min(hi, Math.floor(v) || lo));
 
@@ -5926,8 +6034,8 @@ $ 0 .##/##./.#./.##/##.
   // HP(1) = 25e1, REW(1) = 20e0; each stage ×3 with the 2-digit mantissa truncated: t = D·3; t ≥ 100 → (⌊t/10⌋, E+1).
   // ---------------------------------------------------------------------------------------------------------------
   const STAGES = 5000;
-  const hpD = new Uint8Array(STAGES + 1), hpE = new Int16Array(STAGES + 1), HPv = new Float64Array(STAGES + 1);
-  const rwD = new Uint8Array(STAGES + 1), rwE = new Int16Array(STAGES + 1), RWv = new Float64Array(STAGES + 1);
+  const hpD = new Uint8Array(STAGES + 1), hpE = new Int16Array(STAGES + 1), HPv = new Array(STAGES + 1).fill(0);   // number | Big
+  const rwD = new Uint8Array(STAGES + 1), rwE = new Int16Array(STAGES + 1), RWv = new Array(STAGES + 1).fill(0);
   {
     let d = 25, e = 1, rd = 20, re = 0;
     for (let s = 1; s <= STAGES; s++) {
@@ -6030,7 +6138,7 @@ $ 0 .##/##./.#./.##/##.
     // Expected sub-stage HP: N × mean type mul × HP (+ golden 35 × HP on N-5). 1-1 → 8 700.
     expectedHP(stage, sub) {
       const hp = D.stage.HP(stage);
-      return sat(trees(stage, sub) * AVG_MUL[clampInt(sub, 1, 5) - 1] * hp + (sub === 5 ? 35 * hp : 0));
+      return B.add(B.mul(trees(stage, sub) * AVG_MUL[clampInt(sub, 1, 5) - 1], hp), sub === 5 ? B.mul(35, hp) : 0);
     },
     // Tree grid of one attempt (spec 01 §6). rng() in [0, 1). Returns regular trees (golden spawns later at
     // goldenAt(aMax)). Each: {i, a, b, x, y, type}.
@@ -6127,10 +6235,10 @@ $ 0 .##/##./.#./.##/##.
   //   Power% = Money%: P(n) = trunc3(P(n−1) × 1.08);  Speed% = 100 + 8n
   // ---------------------------------------------------------------------------------------------------------------
   const MAX_LV = 10000;
-  const priceM = new Uint16Array(MAX_LV + 1), priceE = new Int16Array(MAX_LV + 1), PRICE = new Float64Array(MAX_LV + 1);
-  const pctM = new Uint16Array(MAX_LV + 1), pctE = new Int16Array(MAX_LV + 1), POWER_PCT = new Float64Array(MAX_LV + 1);
+  const priceM = new Uint16Array(MAX_LV + 1), priceE = new Int16Array(MAX_LV + 1), PRICE = new Array(MAX_LV + 1).fill(0);
+  const pctM = new Uint16Array(MAX_LV + 1), pctE = new Int16Array(MAX_LV + 1), POWER_PCT = new Array(MAX_LV + 1).fill(0);
   const SPEED_PCT = new Float64Array(MAX_LV + 1);   // 100 + 8n, an array like PRICE / POWER_PCT
-  const PRICE_SUM = new Float64Array(MAX_LV + 2);   // PRICE_SUM[n] = Σ PRICE[0 … n−1] (cost of one card 0 → n)
+  const PRICE_SUM = new Array(MAX_LV + 2).fill(0);   // PRICE_SUM[n] = Σ PRICE[0 … n−1] (cost of one card 0 → n); PRICE и др. — number | Big
   {
     const SCALE = 8388608n;                           // 2^23
     const F138 = BigInt(Math.fround(1.38) * 8388608); // 11 576 279 → 1.37999999523… (makes Lv1 = 68, not 69)
@@ -6151,7 +6259,7 @@ $ 0 .##/##./.#./.##/##.
       if (pe < 0) { m = Number(pm / 10n ** BigInt(-pe)); e = 0; } else { m = Number(pm / 10n); e = pe + 1; }
       priceM[n] = m; priceE[n] = e; PRICE[n] = num(m, e);
       pctM[n] = Number(wm); pctE[n] = we; POWER_PCT[n] = num(Number(wm), we);
-      PRICE_SUM[n + 1] = sat(PRICE_SUM[n] + PRICE[n]);
+      PRICE_SUM[n + 1] = B.add(PRICE_SUM[n], PRICE[n]);
       SPEED_PCT[n] = 100 + 8 * n;
     }
   }
@@ -6161,14 +6269,11 @@ $ 0 .##/##./.#./.##/##.
     PRICE_BASE: 50, PRICE_GROWTH: 1.38, PRICE_GROWTH_F32: Math.fround(1.38), PRICE_SOFTCAP: 5000, PRICE_LATE: 2,
     POWER_MUL: 1.08, SPEED_ADD: 8,
     PRICE, POWER_PCT, SPEED_PCT, PRICE_SUM, priceM, priceE, pctM, pctE,
-    price: (lv) => (lv >= MAX_LV ? NUM_MAX : PRICE[lvIdx(lv)]),   // cost of lv → lv+1; G.isMax(price) = MAX (spec 17 §8)
+    price: (lv) => (lv >= MAX_LV ? NUM_MAX : PRICE[lvIdx(lv)]),   // cost of lv → lv+1; маркер NUM_MAX = MAX: G.isMax (spec 17 §22)
     pct: (lv) => POWER_PCT[lvIdx(lv)],                             // Power% = Money% (100 = 100 %)
     speed: (lv) => 100 + 8 * lvIdx(lv),                            // Speed% (100 = 100 %)
     value: (key, lv) => (key === 'speed' ? 100 + 8 * lvIdx(lv) : POWER_PCT[lvIdx(lv)]),  // card value, no "%"
-    totalCost: (from, to) => {                                     // за пределом double — NUM_MAX («∞»), не NUM_MAX − NUM_MAX = 0
-      const a = lvIdx(from), b = lvIdx(to);
-      return PRICE_SUM[b] < NUM_MAX || b <= a ? PRICE_SUM[b] - PRICE_SUM[a] : NUM_MAX;
-    },
+    totalCost: (from, to) => B.sub(PRICE_SUM[lvIdx(to)], PRICE_SUM[lvIdx(from)]),   // number | Big
     // UI timings (spec 02 §4.3, 07 §0.3)
     HOLD_DELAY: 0.4, HOLD_REPEAT: 0.1, FILL_REFRESH: 0.1, PUNCH: 0.25, FX_PUNCH_MIN: 0.1,
   };
@@ -6616,8 +6721,8 @@ $ 0 .##/##./.#./.##/##.
   const PERM_SOFT = 15000;
   const permPrice = (L) => (L < PERM_SOFT ? Math.floor(3 * (L + 1) ** 1.6)
     : Math.floor(Math.floor(3 * PERM_SOFT ** 1.6) * 1.0019 ** (L - (PERM_SOFT - 1))));   // whole Moonstones
-  // 1.05^N перерастает double на N ≈ 14 549: дальше процент насыщается до G.NUM_MAX (spec 17 §8)
-  const permPct = (N) => G.sat(Math.floor((1.05 ** N - 1) * 100 + 1e-9));
+  // 1.05^N перерастает double на N ≈ 14 549: дальше процент — G.B.Big ≈ 100·1.05^N (spec 17 §22)
+  const permPct = (N) => { const p = Math.floor((1.05 ** N - 1) * 100 + 1e-9); return p < G.B.LIM ? p : G.B.mulPow(100, 1.05, N); };
   const permSum = [0];
   const permTotal = (N) => {                                   // RP needed to go 0 → N
     N = Math.max(0, Math.min(20000, N | 0));
@@ -6626,9 +6731,12 @@ $ 0 .##/##./.#./.##/##.
   };
   D.perm = {
     KEYS: ['power', 'speed', 'money'], MAX: 20000, PRICE_BASE: 3, PRICE_EXP: 1.6, SOFTCAP: PERM_SOFT,
-    price: (L) => (L >= 20000 ? G.NUM_MAX : permPrice(L)),   // G.isMax(price) = MAX (spec 17 §8)
+    price: (L) => (L >= 20000 ? G.NUM_MAX : permPrice(L)),   // маркер NUM_MAX = MAX: G.isMax (spec 17 §22)
     pct: permPct,                                // Power / Money bonus %, compound: floor((1.05^N − 1)·100)
-    mul: (N) => { const p = permPct(N); return G.isMax(p) ? p : (100 + p) / 100; },   // damage / money multiplier (1 + pct/100)
+    mul: (N) => {                                // damage / money multiplier (1 + pct/100); double, пока он < 1e300 — бит в бит как раньше
+      const m = (100 + Math.floor((1.05 ** N - 1) * 100 + 1e-9)) / 100;
+      return m < G.B.LIM ? m : G.B.div(permPct(N), 100);
+    },
     speedAdd: (N) => 5 * N,                      // percentage points added to S%
     total: permTotal,
     maxLevel(points, from) {                     // highest level reachable from `from` with `points`
@@ -6727,7 +6835,7 @@ $ 0 .##/##./.#./.##/##.
   // ---------------------------------------------------------------------------------------------------------------
   const chTrees = (N) => Math.min(190, 15 * (N - 1) + 20);
   const BOSS_LEVELS = 1000;
-  const bossD = new Uint8Array(BOSS_LEVELS + 1), bossE = new Int16Array(BOSS_LEVELS + 1), bossHP = new Float64Array(BOSS_LEVELS + 1);
+  const bossD = new Uint8Array(BOSS_LEVELS + 1), bossE = new Int16Array(BOSS_LEVELS + 1), bossHP = new Array(BOSS_LEVELS + 1).fill(0);   // number | Big
   {
     let d = 50, e = 3;                                     // 50 000; ×5 with 2-digit truncation
     for (let L = 1; L <= BOSS_LEVELS; L++) {
@@ -6750,8 +6858,8 @@ $ 0 .##/##./.#./.##/##.
       baseHP: stageHP, baseRew: stageREW,                   // identical to the main-stage type-0 tree of stage N
       treeHP: (N, t) => (D.stage ? D.stage.treeHP(N, t) : NaN),
       treeMoney: (N, t) => (D.stage ? D.stage.treeMoney(N, t) : NaN),
-      expTotalHP: (N) => G.sat(chTrees(N) * stageHP(N) * 1.93),
-      needDps: (N) => G.sat(chTrees(N) * stageHP(N) * 1.93 / 60),
+      expTotalHP: (N) => G.B.mul(G.B.mul(chTrees(N), stageHP(N)), 1.93),
+      needDps: (N) => { const h = stageHP(N), r = chTrees(N) * h * 1.93 / 60; return !G.B.isBig(h) && r < G.B.LIM ? r : G.B.div(G.B.mul(G.B.mul(chTrees(N), h), 1.93), 60); },
       ARENA_R: 75, CLAMP_R: 74, RING_R0: 22, RING_R1: 70, VIGNETTE: [70, 75],
       OFFER_EVERY: 2, PULSE_PERIOD: 0.8,
       // DEFAULT: ведомые в 'attack' подходят к своему дереву до 10 u, как ведущий (AutoStopDistance). Без этого они били
@@ -8231,7 +8339,7 @@ $ 0 .##/##./.#./.##/##.
     ALARM_GAP: 1.5, ENDING: 0.8, BANNER_TAP: 0.6,
     BOARD_SEED: 0x5106,
   };
-  // HP волны: ×3 за волну с округлением мантиссы (spec 11 §4.3); с волны 651 — G.NUM_MAX («∞», spec 17 §8)
+  // HP волны: ×3 за волну с округлением мантиссы (spec 11 §4.3); с волны 651 — G.B.Big (spec 17 §22)
   D.hunt.waveHP = (w) => {
     w = Math.max(1, Math.min(D.hunt.MAX_WAVE, Math.floor(+w) || 1));
     if (HUNT_HP[w] === undefined) {
@@ -8242,10 +8350,10 @@ $ 0 .##/##./.#./.##/##.
     return HUNT_HP[w];
   };
   D.hunt.slugHP = (w, L, big) => {
-    const v = D.hunt.waveHP(w) * D.hunt.LEVELS.m[Math.max(1, Math.min(5, L | 0)) - 1] * (big ? D.hunt.BIG_HP : 1);
-    return v < 1e15 ? Math.floor(v) : G.sat(v);
+    const v = G.B.mul(G.B.mul(D.hunt.waveHP(w), D.hunt.LEVELS.m[Math.max(1, Math.min(5, L | 0)) - 1]), big ? D.hunt.BIG_HP : 1);
+    return v < 1e15 ? Math.floor(v) : v;
   };
-  D.hunt.need = (w, L) => G.sat(D.hunt.waveHP(w) * D.hunt.LEVELS.m[L - 1] * D.hunt.SWEEP_SAFETY / D.hunt.LEVELS.int[L - 1]);
+  D.hunt.need = (w, L) => G.B.div(G.B.mul(G.B.mul(D.hunt.waveHP(w), D.hunt.LEVELS.m[L - 1]), D.hunt.SWEEP_SAFETY), D.hunt.LEVELS.int[L - 1]);
   Object.freeze(D.hunt.ARENA); Object.freeze(D.hunt.SLUG);
 
   // ---------------------------------------------------------------------------------------------------------------
@@ -8435,7 +8543,7 @@ $ 0 .##/##./.#./.##/##.
 // Данные рейда «Король слизней», сейфа и заточки (owner: data, spec 14 Приложение А, §4.1–4.2, §8.13).
 // Только числа, строки и чистые функции, без состояния.
 //   D.raid: входы (FREE/AD/TICKET), типы слабости TYPES + weakOf(week), ×10 WEAK_X, Z-пушка помощника Z_BASE + b,
-//     hp(L) — HP полосы (гладкая кривая по опорам GDD 6.6, мантисса до 0.1, с L184 → G.NUM_MAX),
+//     hp(L) — HP полосы (гладкая кривая по опорам GDD 6.6, мантисса до 0.1, с L184 — G.B.Big),
 //     stonesPer(L) / stonesFor(bars) — камни за полосы, BANK — ступени копилки, MISSIONS — задания недели,
 //     цвета и раскладка арены для боя, nextWeekMs(date) — следующий понедельник 00:00 по местному времени.
 //   D.modes.raid = {UNLOCK, TIME} — только для G.modes.timeOf('raid'); в D.modes.KEYS рейда нет (§2.3).
@@ -8469,7 +8577,7 @@ $ 0 .##/##./.#./.##/##.
       const x = this.lgHp(L) + Math.log10(this.HP_SCALE);
       let e = Math.floor(x), m = Math.round(10 ** (x - e) * 10) / 10;   // мантисса до 0.1
       if (m >= 10) { m = 1; e++; }
-      return G.sat(Number(m.toFixed(1) + 'e' + e));   // 1e9, 3e9, 9.2e9 … ; с L184 → G.NUM_MAX («∞», spec 17 §8)
+      return G.B.from(m.toFixed(1) + 'e' + e);   // 1e9, 3e9, 9.2e9 … ; с L184 — G.B.Big (spec 17 §22)
     },
     stonesPer: (L) => (L <= 10 ? 25 : L <= 20 ? 20 : L <= 30 ? 10 : 5),
     stonesFor(bars) { let s = 0; for (let L = 1; L <= bars; L++) s += this.stonesPer(L); return s; },
@@ -8620,7 +8728,7 @@ $ 0 .##/##./.#./.##/##.
 //   G.eco.upg(key) -> {key, i, lvl, price, value, maxed, affordable, frac, buffMult}   key 'power'|'speed'|'money'
 //   G.eco.buy(key, src = 'tap') -> bool   src 'tap'|'hold'|'auto'|'offline'. Refuses silently (spec 02 §4.4 step 1;
 //        the HUD adds the deny FIX for discrete taps). Emits upgrade:buy {key, lvl, src, price}; G.mods.dirty().
-//   G.eco.price(lv) (G.NUM_MAX = MAX, проверка G.isMax; spec 17 §8) · G.eco.value(key, lv) · G.eco.lv(key) · G.eco.KEYS
+//   G.eco.price(lv) (G.NUM_MAX = MAX, проверка G.isMax; spec 17 §22) · G.eco.value(key, lv) · G.eco.lv(key) · G.eco.KEYS
 //   G.eco.pickLowest(levels[3]) -> 0|1|2|-1 (lowest level, ties P→S→M) · G.eco.buyLowest(src)
 //   G.eco.setRun({money, lv: [P, S, M]}) apply an offline-sim result (no events except eco:change)
 //   G.eco.resetRun()  money = 0, levels 0/0/0 (Moon Hop; also done on the `rebirth` event, idempotent).
@@ -8681,12 +8789,13 @@ $ 0 .##/##./.#./.##/##.
 
   const finite = (n) => typeof n === 'number' && n === n && n !== Infinity && n !== -Infinity;
   const num = (v, d = 0) => (finite(+v) ? +v : d);
-  // Предел чисел (spec 17 §8): кошельки, цены и урон насыщаются на G.NUM_MAX, Infinity/NaN в состояние не попадают
-  const NUM_MAX = G.NUM_MAX, sat = G.sat, isMax = G.isMax;
+  // Большие числа (spec 17 §22): капуста, цены, урон и деньги за убийство — number | G.B.Big, арифметика через G.B;
+  // Infinity/NaN в состояние не попадают. Кристаллы, Клеверки и камни — обычные числа с насыщением G.sat.
+  const NUM_MAX = G.NUM_MAX, sat = G.sat, isMax = G.isMax, B = G.B;
   const sanitize = () => {
     const e = S();
     if (!e) return;
-    e.money = Math.max(0, num(e.money));
+    e.money = B.max(0, B.from(e.money));
     e.dia = Math.max(0, Math.floor(num(e.dia)));
     e.petCoins = Math.max(0, Math.floor(num(e.petCoins)));
     if (!Array.isArray(e.upgLv)) e.upgLv = [0, 0, 0];
@@ -8710,7 +8819,7 @@ $ 0 .##/##./.#./.##/##.
   const maxLv = () => (U() ? U().MAX_LV : 10000);
   const price = (lv) => {
     const u = U();
-    if (!u) return lv >= 10000 ? NUM_MAX : sat(Math.floor(50 * Math.pow(1.38, lv)));
+    if (!u) return lv >= 10000 ? NUM_MAX : B.floor(B.mulPow(50, 1.38, lv));
     return u.price(lv);
   };
   const pct = (lv) => (U() ? U().pct(lv) : 100);
@@ -8800,25 +8909,25 @@ $ 0 .##/##./.#./.##/##.
   eco.dia = () => S().dia;
   eco.petCoins = () => S().petCoins || 0;
   eco.addMoney = (n, src = 'kill') => {
-    n = num(n);
+    n = B.from(n);
     if (!(n > 0)) return 0;
     const e = S();
-    e.money = sat(e.money + n);
-    e.totals.money = sat(num(e.totals.money) + n);
+    e.money = B.add(e.money, n);
+    e.totals.money = B.add(B.from(e.totals.money), n);
     bump();
     G.emit('money:gain', { n, src });
     return n;
   };
   eco.spendMoney = (n, reason = '') => {
-    n = num(n, Infinity);
+    n = B.from(n, -1);
     const e = S();
-    if (!(n >= 0) || isMax(n) || e.money < n) return false;
-    e.money -= n;
+    if (!(n >= 0) || isMax(n) || B.lt(e.money, n)) return false;
+    e.money = B.sub(e.money, n);
     bump();
     G.emit('money:spend', { n, reason });
     return true;
   };
-  eco.canAfford = (n) => finite(+n) && !isMax(+n) && S().money >= +n;
+  eco.canAfford = (n) => { n = B.from(n, -1); return n >= 0 && !isMax(n) && B.gte(S().money, n); };
   eco.canAffordDia = (n) => finite(+n) && !isMax(+n) && S().dia >= +n;
   eco.addDia = (n, src = '') => {
     n = Math.floor(num(n));
@@ -8959,8 +9068,8 @@ $ 0 .##/##./.#./.##/##.
     const money = S().money;
     return {
       key, i, lvl, price: p, value: value(key, lvl), maxed,
-      affordable: !maxed && money >= p,
-      frac: maxed ? 1 : G.clamp(money / p, 0, 1),
+      affordable: !maxed && B.gte(money, p),
+      frac: maxed ? 1 : G.clamp(B.ratio(money, p), 0, 1),
       buffMult: eco.buffMult(key),
     };
   };
@@ -8973,8 +9082,8 @@ $ 0 .##/##./.#./.##/##.
     const lvl = e.upgLv[i];
     if (lvl >= maxLv()) return false;
     const p = price(lvl);
-    if (isMax(p) || e.money < p) return false;
-    e.money -= p;
+    if (isMax(p) || B.lt(e.money, p)) return false;
+    e.money = B.sub(e.money, p);
     e.upgLv[i] = lvl + 1;
     bump();
     G.mods.dirty();
@@ -8995,7 +9104,7 @@ $ 0 .##/##./.#./.##/##.
   };
   eco.setRun = (r) => {
     const e = S();
-    if (r && finite(+r.money)) e.money = Math.max(0, +r.money);
+    if (r && (finite(+r.money) || B.isBig(r.money))) e.money = B.max(0, B.from(r.money));
     if (r && Array.isArray(r.lv)) for (let i = 0; i < 3; i++) e.upgLv[i] = G.clamp(Math.floor(num(r.lv[i], e.upgLv[i])), 0, maxLv());
     bump();
     G.mods.dirty();
@@ -9067,9 +9176,12 @@ $ 0 .##/##./.#./.##/##.
   };
   const flagsOf = (mode) => (D().modeFlags && D().modeFlags[mode]) || FLAGS_DEFAULT[mode] || FLAGS_DEFAULT.main;
   // floor with a tiny relative epsilon (products of decimal factors such as 25 × 1.16 = 28.999…);
-  // выше G.NUM_MAX — насыщение (spec 17 §8), NaN → 0
-  const floorE = (x) => { const v = Math.floor(x + 1e-9 + Math.abs(x) * 1e-12); return v < NUM_MAX ? v : v === v ? NUM_MAX : 0; };
-  const permPct = (N) => (N > 0 ? sat(Math.floor((Math.pow(1.05, N) - 1) * 100 + 1e-7)) : 0);   // spec 05 §3.1; с N≈14 549 — G.NUM_MAX
+  // с 1e300 — G.B.Big (Big — уже целое, spec 17 §22), NaN → 0
+  const floorE = (x) => (B.isBig(x) ? x : B.from(Math.floor(x + 1e-9 + Math.abs(x) * 1e-12)));
+  const permPct = (N) => {   // spec 05 §3.1; с N≈14 549 — G.B.Big ≈ 100·1.05^N
+    const p = N > 0 ? Math.floor((Math.pow(1.05, N) - 1) * 100 + 1e-7) : 0;
+    return p < B.LIM ? p : B.mulPow(100, 1.05, N);
+  };
   const gunData = (id) => (D().gun ? D().gun(id) : null);
   const OFF_T = { single: 1, pierce: 10, laser: 10, blast: 5, missile: 5, bp: 5 };          // spec 10 C5
   const targetsOf = (g) => (g.type === 'shot' ? (g.pellets || 1) : (g.offlineTargets || OFF_T[g.type] || 1));
@@ -9127,7 +9239,7 @@ $ 0 .##/##./.#./.##/##.
       weakType || '-', nEq > 3 ? 1 : 0, G.mods.version].join('|');
     let out = o.noCache ? null : cache.get(key);
     if (!out) {
-      const permPn = F.rebirth ? 100 + permPct(Np) : 100, permMn = 100 + permPct(Nm);   // percent, integer
+      const permPn = F.rebirth ? B.add(100, permPct(Np)) : 100, permMn = B.add(100, permPct(Nm));   // percent, integer
       const fishD = fish.dmg, fishC = Math.min(100, Math.max(0, fish.crit)), fishCD = fish.critDmg;
       const Ppct = F.runPower ? pct(lvP) : 100;                               // Boss / Mine: factor 1
       let Spct = 10 * sumI + sAdd + (F.runSpeed ? 100 + 8 * lvS : 0) - (F.penalty ? 30 * (stageNo - 1) : 0);
@@ -9143,50 +9255,59 @@ $ 0 .##/##./.#./.##/##.
         // pre = floor(d × P%/100 × permP × (1 + 0.16 ΣI) × (1 + fishD/100) × relP‰); integer-percent products stay exact.
         // При relP = 1000 — прежняя формула: расчёты до амулетов совпадают бит в бит (spec 13 §13.5)
         const X = g.dmg * Ppct * permPn * (100 + 16 * sumI) * (100 + fishD);
-        // произведение вышло за double — тот же расчёт с делителем вперёд (только у края, spec 17 §8)
+        // произведение вышло за double (или множитель — Big) — тот же расчёт через G.B (spec 17 §22)
         const pre = X < Infinity ? floorE(relP === 1000 ? X / 1e8 : X * relP / 1e11)
-          : floorE(g.dmg * Ppct / 1e8 * permPn * (100 + 16 * sumI) * (100 + fishD) * relP / 1000);
+          : floorE(B.mul(B.mul(B.mul(B.mul(g.dmg, Ppct), permPn), (100 + 16 * sumI) * (100 + fishD)), relP / 1e11));
         // звезда слота s (4-й — помощник: самая низкая из трёх); при ×1 — прежнее число бит в бит
         const star = s < 3 ? stars[s] : Math.min(stars[0], stars[1], stars[2]);
         const starMul = starMulOf(star);
         const weakX = weakType && g.type === weakType ? W : 1;
-        const shot = F.dmgIsOne ? 1 : sat((starMul === 1 ? pre * bM[1] : floorE(pre * bM[1] * starMul)) * weakX);
+        const shot = F.dmgIsOne ? 1 : B.mul(starMul === 1 ? B.mul(pre, bM[1]) : floorE(B.mul(B.mul(pre, bM[1]), starMul)), weakX);
         const critShot = F.dmgIsOne ? 1 : shot < 1e300 ? floorE(relC === 1000 ? shot * (125 + fishCD) / 100 : shot * (125 + fishCD) * relC / 1e5)
-          : floorE(shot / 100 * (125 + fishCD) * relC / 1000);
+          : floorE(B.mul(shot, (125 + fishCD) * relC / 1e5));
         const critPct = F.dmgIsOne ? 0 : fishC;
         const interval = G.clamp(g.interval / (Spct / 100) / bM[2], 0.05, 2.0);
         const c = critPct / 100;
-        const E = sat(shot * (1 - c) + critShot * c);
+        const E = B.add(B.mul(shot, 1 - c), B.mul(critShot, c));
         const pellets = g.pellets || 1;
         const targets = targetsOf(g);
         const st = {
           slot: s, gunId: id, type: g.type, pellets, dmg: g.dmg, gi: g.interval, pre, shot, critShot, critPct, interval, star, starMul, weakX,
-          dps: sat(E * pellets / interval), dpsSingle: sat(E * pellets / interval), dpsArea: sat(E * targets / interval), targets,
+          dps: B.div(B.mul(E, pellets), interval), dpsSingle: B.div(B.mul(E, pellets), interval), dpsArea: B.div(B.mul(E, targets), interval), targets,
         };
         guns.push(st);
         slots[s] = st;
-        dps = sat(dps + st.dps); dpsArea = sat(dpsArea + st.dpsArea); dpsSingle = sat(dpsSingle + st.dpsSingle);
+        dps = B.add(dps, st.dps); dpsArea = B.add(dpsArea, st.dpsArea); dpsSingle = B.add(dpsSingle, st.dpsSingle);
       }
       // ×1e-8 → multiplier (before buff); питомцы — ещё один целый процент
       let moneyPctProd = pct(lvM) * permMn * (100 + 5 * sumI) * (100 + pet.money);
       // амулеты капусты — ещё множитель в ‰; при relM = 1000 — прежние делители
       let mulM = relM === 1000 ? 1 / 1e8 : relM / 1e11;
-      // произведение вышло за double: делитель вперёд, деньги за убийство — через общий путь с ‰ (spec 17 §8)
+      // произведение вышло за double (или множитель — Big): делитель вперёд через G.B, деньги за убийство — общим путём
+      // с ‰ (spec 17 §22)
       const mOv = !(moneyPctProd < Infinity);
-      if (mOv) { moneyPctProd = sat(pct(lvM) / 1e8 * permMn * (100 + 5 * sumI) * (100 + pet.money)); mulM = relM / 1e3; }
+      if (mOv) { moneyPctProd = B.mul(B.mul(B.mul(pct(lvM), 1e-8), permMn), (100 + 5 * sumI) * (100 + pet.money)); mulM = relM / 1e3; }
+      // деньги за убийство через G.B: база (награда дерева) — Big или обычное произведение перерастает double
+      const mBig = (base, f) => floorE(B.mul(B.mul(B.mul(base, moneyPctProd), bM[0]), f));
       out = {
         mode, stageNo, flags: F, guns, slots, stars: stars.slice(), weak: weakType,
-        moneyMul: sat(relM === 1000 && !mOv ? moneyPctProd / 1e8 * bM[0] : moneyPctProd * mulM * bM[0]),
-        money: mOv ? (base) => floorE(num(base) * moneyPctProd * bM[0] * mulM)
-          : relM === 1000 ? (base) => floorE(num(base) * moneyPctProd * bM[0] / 1e8)     // money per kill (relic = 1)
-            : (base) => floorE(num(base) * moneyPctProd * bM[0] * relM / 1e11),
+        moneyMul: mOv ? B.mul(B.mul(moneyPctProd, mulM), bM[0]) : B.from(relM === 1000 ? moneyPctProd / 1e8 * bM[0] : moneyPctProd * mulM * bM[0]),
+        money: mOv ? (base) => mBig(base, mulM)
+          : relM === 1000 ? (base) => {                                                    // money per kill (relic = 1)
+            const v = typeof base === 'number' ? num(base) * moneyPctProd * bM[0] / 1e8 : Infinity;
+            return v < Infinity ? floorE(v) : mBig(base, 1e-8);
+          }
+            : (base) => {
+              const v = typeof base === 'number' ? num(base) * moneyPctProd * bM[0] * relM / 1e11 : Infinity;
+              return v < Infinity ? floorE(v) : mBig(base, relM / 1e11);
+            },
         moveMul: (replay ? 2 : 1) * (100 + pet.move + movePct) / 100,
         petMoney: pet.money, petMove: pet.move, replay: !!replay, relP, relM, relC, movePct,
         speedPct: Spct, speedPctAdd: 10 * sumI + sAdd, critChance: F.dmgIsOne ? 0 : fishC, critDmgPct: fishCD,
         buffMult: { money: bM[0], power: bM[1], speed: bM[2] },
         superBuff: bM[0] === 4 || bM[1] === 4 || bM[2] === 4, buffPack: pack,
         lv: { power: lvP, speed: lvS, money: lvM }, powerPct: Ppct,
-        sumI, Ns: sAdd / 5, Np, Nm, permP: permPn / 100, permM: permMn / 100, fish: { dmg: fishD, crit: fishC, critDmg: fishCD },
+        sumI, Ns: sAdd / 5, Np, Nm, permP: B.div(permPn, 100), permM: B.div(permMn, 100), fish: { dmg: fishD, crit: fishC, critDmg: fishCD },
         dps, dpsArea, dpsSingle,
       };
       if (!o.noCache) {
@@ -9564,9 +9685,9 @@ $ 0 .##/##./.#./.##/##.
       if (o.hpBar === undefined && t.kind === 'ore') t.hpBar = false;      // ores show cracks instead (07 §6.5)
       t.id = ++uid;
       t.seed = o.seed !== undefined ? o.seed : t.id * 7919;
-      // HP выше double («∞») — G.NUM_MAX, а не 1; NaN → 1 (spec 17 §8)
-      t.hp = +t.hp; t.hp = t.hp === t.hp ? G.sat(t.hp) : 1;
-      t.maxHp = G.sat(o.maxHp) || t.hp;
+      // HP — number | G.B.Big (spec 17 §22); NaN → 1
+      t.hp = G.B.from(t.hp, 1);
+      t.maxHp = G.B.from(o.maxHp) || t.hp;
       t.alive = t.hp > 0;
       t.deadAt = -1; t.hitAt = -9; t.hits = 0;
       t.born = this.time;
@@ -10224,10 +10345,10 @@ $ 0 .##/##./.#./.##/##.
     damage(t, dmg, crit, src) {
       if (!t || !t.alive || !(dmg > 0)) return false;
       if (this.mode === 'mine') { dmg = 1; crit = false; }
-      else if (!(dmg < G.NUM_MAX)) dmg = G.NUM_MAX;              // spec 17 §8: выстрел «∞» снимает полосу «∞»
+      else dmg = G.B.from(dmg);                                    // урон и HP — number | G.B.Big (spec 17 §22)
       const before = t.hp;
-      const dealt = Math.min(dmg, before);
-      t.hp = before - dmg;
+      const dealt = G.B.min(dmg, before);
+      t.hp = G.B.sub(before, dmg);
       t.hitAt = this.time;
       t.hits++;
       if (this.o.onDamage) { try { this.o.onDamage(t, dealt, src, this); } catch (e) { report(e, 'onDamage'); } }
@@ -10260,7 +10381,7 @@ $ 0 .##/##./.#./.##/##.
     kill(t, src) {
       if (!t.alive) return;
       t.alive = false;
-      t.hp = Math.min(0, t.hp);
+      t.hp = G.B.min(0, t.hp);
       t.deadAt = this.time;
       this.grid.remove(t);
       this.nAlive--;
@@ -10268,7 +10389,7 @@ $ 0 .##/##./.#./.##/##.
       let money = 0;
       if (this.pay && t.money > 0) {
         const st = this.lastStats || this.stats();
-        try { money = st && typeof st.money === 'function' ? st.money(t.money) : Math.floor(t.money); } catch (e) { money = Math.floor(t.money); }
+        try { money = st && typeof st.money === 'function' ? st.money(t.money) : G.B.floor(t.money); } catch (e) { money = G.B.floor(t.money); }
         if (money > 0 && G.eco && G.eco.addMoney) G.eco.addMoney(money, 'kill');
       }
       // presentation
@@ -10308,7 +10429,7 @@ $ 0 .##/##./.#./.##/##.
       let b = this.buckets.get(key);
       if (!b) { b = { last: -99, pending: 0, n: 0, x: t.x, y: t.y, hPx: t.hPx, preset, big: false }; this.buckets.set(key, b); }
       b.x = t.x; b.y = t.y; b.hPx = t.hPx; b.big = b.big || !!big;
-      b.pending += value; b.n++;
+      b.pending = G.B.add(b.pending, value); b.n++;
       if (this.time - b.last >= this.numCd(b.preset)) this.flushBucket(b);
     }
     flushBucket(b) {
@@ -10415,7 +10536,7 @@ $ 0 .##/##./.#./.##/##.
           else this.drawRabbit(ctx, e.r); } catch (err) { report(err, 'battle sprite'); }
       }
       // HP bars (after the first hit), reticles, bullets, FX, numbers
-      for (const e of list) if (e.t && e.t.alive && e.t.hpBar !== false && e.t.hits > 0 && e.t.hp < e.t.maxHp) this.drawBar(ctx, e.t, e.sx, e.sy);
+      for (const e of list) if (e.t && e.t.alive && e.t.hpBar !== false && e.t.hits > 0 && G.B.lt(e.t.hp, e.t.maxHp)) this.drawBar(ctx, e.t, e.sx, e.sy);
       if (this.o.reticles !== false && !this.frozen && G.fx && G.fx.reticle) {
         const seen = [];
         for (const r of this.squad) {
@@ -10447,7 +10568,7 @@ $ 0 .##/##./.#./.##/##.
       if (typeof t.draw === 'function') t.draw(ctx, sx, sy, t, this);
       else if (t.kind === 'ore' && G.art && G.art.ore) {
         if (!t.alive) return void (scaled && ctx.restore());
-        G.art.ore(ctx, sx, sy, { kind: t.rare ? 'crystal' : 'stone', crack: 1 - t.hp / t.maxHp, hit, pop: age < 0.1 ? age / 0.1 : 1 });
+        G.art.ore(ctx, sx, sy, { kind: t.rare ? 'crystal' : 'stone', crack: 1 - G.B.ratio(t.hp, t.maxHp), hit, pop: age < 0.1 ? age / 0.1 : 1 });
       } else if (G.art && G.art.target) G.art.target(ctx, sx, sy, { biome: t.biome, type: t.type, hit, dead, t: this.time, seed: t.seed });
       else { ctx.fillStyle = t.golden ? '#ffd84a' : '#4f9a46'; ctx.fillRect(Math.round(sx - 5), Math.round(sy - t.hPx), 10, t.hPx); }
       if (scaled) ctx.restore();
@@ -10455,7 +10576,7 @@ $ 0 .##/##./.#./.##/##.
     drawBar(ctx, t, sx, sy) {
       const w = t.golden ? 24 : (t.barW || 14), h = t.golden ? 3 : (t.barH || 2);
       const x = Math.round(sx - w / 2), y = Math.round(sy - t.hPx - h - 3);
-      const f = clamp(t.hp / t.maxHp, 0, 1);
+      const f = clamp(G.B.ratio(t.hp, t.maxHp), 0, 1);
       ctx.fillStyle = (G.PAL && G.PAL.P00) || '#17111d';
       ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
       ctx.fillStyle = '#2a2a2a';
@@ -10784,8 +10905,8 @@ $ 0 .##/##./.#./.##/##.
     s.max = int(s.max, 1, MAXST()); s.maxSub = int(s.maxSub, 1, 5);
     if (nOf(s.max, s.maxSub) < nOf(s.cur, s.sub)) { s.max = s.cur; s.maxSub = s.sub; }
     s.timer = Math.max(0, +s.timer || 0);
-    s.progressHp = Math.max(0, +s.progressHp || 0);
-    s.totalHp = Math.max(0, +s.totalHp || 0);
+    s.progressHp = G.B.max(0, G.B.from(s.progressHp));   // number | G.B.Big (spec 17 §22)
+    s.totalHp = G.B.max(0, G.B.from(s.totalHp));
   };
 
   // ---------- positions ----------
@@ -10822,7 +10943,7 @@ $ 0 .##/##./.#./.##/##.
       onDamage: (t, dealt) => {
         if (!t.regular) return;
         const s = S();
-        s.progressHp = Math.min(s.totalHp, s.progressHp + dealt);
+        s.progressHp = G.B.min(s.totalHp, G.B.add(s.progressHp, dealt));
       },
     });
     return F.battle;
@@ -10849,7 +10970,7 @@ $ 0 .##/##./.#./.##/##.
           kind: 'tree', type: p.type, x: p.x, y: p.y, hp, money: DS.treeMoney(s.cur, p.type), r: mapv('treeR', 2.5),
           regular: true, biome, popDelay: Math.min(0.3, i * 0.01),
         });
-        total = G.sat(total + hp);                       // этап ≥ 4 600: HP дерева — G.NUM_MAX (spec 17 §8)
+        total = G.B.add(total, hp);                      // с этапа ≈4 600 HP дерева — G.B.Big (spec 17 §22)
         if (p.a > aMax) aMax = p.a;
       });
     }
@@ -11228,15 +11349,17 @@ $ 0 .##/##./.#./.##/##.
     const DS = G.D && G.D.stage;
     if (!DS || typeof G.calc !== 'function') { res.skipped = true; return res; }
     const lv = lv0.slice();
-    let wallet = o.money !== undefined ? +o.money : ((G.S.eco && G.S.eco.money) || 0);
+    let wallet = o.money !== undefined ? G.B.from(o.money, NaN) : ((G.S.eco && G.S.eco.money) || 0);
     let stage = s.cur, sub = s.sub;
     const rec = recN();
     const AVG = DS.AVG_MUL || [1.16, 1.46, 1.94, 2.48, 2.82];
     const scale = off('TIME_SCALE'), delay = off('CLEAR_DELAY'), walkPer = off('WALK_PER_TREE');
     const lim = limit(), wallNeed = lim + delay;
     const price = (l) => (G.eco && G.eco.price ? G.eco.price(l) : (G.D.upg ? G.D.upg.price(l) : G.NUM_MAX));
-    // a·b/c без переполнения промежуточного произведения; итог насыщается на G.NUM_MAX (spec 17 §8)
-    const sat = G.sat, mdiv = (a, b, c) => { const v = a * b / c; return v < Infinity ? v : sat(a * (b / c)); };
+    // a·b/c без переполнения промежуточного произведения: деньги — number | G.B.Big, время — обычное число
+    // (насыщается на G.NUM_MAX; spec 17 §22)
+    const B = G.B, sat = G.sat, mdiv = (a, b, c) => { const v = a * b / c; return v < Infinity ? v : B.div(B.mul(a, b), c); };
+    const tdiv = (a, b, c) => B.toNum(mdiv(a, b, c));
     const pick = (L) => {
       if (G.eco && G.eco.pickLowest) return G.eco.pickLowest(L);
       let best = 0; for (let i = 1; i < 3; i++) if (L[i] < L[best]) best = i; return best;
@@ -11253,18 +11376,18 @@ $ 0 .##/##./.#./.##/##.
       if (!(dpsA > 0) || !(dpsS > 0)) break;
       const N = DS.trees(stage, sub), A = AVG[sub - 1], HP = DS.HP(stage), REW = DS.REW(stage);
       const walk = N * walkPer / (n < rec ? 2 : 1);
-      const Treg = sat(Math.max(mdiv(N * A, HP, dpsA), walk) * scale);
-      const Tgold = sub === 5 ? sat(mdiv(off('GOLDEN_HP_MUL'), HP, dpsS) * scale) : 0;
-      const Mreg = sat(N * A * REW * st.moneyMul);
-      const Mgold = sub === 5 ? sat(off('GOLDEN_MONEY_MUL') * REW * st.moneyMul) : 0;
+      const Treg = sat(Math.max(tdiv(N * A, HP, dpsA), walk) * scale);
+      const Tgold = sub === 5 ? sat(tdiv(off('GOLDEN_HP_MUL'), HP, dpsS) * scale) : 0;
+      const Mreg = B.mul(B.mul(N * A, REW), st.moneyMul);
+      const Mgold = sub === 5 ? B.mul(B.mul(off('GOLDEN_MONEY_MUL'), REW), st.moneyMul) : 0;
       let need, gain, cleared;
-      if (Treg + Tgold <= lim) { need = Treg + Tgold + delay; gain = sat(Mreg + Mgold); cleared = true; }
+      if (Treg + Tgold <= lim) { need = Treg + Tgold + delay; gain = B.add(Mreg, Mgold); cleared = true; }
       else if (Treg <= lim) { need = wallNeed; gain = Mreg; cleared = false; }
       else { need = wallNeed; gain = mdiv(Mreg, lim, Treg); cleared = false; }
-      if (need > t) { const part = mdiv(gain, t, need); gained = sat(gained + part); wallet = sat(wallet + part); t = 0; break; }
+      if (need > t) { const part = mdiv(gain, t, need); gained = B.add(gained, part); wallet = B.add(wallet, part); t = 0; break; }
       t -= need;
-      gained = sat(gained + gain);
-      wallet = sat(wallet + gain);
+      gained = B.add(gained, gain);
+      wallet = B.add(wallet, gain);
       if (cleared && n + 1 <= rec) {
         const p = posOf(n + 1);
         stage = p.stage; sub = p.sub;
@@ -11276,12 +11399,12 @@ $ 0 .##/##./.#./.##/##.
         const i = pick(lv);
         if (i < 0) break;
         const p = price(lv[i]);
-        if (G.isMax(p) || !(p <= wallet)) break;               // MAX-уровень не покупается и при полном кошельке
-        wallet -= p; spent = sat(spent + p); lv[i]++;
+        if (G.isMax(p) || !(p === p && wallet === wallet && B.lte(p, wallet))) break;   // MAX-уровень не покупается
+        wallet = B.sub(wallet, p); spent = B.add(spent, p); lv[i]++;
       }
     }
     res.iterations = it;
-    res.money = Math.floor(gained);
+    res.money = B.floor(gained);
     res.spent = spent;
     res.to = { stage, sub };
     res.levels.to = lv.slice();
@@ -28901,7 +29024,7 @@ $ 0 .##/##./.#./.##/##.
     if (!fin(+pct)) {
       const p = call(st, 'progress');
       if (fin(+p)) pct = p <= 1 ? p * 100 : p;
-      else pct = s.totalHp > 0 ? Math.min(99, Math.floor(numOr(s.progressHp, 0) / s.totalHp * 100)) : 0;
+      else pct = s.totalHp > 0 ? Math.min(99, Math.floor(G.B.ratio(s.progressHp || 0, s.totalHp) * 100)) : 0;
     }
     if (bn && bn.kind === 'clear') pct = 100;
     let phase = call(st, 'phase');
@@ -29065,7 +29188,8 @@ $ 0 .##/##./.#./.##/##.
     const c = ctr[k];
     if (!c.init) { c.init = true; c.shown = c.to = c.from = val; }
     if (val !== c.to) {
-      if (val > c.to && val - c.to >= 0.1 * Math.max(1, c.to)) { c.from = c.shown; c.t = 0; } else c.t = 1;
+      // G.B.Big — без анимации: lerp к Big дал бы «∞» (spec 17 §22)
+      if (!G.B.isBig(val) && val > c.to && val - c.to >= 0.1 * Math.max(1, c.to)) { c.from = c.shown; c.t = 0; } else c.t = 1;
       c.to = val;
     }
     c.t = Math.min(1, c.t + dt);
@@ -31993,6 +32117,7 @@ $ 0 .##/##./.#./.##/##.
   const G = window.G = window.G || {};
   const D = () => G.D.modes;
   const S = () => G.S.modes;
+  const B = G.B;
   const tutorial = () => G.S.tut && G.S.tut.step === 'challenge';
   const ent = (k) => !!(G.shop && G.shop.ent(k));
   G.state.register('modes', () => ({ chLevel: 1, chOfferCount: 0, mineDay: '', mineUsed: 0,
@@ -32035,17 +32160,17 @@ $ 0 .##/##./.#./.##/##.
       if (!(g.interval > 0.001)) continue;
       const c = g.critPct;
       let E = (g.shot * (100 - c) + g.critShot * c) / 100;
-      if (!(E < Infinity)) E = G.sat(g.shot / 100 * (100 - c) + g.critShot / 100 * c);   // предел double (spec 17 §8)
+      if (!(E < Infinity)) E = B.add(B.mul(B.div(g.shot, 100), 100 - c), B.mul(B.div(g.critShot, 100), c));   // G.B (spec 17 §22)
       const gd = G.D.gun ? G.D.gun(g.gunId) : null;
       const w = Math.max(1, (gd && gd.cpWeight) || g.pellets || 1);
-      cp = G.sat(cp + E * w / g.interval);
+      cp = B.add(cp, B.div(B.mul(E, w), g.interval));
     }
-    return G.sat(+cp.toPrecision(5));                  // «1.7977e+308» уже Infinity → G.NUM_MAX: «∞» отряда против «∞» режима — 100 %
+    return B.isBig(cp) ? cp : +cp.toPrecision(5);
   };
   const quickNeed = (m) => {
     const q = PKD().QUICK || {};
-    if (m === 'challenge') return D().challenge.expTotalHP(S().chLevel) / (q.CH_DIV || 24);
-    if (m === 'boss') return D().boss.HP(S().bossLevel) / (packOn('time') ? (q.BOSS_DIV_TIME || 84) : (q.BOSS_DIV || 42));
+    if (m === 'challenge') return B.div(D().challenge.expTotalHP(S().chLevel), q.CH_DIV || 24);
+    if (m === 'boss') return B.div(D().boss.HP(S().bossLevel), packOn('time') ? (q.BOSS_DIV_TIME || 84) : (q.BOSS_DIV || 42));
     return 0;
   };
   const quickPct = (m) => {
@@ -32053,7 +32178,7 @@ $ 0 .##/##./.#./.##/##.
     const need = quickNeed(m);
     if (!(need > 0)) return 0;
     const cp = quickCP(), v = cp * 100 / need;
-    return Math.floor(v < Infinity ? v : cp / need * 100);
+    return Math.floor(v < Infinity ? v : B.toNum(B.mul(B.div(cp, need), 100)));
   };
   const busy = (m) => run || !unlocked(m) || !G.scenes || G.scenes.name !== 'stage' || G.stage.phase() !== 'play' ||
     (G.S.tut && G.S.tut.step !== 'done');
@@ -32260,7 +32385,7 @@ $ 0 .##/##./.#./.##/##.
   const draw = (ctx) => {
     if (!run) return;
     const r = run; r.battle.draw(ctx, { noInput: r.phase !== 'fight' });
-    const progress = r.mode === 'boss' ? r.boss.hp / r.boss.maxHp : r.killed / Math.max(1, r.total);
+    const progress = r.mode === 'boss' ? B.ratio(r.boss.hp, r.boss.maxHp) : r.killed / Math.max(1, r.total);
     G.ui.bar(0, 2, 216, 8, progress, { fill: 'P34', bg: 'P01' });
     G.ui.bar(0, 11, 216, 2, 1 - r.timer / r.limit, { fill: 'P32', bg: 'P01' });
     G.text(title(r.mode), 108, 20, { align: 'center', outline: 'P00', maxW: 200 });
@@ -32635,8 +32760,8 @@ $ 0 .##/##./.#./.##/##.
   const int0 = (v) => (finite(+v) && +v > 0 ? Math.floor(+v) : 0);
   const sanitize = () => {
     const r = G.S.rebirth;
-    r.rp = Math.max(0, finite(+r.rp) ? +r.rp : 0);
-    r.totalRp = Math.max(r.rp, finite(+r.totalRp) ? +r.totalRp : 0);
+    r.rp = G.B.max(0, G.B.from(r.rp));                     // number | G.B.Big (spec 17 §22)
+    r.totalRp = G.B.max(r.rp, G.B.from(r.totalRp));
     if (!r.lv || typeof r.lv !== 'object') r.lv = { power: 0, speed: 0, money: 0 };
     for (const k of PERM_KEYS) r.lv[k] = Math.min(20000, int0(r.lv[k]));
     r.count = int0(r.count);
@@ -32754,8 +32879,8 @@ $ 0 .##/##./.#./.##/##.
     anim.applied = true;
     const r = G.S.rebirth, pts = anim.points, sup = anim.super;
     r.count += 1;
-    r.rp = G.sat(r.rp + pts);
-    r.totalRp = G.sat(r.totalRp + pts);
+    r.rp = G.B.add(r.rp, pts);
+    r.totalRp = G.B.add(r.totalRp, pts);
     if (G.eco && typeof G.eco.resetRun === 'function') G.eco.resetRun();
     else if (G.S.eco) { G.S.eco.money = 0; G.S.eco.upgLv = [0, 0, 0]; }
     if (G.stage && typeof G.stage.resetForRebirth === 'function') {
@@ -32785,7 +32910,7 @@ $ 0 .##/##./.#./.##/##.
   }, 85, { always: true, name: 'meta.moonhop' });
 
   meta.permLv = (key) => ((G.S.rebirth && G.S.rebirth.lv && G.S.rebirth.lv[key]) | 0);
-  meta.permPrice = (key) => (D().perm ? D().perm.price(meta.permLv(key)) : G.NUM_MAX);   // G.NUM_MAX = MAX (spec 17 §8)
+  meta.permPrice = (key) => (D().perm ? D().perm.price(meta.permLv(key)) : G.NUM_MAX);   // G.NUM_MAX = MAX: G.isMax (spec 17 §22)
   meta.permPct = (key) => (key === 'speed' ? 5 * meta.permLv(key) : (D().perm ? D().perm.pct(meta.permLv(key)) : 0));
   meta.speedAdd = () => 5 * meta.permLv('speed');
   G.act.permBuy = (key, count = 1) => {
@@ -32794,8 +32919,8 @@ $ 0 .##/##./.#./.##/##.
     let n = 0;
     for (let i = 0; i < Math.max(1, count | 0); i++) {
       const L = r.lv[key] | 0, price = D().perm.price(L);
-      if (G.isMax(price) || L >= D().perm.MAX || r.rp < price) break;
-      r.rp -= price;
+      if (G.isMax(price) || L >= D().perm.MAX || G.B.lt(r.rp, price)) break;
+      r.rp = G.B.sub(r.rp, price);
       r.lv[key] = L + 1;
       n++;
     }
@@ -33174,7 +33299,7 @@ $ 0 .##/##./.#./.##/##.
     const p1 = pos(), lv1 = lvNow();
     const lv = res.levels || {};
     const info = {
-      away, capped: raw >= cap, money: finite(+res.money) ? +res.money : Math.max(0, money() - m0),
+      away, capped: raw >= cap, money: finite(+res.money) || G.B.isBig(res.money) ? res.money : G.B.max(0, G.B.sub(money(), m0)),
       subs: finite(+res.subs) ? +res.subs : Math.max(0, p1.n - p0.n),
       lv0: Array.isArray(lv.from) ? lv.from.slice(0, 3) : lv0, lv1: Array.isArray(lv.to) ? lv.to.slice(0, 3) : lv1,
       from: pair(res.from, [p0.stage, p0.sub]), to: pair(res.to, [p1.stage, p1.sub]),
@@ -33206,7 +33331,7 @@ $ 0 .##/##./.#./.##/##.
       case 'rebirth': {
         if (!unlocked('rebirth')) return false;
         const r = G.S.rebirth;
-        return (rebirth.superState() === 'ad' && rebirth.points(true) > 0) || PERM_KEYS.some((k) => { const p = meta.permPrice(k); return !G.isMax(p) && r.rp >= p; });
+        return (rebirth.superState() === 'ad' && rebirth.points(true) > 0) || PERM_KEYS.some((k) => { const p = meta.permPrice(k); return !G.isMax(p) && G.B.gte(r.rp, p); });
       }
       case 'quests': return meta.questsClaimable();
       case 'daily': return meta.dailyClaimable();
@@ -33336,7 +33461,7 @@ $ 0 .##/##./.#./.##/##.
   const drawPermCard = (key, x, y, w, h, t) => {
     const r = G.S.rebirth, L = meta.permLv(key), price = meta.permPrice(key);
     const maxed = G.isMax(price) || L >= ((D().perm && D().perm.MAX) || 20000);
-    const ok = !maxed && r.rp >= price;
+    const ok = !maxed && G.B.gte(r.rp, price);
     G.px.panel(x, y, w, h, 'card');
     const fl = permFlash[key] !== undefined ? t - permFlash[key] : 9;
     icon(PERM_ICON[key], x + 5, y + Math.floor((h - 16) / 2), 16);
@@ -34079,7 +34204,7 @@ $ 0 .##/##./.#./.##/##.
       };
       const away = G.fmtTime(a.away || 0, 'hm');
       row(T('off.away', a.capped ? T('off.awayMax', away) : away));
-      row(G.t('stat.money'), '+' + fmt(G.ui.countUp('welcome.money', Math.floor(a.money || 0), 0.6)) + ' {coin}', P('P22', '#2f5e3a'));
+      row(G.t('stat.money'), '+' + fmt(G.ui.countUp('welcome.money', G.B.floor(a.money || 0), 0.6)) + ' {coin}', P('P22', '#2f5e3a'));
       const names = [G.t('stat.power'), G.t('stat.speed'), G.t('stat.money')];
       for (let i = 0; i < 3; i++) {
         const l0 = (a.lv0 || [])[i] | 0, l1 = (a.lv1 || [])[i] | 0;
@@ -38444,7 +38569,7 @@ $ 0 .##/##./.#./.##/##.
       hPx: big ? 14 : 10, pop: 0, deathLife: popDur(), regular: true, draw: drawSlugT, hitFx: slugHitFx, deathFx: slugDeathFx,
       data: { hunt: true, big, kind: r.wave % 10, v: big ? d.SLUG.V_BIG : d.SLUG.V, kb: 0, kbT: 0, rec: d.RECOVER,
         phase: G.frand() * TAU, age: 0, popT: -1, danger: false, flip: Math.cos(a) > 0 } });
-    // волна 651+: HP — G.NUM_MAX («∞», spec 17 §8); addTarget его сохраняет, снять может только выстрел «∞»
+    // волна 651+: HP — G.B.Big (spec 17 §22); урон и полоска считаются через G.B
     r.slugs.push(t);
     r.spawned++;
   };
@@ -38453,7 +38578,7 @@ $ 0 .##/##./.#./.##/##.
     const dd = t.data;
     if (!dd || !dd.hunt) return;
     const d = D();
-    let k = dealt / t.maxHp * d.KB_K;
+    let k = G.B.ratio(dealt, t.maxHp) * d.KB_K;
     if (!(k > 0)) return;
     k = Math.min(1, k);
     dd.kb = dd.kbT > 0 ? Math.max(dd.kb, k) : k;
@@ -38623,11 +38748,11 @@ $ 0 .##/##./.#./.##/##.
   // ===============================================================================================================
   // «Мигом!» (набор auto spec 12, §3.3.2): без набора кнопки нет
   // ===============================================================================================================
-  const cp = () => { try { return G.modes && G.modes.quick && G.modes.quick.cp ? +G.modes.quick.cp() || 0 : 0; } catch (e) { return 0; } };
+  const cp = () => { try { return G.modes && G.modes.quick && G.modes.quick.cp ? G.B.from(G.modes.quick.cp()) : 0; } catch (e) { return 0; } };
   const plan = () => {
     const d = D(), c = cp();
     let w = S().wave, L = S().lv, n = 0, waves = 0, last = w, done = 0;
-    while (n < d.SWEEP_LEVELS && w <= d.MAX_WAVE && c >= d.need(w, L)) {
+    while (n < d.SWEEP_LEVELS && w <= d.MAX_WAVE && G.B.gte(c, d.need(w, L))) {
       n++; last = w;
       if (++L > 5) { L = 1; waves++; done = w; if (w >= d.MAX_WAVE) break; w++; }
     }
@@ -38639,7 +38764,7 @@ $ 0 .##/##./.#./.##/##.
     need: (w, L) => D().need(w, L),
     levels: () => plan().levels,
     waves: () => plan().wave - S().wave,
-    pct: () => { const c = cp(), n = D().need(S().wave, S().lv), v = c * 100 / n; return Math.floor(v < Infinity ? v : c / n * 100); },
+    pct: () => { const c = cp(), n = D().need(S().wave, S().lv), v = c * 100 / n; return Math.floor(v < Infinity ? v : G.B.toNum(G.B.mul(G.B.div(c, n), 100))); },
     why: () => (!(G.stage && G.stage.unlocked('plusPacks')) ? 'locked' : !packActive('auto') ? 'pack'
       : (startWhy() || S().run) ? 'busy' : plan().levels > 0 ? '' : 'low'),
     can: () => sweep.why() === '',
@@ -40913,7 +41038,7 @@ $ 0 .##/##./.#./.##/##.
   const candidates = () => {
     const out = [];
     for (const [id, n] of counts()) if (gunOf(id)) out.push({ id, n, dpsRaid: dpsRaid(id) });
-    out.sort((a, b) => b.dpsRaid - a.dpsRaid || b.id - a.id);
+    out.sort((a, b) => G.B.cmp(b.dpsRaid, a.dpsRaid) || b.id - a.id);
     return out;
   };
   const starsNow = () => [0, 1, 2].map((i) => (G.guns.stars ? G.guns.stars(i) : 0));
@@ -41068,15 +41193,14 @@ $ 0 .##/##./.#./.##/##.
     // §8.4: «над короной, ниже строк HUD» — подъём 4 px вместо 14, чтобы надпись не заходила в полосу HUD (0..57)
     if (G.ui) G.ui.float('+' + G.fmt(stones) + ' {whetstone}', 108, 62, { color: 'P34', font: 'small', rise: 4 });
   };
-  // R11: лишний урон переходит на следующую полосу (§4.1). С L184 HP полосы — G.NUM_MAX («∞», spec 17 §8):
-  // переноса на неё нет, а снять её может только выстрел «∞» (раньше полоса была Infinity и не снималась вовсе)
+  // R11: лишний урон переходит на следующую полосу (§4.1). С L184 HP полосы — G.B.Big: перенос считается через G.B
+  // (spec 17 §22); HP полос растёт ≈×1.7 за уровень, поэтому цикл короткий и при огромном перебое
   const barOverflow = (r, t) => {
     if (Number.isNaN(t.hp)) { t.hp = t.maxHp; return; }
-    if (t.hp < -Number.MAX_VALUE) t.hp = -Number.MAX_VALUE;
     while (t.hp <= 0) {
       const s1 = DR.stonesPer(r.level);
       r.bars++; r.level++; r.stones += s1; r.bank += DR.BANK_PER_BAR;
-      t.maxHp = DR.hp(r.level); t.hp = G.isMax(t.maxHp) ? t.maxHp : t.hp + t.maxHp;
+      t.maxHp = DR.hp(r.level); t.hp = G.B.add(t.hp, t.maxHp);
       G.emit('raid:bar', { level: r.level, stones: s1, bank: DR.BANK_PER_BAR });
       // эффекты: до 3 полос за 0.25 с — каждая отдельно, сверх — одной вспышкой с суммой (§8.4)
       if (r.time - r.fxT > 0.25) { r.fxT = r.time; r.fxN = 0; }
@@ -41190,7 +41314,7 @@ $ 0 .##/##./.#./.##/##.
     const slotBest = (() => {
       const d = (() => { try { return G.calc('raid', 1, { equipped: r.ids }).slots; } catch (e) { return []; } })();
       let k = 0;
-      for (let i = 1; i < 3; i++) if (d[i] && (!d[k] || d[i].dps > d[k].dps)) k = i;
+      for (let i = 1; i < 3; i++) if (d[i] && (!d[k] || G.B.gt(d[i].dps, d[k].dps))) k = i;
       return k;
     })();
     G.ui.close('raidResult', 'claimed');
@@ -41321,7 +41445,7 @@ $ 0 .##/##./.#./.##/##.
     P.rectO(x + 1, y - 14, 3, 3, 'P34');
   });
   const drawBar = (ctx, r) => {
-    const t = r.king, frac = t && t.maxHp > 0 ? G.clamp(t.hp / t.maxHp, 0, 1) : 1;
+    const t = r.king, frac = t && t.maxHp > 0 ? G.clamp(G.B.ratio(t.hp, t.maxHp), 0, 1) : 1;
     const flash = r.flashT < 0.15;
     // арт рисует только полосу (flash — число > 0.5), подпись «УР. N» — всегда наша
     if (!callArt('raidBar', ctx, 0, 2, 216, 9, { level: r.level, frac, t: r.time, flash: flash ? 1 : 0 })) {
@@ -41354,7 +41478,7 @@ $ 0 .##/##./.#./.##/##.
     const hot = r.phase === 'fight' && left <= 10;
     const pulse = hot && Math.floor(r.time * 4) % 2 === 0;
     G.text(G.fmtTime(Math.ceil(left), 'ms'), 108, 26, { align: 'center', color: hot ? (pulse ? 'P41' : 'P36') : 'P06', outline: 'P00' });
-    const hp = t ? Math.max(0, t.hp) : 0, mx = t ? t.maxHp : 0;
+    const hp = t ? G.B.max(0, t.hp) : 0, mx = t ? t.maxHp : 0;
     G.text(fit(T('raid.hp', G.fmt(hp), G.fmt(mx)), 200, 'small'), 108, 36, { align: 'center', font: 'small', color: 'P06', outline: 'P00' });
     const nb = r.newBestShown && r.week === s.week;
     G.text(fit(T('raid.fightBest', Math.max(r.week === s.week ? s.best : 0, r.level)), 200, 'small'), 108, 43,
@@ -43309,7 +43433,7 @@ $ 0 .##/##./.#./.##/##.
   const huntStep = () => {
     const H = G.D.hunt, w = G.hunt.wave ? G.hunt.wave() : 1, L = G.hunt.lv ? G.hunt.lv() : 1;
     if (!(H && H.need) || !(L >= 2)) return HUNT_STEP;
-    const r = H.need(w, L) / H.need(w, L - 1);
+    const r = G.B.ratio(H.need(w, L), H.need(w, L - 1));
     return Number.isFinite(r) && r > HUNT_STEP ? r : HUNT_STEP;
   };
   const huntReady = (p) => now() >= p.nextHunt && !(p.huntP > 0 && huntPower() < huntStep() * p.huntP &&
@@ -43425,7 +43549,8 @@ $ 0 .##/##./.#./.##/##.
       p.failed = false;
       const n = G.stage.n(), elapsed = now() - p.runStart;
       const price = G.eco.price(Math.min(...G.S.eco.upgLv));
-      const wait = now() - p.attemptStart + Math.max(0, 3 * price - G.eco.money()) / Math.max(1e-9, p.income / 180);
+      const B = G.B;   // капуста и цены — number | G.B.Big (spec 17 §22)
+      const wait = now() - p.attemptStart + B.ratio(B.max(0, B.sub(B.mul(3, price), G.eco.money())), B.max(1e-9, B.div(p.income, 180)));
       if (n >= 10 && G.stage.recN() >= 10 && wait > 2.5 * elapsed / n) {
         if (G.act.rebirth(p.ads && G.rebirth.canSuper())) return;
       }
@@ -43527,7 +43652,7 @@ $ 0 .##/##./.#./.##/##.
     }
     if (name === 'stage:sub') { p.attemptStart = now(); p.income = 0; }
     if (name === 'hunt:level' || name === 'hunt:start') { p.huntLevelT = now(); p.huntStuck = false; }
-    if (name === 'money:gain' && e.src === 'kill' && !G.modes.active()) p.income += e.n;
+    if (name === 'money:gain' && e.src === 'kill' && !G.modes.active()) p.income = G.B.add(p.income, e.n);
     if (name === 'stage:fail') p.failed = true;
     if (name === 'mode:end' && e && e.mode === 'boss' && !e.win) p.bossDay = G.dayKey();   // поражение — до завтра
     if (name === 'rebirth') {
