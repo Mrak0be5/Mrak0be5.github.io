@@ -22,7 +22,7 @@
 <body>
 <canvas id="game" width="216" height="384" tabindex="0"></canvas>
 <noscript>Для игры нужен JavaScript. / This game needs JavaScript.</noscript>
-<script>window.BUILD_INFO = {"time": "2026-10-11 22:12", "hash": "f098adc9", "dev": false, "files": 42};</script>
+<script>window.BUILD_INFO = {"time": "2026-10-12 16:58", "hash": "4a8af2a3", "dev": false, "files": 42};</script>
 <script>
 // Core: events, seeded rng, time, number/time formatting, i18n, action registry, stats-modifier hooks, easing,
 // simulation + scene registries, error capture, boot warm-up registry. Loaded first, so every later file can use these
@@ -10463,6 +10463,10 @@ $ 0 .##/##./.#./.##/##.
       ctx.fillStyle = t.golden ? ((G.PAL && G.PAL.gold) || '#ffd34a') : ((G.PAL && G.PAL.P26) || '#b6d65c');
       const fw = Math.max(f > 0 ? 1 : 0, Math.round(w * f));
       ctx.fillRect(x, y, fw, h);
+      // цифра HP над полоской (просьба владельца, отступление от оригинала); прячется вместе с цифрами урона
+      if (G.text && G.fmt && numbersSetting() !== 'off') {
+        G.text(G.fmt(t.hp), Math.round(sx), y - 7, { font: 'small', align: 'center', color: G.col ? G.col('P06') : '#ffffff', outline: (G.PAL && G.PAL.P00) || '#17111d' });
+      }
     }
     rabbitPose(r) {
       if (r.leaving) return { pose: 'warp_out', t: r.warpT };
