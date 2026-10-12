@@ -1,5 +1,6 @@
 export const DAY = 86400000;
 export const RETENTION_DAYS = [1, 3, 7, 14, 30];
+export const PLAYTIME_DAYS = [0, 1, 7];
 export const dateUTC = value => new Date(value).toISOString().slice(0, 10);
 export const shiftDay = (day, amount) => dateUTC(Date.parse(day + 'T00:00:00Z') + amount * DAY);
 export const validDay = day => typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day) && Number.isFinite(Date.parse(day + 'T00:00:00Z')) && dateUTC(day + 'T00:00:00Z') === day;
@@ -40,6 +41,20 @@ export function sumMetric(data, source, rows, metric) {
   return values.some(value => value === null) ? null : values.reduce((total, value) => total + value, 0);
 }
 export const ratio = (a, b) => numeric(a) !== null && numeric(b) !== null && b > 0 ? a / b : null;
+export function rewardedCount(data, filters) {
+  const id = data.engagement?.rewarded_event_id;
+  return typeof id === 'string' ? sumMetric(data, 'events', filterRows(data.event_rows, filters), id) : null;
+}
+export function playtimeKpis(data, filters) {
+  const parsed = Date.parse(data.generated_at);
+  const completed = Number.isFinite(parsed) ? shiftDay(dateUTC(parsed), -1) : null;
+  const rows = filterRows(data.cohorts, filters);
+  return Object.fromEntries(PLAYTIME_DAYS.map(day => {
+    const mature = completed ? rows.filter(row => shiftDay(row.day, day) <= completed) : [];
+    return ['playtime_d' + day, ratio(sumMetric(data, 'cohorts', mature, 'time_spent_d' + day),
+                                     sumMetric(data, 'cohorts', mature, 'cohort_size_d' + day))];
+  }));
+}
 export function kpis(data, filters) {
   const source = filters.network || filters.country ? 'acquisition' : 'daily';
   const rows = filterRows(data[source], filters);
@@ -54,6 +69,8 @@ export function kpis(data, filters) {
     daus: source === 'daily' && covered ? ratio(sum('daus'), count) : null,
     cpi: ratio(sumMetric(data, 'acquisition', paid, 'cost'), sumMetric(data, 'acquisition', paid, 'installs')),
     income_cost: ratio(revenue, cost), sessions: sum('sessions'),
+    revenue: sum('revenue'), ad_revenue: sum('ad_revenue'), revenue_events: sum('revenue_events'),
+    ad_impressions: sum('ad_impressions'), rewarded_count: rewardedCount(data, filters), ...playtimeKpis(data, filters),
   };
 }
 export function comparison(data, filters) {
@@ -62,6 +79,16 @@ export function comparison(data, filters) {
   return kpis(data, { ...filters, ...previous });
 }
 export function timeline(data, filters, metric) {
+  if (metric === 'rewarded_count') {
+    const id = data.engagement?.rewarded_event_id;
+    const rows = filterRows(data.event_rows, filters);
+    if (!id || !available(data, 'events', id) || !rows.length) return [];
+    return daysBetween(filters.start, filters.end).map(day => {
+      const dayRows = rows.filter(row => row.day === day);
+      const covered = day >= data.range?.start && day <= data.range?.end;
+      return {day, value: dayRows.length ? sumMetric(data, 'events', dayRows, id) : covered ? 0 : null};
+    });
+  }
   const source = filters.network || filters.country ? 'acquisition' : 'daily';
   const rows = filterRows(data[source], filters);
   if (source !== 'daily' && metric === 'daus') return [];
@@ -80,7 +107,7 @@ export function groupAcquisition(data, filters, dimension) {
     groups.get(name).push(row);
   }
   return [...groups].map(([name, rows]) => {
-    const values = Object.fromEntries(['installs', 'sessions', 'revenue', 'ad_revenue', 'revenue_total', 'cost', 'clicks', 'impressions'].map(id => [id, sumMetric(data, 'acquisition', rows, id)]));
+    const values = Object.fromEntries(['installs', 'sessions', 'revenue', 'ad_revenue', 'revenue_total', 'revenue_events', 'ad_impressions', 'cost', 'clicks', 'impressions'].map(id => [id, sumMetric(data, 'acquisition', rows, id)]));
     const paid = rows.filter(paidNetwork);
     return { name, ...values, cpi: ratio(sumMetric(data, 'acquisition', paid, 'cost'), sumMetric(data, 'acquisition', paid, 'installs')), income_cost: ratio(values.revenue_total, values.cost) };
   });
@@ -102,6 +129,10 @@ export function cohortTable(data, filters) {
       result['revenue_total_d' + n] = mature ? sumMetric(data, 'cohorts', rows, 'revenue_total_d' + n) : null;
     }
     result.revenue_total_d0 = completedDay && day <= completedDay ? sumMetric(data, 'cohorts', rows, 'revenue_total_d0') : null;
+    for (const n of PLAYTIME_DAYS) {
+      result['playtime_d' + n] = completedDay && shiftDay(day, n) <= completedDay
+        ? ratio(sumMetric(data, 'cohorts', rows, 'time_spent_d' + n), sumMetric(data, 'cohorts', rows, 'cohort_size_d' + n)) : null;
+    }
     return result;
   });
 }
