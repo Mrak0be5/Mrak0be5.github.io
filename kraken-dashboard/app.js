@@ -1,4 +1,4 @@
-import { RETENTION_DAYS, PLAYTIME_DAYS, validDay, dateUTC, shiftDay, daysBetween, filterRows, sumMetric, ratio, kpis, comparison, timeline, groupAcquisition, cohortTable, eventTable, makeCSV, normalizeData, countryName, networkName } from './logic.mjs?v=20261013-spend';
+import { RETENTION_DAYS, PLAYTIME_DAYS, validDay, dateUTC, shiftDay, daysBetween, filterRows, sumMetric, ratio, kpis, comparison, timeline, groupAcquisition, cohortTable, eventTable, makeCSV, normalizeData, countryName, networkName, adKey, adName } from './logic.mjs?v=20261013-creative';
 
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
@@ -6,12 +6,15 @@ const today = () => dateUTC(Date.now());
 const titles = {
   overview: ['Обзор', 'Ключевые показатели игры в одном пространстве.'],
   acquisition: ['Привлечение', 'Сети, кампании и страны: от установки до дохода.'],
+  campaigns: ['Кампании', 'Название рекламной кампании и её показатели.'],
+  creatives: ['Креативы', 'Показатели каждого объявления с названием рекламной кампании.'],
   cohorts: ['Когорты', 'Удержание и накопительный доход по дате установки.'],
   events: ['События', 'Действия игроков за выбранный период.'],
   status: ['Данные и источник', 'Свежесть снимка, доступность метрик и покрытие отчёта.'],
 };
 const metricLabels = { installs: 'Установки', sessions: 'Сессии', daus: 'DAU', revenue: 'Доход IAP', ad_revenue: 'Доход от рекламы', revenue_total: 'Общий доход', revenue_events: 'Количество покупок', rewarded_count: 'Ревардеды', ad_impressions: 'Все рекламные показы', ads_per_dau: 'Реклам / активного игрока в сутки', cost: 'Расходы сетей', network_cost: 'Затраты из API сетей', network_installs: 'Установки из API сетей', clicks: 'Клики', impressions: 'Показы', cpi: 'CPI по установкам Adjust', cpi_network: 'CPI по данным сети', income_cost: 'Доход / расходы' };
-const state = { data: null, section: 'overview', loading: false, failed: false, filters: { start: shiftDay(today(), -30), end: shiftDay(today(), -1), os: '', network: '', country: '' }, searches: {}, sorts: {}, group: 'network', chartMetric: 'installs', cohortMode: 'retention', tableRows: [], tableColumns: [], request: 0 };
+const state = { data: null, section: 'overview', loading: false, failed: false, filters: { start: shiftDay(today(), -30), end: shiftDay(today(), -1), os: '', network: '', country: '', campaign: '', creative: '' }, searches: {}, sorts: {}, group: 'network', chartMetric: 'installs', cohortMode: 'retention', tableRows: [], tableColumns: [], request: 0 };
+const acquisitionSection = () => ['acquisition','campaigns','creatives'].includes(state.section);
 const dateFormat = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 function shortDay(day) { return validDay(day) ? dateFormat.format(new Date(day + 'T00:00:00Z')) : '—'; }
 function stamp(value) {
@@ -42,7 +45,7 @@ function label(id) {
 }
 function empty(title, body, action = '') { return `<div class="empty-state"><span class="empty-symbol" aria-hidden="true">⌁</span><h2>${esc(title)}</h2><p>${esc(body)}</p>${action}</div>`; }
 function panel(title, subtitle, body, tools = '') { return `<section class="panel"><div class="panel-heading"><div><h2>${esc(title)}</h2><p>${esc(subtitle)}</p></div>${tools}</div>${body}</section>`; }
-function source() { return state.filters.network || state.filters.country ? 'acquisition' : 'daily'; }
+function source() { return state.filters.network || state.filters.country || state.filters.campaign || state.filters.creative ? 'acquisition' : 'daily'; }
 function setPreset(value) {
   if (value !== 'custom') { state.filters.end = shiftDay(today(), -1); state.filters.start = shiftDay(state.filters.end, -(Number(value) - 1)); }
   $('#start-date').value = state.filters.start;
@@ -59,16 +62,21 @@ function populateFilters() {
   fillSelect('#os-filter', values('os_name'), 'Все платформы');
   const networks = [...new Set(rows.filter(row=>row.network || row.partner_name).map(networkName))].sort((a,b)=>a.localeCompare(b,'ru'));
   fillSelect('#network-filter', networks.map(name=>[name,name]), 'Все сети');
+  for (const level of ['campaign','creative']) {
+    const entries = new Map();
+    for (const row of rows) if (row[level+'_id'] || row[level+'_name']) entries.set(adKey(row,level),adName(row,level)+' · '+networkName(row));
+    fillSelect('#'+level+'-filter',[...entries].sort((a,b)=>a[1].localeCompare(b[1],'ru')),level==='campaign'?'Все кампании':'Все креативы');
+  }
   const countries = new Map();
   for (const row of rows) { const code = row.country_code || row.country; if (typeof code === 'string' && code) countries.set(code, `${countryName(row)}${row.country_code ? ' · ' + String(row.country_code).toUpperCase() : ''}`); }
   fillSelect('#country-filter', [...countries].sort((a, b) => a[1].localeCompare(b[1], 'ru')), 'Все страны');
-  for (const [id, key] of [['#os-filter', 'os'], ['#network-filter', 'network'], ['#country-filter', 'country']]) state.filters[key] = $(id).value;
+  for (const [id, key] of [['#os-filter', 'os'], ['#network-filter', 'network'], ['#country-filter', 'country'], ['#campaign-filter','campaign'], ['#creative-filter','creative']]) state.filters[key] = $(id).value;
 }
 function updateMeta() {
-  const { start, end, network, country } = state.filters;
+  const { start, end, network, country, campaign, creative } = state.filters;
   $('#range-label').textContent = `${shortDay(start)} — ${shortDay(end)} · ${daysBetween(start, end).length} дней`;
   $('#incomplete-label').hidden = !(start <= today() && end >= today());
-  $('#segment-label').hidden = !(network || country);
+  $('#segment-label').hidden = !(network || country || campaign || creative);
   $('#currency-label').textContent = state.data?.currency || 'USD';
   const coverage = state.data?.range;
   $('#coverage-label').textContent = state.data && (!validDay(coverage?.start) || !validDay(coverage?.end)) ? 'Покрытие снимка не указано' : state.data && (start < coverage.start || end > coverage.end) ? 'Часть периода вне покрытия снимка' : '';
@@ -195,7 +203,7 @@ function tableShell(title, subtitle, rows, columns, note = '', extraTools = '') 
 function visibleRows() {
   const query = (state.searches[state.section] || '').toLocaleLowerCase('ru').trim();
   const rows = state.tableRows.filter(row => !query || state.tableColumns.some(column => String(row[column.key] ?? '').toLocaleLowerCase('ru').includes(query)));
-  const sort = state.sorts[state.section] || { key: state.section === 'events' ? 'count' : state.section === 'acquisition' ? 'installs' : 'day', direction: 'desc' };
+  const sort = state.sorts[state.section] || { key: state.section === 'events' ? 'count' : acquisitionSection() ? 'installs' : 'day', direction: 'desc' };
   return rows.sort((a, b) => {
     const aa = a[sort.key], bb = b[sort.key];
     if (aa === null || aa === undefined) return bb === null || bb === undefined ? 0 : 1;
@@ -214,10 +222,10 @@ function renderTable() {
     target.innerHTML = empty(state.tableRows.length ? 'Ничего не найдено' : 'Нет строк за этот период', state.tableRows.length ? 'Попробуйте другой поисковый запрос.' : 'Измените период или фильтры. Пустой набор данных не означает нулевую активность.');
     return;
   }
-  const sort = state.sorts[state.section] || { key: state.section === 'events' ? 'count' : state.section === 'acquisition' ? 'installs' : 'day', direction: 'desc' };
+  const sort = state.sorts[state.section] || { key: state.section === 'events' ? 'count' : acquisitionSection() ? 'installs' : 'day', direction: 'desc' };
   target.innerHTML = `<div class="table-scroll" role="region" aria-label="${esc(titles[state.section][0])}: таблица, прокручивается по горизонтали" tabindex="0"><table><caption class="sr-only">${esc(titles[state.section][0])} за ${esc(state.filters.start)} — ${esc(state.filters.end)}</caption><thead><tr>${columns.map(column => `<th scope="col" aria-sort="${sort.key === column.key ? sort.direction === 'asc' ? 'ascending' : 'descending' : 'none'}"><button class="sort-button" data-sort="${esc(column.key)}" aria-pressed="${sort.key === column.key}" aria-label="Сортировать: ${esc(column.label)}"><span>${esc(column.label)}</span><span class="sort-arrow" aria-hidden="true">${sort.key === column.key ? sort.direction === 'asc' ? '↑' : '↓' : '↕'}</span></button></th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${columns.map(column => {
     const value = row[column.key];
-    let content = column.type === 'text' ? esc(value) : column.type === 'day' ? esc(validDay(value) ? `${shortDay(value)} ${value.slice(0, 4)}` : value) : esc(format(value, column.type));
+    let content = column.type === 'entity' && /не передан[а]?$/.test(String(value)) ? esc(value) : column.type === 'entity' ? `<button class="text-button" data-entity="${esc(row.entity_key)}" data-dimension="${esc(column.dimension)}" title="${esc('Выбрать '+value)}">${esc(value)}</button>` : column.type === 'text' ? esc(value || '—') : column.type === 'day' ? esc(validDay(value) ? `${shortDay(value)} ${value.slice(0, 4)}` : value) : esc(format(value, column.type));
     if (column.heat) {
       const maturity = row['mature' + column.key.slice(1)];
       content = `<span class="heat-cell ${value === null ? 'unknown' : ''}" style="--heat:${value === null ? 0 : Math.round(Math.min(1, Math.max(0, value)) * 48 + 8)}%" title="${value === null ? maturity ? 'Данные недоступны или размер когорты неизвестен' : 'Когорта ещё не созрела или дата снимка неизвестна' : esc('Удержание: ' + format(value, 'percent'))}">${content}</span>`;
@@ -259,9 +267,12 @@ function overview() {
   return kpiCards() + playerPanel() + incomeChart + metricChart + `<div class="two-columns">${summary}${topNetworks}</div>` + tableShell('Данные по дням', 'Активность дня и показатели игроков, установивших игру в этот день', dailyTableRows(), columns, 'Плейтайм, реклама на игрока и LTV относятся к дате установки в строке. Остальные показатели — к календарному дню активности. LTV включает накопленные доходы рекламы и IAP. Реклам / активного игрока = показы за день / DAU. CPI исключает Organic и неизвестные источники. Незрелые когорты и отсутствующие затраты показаны как «—».');
 }
 function acquisition() {
-  const tools = `<div class="panel-tools"><label for="group-by">Группировка</label><select id="group-by"><option value="network" ${state.group === 'network' ? 'selected' : ''}>По сети</option><option value="campaign" ${state.group === 'campaign' ? 'selected' : ''}>По кампании</option><option value="country" ${state.group === 'country' ? 'selected' : ''}>По стране</option></select></div>`;
-  const columns = acquisitionColumns.map(column => column.key === 'name' ? { ...column, label: { network: 'Сеть', campaign: 'Кампания', country: 'Страна' }[state.group] } : column);
-  return kpiCards() + playerPanel() + tableShell('Источники привлечения', 'Затраты, CPI, плейтайм и LTV по сетям, кампаниям и странам', groupAcquisition(state.data, state.filters, state.group), columns, 'Facebook включает Facebook, Instagram и Off-Facebook. CPI Adjust = затраты / платные установки Adjust; CPI сети = затраты / установки, сообщённые сетью. Они могут различаться из-за атрибуции. Плейтайм и LTV рассчитаны по зрелым когортам выбранной группы. «Доход / расходы» относится к активности за период.', tools);
+  const dimension = state.section==='campaigns' ? 'campaign' : state.section==='creatives' ? 'creative' : state.group;
+  const entity = ['campaign','creative'].includes(dimension);
+  const tools = state.section==='acquisition' ? `<div class="panel-tools"><label for="group-by">Группировка</label><select id="group-by">${[['network','По сети'],['campaign','По кампании'],['creative','По креативу'],['country','По стране']].map(([id,name])=>`<option value="${id}" ${dimension===id?'selected':''}>${name}</option>`).join('')}</select></div>` : '';
+  const columns = acquisitionColumns.map(column => column.key === 'name' ? { ...column, label: { network: 'Сеть', campaign: 'Название кампании', creative:'Название креатива', country: 'Страна' }[dimension], ...(entity?{type:'entity',dimension}:{}) } : column);
+  if (entity) columns.splice(1,0,{key:'network_name',label:'Сеть',type:'text'}, ...(dimension==='creative'?[{key:'campaign_name',label:'Рекламная кампания',type:'text'},{key:'adgroup_name',label:'Группа объявлений',type:'text'},{key:'creative_id',label:'ID объявления',type:'text'}]:[{key:'campaign_id',label:'ID кампании',type:'text'}]));
+  return kpiCards() + playerPanel() + tableShell(dimension==='creative'?'Показатели по каждому креативу':dimension==='campaign'?'Рекламные кампании':'Источники привлечения', 'Затраты, CPI, плейтайм, рекламы на игрока и LTV', groupAcquisition(state.data, state.filters, dimension), columns, 'Нажмите на название кампании или креатива, чтобы выбрать его во всех разделах. Facebook включает Facebook, Instagram и Off-Facebook. CPI Adjust и CPI сети используют разные счётчики установок. Одинаковые названия с разными ID учитываются отдельно. «Не передан» — данные без привязки из Adjust; расходы между креативами не распределяются предположительно.', tools);
 }
 function cohorts() {
   const mode = state.cohortMode;
@@ -316,7 +327,7 @@ function render() {
     $('#content').innerHTML = `<section class="panel">${empty(state.failed ? 'Снимок пока недоступен' : 'Ожидаем данные игры', 'После загрузки отчёта здесь появятся показатели, графики и таблицы игры.')}</section>`;
     return;
   }
-  $('#content').innerHTML = ({ overview, acquisition, cohorts, events, status }[state.section])();
+  $('#content').innerHTML = ({ overview, acquisition, campaigns:acquisition, creatives:acquisition, cohorts, events, status }[state.section])();
   renderTable();
 }
 function route() {
@@ -333,7 +344,7 @@ function changeFilters() {
     $('#export-button').disabled = true;
     return;
   }
-  state.filters = { start, end, os: $('#os-filter').value, network: $('#network-filter').value, country: $('#country-filter').value };
+  state.filters = { start, end, os: $('#os-filter').value, network: $('#network-filter').value, country: $('#country-filter').value, campaign:$('#campaign-filter').value, creative:$('#creative-filter').value };
   render();
 }
 function exportCSV() {
@@ -373,11 +384,11 @@ $('#export-button').addEventListener('click', exportCSV);
 $('#filters').addEventListener('submit', event => { event.preventDefault(); changeFilters(); });
 $('#preset').addEventListener('change', () => { setPreset($('#preset').value); changeFilters(); });
 for (const id of ['#start-date', '#end-date']) $(id).addEventListener('change', () => { $('#preset').value = 'custom'; changeFilters(); });
-for (const id of ['#os-filter', '#network-filter', '#country-filter']) $(id).addEventListener('change', changeFilters);
+for (const id of ['#os-filter', '#network-filter', '#country-filter', '#campaign-filter', '#creative-filter']) $(id).addEventListener('change',()=>{if(id==='#campaign-filter')$('#creative-filter').value='';changeFilters();});
 $('#reset-button').addEventListener('click', () => {
   $('#preset').value = '30';
   setPreset('30');
-  for (const id of ['#os-filter', '#network-filter', '#country-filter']) $(id).value = '';
+  for (const id of ['#os-filter', '#network-filter', '#country-filter', '#campaign-filter', '#creative-filter']) $(id).value = '';
   state.searches = {}; state.sorts = {}; state.group = 'network'; state.chartMetric = 'installs'; state.cohortMode = 'retention';
   changeFilters();
 });
@@ -385,13 +396,19 @@ $('#info-button').addEventListener('click', () => $('#info-dialog').showModal())
 for (const id of ['#close-info', '#done-info']) $(id).addEventListener('click', () => $('#info-dialog').close());
 $('#info-dialog').addEventListener('click', event => { if (event.target === $('#info-dialog')) { const rect = event.target.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) event.target.close(); } });
 document.addEventListener('click', event => {
-  const button = event.target.closest('[data-action], [data-sort]');
+  const button = event.target.closest('[data-action], [data-sort], [data-entity]');
   if (!button) return;
   if (button.dataset.action === 'retry') load();
   if (button.dataset.action === 'acquisition') location.hash = 'acquisition';
   if (button.dataset.action === 'cohorts') { state.cohortMode = 'unit'; location.hash = 'cohorts'; }
+  if (button.dataset.entity) {
+    const dimension=button.dataset.dimension;
+    if (dimension==='campaign') $('#creative-filter').value='';
+    $('#'+dimension+'-filter').value=button.dataset.entity;
+    changeFilters();
+  }
   if (button.dataset.sort) {
-    const old = state.sorts[state.section] || { key: state.section === 'acquisition' ? 'installs' : state.section === 'events' ? 'count' : 'day', direction: 'desc' };
+    const old = state.sorts[state.section] || { key: acquisitionSection() ? 'installs' : state.section === 'events' ? 'count' : 'day', direction: 'desc' };
     state.sorts[state.section] = { key: button.dataset.sort, direction: old.key === button.dataset.sort && old.direction === 'desc' ? 'asc' : 'desc' };
     renderTable();
     document.querySelector(`[data-sort="${CSS.escape(button.dataset.sort)}"]`)?.focus({ preventScroll: true });

@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#0b1521">
   <title>Kraken — аналитика Octopus RPG</title>
   <link rel="stylesheet" href="./styles.css">
-  <script type="module" src="./app.js?v=20261013-spend"></script>
+  <script type="module" src="./app.js?v=20261013-creative"></script>
 </head>
 <body>
 <a class="skip-link" href="#main">Перейти к данным</a>
@@ -18,6 +18,8 @@
   <nav id="navigation">
     <a href="#overview" data-section="overview"><span aria-hidden="true">▦</span>Обзор</a>
     <a href="#acquisition" data-section="acquisition"><span aria-hidden="true">↗</span>Привлечение</a>
+    <a href="#campaigns" data-section="campaigns"><span aria-hidden="true">▥</span>Кампании</a>
+    <a href="#creatives" data-section="creatives"><span aria-hidden="true">▧</span>Креативы</a>
     <a href="#cohorts" data-section="cohorts"><span aria-hidden="true">▤</span>Когорты</a>
     <a href="#events" data-section="events"><span aria-hidden="true">ϟ</span>События</a>
     <a href="#status" data-section="status"><span aria-hidden="true">⊙</span>Данные и источник</a>
@@ -33,6 +35,8 @@
       <div class="date-fields"><label>С <input id="start-date" type="date" required></label><span aria-hidden="true">—</span><label>По <input id="end-date" type="date" required></label></div>
       <label>Платформа<select id="os-filter"><option value="">Все платформы</option></select></label>
       <label>Сеть<select id="network-filter"><option value="">Все сети</option></select></label>
+      <label>Кампания<select id="campaign-filter"><option value="">Все кампании</option></select></label>
+      <label>Креатив<select id="creative-filter"><option value="">Все креативы</option></select></label>
       <label>Страна<select id="country-filter"><option value="">Все страны</option></select></label>
       <button id="reset-button" type="button" class="reset-button" title="Сбросить все фильтры">Сбросить</button>
       <p id="filter-error" class="filter-error" role="alert" hidden></p>
