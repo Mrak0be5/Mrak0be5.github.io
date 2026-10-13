@@ -22,7 +22,7 @@
 <body>
 <canvas id="game" width="216" height="384" tabindex="0"></canvas>
 <noscript>Для игры нужен JavaScript. / This game needs JavaScript.</noscript>
-<script>window.BUILD_INFO = {"time": "2026-10-13 17:58", "hash": "d4b56994", "dev": false, "files": 42};</script>
+<script>window.BUILD_INFO = {"time": "2026-10-13 19:11", "hash": "df7167db", "dev": false, "files": 42};</script>
 <script>
 // Core: events, seeded rng, time, number/time formatting, i18n, action registry, stats-modifier hooks, easing,
 // simulation + scene registries, error capture, boot warm-up registry. Loaded first, so every later file can use these
@@ -8810,6 +8810,7 @@ $ 0 .##/##./.#./.##/##.
     if (!e.totals || typeof e.totals !== 'object') e.totals = { money: 0, dia: 0, stones: 0 };
     e.stones = Math.max(0, Math.floor(num(e.stones)));                // spec 14 §6.3: старые сохранения → 0
     e.totals.stones = Math.max(0, Math.floor(num(e.totals.stones)));
+    e.totals.dia = Math.max(0, Math.floor(num(e.totals.dia)));       // насыщенные 1.79e308 из сейва — Big → снова число
     if (!e.ui || typeof e.ui !== 'object') e.ui = { fresh: {}, seen: {} };
     if (!e.ui.fresh || typeof e.ui.fresh !== 'object') e.ui.fresh = {};
     if (!e.ui.seen || typeof e.ui.seen !== 'object') e.ui.seen = {};
