@@ -22,7 +22,7 @@
 <body>
 <canvas id="game" width="216" height="384" tabindex="0"></canvas>
 <noscript>Для игры нужен JavaScript. / This game needs JavaScript.</noscript>
-<script>window.BUILD_INFO = {"time": "2026-10-12 18:01", "hash": "923b523e", "dev": false, "files": 42};</script>
+<script>window.BUILD_INFO = {"time": "2026-10-13 17:58", "hash": "d4b56994", "dev": false, "files": 42};</script>
 <script>
 // Core: events, seeded rng, time, number/time formatting, i18n, action registry, stats-modifier hooks, easing,
 // simulation + scene registries, error capture, boot warm-up registry. Loaded first, so every later file can use these
@@ -2518,9 +2518,9 @@ $ 0 .##/##./.#./.##/##.
 
   const counts = {};
   ui.countUp = (id, target, dur = 0.6) => {
-    if (G.B.isBig(target)) return target;              // G.B.Big — сразу итог, без анимации (spec 17 §22)
+    const B = G.B;                                     // target может быть G.B.Big (spec 17 §22)
     let c = counts[id];
-    if (!c || c.to !== target) {
+    if (!c || B.cmp(c.to, target) !== 0) {
       c = counts[id] = { from: c ? c.val : 0, to: target, t: 0, val: c ? c.val : 0, tick: 0 };
     }
     if (c.t < dur) {
@@ -2528,8 +2528,8 @@ $ 0 .##/##./.#./.##/##.
       c.tick += ui.dt;
       if (c.tick >= 0.05) { c.tick = 0; sfx('tick'); }
     }
-    c.val = c.from + (c.to - c.from) * G.ease.outQuad(c.t / dur);
-    return c.t >= dur ? c.to : Math.floor(c.val);
+    c.val = B.add(c.from, B.mul(B.sub(c.to, c.from), G.ease.outQuad(c.t / dur)));
+    return c.t >= dur ? c.to : B.floor(c.val);
   };
   ui.countReset = (id) => { delete counts[id]; };
 
@@ -8788,7 +8788,8 @@ $ 0 .##/##./.#./.##/##.
   const S = () => G.S.eco;
 
   const finite = (n) => typeof n === 'number' && n === n && n !== Infinity && n !== -Infinity;
-  const num = (v, d = 0) => (finite(+v) ? +v : d);
+  // G.B.Big (насыщенные 1.79e308 из сейва грузятся как Big) → ±NUM_MAX, а не d: иначе ∞ кристаллов после загрузки = 0
+  const num = (v, d = 0) => (finite(+v) ? +v : v instanceof G.B.Big ? G.B.toNum(v) : d);
   // Большие числа (spec 17 §22): капуста, цены, урон и деньги за убийство — number | G.B.Big, арифметика через G.B;
   // Infinity/NaN в состояние не попадают. Кристаллы, Клеверки и камни — обычные числа с насыщением G.sat.
   const NUM_MAX = G.NUM_MAX, sat = G.sat, isMax = G.isMax, B = G.B;
@@ -29187,14 +29188,15 @@ $ 0 .##/##./.#./.##/##.
   const counterVal = (k, val, dt) => {
     const c = ctr[k];
     if (!c.init) { c.init = true; c.shown = c.to = c.from = val; }
-    if (val !== c.to) {
-      // G.B.Big — без анимации: lerp к Big дал бы «∞» (spec 17 §22)
-      if (!G.B.isBig(val) && val > c.to && val - c.to >= 0.1 * Math.max(1, c.to)) { c.from = c.shown; c.t = 0; } else c.t = 1;
+    const B = G.B;
+    // всё через G.B: значения могут быть G.B.Big (spec 17 §22), обычные числа считаются как раньше
+    if (B.cmp(val, c.to) !== 0) {
+      if (B.gte(B.sub(val, c.to), B.mul(0.1, B.max(1, c.to)))) { c.from = c.shown; c.t = 0; } else c.t = 1;
       c.to = val;
     }
     c.t = Math.min(1, c.t + dt);
     c.pt += dt;
-    c.shown = c.t >= 0.2 ? c.to : G.lerp(c.from, c.to, G.ease.outQuad(c.t / 0.2));
+    c.shown = c.t >= 0.2 ? c.to : B.add(c.from, B.mul(B.sub(c.to, c.from), G.ease.outQuad(c.t / 0.2)));
     return c.shown;
   };
   hud.counterPos = (k) => (k === 'dia' ? { x: 142, y: 33 } : k === 'moon' ? { x: 15, y: 247 } : { x: 142, y: 21 });
