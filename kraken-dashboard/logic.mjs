@@ -152,7 +152,7 @@ export function groupAcquisition(data, filters, dimension) {
     const cohortRows = cohorts.filter(row => groupKey(row) === key);
     const cost = Array.isArray(data.spend_rows) ? available(data,'spend','cost') ? spend.length ? sumMetric(data,'spend',spend,'cost') : 0 : null : values.cost;
     const network_installs = sumMetric(data,'spend',spend,'network_installs');
-    return { name, entity_key:key, network_name:networkName(metadata), campaign_name:adName(metadata,'campaign'), campaign_id:adValue(metadata.campaign_id) || adValue(metadata.campaign_id_network), adgroup_name:adName(metadata,'adgroup'), creative_id:adValue(metadata.creative_id) || adValue(metadata.creative_id_network), ...values, cost, network_installs, cpi_network:ratio(cost,network_installs), ...cohortValues(data, cohortRows), cpi: ratio(Array.isArray(data.spend_rows) ? cost : sumMetric(data, 'acquisition', paid, 'cost'), sumMetric(data, 'acquisition', paid, 'installs')), income_cost: ratio(values.revenue_total, cost) };
+    return { name, entity_key:key, campaign_key:adKey(metadata,'campaign'), network_name:networkName(metadata), campaign_name:adName(metadata,'campaign'), campaign_id:adValue(metadata.campaign_id) || adValue(metadata.campaign_id_network), adgroup_name:adName(metadata,'adgroup'), creative_id:adValue(metadata.creative_id) || adValue(metadata.creative_id_network), ...values, cost, network_installs, cpi_network:ratio(cost,network_installs), ...cohortValues(data, cohortRows), cpi: ratio(Array.isArray(data.spend_rows) ? cost : sumMetric(data, 'acquisition', paid, 'cost'), sumMetric(data, 'acquisition', paid, 'installs')), income_cost: ratio(values.revenue_total, cost) };
   });
 }
 export function cohortTable(data, filters) {

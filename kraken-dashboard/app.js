@@ -1,4 +1,4 @@
-import { RETENTION_DAYS, PLAYTIME_DAYS, validDay, dateUTC, shiftDay, daysBetween, filterRows, sumMetric, ratio, kpis, comparison, timeline, groupAcquisition, cohortTable, eventTable, makeCSV, normalizeData, countryName, networkName, adKey, adName } from './logic.mjs?v=20261013-creative';
+import { RETENTION_DAYS, PLAYTIME_DAYS, validDay, dateUTC, shiftDay, daysBetween, filterRows, sumMetric, ratio, kpis, comparison, timeline, groupAcquisition, cohortTable, eventTable, makeCSV, normalizeData, countryName, networkName, adKey, adName } from './logic.mjs?v=20261013-expand';
 
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
@@ -13,7 +13,7 @@ const titles = {
   status: ['Данные и источник', 'Свежесть снимка, доступность метрик и покрытие отчёта.'],
 };
 const metricLabels = { installs: 'Установки', sessions: 'Сессии', daus: 'DAU', revenue: 'Доход IAP', ad_revenue: 'Доход от рекламы', revenue_total: 'Общий доход', revenue_events: 'Количество покупок', rewarded_count: 'Ревардеды', ad_impressions: 'Все рекламные показы', ads_per_dau: 'Реклам / активного игрока в сутки', cost: 'Расходы сетей', network_cost: 'Затраты из API сетей', network_installs: 'Установки из API сетей', clicks: 'Клики', impressions: 'Показы', cpi: 'CPI по установкам Adjust', cpi_network: 'CPI по данным сети', income_cost: 'Доход / расходы' };
-const state = { data: null, section: 'overview', loading: false, failed: false, filters: { start: shiftDay(today(), -30), end: shiftDay(today(), -1), os: '', network: '', country: '', campaign: '', creative: '' }, searches: {}, sorts: {}, group: 'network', chartMetric: 'installs', cohortMode: 'retention', tableRows: [], tableColumns: [], request: 0 };
+const state = { data: null, section: 'overview', loading: false, failed: false, filters: { start: shiftDay(today(), -30), end: shiftDay(today(), -1), os: '', network: '', country: '', campaign: '', creative: '' }, searches: {}, sorts: {}, expandedCampaigns: new Set(), group: 'network', chartMetric: 'installs', cohortMode: 'retention', tableRows: [], tableColumns: [], request: 0 };
 const acquisitionSection = () => ['acquisition','campaigns','creatives'].includes(state.section);
 const dateFormat = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 function shortDay(day) { return validDay(day) ? dateFormat.format(new Date(day + 'T00:00:00Z')) : '—'; }
@@ -212,26 +212,36 @@ function visibleRows() {
     return sort.direction === 'asc' ? result : -result;
   });
 }
+function tableRow(row, columns, child = false) {
+  return `<tr${child ? ` class="creative-row" data-parent-campaign="${esc(row.campaign_key)}"` : row.creatives ? ` data-campaign="${esc(row.entity_key)}"` : ''}>${columns.map(column => {
+    const value = row[column.key], dimension = child && column.key === 'name' ? 'creative' : column.dimension;
+    let content = column.type === 'entity' && /не передан[а]?$/.test(String(value)) ? esc(value) : column.type === 'entity' ? `<button class="text-button" data-entity="${esc(row.entity_key)}" data-dimension="${esc(dimension)}" title="${esc('Выбрать '+value)}">${esc(value)}</button>` : column.type === 'text' ? esc(value || '—') : column.type === 'day' ? esc(validDay(value) ? `${shortDay(value)} ${value.slice(0, 4)}` : value) : esc(format(value, column.type));
+    if (column.key === 'name' && row.creatives) {
+      const expanded = state.expandedCampaigns.has(row.entity_key);
+      content = `<div class="campaign-name"><button class="campaign-toggle" data-expand-campaign="${esc(row.entity_key)}" aria-expanded="${expanded}" aria-label="${esc((expanded ? 'Свернуть' : 'Развернуть')+' кампанию '+row.name)}"><span class="campaign-arrow" aria-hidden="true">›</span></button><div>${content}<small class="entity-detail">Креативов: ${row.creatives.length}</small></div></div>`;
+    } else if (column.key === 'name' && child) {
+      content = `<div class="creative-name">${content}<small class="entity-detail">Креатив · ${esc(row.adgroup_name)}<br>ID: ${esc(row.creative_id || 'не передан')}</small></div>`;
+    }
+    if (column.heat) {
+      const maturity = row['mature' + column.key.slice(1)];
+      content = `<span class="heat-cell ${value === null ? 'unknown' : ''}" style="--heat:${value === null ? 0 : Math.round(Math.min(1, Math.max(0, value)) * 48 + 8)}%" title="${value === null ? maturity ? 'Данные недоступны или размер когорты неизвестен' : 'Когорта ещё не созрела или дата снимка неизвестна' : esc('Удержание: ' + format(value, 'percent'))}">${content}</span>`;
+    }
+    return `<td>${content}</td>`;
+  }).join('')}</tr>`;
+}
 function renderTable() {
   const target = $('#table-body');
   if (!target) return;
   const rows = visibleRows(), columns = state.tableColumns;
-  $('#table-count').textContent = `${rows.length} из ${state.tableRows.length} строк`;
+  const childCount = rows.reduce((total,row)=>total+(state.expandedCampaigns.has(row.entity_key) ? row.creatives?.length || 0 : 0),0);
+  $('#table-count').textContent = `${rows.length} из ${state.tableRows.length} ${columns[0]?.dimension === 'campaign' ? 'кампаний' : 'строк'}${childCount ? ' · креативов: '+childCount : ''}`;
   $('#export-button').disabled = !rows.length || !$('#filter-error').hidden;
   if (!rows.length) {
     target.innerHTML = empty(state.tableRows.length ? 'Ничего не найдено' : 'Нет строк за этот период', state.tableRows.length ? 'Попробуйте другой поисковый запрос.' : 'Измените период или фильтры. Пустой набор данных не означает нулевую активность.');
     return;
   }
   const sort = state.sorts[state.section] || { key: state.section === 'events' ? 'count' : acquisitionSection() ? 'installs' : 'day', direction: 'desc' };
-  target.innerHTML = `<div class="table-scroll" role="region" aria-label="${esc(titles[state.section][0])}: таблица, прокручивается по горизонтали" tabindex="0"><table><caption class="sr-only">${esc(titles[state.section][0])} за ${esc(state.filters.start)} — ${esc(state.filters.end)}</caption><thead><tr>${columns.map(column => `<th scope="col" aria-sort="${sort.key === column.key ? sort.direction === 'asc' ? 'ascending' : 'descending' : 'none'}"><button class="sort-button" data-sort="${esc(column.key)}" aria-pressed="${sort.key === column.key}" aria-label="Сортировать: ${esc(column.label)}"><span>${esc(column.label)}</span><span class="sort-arrow" aria-hidden="true">${sort.key === column.key ? sort.direction === 'asc' ? '↑' : '↓' : '↕'}</span></button></th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${columns.map(column => {
-    const value = row[column.key];
-    let content = column.type === 'entity' && /не передан[а]?$/.test(String(value)) ? esc(value) : column.type === 'entity' ? `<button class="text-button" data-entity="${esc(row.entity_key)}" data-dimension="${esc(column.dimension)}" title="${esc('Выбрать '+value)}">${esc(value)}</button>` : column.type === 'text' ? esc(value || '—') : column.type === 'day' ? esc(validDay(value) ? `${shortDay(value)} ${value.slice(0, 4)}` : value) : esc(format(value, column.type));
-    if (column.heat) {
-      const maturity = row['mature' + column.key.slice(1)];
-      content = `<span class="heat-cell ${value === null ? 'unknown' : ''}" style="--heat:${value === null ? 0 : Math.round(Math.min(1, Math.max(0, value)) * 48 + 8)}%" title="${value === null ? maturity ? 'Данные недоступны или размер когорты неизвестен' : 'Когорта ещё не созрела или дата снимка неизвестна' : esc('Удержание: ' + format(value, 'percent'))}">${content}</span>`;
-    }
-    return `<td>${content}</td>`;
-  }).join('')}</tr>`).join('')}</tbody></table></div>`;
+  target.innerHTML = `<div class="table-scroll" role="region" aria-label="${esc(titles[state.section][0])}: таблица, прокручивается по горизонтали" tabindex="0"><table><caption class="sr-only">${esc(titles[state.section][0])} за ${esc(state.filters.start)} — ${esc(state.filters.end)}</caption><thead><tr>${columns.map(column => `<th scope="col" aria-sort="${sort.key === column.key ? sort.direction === 'asc' ? 'ascending' : 'descending' : 'none'}"><button class="sort-button" data-sort="${esc(column.key)}" aria-pressed="${sort.key === column.key}" aria-label="Сортировать: ${esc(column.label)}"><span>${esc(column.label)}</span><span class="sort-arrow" aria-hidden="true">${sort.key === column.key ? sort.direction === 'asc' ? '↑' : '↓' : '↕'}</span></button></th>`).join('')}</tr></thead><tbody>${rows.map(row => tableRow(row,columns)+(state.expandedCampaigns.has(row.entity_key) ? (row.creatives || []).map(child=>tableRow(child,columns,true)).join('') : '')).join('')}</tbody></table></div>`;
 }
 function dailyTableRows() {
   const src = source(), data = state.data, rows = filterRows(data[src], state.filters);
@@ -270,9 +280,14 @@ function acquisition() {
   const dimension = state.section==='campaigns' ? 'campaign' : state.section==='creatives' ? 'creative' : state.group;
   const entity = ['campaign','creative'].includes(dimension);
   const tools = state.section==='acquisition' ? `<div class="panel-tools"><label for="group-by">Группировка</label><select id="group-by">${[['network','По сети'],['campaign','По кампании'],['creative','По креативу'],['country','По стране']].map(([id,name])=>`<option value="${id}" ${dimension===id?'selected':''}>${name}</option>`).join('')}</select></div>` : '';
-  const columns = acquisitionColumns.map(column => column.key === 'name' ? { ...column, label: { network: 'Сеть', campaign: 'Название кампании', creative:'Название креатива', country: 'Страна' }[dimension], ...(entity?{type:'entity',dimension}:{}) } : column);
+  const columns = acquisitionColumns.map(column => column.key === 'name' ? { ...column, label: { network: 'Сеть', campaign: 'Кампания / креатив', creative:'Название креатива', country: 'Страна' }[dimension], ...(entity?{type:'entity',dimension}:{}) } : column);
   if (entity) columns.splice(1,0,{key:'network_name',label:'Сеть',type:'text'}, ...(dimension==='creative'?[{key:'campaign_name',label:'Рекламная кампания',type:'text'},{key:'adgroup_name',label:'Группа объявлений',type:'text'},{key:'creative_id',label:'ID объявления',type:'text'}]:[{key:'campaign_id',label:'ID кампании',type:'text'}]));
-  return kpiCards() + playerPanel() + tableShell(dimension==='creative'?'Показатели по каждому креативу':dimension==='campaign'?'Рекламные кампании':'Источники привлечения', 'Затраты, CPI, плейтайм, рекламы на игрока и LTV', groupAcquisition(state.data, state.filters, dimension), columns, 'Нажмите на название кампании или креатива, чтобы выбрать его во всех разделах. Facebook включает Facebook, Instagram и Off-Facebook. CPI Adjust и CPI сети используют разные счётчики установок. Одинаковые названия с разными ID учитываются отдельно. «Не передан» — данные без привязки из Adjust; расходы между креативами не распределяются предположительно.', tools);
+  const rows = groupAcquisition(state.data, state.filters, dimension);
+  if (dimension === 'campaign') {
+    const creatives = groupAcquisition(state.data,state.filters,'creative');
+    for (const row of rows) row.creatives = creatives.filter(creative=>creative.campaign_key === row.entity_key).sort((a,b)=>(b.installs || 0)-(a.installs || 0) || a.name.localeCompare(b.name,'ru'));
+  }
+  return kpiCards() + playerPanel() + tableShell(dimension==='creative'?'Показатели по каждому креативу':dimension==='campaign'?'Рекламные кампании':'Источники привлечения', dimension==='campaign' ? 'Нажмите стрелку слева от кампании, чтобы увидеть её креативы и показатели' : 'Затраты, CPI, плейтайм, рекламы на игрока и LTV', rows, columns, (dimension==='campaign' ? 'Стрелка раскрывает креативы, сохраняя фильтры и итоги кампании. CSV этого раздела содержит итоги кампаний; данные объявлений экспортируются в «Креативах». ' : '')+'Нажмите на название кампании или креатива, чтобы выбрать его во всех разделах. Facebook включает Facebook, Instagram и Off-Facebook. CPI Adjust и CPI сети используют разные счётчики установок. Одинаковые названия с разными ID учитываются отдельно. «Не передан» — данные без привязки из Adjust; расходы между креативами не распределяются предположительно.', tools);
 }
 function cohorts() {
   const mode = state.cohortMode;
@@ -389,18 +404,26 @@ $('#reset-button').addEventListener('click', () => {
   $('#preset').value = '30';
   setPreset('30');
   for (const id of ['#os-filter', '#network-filter', '#country-filter', '#campaign-filter', '#creative-filter']) $(id).value = '';
-  state.searches = {}; state.sorts = {}; state.group = 'network'; state.chartMetric = 'installs'; state.cohortMode = 'retention';
+  state.searches = {}; state.sorts = {}; state.expandedCampaigns.clear(); state.group = 'network'; state.chartMetric = 'installs'; state.cohortMode = 'retention';
   changeFilters();
 });
 $('#info-button').addEventListener('click', () => $('#info-dialog').showModal());
 for (const id of ['#close-info', '#done-info']) $(id).addEventListener('click', () => $('#info-dialog').close());
 $('#info-dialog').addEventListener('click', event => { if (event.target === $('#info-dialog')) { const rect = event.target.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) event.target.close(); } });
 document.addEventListener('click', event => {
-  const button = event.target.closest('[data-action], [data-sort], [data-entity]');
+  const button = event.target.closest('[data-action], [data-sort], [data-entity], [data-expand-campaign]');
   if (!button) return;
   if (button.dataset.action === 'retry') load();
   if (button.dataset.action === 'acquisition') location.hash = 'acquisition';
   if (button.dataset.action === 'cohorts') { state.cohortMode = 'unit'; location.hash = 'cohorts'; }
+  if (button.dataset.expandCampaign) {
+    const key = button.dataset.expandCampaign, scroll = $('#table-body .table-scroll');
+    const position = {left:scroll.scrollLeft,top:scroll.scrollTop};
+    if (state.expandedCampaigns.has(key)) state.expandedCampaigns.delete(key); else state.expandedCampaigns.add(key);
+    renderTable();
+    $('#table-body .table-scroll').scrollTo(position);
+    document.querySelector(`[data-expand-campaign="${CSS.escape(key)}"]`)?.focus({preventScroll:true});
+  }
   if (button.dataset.entity) {
     const dimension=button.dataset.dimension;
     if (dimension==='campaign') $('#creative-filter').value='';
