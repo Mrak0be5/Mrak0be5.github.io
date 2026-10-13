@@ -21,12 +21,13 @@ export function countryName(row) {
   return /^[A-Z]{2}$/.test(code) && regionNames ? regionNames.of(code) : row.country || row.country_code || 'Не указана';
 }
 const paidNetwork = row => typeof row.network === 'string' && row.network.trim() && !/^(organic|unknown(?: devices)?|unattributed)$/i.test(row.network.trim());
+export const networkName = row => row.partner_name || row.network || 'Не указан';
 export function available(data, source, metric) {
   return Array.isArray(data.availability?.[source]) && data.availability[source].includes(metric);
 }
 export function filterRows(rows, filters) {
   return (Array.isArray(rows) ? rows : []).filter(row => row && validDay(row.day) && row.day >= filters.start && row.day <= filters.end &&
-    (!filters.os || row.os_name === filters.os) && (!filters.network || row.network === filters.network) &&
+    (!filters.os || row.os_name === filters.os) && (!filters.network || networkName(row) === filters.network) &&
     (!filters.country || (row.country_code || row.country) === filters.country));
 }
 export function sumMetric(data, source, rows, metric) {
@@ -64,19 +65,27 @@ function cohortValues(data, rows) {
   }));
 }
 export const cohortKpis = (data, filters) => cohortValues(data, filterRows(data.cohorts, filters));
+export function spendKpis(data, filters) {
+  const rows = filterRows(data.spend_rows,filters);
+  const covered = filters.start >= data.range?.start && filters.end <= data.range?.end;
+  const sum = id => available(data,'spend',id) && !rows.length && covered && data.spend_rows?.length ? 0 : sumMetric(data,'spend',rows,id);
+  return {cost:sum('cost'),network_installs:sum('network_installs'),cpi_network:ratio(sum('cost'),sum('network_installs'))};
+}
 export function kpis(data, filters) {
   const source = filters.network || filters.country ? 'acquisition' : 'daily';
   const rows = filterRows(data[source], filters);
   const sum = id => sumMetric(data, source, rows, id);
-  const revenue = sum('revenue_total'), cost = sum('cost');
+  const revenue = sum('revenue_total');
+  const spending = Array.isArray(data.spend_rows) ? spendKpis(data,filters) : {cost:sum('cost'),cpi_network:null,network_installs:null};
+  const cost = spending.cost;
   const acquisition = filterRows(data.acquisition, filters);
   const paid = acquisition.filter(paidNetwork);
   const count = daysBetween(filters.start, filters.end).length;
   const covered = validDay(data.range?.start) && validDay(data.range?.end) && filters.start >= data.range.start && filters.end <= data.range.end;
   return {
-    installs: sum('installs'), revenue_total: revenue, cost,
+    installs: sum('installs'), revenue_total: revenue, ...spending,
     daus: source === 'daily' && covered ? ratio(sum('daus'), count) : null,
-    cpi: ratio(sumMetric(data, 'acquisition', paid, 'cost'), sumMetric(data, 'acquisition', paid, 'installs')),
+    cpi: ratio(Array.isArray(data.spend_rows) ? cost : sumMetric(data, 'acquisition', paid, 'cost'), sumMetric(data, 'acquisition', paid, 'installs')),
     income_cost: ratio(revenue, cost), sessions: sum('sessions'),
     revenue: sum('revenue'), ad_revenue: sum('ad_revenue'), revenue_events: sum('revenue_events'),
     ad_impressions: sum('ad_impressions'),
@@ -90,7 +99,7 @@ export function comparison(data, filters) {
   return kpis(data, { ...filters, ...previous });
 }
 export function timeline(data, filters, metric) {
-  if (['cpi','ads_per_dau'].includes(metric)) return daysBetween(filters.start,filters.end).map(day=>({day,value:kpis(data,{...filters,start:day,end:day})[metric]}));
+  if (['cpi','cpi_network','ads_per_dau'].includes(metric) || metric === 'cost' && Array.isArray(data.spend_rows)) return daysBetween(filters.start,filters.end).map(day=>({day,value:kpis(data,{...filters,start:day,end:day})[metric]}));
   if (metric === 'rewarded_count') {
     const id = data.engagement?.rewarded_event_id;
     const rows = filterRows(data.event_rows, filters);
@@ -114,16 +123,22 @@ export function timeline(data, filters, metric) {
 export function groupAcquisition(data, filters, dimension) {
   const groups = new Map();
   for (const row of filterRows(data.acquisition, filters)) {
-    const name = dimension === 'country' ? countryName(row) : row[dimension] || 'Не указан';
+    const name = dimension === 'country' ? countryName(row) : dimension === 'network' ? networkName(row) : row[dimension] || 'Не указан';
     if (!groups.has(name)) groups.set(name, []);
     groups.get(name).push(row);
   }
   const cohorts = filterRows(data.cohorts, filters);
+  const spendingRows = filterRows(data.spend_rows,filters);
+  const groupName = row => dimension === 'country' ? countryName(row) : dimension === 'network' ? networkName(row) : row[dimension] || 'Не указан';
+  for (const row of spendingRows) if (!groups.has(groupName(row))) groups.set(groupName(row),[]);
   return [...groups].map(([name, rows]) => {
     const values = Object.fromEntries(['installs', 'sessions', 'revenue', 'ad_revenue', 'revenue_total', 'revenue_events', 'ad_impressions', 'cost', 'clicks', 'impressions'].map(id => [id, sumMetric(data, 'acquisition', rows, id)]));
     const paid = rows.filter(paidNetwork);
-    const cohortRows = cohorts.filter(row => (dimension === 'country' ? countryName(row) : row[dimension] || 'Не указан') === name);
-    return { name, ...values, ...cohortValues(data, cohortRows), cpi: ratio(sumMetric(data, 'acquisition', paid, 'cost'), sumMetric(data, 'acquisition', paid, 'installs')), income_cost: ratio(values.revenue_total, values.cost) };
+    const cohortRows = cohorts.filter(row => groupName(row) === name);
+    const spend = spendingRows.filter(row=>groupName(row)===name);
+    const cost = Array.isArray(data.spend_rows) ? available(data,'spend','cost') ? spend.length ? sumMetric(data,'spend',spend,'cost') : 0 : null : values.cost;
+    const network_installs = sumMetric(data,'spend',spend,'network_installs');
+    return { name, ...values, cost, network_installs, cpi_network:ratio(cost,network_installs), ...cohortValues(data, cohortRows), cpi: ratio(Array.isArray(data.spend_rows) ? cost : sumMetric(data, 'acquisition', paid, 'cost'), sumMetric(data, 'acquisition', paid, 'installs')), income_cost: ratio(values.revenue_total, cost) };
   });
 }
 export function cohortTable(data, filters) {
@@ -163,6 +178,7 @@ export function normalizeData(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input) || input.schema_version !== 1) throw new Error('Неподдерживаемый формат снимка: ожидается schema_version: 1.');
   const data = { ...input };
   for (const key of ['metrics', 'daily', 'acquisition', 'cohorts', 'events', 'event_rows', 'warnings']) data[key] = Array.isArray(input[key]) ? input[key].filter(row => row && typeof row === 'object') : [];
+  if (Array.isArray(input.spend_rows)) data.spend_rows = input.spend_rows.filter(row=>row && typeof row==='object');
   return data;
 }
 

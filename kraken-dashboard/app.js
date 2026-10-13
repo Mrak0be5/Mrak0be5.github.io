@@ -1,4 +1,4 @@
-import { RETENTION_DAYS, PLAYTIME_DAYS, validDay, dateUTC, shiftDay, daysBetween, filterRows, sumMetric, ratio, kpis, comparison, timeline, groupAcquisition, cohortTable, eventTable, makeCSV, normalizeData, countryName } from './logic.mjs?v=20261013-unit';
+import { RETENTION_DAYS, PLAYTIME_DAYS, validDay, dateUTC, shiftDay, daysBetween, filterRows, sumMetric, ratio, kpis, comparison, timeline, groupAcquisition, cohortTable, eventTable, makeCSV, normalizeData, countryName, networkName } from './logic.mjs?v=20261013-spend';
 
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
@@ -10,7 +10,7 @@ const titles = {
   events: ['События', 'Действия игроков за выбранный период.'],
   status: ['Данные и источник', 'Свежесть снимка, доступность метрик и покрытие отчёта.'],
 };
-const metricLabels = { installs: 'Установки', sessions: 'Сессии', daus: 'DAU', revenue: 'Доход IAP', ad_revenue: 'Доход от рекламы', revenue_total: 'Общий доход', revenue_events: 'Количество покупок', rewarded_count: 'Ревардеды', ad_impressions: 'Все рекламные показы', ads_per_dau: 'Реклам / активного игрока в сутки', cost: 'Расходы сетей', network_cost: 'Затраты из API сетей', network_installs: 'Установки из API сетей', clicks: 'Клики', impressions: 'Показы', cpi: 'CPI платных установок', income_cost: 'Доход / расходы' };
+const metricLabels = { installs: 'Установки', sessions: 'Сессии', daus: 'DAU', revenue: 'Доход IAP', ad_revenue: 'Доход от рекламы', revenue_total: 'Общий доход', revenue_events: 'Количество покупок', rewarded_count: 'Ревардеды', ad_impressions: 'Все рекламные показы', ads_per_dau: 'Реклам / активного игрока в сутки', cost: 'Расходы сетей', network_cost: 'Затраты из API сетей', network_installs: 'Установки из API сетей', clicks: 'Клики', impressions: 'Показы', cpi: 'CPI по установкам Adjust', cpi_network: 'CPI по данным сети', income_cost: 'Доход / расходы' };
 const state = { data: null, section: 'overview', loading: false, failed: false, filters: { start: shiftDay(today(), -30), end: shiftDay(today(), -1), os: '', network: '', country: '' }, searches: {}, sorts: {}, group: 'network', chartMetric: 'installs', cohortMode: 'retention', tableRows: [], tableColumns: [], request: 0 };
 const dateFormat = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 function shortDay(day) { return validDay(day) ? dateFormat.format(new Date(day + 'T00:00:00Z')) : '—'; }
@@ -31,7 +31,7 @@ function format(value, type = 'integer', compact = false) {
   try { return new Intl.NumberFormat('ru-RU', options).format(value) + (type === 'multiplier' ? '×' : ''); }
   catch { return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(value); }
 }
-const moneyMetrics = ['revenue', 'ad_revenue', 'revenue_total', 'cost', 'cpi'];
+const moneyMetrics = ['revenue', 'ad_revenue', 'revenue_total', 'cost', 'cpi', 'cpi_network'];
 const metricType = id => id.startsWith('ltv_') ? 'money_per_user' : moneyMetrics.includes(id) || id.startsWith('revenue_total_d') ? 'money' : /^(playtime|time_spent)_d/.test(id) ? 'duration' : id.startsWith('ads_per_') ? 'decimal' : id === 'income_cost' ? 'multiplier' : /^d\d+$/.test(id) ? 'percent' : 'integer';
 function label(id) {
   const unit = /^(playtime|ads_per_user|ltv|ltv_ad|ltv_iap|cohort_users)_d(\d+)$/.exec(id);
@@ -54,10 +54,11 @@ function fillSelect(selector, entries, initial) {
   select.value = entries.some(([value]) => value === selected) ? selected : '';
 }
 function populateFilters() {
-  const rows = ['daily', 'acquisition', 'cohorts', 'event_rows'].flatMap(key => state.data[key]);
+  const rows = ['daily', 'acquisition', 'cohorts', 'event_rows', 'spend_rows'].flatMap(key => state.data[key] || []);
   const values = key => [...new Set(rows.map(row => row[key]).filter(value => typeof value === 'string' && value))].sort((a, b) => a.localeCompare(b, 'ru')).map(value => [value, value]);
   fillSelect('#os-filter', values('os_name'), 'Все платформы');
-  fillSelect('#network-filter', values('network'), 'Все сети');
+  const networks = [...new Set(rows.filter(row=>row.network || row.partner_name).map(networkName))].sort((a,b)=>a.localeCompare(b,'ru'));
+  fillSelect('#network-filter', networks.map(name=>[name,name]), 'Все сети');
   const countries = new Map();
   for (const row of rows) { const code = row.country_code || row.country; if (typeof code === 'string' && code) countries.set(code, `${countryName(row)}${row.country_code ? ' · ' + String(row.country_code).toUpperCase() : ''}`); }
   fillSelect('#country-filter', [...countries].sort((a, b) => a[1].localeCompare(b[1], 'ru')), 'Все страны');
@@ -113,23 +114,25 @@ async function load() {
 function kpiCards() {
   const values = kpis(state.data, state.filters), previous = comparison(state.data, state.filters);
   const configs = [
-    ['installs', 'Установки', '↓', 'integer'], ['cost', 'Расходы сетей', '↗', 'money'], ['cpi', 'CPI платных установок', '↓', 'money'],
+    ['installs', 'Установки', '↓', 'integer'], ['cost', 'Расходы сетей', '↗', 'money'], ['cpi', 'CPI по установкам Adjust', '↓', 'money'],
+    ['cpi_network', 'CPI по данным сети', '↓', 'money'],
     ['revenue_total', 'Общий доход', '$', 'money'],
     ['ad_revenue', 'Доход от рекламы', '▣', 'money'], ['revenue', 'Доход IAP', '◇', 'money'],
     ['revenue_events', 'Количество покупок', '▤', 'integer'], ['rewarded_count', 'Ревардеды', '▶', 'integer'],
     ['ad_impressions', 'Все рекламные показы', '◫', 'integer'],
+    ['daus', 'Средний DAU', '◉', 'decimal'], ['ads_per_dau', 'Реклам / активного игрока в сутки', '◫', 'decimal'],
   ];
   return `<div class="kpi-grid">${configs.map(([id, title, icon, type]) => {
     const value = values[id], before = previous?.[id];
     let delta = '<span>Нет доступного сравнения</span>';
-    if (['cost', 'cpi'].includes(id) && value === null) delta = `<span>${esc(state.data.spend?.status === 'missing' ? 'Adjust не передал затраты сетей' : id === 'cpi' ? 'Нет затрат или платных установок' : 'Нет данных о расходах')}</span>`;
+    if (['cost', 'cpi', 'cpi_network'].includes(id) && value === null) delta = `<span>${esc(state.data.spend?.status === 'missing' ? 'Adjust не передал затраты сетей' : id.startsWith('cpi') ? 'Нет затрат или платных установок' : 'Нет данных о расходах')}</span>`;
     if (id === 'rewarded_count' && value === null) delta = state.data.engagement?.rewarded_event_id ? '<span>Нет данных за период</span>' : '<span>Нет отдельного события в Adjust</span>';
     if (value !== null && before !== null && before !== undefined && before > 0 && $('#incomplete-label').hidden) {
       const change = (value - before) / before;
-      const better = ['cost', 'cpi'].includes(id) ? change < 0 : change > 0;
+      const better = ['cost', 'cpi', 'cpi_network'].includes(id) ? change < 0 : change > 0;
       delta = `<span class="change ${change === 0 ? '' : better ? 'up' : 'down'}">${change > 0 ? '+' : ''}${esc(format(change, 'percent'))}</span><span>к предыдущему периоду</span>`;
     }
-    const note = id === 'cost' ? 'Затраты из API рекламных сетей' : id === 'cpi' ? 'Расходы / платные установки' : id === 'rewarded_count' ? 'Завершённые просмотры rewarded' : id === 'ad_impressions' ? 'Все форматы · не только rewarded' : id === 'revenue_events' ? 'События оплаты, переданные в Adjust' : id === 'revenue' ? 'Покупки в приложении · USD' : id === 'ad_revenue' ? 'Доход от показов рекламы · USD' : id === 'revenue_total' ? 'IAP + рекламный доход' : '';
+    const note = id === 'cost' ? 'Затраты той же игры · Octopus RPG + TEST1' : id === 'cpi' ? 'Расходы / платные установки Adjust' : id === 'cpi_network' ? 'Расходы / установки, сообщённые сетью' : id === 'ads_per_dau' ? 'Показы / сумма DAU за дни периода' : id === 'daus' ? 'Среднее по календарным дням' : id === 'rewarded_count' ? 'Завершённые просмотры rewarded' : id === 'ad_impressions' ? 'Все форматы · не только rewarded' : id === 'revenue_events' ? 'События оплаты, переданные в Adjust' : id === 'revenue' ? 'Покупки в приложении · USD' : id === 'ad_revenue' ? 'Доход от показов рекламы · USD' : id === 'revenue_total' ? 'IAP + рекламный доход' : '';
     return `<article class="kpi ${id === 'revenue_total' ? 'featured' : ''}" data-kpi="${id}" title="${esc(id === 'rewarded_count' ? state.data.engagement?.rewarded_note || note : note || label(id))}"><div class="kpi-top"><span>${esc(title)}</span><span class="kpi-icon" aria-hidden="true">${icon}</span></div><div class="kpi-value">${esc(format(value, type))}</div><div class="kpi-bottom">${delta}</div>${note ? `<div class="kpi-bottom" style="margin-top:9px">${esc(note)}</div>` : ''}</article>`;
   }).join('')}</div>`;
 }
@@ -181,7 +184,7 @@ function chart(series, chartId, type = 'integer') {
   return `<div class="chart">${svg}</div><div class="chart-legend">${series.map(item => `<span><i class="legend-dot" style="background:${item.color}" aria-hidden="true"></i>${esc(item.label)}</span>`).join('')}</div>`;
 }
 const acquisitionColumns = [
-  { key: 'name', label: 'Источник', type: 'text' }, ...['installs', 'cost', 'cpi', ...PLAYTIME_DAYS.map(day=>'playtime_d'+day), 'ads_per_user_d0', 'ltv_d0', 'ltv_d1', 'ltv_d7', 'ad_revenue', 'revenue', 'revenue_events', 'ad_impressions', 'revenue_total', 'income_cost', 'sessions', 'clicks', 'impressions'].map(key => ({ key, label: label(key), type: metricType(key) })),
+  { key: 'name', label: 'Источник', type: 'text' }, ...['installs', 'cost', 'cpi', 'cpi_network', 'network_installs', ...PLAYTIME_DAYS.map(day=>'playtime_d'+day), 'ads_per_user_d0', 'ltv_d0', 'ltv_d1', 'ltv_d7', 'ad_revenue', 'revenue', 'revenue_events', 'ad_impressions', 'revenue_total', 'income_cost', 'sessions', 'clicks', 'impressions'].map(key => ({ key, label: label(key), type: metricType(key) })),
 ];
 function tableShell(title, subtitle, rows, columns, note = '', extraTools = '') {
   state.tableRows = rows;
@@ -230,14 +233,17 @@ function dailyTableRows() {
   const cohorts = new Map(cohortTable(data,state.filters).map(row=>[row.day,row]));
   return daysBetween(state.filters.start, state.filters.end).map(day => {
     const result = {day,...cohorts.get(day),...Object.fromEntries(metrics.map(id=>[id,series[id].get(day)??null]))};
-    result.cpi = kpis(data,{...state.filters,start:day,end:day}).cpi;
+    const values = kpis(data,{...state.filters,start:day,end:day});
+    result.cpi = values.cpi;
+    result.cpi_network = values.cpi_network;
+    result.network_installs = values.network_installs;
     result.ads_per_dau = ratio(result.ad_impressions,result.daus);
     return result;
   });
 }
 function overview() {
   const data = state.data, src = source(), rows = filterRows(data[src], state.filters);
-  const metrics = ['installs', 'sessions', ...(src === 'daily' ? ['daus','ads_per_dau'] : []), 'cost', 'cpi', 'revenue_total', 'ad_revenue', 'revenue', 'revenue_events', 'ad_impressions', 'rewarded_count'];
+  const metrics = ['installs', 'sessions', ...(src === 'daily' ? ['daus','ads_per_dau'] : []), 'cost', 'cpi', 'cpi_network', 'revenue_total', 'ad_revenue', 'revenue', 'revenue_events', 'ad_impressions', 'rewarded_count'];
   if (!metrics.includes(state.chartMetric)) state.chartMetric = 'installs';
   const switcher = `<div class="panel-tools"><label for="chart-metric">Метрика</label><select id="chart-metric">${metrics.map(id => `<option value="${id}" ${state.chartMetric === id ? 'selected' : ''}>${esc(label(id))}</option>`).join('')}</select></div>`;
   const incomeChart = panel('Реклама и IAP — доходы отдельно', 'Доход за день · USD', chart([
@@ -249,13 +255,13 @@ function overview() {
   const networks = groupAcquisition(data, state.filters, 'network').filter(row => row.installs !== null).sort((a, b) => b.installs - a.installs).slice(0, 5);
   const maximum = Math.max(1, ...networks.map(row => row.installs));
   const topNetworks = panel('Ведущие сети', 'По установкам · первые 5', networks.length ? `<div class="bar-list">${networks.map(row => `<div class="bar-row"><div class="bar-label"><span>${esc(row.name)}</span><span>${esc(format(row.installs))}</span></div><div class="bar-track"><div class="bar-fill" style="width:${Math.max(0, row.installs) / maximum * 100}%"></div></div></div>`).join('')}</div>` : empty('Сети недоступны', 'Нет доступных данных об установках по сетям.'), '<button class="text-button" data-action="acquisition">Все источники ↗</button>');
-  const columns = [{ key: 'day', label: 'День · UTC', type: 'day' }, ...['installs', 'cost', 'cpi', ...PLAYTIME_DAYS.map(day=>'playtime_d'+day), 'ads_per_user_d0', 'ltv_d0', 'ltv_d1', 'ltv_d7', ...(src === 'daily' ? ['daus','ads_per_dau'] : []), 'ad_revenue', 'revenue', 'revenue_events', 'ad_impressions', 'rewarded_count', 'revenue_total', 'sessions'].map(key => ({ key, label: label(key), type: metricType(key) }))];
+  const columns = [{ key: 'day', label: 'День · UTC', type: 'day' }, ...['installs', 'cost', 'cpi', 'cpi_network', 'network_installs', ...PLAYTIME_DAYS.map(day=>'playtime_d'+day), 'ads_per_user_d0', 'ltv_d0', 'ltv_d1', 'ltv_d7', ...(src === 'daily' ? ['daus','ads_per_dau'] : []), 'ad_revenue', 'revenue', 'revenue_events', 'ad_impressions', 'rewarded_count', 'revenue_total', 'sessions'].map(key => ({ key, label: label(key), type: metricType(key) }))];
   return kpiCards() + playerPanel() + incomeChart + metricChart + `<div class="two-columns">${summary}${topNetworks}</div>` + tableShell('Данные по дням', 'Активность дня и показатели игроков, установивших игру в этот день', dailyTableRows(), columns, 'Плейтайм, реклама на игрока и LTV относятся к дате установки в строке. Остальные показатели — к календарному дню активности. LTV включает накопленные доходы рекламы и IAP. Реклам / активного игрока = показы за день / DAU. CPI исключает Organic и неизвестные источники. Незрелые когорты и отсутствующие затраты показаны как «—».');
 }
 function acquisition() {
   const tools = `<div class="panel-tools"><label for="group-by">Группировка</label><select id="group-by"><option value="network" ${state.group === 'network' ? 'selected' : ''}>По сети</option><option value="campaign" ${state.group === 'campaign' ? 'selected' : ''}>По кампании</option><option value="country" ${state.group === 'country' ? 'selected' : ''}>По стране</option></select></div>`;
   const columns = acquisitionColumns.map(column => column.key === 'name' ? { ...column, label: { network: 'Сеть', campaign: 'Кампания', country: 'Страна' }[state.group] } : column);
-  return kpiCards() + playerPanel() + tableShell('Источники привлечения', 'Затраты, CPI, плейтайм и LTV по сетям, кампаниям и странам', groupAcquisition(state.data, state.filters, state.group), columns, 'CPI = затраты / платные установки. Плейтайм и LTV рассчитаны по зрелым когортам установок выбранной группы. «Доход / расходы» относится к активности за период. Неизвестные значения показаны как «—».', tools);
+  return kpiCards() + playerPanel() + tableShell('Источники привлечения', 'Затраты, CPI, плейтайм и LTV по сетям, кампаниям и странам', groupAcquisition(state.data, state.filters, state.group), columns, 'Facebook включает Facebook, Instagram и Off-Facebook. CPI Adjust = затраты / платные установки Adjust; CPI сети = затраты / установки, сообщённые сетью. Они могут различаться из-за атрибуции. Плейтайм и LTV рассчитаны по зрелым когортам выбранной группы. «Доход / расходы» относится к активности за период.', tools);
 }
 function cohorts() {
   const mode = state.cohortMode;
@@ -283,15 +289,15 @@ function status() {
     ['loaded', 'Источник отчёта', 'Adjust Report Service'],
     ['spend', 'Источник затрат и CPI', data.spend?.note || 'Затраты сетей из Adjust'],
   ];
-  const datasets = [['daily', 'Дневная активность', 'День + платформа'], ['acquisition', 'Привлечение', 'День + платформа + сеть + кампания + страна'], ['cohorts', 'Когорты', 'Дата установки + платформа + сеть + страна'], ['event_rows', 'События', 'День + платформа + сеть + страна']];
+  const datasets = [['daily', 'Дневная активность', 'День + платформа'], ['acquisition', 'Привлечение', 'День + платформа + сеть + кампания + страна'], ['cohorts', 'Когорты', 'Дата установки + платформа + сеть + страна'], ['spend_rows', 'Расходы сетей', 'Та же игра · Octopus RPG и TEST1 без повторного сложения'], ['event_rows', 'События', 'День + платформа + сеть + страна']];
   state.tableColumns = [{ key: 'name', label: 'Параметр', type: 'text' }, { key: 'value', label: 'Значение', type: 'text' }];
   state.tableRows = entries.map(([, name, value]) => ({ name, value }));
-  state.tableRows.push(...datasets.map(([key, name]) => ({ name: 'Строки: ' + name, value: data[key].length })));
-  for (const key of ['daily', 'acquisition', 'cohorts', 'events']) state.tableRows.push({ name: 'Доступные метрики: ' + ({daily:'Активность',acquisition:'Привлечение',cohorts:'Когорты',events:'События'}[key]), value: Array.isArray(data.availability?.[key]) ? data.availability[key].map(label).join(', ') : 'Не указана' });
+  state.tableRows.push(...datasets.map(([key, name]) => ({ name: 'Строки: ' + name, value: data[key]?.length || 0 })));
+  for (const key of ['daily', 'acquisition', 'cohorts', 'spend', 'events']) state.tableRows.push({ name: 'Доступные метрики: ' + ({daily:'Активность',acquisition:'Привлечение',cohorts:'Когорты',spend:'Расходы сетей',events:'События'}[key]), value: Array.isArray(data.availability?.[key]) ? data.availability[key].map(label).join(', ') : 'Не указана' });
   $('#export-button').disabled = !$('#filter-error').hidden;
   const parsed = Date.parse(data.generated_at), interval = typeof data.refresh?.interval_hours === 'number' && data.refresh.interval_hours > 0 ? data.refresh.interval_hours : 6;
   const stale = Number.isFinite(parsed) && Date.now() - parsed > interval * 3600000;
-  return `<div class="status-grid">${panel('Опубликованный снимок', 'Файл данных читается напрямую с GitHub Pages', `<dl class="summary-list">${entries.map(([, name, value]) => `<div><dt>${esc(name)}</dt><dd>${esc(value)}</dd></div>`).join('')}</dl>`)}${panel('Наборы данных', 'Количество строк во всём снимке, без фильтров', `<ul class="source-list">${datasets.map(([key, name, description]) => `<li><div>${esc(name)}<small>${esc(description)}</small></div><span class="pill">${format(data[key].length)} строк</span></li>`).join('')}</ul>`)}<section class="panel wide"><div class="panel-heading"><div><h2>Доступность метрик</h2><p>Метрики, доступные в текущем отчёте</p></div></div>${['daily', 'acquisition', 'cohorts', 'events'].map(key => `<div class="notice"><strong>${esc({ daily: 'Дневная активность', acquisition: 'Привлечение', cohorts: 'Когорты', events: 'События' }[key])}</strong></div><div class="available-metrics">${Array.isArray(data.availability?.[key]) && data.availability[key].length ? data.availability[key].map(id => `<span class="pill">${esc(key === 'events' ? data.events.find(event => event.id === id)?.label || id : label(id))}</span>`).join('') : '<span class="source-path">Нет доступных метрик</span>'}</div>`).join('')}</section><section class="panel wide"><div class="notice"><strong>${stale ? 'Снимок старше ожидаемого интервала' : 'Обновление данных на ПК'}</strong><p>${esc(data.refresh?.note || 'Данные обновляются каждые 6 часов, пока ПК включён.')} Кнопка «Обновить» загружает опубликованный файл и не запускает сборщик. ${stale ? 'ПК мог быть выключен; текущие данные не следует считать актуальными.' : ''}</p></div><div class="notice"><strong>Публичный агрегированный отчёт</strong><p>Отчёт содержит только агрегированную статистику Octopus RPG. API-ключ хранится защищённо на основном ПК. Расходы берутся из рекламных сетей; все даты — UTC.${data.timezone && data.timezone !== 'UTC' ? ' Внимание: снимок указывает другой часовой пояс; интерфейс ожидает UTC.' : ''}</p></div></section></div>`;
+  return `<div class="status-grid">${panel('Опубликованный снимок', 'Файл данных читается напрямую с GitHub Pages', `<dl class="summary-list">${entries.map(([, name, value]) => `<div><dt>${esc(name)}</dt><dd>${esc(value)}</dd></div>`).join('')}</dl>`)}${panel('Наборы данных', 'Количество строк во всём снимке, без фильтров', `<ul class="source-list">${datasets.map(([key, name, description]) => `<li><div>${esc(name)}<small>${esc(description)}</small></div><span class="pill">${format((data[key]?.length || 0))} строк</span></li>`).join('')}</ul>`)}<section class="panel wide"><div class="panel-heading"><div><h2>Доступность метрик</h2><p>Метрики, доступные в текущем отчёте</p></div></div>${['daily', 'acquisition', 'cohorts', 'spend', 'events'].map(key => `<div class="notice"><strong>${esc({ daily: 'Дневная активность', acquisition: 'Привлечение', cohorts: 'Когорты', spend: 'Расходы сетей', events: 'События' }[key])}</strong></div><div class="available-metrics">${Array.isArray(data.availability?.[key]) && data.availability[key].length ? data.availability[key].map(id => `<span class="pill">${esc(key === 'events' ? data.events.find(event => event.id === id)?.label || id : label(id))}</span>`).join('') : '<span class="source-path">Нет доступных метрик</span>'}</div>`).join('')}</section><section class="panel wide"><div class="notice"><strong>${stale ? 'Снимок старше ожидаемого интервала' : 'Обновление данных на ПК'}</strong><p>${esc(data.refresh?.note || 'Данные обновляются каждые 6 часов, пока ПК включён.')} Кнопка «Обновить» загружает опубликованный файл и не запускает сборщик. ${stale ? 'ПК мог быть выключен; текущие данные не следует считать актуальными.' : ''}</p></div><div class="notice"><strong>Публичный агрегированный отчёт</strong><p>Отчёт содержит только агрегированную статистику Octopus RPG. API-ключ хранится защищённо на основном ПК. Расходы берутся из рекламных сетей; все даты — UTC.${data.timezone && data.timezone !== 'UTC' ? ' Внимание: снимок указывает другой часовой пояс; интерфейс ожидает UTC.' : ''}</p></div></section></div>`;
 }
 function render() {
   updateMeta();
