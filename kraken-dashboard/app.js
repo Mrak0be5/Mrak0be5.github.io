@@ -1,4 +1,4 @@
-import { RETENTION_DAYS, PLAYTIME_DAYS, validDay, dateUTC, shiftDay, daysBetween, filterRows, sumMetric, ratio, kpis, comparison, timeline, groupAcquisition, cohortTable, eventTable, makeCSV, normalizeData, countryName } from './logic.mjs?v=20261012-engagement';
+import { RETENTION_DAYS, PLAYTIME_DAYS, validDay, dateUTC, shiftDay, daysBetween, filterRows, sumMetric, ratio, kpis, comparison, timeline, groupAcquisition, cohortTable, eventTable, makeCSV, normalizeData, countryName } from './logic.mjs?v=20261013-unit';
 
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
@@ -10,7 +10,7 @@ const titles = {
   events: ['События', 'Действия игроков за выбранный период.'],
   status: ['Данные и источник', 'Свежесть снимка, доступность метрик и покрытие отчёта.'],
 };
-const metricLabels = { installs: 'Установки', sessions: 'Сессии', daus: 'DAU', revenue: 'Доход IAP', ad_revenue: 'Доход от рекламы', revenue_total: 'Общий доход', revenue_events: 'Количество покупок', rewarded_count: 'Ревардеды', ad_impressions: 'Все рекламные показы', playtime_d0: 'Плейтайм D0', playtime_d1: 'Плейтайм D1', playtime_d7: 'Плейтайм D7', cost: 'Расходы сетей', clicks: 'Клики', impressions: 'Показы', cpi: 'CPI платных установок', income_cost: 'Доход / расходы' };
+const metricLabels = { installs: 'Установки', sessions: 'Сессии', daus: 'DAU', revenue: 'Доход IAP', ad_revenue: 'Доход от рекламы', revenue_total: 'Общий доход', revenue_events: 'Количество покупок', rewarded_count: 'Ревардеды', ad_impressions: 'Все рекламные показы', ads_per_dau: 'Реклам / активного игрока в сутки', cost: 'Расходы сетей', network_cost: 'Затраты из API сетей', network_installs: 'Установки из API сетей', clicks: 'Клики', impressions: 'Показы', cpi: 'CPI платных установок', income_cost: 'Доход / расходы' };
 const state = { data: null, section: 'overview', loading: false, failed: false, filters: { start: shiftDay(today(), -30), end: shiftDay(today(), -1), os: '', network: '', country: '' }, searches: {}, sorts: {}, group: 'network', chartMetric: 'installs', cohortMode: 'retention', tableRows: [], tableColumns: [], request: 0 };
 const dateFormat = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 function shortDay(day) { return validDay(day) ? dateFormat.format(new Date(day + 'T00:00:00Z')) : '—'; }
@@ -25,17 +25,19 @@ function format(value, type = 'integer', compact = false) {
     return minutes >= 60 ? `${Math.floor(minutes / 60)} ч ${minutes % 60} мин` : `${minutes} мин ${seconds % 60} с`;
   }
   let options = { maximumFractionDigits: type === 'integer' ? 0 : 2 };
-  if (type === 'money') options = { ...options, style: 'currency', currency: /^[A-Z]{3}$/.test(state.data?.currency || '') ? state.data.currency : 'USD', maximumFractionDigits: 2 };
+  if (type === 'money' || type === 'money_per_user') options = { ...options, style: 'currency', currency: /^[A-Z]{3}$/.test(state.data?.currency || '') ? state.data.currency : 'USD', maximumFractionDigits: type === 'money_per_user' ? 4 : 2, minimumFractionDigits: type === 'money_per_user' ? 4 : 2 };
   if (type === 'percent') options = { style: 'percent', maximumFractionDigits: 1 };
   if (compact) options = { ...options, notation: 'compact', maximumFractionDigits: 1 };
   try { return new Intl.NumberFormat('ru-RU', options).format(value) + (type === 'multiplier' ? '×' : ''); }
   catch { return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(value); }
 }
 const moneyMetrics = ['revenue', 'ad_revenue', 'revenue_total', 'cost', 'cpi'];
-const metricType = id => moneyMetrics.includes(id) || id.startsWith('revenue_total_d') ? 'money' : /^(playtime|time_spent)_d/.test(id) ? 'duration' : id === 'income_cost' ? 'multiplier' : /^d\d+$/.test(id) ? 'percent' : 'integer';
+const metricType = id => id.startsWith('ltv_') ? 'money_per_user' : moneyMetrics.includes(id) || id.startsWith('revenue_total_d') ? 'money' : /^(playtime|time_spent)_d/.test(id) ? 'duration' : id.startsWith('ads_per_') ? 'decimal' : id === 'income_cost' ? 'multiplier' : /^d\d+$/.test(id) ? 'percent' : 'integer';
 function label(id) {
-  const cohort = /^(cohort_size|retained_users|revenue_total|ad_revenue_total|time_spent)_d(\d+)$/.exec(id);
-  if (cohort) return ({cohort_size:'Размер когорты',retained_users:'Активные игроки',revenue_total:'Общий доход',ad_revenue_total:'Рекламный доход',time_spent:'Время всех игроков'}[cohort[1]]) + ' D' + cohort[2];
+  const unit = /^(playtime|ads_per_user|ltv|ltv_ad|ltv_iap|cohort_users)_d(\d+)$/.exec(id);
+  if (unit) return ({playtime:'Плейтайм / игрока',ads_per_user:'Реклам / игрока',ltv:'LTV / игрока',ltv_ad:'LTV рекламы',ltv_iap:'LTV IAP',cohort_users:'Игроков в расчёте'}[unit[1]]) + ' D' + unit[2];
+  const cohort = /^(cohort_size|retained_users|revenue_total|ad_revenue_total|time_spent|ad_impressions_total_in_cohort|all_revenue_total_in_cohort|ad_revenue_total_in_cohort|revenue_total_in_cohort)_d(\d+)$/.exec(id);
+  if (cohort) return ({cohort_size:'Размер когорты',retained_users:'Активные игроки',revenue_total:'Общий доход',ad_revenue_total:'Рекламный доход',time_spent:'Время всех игроков',ad_impressions_total_in_cohort:'Рекламные показы зрелой когорты',all_revenue_total_in_cohort:'Общий доход зрелой когорты',ad_revenue_total_in_cohort:'Рекламный доход зрелой когорты',revenue_total_in_cohort:'Доход IAP зрелой когорты'}[cohort[1]]) + ' D' + cohort[2];
   return Object.hasOwn(metricLabels, id) ? metricLabels[id] : state.data?.metrics.find(metric => metric.id === id)?.label || id;
 }
 function empty(title, body, action = '') { return `<div class="empty-state"><span class="empty-symbol" aria-hidden="true">⌁</span><h2>${esc(title)}</h2><p>${esc(body)}</p>${action}</div>`; }
@@ -111,26 +113,36 @@ async function load() {
 function kpiCards() {
   const values = kpis(state.data, state.filters), previous = comparison(state.data, state.filters);
   const configs = [
-    ['installs', 'Установки', '↓', 'integer'], ['revenue_total', 'Общий доход', '$', 'money'],
+    ['installs', 'Установки', '↓', 'integer'], ['cost', 'Расходы сетей', '↗', 'money'], ['cpi', 'CPI платных установок', '↓', 'money'],
+    ['revenue_total', 'Общий доход', '$', 'money'],
     ['ad_revenue', 'Доход от рекламы', '▣', 'money'], ['revenue', 'Доход IAP', '◇', 'money'],
     ['revenue_events', 'Количество покупок', '▤', 'integer'], ['rewarded_count', 'Ревардеды', '▶', 'integer'],
-    ...PLAYTIME_DAYS.map(day => ['playtime_d' + day, 'Плейтайм D' + day, '◷', 'duration']),
-    ['ad_impressions', 'Все рекламные показы', '◫', 'integer'], ['daus', 'Средний DAU', '◉', 'decimal'], ['cost', 'Расходы сетей', '↗', 'money'],
+    ['ad_impressions', 'Все рекламные показы', '◫', 'integer'],
   ];
   return `<div class="kpi-grid">${configs.map(([id, title, icon, type]) => {
     const value = values[id], before = previous?.[id];
     let delta = '<span>Нет доступного сравнения</span>';
+    if (['cost', 'cpi'].includes(id) && value === null) delta = `<span>${esc(state.data.spend?.status === 'missing' ? 'Adjust не передал затраты сетей' : id === 'cpi' ? 'Нет затрат или платных установок' : 'Нет данных о расходах')}</span>`;
     if (id === 'rewarded_count' && value === null) delta = state.data.engagement?.rewarded_event_id ? '<span>Нет данных за период</span>' : '<span>Нет отдельного события в Adjust</span>';
     if (value !== null && before !== null && before !== undefined && before > 0 && $('#incomplete-label').hidden) {
       const change = (value - before) / before;
       const better = ['cost', 'cpi'].includes(id) ? change < 0 : change > 0;
       delta = `<span class="change ${change === 0 ? '' : better ? 'up' : 'down'}">${change > 0 ? '+' : ''}${esc(format(change, 'percent'))}</span><span>к предыдущему периоду</span>`;
     }
-    const note = id.startsWith('playtime_d') ? 'На установившего игрока · зрелые когорты' : id === 'rewarded_count' ? 'Завершённые просмотры rewarded' : id === 'ad_impressions' ? 'Все форматы · не только rewarded' : id === 'revenue_events' ? 'События оплаты, переданные в Adjust' : id === 'revenue' ? 'Покупки в приложении · USD' : id === 'ad_revenue' ? 'Доход от показов рекламы · USD' : id === 'daus' ? 'Среднее по календарным дням' : id === 'revenue_total' ? 'IAP + рекламный доход' : '';
+    const note = id === 'cost' ? 'Затраты из API рекламных сетей' : id === 'cpi' ? 'Расходы / платные установки' : id === 'rewarded_count' ? 'Завершённые просмотры rewarded' : id === 'ad_impressions' ? 'Все форматы · не только rewarded' : id === 'revenue_events' ? 'События оплаты, переданные в Adjust' : id === 'revenue' ? 'Покупки в приложении · USD' : id === 'ad_revenue' ? 'Доход от показов рекламы · USD' : id === 'revenue_total' ? 'IAP + рекламный доход' : '';
     return `<article class="kpi ${id === 'revenue_total' ? 'featured' : ''}" data-kpi="${id}" title="${esc(id === 'rewarded_count' ? state.data.engagement?.rewarded_note || note : note || label(id))}"><div class="kpi-top"><span>${esc(title)}</span><span class="kpi-icon" aria-hidden="true">${icon}</span></div><div class="kpi-value">${esc(format(value, type))}</div><div class="kpi-bottom">${delta}</div>${note ? `<div class="kpi-bottom" style="margin-top:9px">${esc(note)}</div>` : ''}</article>`;
   }).join('')}</div>`;
 }
-function chart(series, chartId, money = false) {
+function playerPanel() {
+  const values = kpis(state.data, state.filters);
+  const columns = [['cohort_users','Игроков в расчёте'],['playtime','Плейтайм / игрока'],['ads_per_user','Реклам / игрока'],['ltv_ad','LTV рекламы'],['ltv_iap','LTV IAP'],['ltv','LTV всего']];
+  return panel('На одного игрока · D0 / D1 / D7', 'Плейтайм — за день N. Реклама и LTV — накопительно от установки до дня N.',
+    `<div class="table-scroll player-table" role="region" aria-label="Показатели на игрока по зрелым когортам" tabindex="0"><table><caption class="sr-only">Средние показатели на одного установившего игрока</caption><thead><tr><th scope="col">День после установки</th>${columns.map(([,name])=>`<th scope="col">${esc(name)}</th>`).join('')}</tr></thead><tbody>${PLAYTIME_DAYS.map(day=>`<tr><th scope="row">D${day}</th>${columns.map(([prefix])=>{
+      const id=prefix+'_d'+day, value=values[id];
+      return `<td data-unit="${id}" title="${esc(value === null ? `Нет завершённых когорт или данных D${day}` : label(id))}">${esc(format(value,metricType(id)))}</td>`;
+    }).join('')}</tr>`).join('')}</tbody></table></div><p class="table-note">Суммы делятся на число игроков в зрелых когортах, включая неактивных. Все рекламные форматы. Реклам на активного игрока в сутки: <strong>${esc(format(values.ads_per_dau,'decimal'))}</strong>. «—» означает отсутствие зрелой когорты или данных.</p>`, '<button class="text-button" data-action="cohorts">По дате установки ↗</button>');
+}
+function chart(series, chartId, type = 'integer') {
   const points = series.flatMap(item => item.values.filter(point => point.value !== null));
   if (!points.length) return empty('Нет доступных значений', 'Метрика недоступна или в выбранном периоде нет строк данных.');
   const days = daysBetween(state.filters.start, state.filters.end), width = 920, height = 280, left = 68, right = 16, top = 20, bottom = 42;
@@ -142,7 +154,7 @@ function chart(series, chartId, money = false) {
   let svg = `<svg viewBox="0 0 ${width} ${height}" role="group" aria-labelledby="${chartId}-title ${chartId}-desc"><title id="${chartId}-title">${esc(series.map(item => item.label).join(' и '))}</title><desc id="${chartId}-desc">Данные по дням, UTC. Используйте стрелки для перехода между точками графика. Значения также доступны в таблице по дням.</desc>`;
   for (let i = 0; i <= 4; i++) {
     const value = min + (max - min) * i / 4, py = y(value);
-    svg += `<line class="gridline" x1="${left}" x2="${width - right}" y1="${py}" y2="${py}"/><text x="${left - 12}" y="${py + 4}" text-anchor="end">${esc(format(value, money ? 'money' : 'integer', true))}</text>`;
+    svg += `<line class="gridline" x1="${left}" x2="${width - right}" y1="${py}" y2="${py}"/><text x="${left - 12}" y="${py + 4}" text-anchor="end">${esc(format(value, type, true))}</text>`;
   }
   const ticks = [...new Set([0, ...Array.from({ length: 5 }, (_, i) => Math.round((days.length - 1) * (i + 1) / 5))])];
   for (const index of ticks) svg += `<text x="${x(index)}" y="${height - 12}" text-anchor="${index === 0 ? 'start' : index === days.length - 1 ? 'end' : 'middle'}">${esc(shortDay(days[index]))}</text>`;
@@ -160,7 +172,7 @@ function chart(series, chartId, money = false) {
     for (let index = 0; index < days.length; index++) {
       const value = byDay.get(days[index]);
       if (value === null || value === undefined) continue;
-      const text = `${shortDay(days[index])} ${days[index].slice(0, 4)} · UTC\n${item.label}: ${format(value, money ? 'money' : 'integer')}`;
+      const text = `${shortDay(days[index])} ${days[index].slice(0, 4)} · UTC\n${item.label}: ${format(value, type)}`;
       svg += `<circle class="point" cx="${x(index)}" cy="${y(value)}" r="4" style="fill:${item.color}" tabindex="${focusFirst ? '0' : '-1'}" role="img" aria-label="${esc(text)}" data-tooltip="${esc(text)}"><title>${esc(text)}</title></circle>`;
       focusFirst = false;
     }
@@ -169,7 +181,7 @@ function chart(series, chartId, money = false) {
   return `<div class="chart">${svg}</div><div class="chart-legend">${series.map(item => `<span><i class="legend-dot" style="background:${item.color}" aria-hidden="true"></i>${esc(item.label)}</span>`).join('')}</div>`;
 }
 const acquisitionColumns = [
-  { key: 'name', label: 'Источник', type: 'text' }, ...['installs', 'cost', 'ad_revenue', 'revenue', 'revenue_events', 'ad_impressions', 'revenue_total', 'cpi', 'income_cost', 'sessions', 'clicks', 'impressions'].map(key => ({ key, label: label(key), type: metricType(key) })),
+  { key: 'name', label: 'Источник', type: 'text' }, ...['installs', 'cost', 'cpi', ...PLAYTIME_DAYS.map(day=>'playtime_d'+day), 'ads_per_user_d0', 'ltv_d0', 'ltv_d1', 'ltv_d7', 'ad_revenue', 'revenue', 'revenue_events', 'ad_impressions', 'revenue_total', 'income_cost', 'sessions', 'clicks', 'impressions'].map(key => ({ key, label: label(key), type: metricType(key) })),
 ];
 function tableShell(title, subtitle, rows, columns, note = '', extraTools = '') {
   state.tableRows = rows;
@@ -215,40 +227,48 @@ function dailyTableRows() {
   if (!rows.length) return [];
   const metrics = ['installs', 'sessions', ...(src === 'daily' ? ['daus'] : []), 'revenue', 'ad_revenue', 'revenue_events', 'ad_impressions', 'rewarded_count', 'revenue_total', 'cost'];
   const series = Object.fromEntries(metrics.map(id => [id, new Map(timeline(data, state.filters, id).map(point => [point.day, point.value]))]));
-  return daysBetween(state.filters.start, state.filters.end).map(day => ({ day, ...Object.fromEntries(metrics.map(id => [id, series[id].get(day) ?? null])) }));
+  const cohorts = new Map(cohortTable(data,state.filters).map(row=>[row.day,row]));
+  return daysBetween(state.filters.start, state.filters.end).map(day => {
+    const result = {day,...cohorts.get(day),...Object.fromEntries(metrics.map(id=>[id,series[id].get(day)??null]))};
+    result.cpi = kpis(data,{...state.filters,start:day,end:day}).cpi;
+    result.ads_per_dau = ratio(result.ad_impressions,result.daus);
+    return result;
+  });
 }
 function overview() {
   const data = state.data, src = source(), rows = filterRows(data[src], state.filters);
-  const metrics = ['installs', 'sessions', ...(src === 'daily' ? ['daus'] : []), 'revenue_total', 'ad_revenue', 'revenue', 'revenue_events', 'ad_impressions', 'rewarded_count'];
+  const metrics = ['installs', 'sessions', ...(src === 'daily' ? ['daus','ads_per_dau'] : []), 'cost', 'cpi', 'revenue_total', 'ad_revenue', 'revenue', 'revenue_events', 'ad_impressions', 'rewarded_count'];
   if (!metrics.includes(state.chartMetric)) state.chartMetric = 'installs';
   const switcher = `<div class="panel-tools"><label for="chart-metric">Метрика</label><select id="chart-metric">${metrics.map(id => `<option value="${id}" ${state.chartMetric === id ? 'selected' : ''}>${esc(label(id))}</option>`).join('')}</select></div>`;
   const incomeChart = panel('Реклама и IAP — доходы отдельно', 'Доход за день · USD', chart([
     { label: 'Доход от рекламы', color: 'var(--accent)', values: timeline(data, state.filters, 'ad_revenue') },
     { label: 'Доход IAP', color: 'var(--blue)', values: timeline(data, state.filters, 'revenue') },
-  ], 'income-chart', true));
-  const metricChart = panel('Динамика активности', 'Ежедневные значения · UTC', chart([{ label: label(state.chartMetric), color: 'var(--accent)', values: timeline(data, state.filters, state.chartMetric) }], 'activity-chart', moneyMetrics.includes(state.chartMetric)), switcher);
-  const summary = panel('Структура дохода', 'Значения за выбранный период', `<dl class="summary-list">${['revenue', 'ad_revenue', 'revenue_total', 'sessions'].map(id => `<div><dt>${esc(label(id))}</dt><dd>${esc(format(sumMetric(data, src, rows, id), metricType(id)))}</dd></div>`).join('')}<div><dt>CTR · клики / показы</dt><dd>${esc(format(ratio(sumMetric(data, src, rows, 'clicks'), sumMetric(data, src, rows, 'impressions')), 'percent'))}</dd></div></dl>`);
+  ], 'income-chart', 'money'));
+  const metricChart = panel('Динамика активности', 'Ежедневные значения · UTC', chart([{ label: label(state.chartMetric), color: 'var(--accent)', values: timeline(data, state.filters, state.chartMetric) }], 'activity-chart', metricType(state.chartMetric)), switcher);
+  const summary = panel('Структура дохода', 'Значения за выбранный период', `<dl class="summary-list">${['revenue', 'ad_revenue', 'revenue_total', 'sessions'].map(id => `<div><dt>${esc(label(id))}</dt><dd>${esc(format(sumMetric(data, src, rows, id), metricType(id)))}</dd></div>`).join('')}<div><dt>Средний DAU</dt><dd>${esc(format(kpis(data,state.filters).daus,'decimal'))}</dd></div><div><dt>CTR · клики / показы</dt><dd>${esc(format(ratio(sumMetric(data, src, rows, 'clicks'), sumMetric(data, src, rows, 'impressions')), 'percent'))}</dd></div></dl>`);
   const networks = groupAcquisition(data, state.filters, 'network').filter(row => row.installs !== null).sort((a, b) => b.installs - a.installs).slice(0, 5);
   const maximum = Math.max(1, ...networks.map(row => row.installs));
   const topNetworks = panel('Ведущие сети', 'По установкам · первые 5', networks.length ? `<div class="bar-list">${networks.map(row => `<div class="bar-row"><div class="bar-label"><span>${esc(row.name)}</span><span>${esc(format(row.installs))}</span></div><div class="bar-track"><div class="bar-fill" style="width:${Math.max(0, row.installs) / maximum * 100}%"></div></div></div>`).join('')}</div>` : empty('Сети недоступны', 'Нет доступных данных об установках по сетям.'), '<button class="text-button" data-action="acquisition">Все источники ↗</button>');
-  const columns = [{ key: 'day', label: 'День · UTC', type: 'day' }, ...['installs', 'sessions', ...(src === 'daily' ? ['daus'] : []), 'ad_revenue', 'revenue', 'revenue_events', 'ad_impressions', 'rewarded_count', 'revenue_total', 'cost'].map(key => ({ key, label: label(key), type: metricType(key) }))];
-  return kpiCards() + incomeChart + metricChart + `<div class="two-columns">${summary}${topNetworks}</div>` + tableShell('Данные по дням', 'Дневные суммы, используемые в графиках и экспорте', dailyTableRows(), columns, 'DAU в строке — активные пользователи за один день, суммированные по платформам. Пропущенные дни внутри заявленного покрытия считаются нулевыми только для доступных метрик непустого набора данных.');
+  const columns = [{ key: 'day', label: 'День · UTC', type: 'day' }, ...['installs', 'cost', 'cpi', ...PLAYTIME_DAYS.map(day=>'playtime_d'+day), 'ads_per_user_d0', 'ltv_d0', 'ltv_d1', 'ltv_d7', ...(src === 'daily' ? ['daus','ads_per_dau'] : []), 'ad_revenue', 'revenue', 'revenue_events', 'ad_impressions', 'rewarded_count', 'revenue_total', 'sessions'].map(key => ({ key, label: label(key), type: metricType(key) }))];
+  return kpiCards() + playerPanel() + incomeChart + metricChart + `<div class="two-columns">${summary}${topNetworks}</div>` + tableShell('Данные по дням', 'Активность дня и показатели игроков, установивших игру в этот день', dailyTableRows(), columns, 'Плейтайм, реклама на игрока и LTV относятся к дате установки в строке. Остальные показатели — к календарному дню активности. LTV включает накопленные доходы рекламы и IAP. Реклам / активного игрока = показы за день / DAU. CPI исключает Organic и неизвестные источники. Незрелые когорты и отсутствующие затраты показаны как «—».');
 }
 function acquisition() {
   const tools = `<div class="panel-tools"><label for="group-by">Группировка</label><select id="group-by"><option value="network" ${state.group === 'network' ? 'selected' : ''}>По сети</option><option value="campaign" ${state.group === 'campaign' ? 'selected' : ''}>По кампании</option><option value="country" ${state.group === 'country' ? 'selected' : ''}>По стране</option></select></div>`;
   const columns = acquisitionColumns.map(column => column.key === 'name' ? { ...column, label: { network: 'Сеть', campaign: 'Кампания', country: 'Страна' }[state.group] } : column);
-  return kpiCards() + tableShell('Источники привлечения', 'Все значения активности суммируются в выбранной группе', groupAcquisition(state.data, state.filters, state.group), columns, 'CPI использует расходы и установки по известным сетям, кроме Organic. «Доход / расходы» — отношение дохода активности к расходам за период, не когортный ROAS. Неизвестные значения показаны как «—».', tools);
+  return kpiCards() + playerPanel() + tableShell('Источники привлечения', 'Затраты, CPI, плейтайм и LTV по сетям, кампаниям и странам', groupAcquisition(state.data, state.filters, state.group), columns, 'CPI = затраты / платные установки. Плейтайм и LTV рассчитаны по зрелым когортам установок выбранной группы. «Доход / расходы» относится к активности за период. Неизвестные значения показаны как «—».', tools);
 }
 function cohorts() {
   const mode = state.cohortMode;
-  const values = mode === 'playtime'
+  const values = mode === 'unit'
+    ? PLAYTIME_DAYS.flatMap(n => ['playtime','ads_per_user','ltv'].map(prefix=>({key:prefix+'_d'+n,label:label(prefix+'_d'+n),type:metricType(prefix+'_d'+n)})))
+    : mode === 'playtime'
     ? PLAYTIME_DAYS.map(n => ({key:'playtime_d'+n,label:'Плейтайм D'+n,type:'duration'}))
     : mode === 'revenue' ? [0,...RETENTION_DAYS].map(n => ({key:'revenue_total_d'+n,label:'Доход D'+n,type:'money'}))
     : RETENTION_DAYS.map(n => ({key:'d'+n,label:'Удержание D'+n,type:'percent',heat:true}));
   const columns = [{key:'day',label:'Дата установки · UTC',type:'day'},{key:'installs',label:'Установки',type:'integer'},...values];
-  const tools = `<div class="panel-tools"><label for="cohort-mode">Показатель</label><select id="cohort-mode">${[['retention','Удержание'],['revenue','Накопительный доход'],['playtime','Плейтайм на игрока']].map(([id,name])=>`<option value="${id}" ${mode===id?'selected':''}>${name}</option>`).join('')}</select></div>`;
-  const title = mode === 'playtime' ? 'Средний плейтайм на игрока' : mode === 'revenue' ? 'Накопительный доход когорт' : 'Удержание по когортам';
-  const note = mode === 'playtime' ? 'D0 — день установки, D1 и D7 — первый и седьмой дни после установки. Время показывается за конкретный день, не накопительно. Суммарные секунды делятся на размер зрелой когорты, включая неактивных игроков. В CSV время хранится в секундах.' : mode === 'revenue' ? 'Доход Dn накопительный: включает IAP и рекламу от установки до дня N. Значения показываются после завершения дня N к дате снимка.' : 'Удержание Dn = активные игроки дня N / соответствующий размер когорты. Незрелые когорты и недоступные значения показаны как «—».';
+  const tools = `<div class="panel-tools"><label for="cohort-mode">Показатель</label><select id="cohort-mode">${[['unit','Плейтайм, реклама и LTV / игрока'],['retention','Удержание'],['revenue','Накопительный доход'],['playtime','Плейтайм на игрока']].map(([id,name])=>`<option value="${id}" ${mode===id?'selected':''}>${name}</option>`).join('')}</select></div>`;
+  const title = mode === 'unit' ? 'Плейтайм, реклама и LTV на игрока' : mode === 'playtime' ? 'Средний плейтайм на игрока' : mode === 'revenue' ? 'Накопительный доход когорт' : 'Удержание по когортам';
+  const note = mode === 'unit' ? 'Для D0/D1/D7 плейтайм считается за соответствующий день, реклама и LTV — накопительно с установки. Делитель — размер зрелой когорты, включая неактивных игроков. LTV = доход рекламы + доход IAP на игрока. CSV сохраняет время в секундах.' : mode === 'playtime' ? 'D0 — первые 24 часа, D1 — часы 24–48, D7 — часы 168–192 после установки. Время показывается за конкретный день, не накопительно. Суммарные секунды делятся на размер зрелой когорты, включая неактивных игроков. В CSV время хранится в секундах.' : mode === 'revenue' ? 'Доход Dn накопительный: включает IAP и рекламу от установки до дня N. Значения показываются после завершения дня N к дате снимка.' : 'Удержание Dn = активные игроки дня N / соответствующий размер когорты. Незрелые когорты и недоступные значения показаны как «—».';
   return tableShell(title,'Группировка по дате установки · фильтры платформы, сети и страны',cohortTable(state.data,state.filters),columns,note,tools);
 }
 function events() {
@@ -261,6 +281,7 @@ function status() {
     ['timezone', 'Часовой пояс', data.timezone || 'UTC'], ['currency', 'Валюта', data.currency || 'USD'],
     ['refresh', 'Интервал обновления', `${data.refresh?.interval_hours ?? 6} ч · основной ПК`],
     ['loaded', 'Источник отчёта', 'Adjust Report Service'],
+    ['spend', 'Источник затрат и CPI', data.spend?.note || 'Затраты сетей из Adjust'],
   ];
   const datasets = [['daily', 'Дневная активность', 'День + платформа'], ['acquisition', 'Привлечение', 'День + платформа + сеть + кампания + страна'], ['cohorts', 'Когорты', 'Дата установки + платформа + сеть + страна'], ['event_rows', 'События', 'День + платформа + сеть + страна']];
   state.tableColumns = [{ key: 'name', label: 'Параметр', type: 'text' }, { key: 'value', label: 'Значение', type: 'text' }];
@@ -362,6 +383,7 @@ document.addEventListener('click', event => {
   if (!button) return;
   if (button.dataset.action === 'retry') load();
   if (button.dataset.action === 'acquisition') location.hash = 'acquisition';
+  if (button.dataset.action === 'cohorts') { state.cohortMode = 'unit'; location.hash = 'cohorts'; }
   if (button.dataset.sort) {
     const old = state.sorts[state.section] || { key: state.section === 'acquisition' ? 'installs' : state.section === 'events' ? 'count' : 'day', direction: 'desc' };
     state.sorts[state.section] = { key: button.dataset.sort, direction: old.key === button.dataset.sort && old.direction === 'desc' ? 'asc' : 'desc' };
