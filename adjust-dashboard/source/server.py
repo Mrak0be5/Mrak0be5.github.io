@@ -223,11 +223,21 @@ def dashboard(body):
     output = {'table': table, 'parameters': params, 'generated_at': now(), 'summary_scope': 'dimension_filters'}
     known = ids(cat.get('attributes', []))
     base_metrics = list(dict.fromkeys([*metrics, *[m for m in ('installs', 'sessions', 'daus', 'network_cost', 'cost', 'revenue', 'ad_revenue', 'ad_impressions', 'revenue_events') if m in known]]))
+    cohort_days = [0, 1, 2, 3, 7, 14, 30]
+    cohort_metrics = [f'{kind}_d{day}' for day in cohort_days for kind in ('roas_iap', 'roas_ad')]
+    available_cohorts = [day for day in cohort_days if f'roas_iap_d{day}' in known and f'roas_ad_d{day}' in known]
+    base_metrics = list(dict.fromkeys(base_metrics + [metric for metric in cohort_metrics if metric in known] +
+                                    [f'mature_based_virtual_metric_cost_d{day}' for day in available_cohorts]))
     if not base_metrics:
         base_metrics = [metrics[0]]
     for name, dims in (('summary', ['app_token']), ('trend', ['day'])):
         try:
             output[name] = report(base_params, dims, base_metrics, force)
+            for row in [*output[name]['rows'], output[name].get('totals', {})]:
+                for day in available_cohorts:
+                    values = [row.get(f'{kind}_d{day}') for kind in ('roas_iap', 'roas_ad')]
+                    if all(value is not None and str(value).strip() for value in values):
+                        row[f'roas_d{day}'] = sum(float(value) for value in values) if float(row.get(f'mature_based_virtual_metric_cost_d{day}') or 0) > 0 else None
         except APIError as error:
             output[name] = {'error': str(error), 'status': error.status, 'rows': [], 'totals': {}}
     if params != base_params:

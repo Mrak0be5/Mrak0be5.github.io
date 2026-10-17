@@ -4,7 +4,7 @@
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'">
   <meta name="color-scheme" content="light dark"><title>Adjust · Аналитика</title>
-  <link rel="stylesheet" href="./styles.css"><script type="module" src="./app.js"></script>
+  <link rel="stylesheet" href="./styles.css?v=cohorts2"><script type="module" src="./app.js?v=cohorts2"></script>
 </head>
 <body>
 <a class="skip-link" href="#main">Перейти к отчёту</a>
@@ -24,7 +24,9 @@
   <div class="main-shell">
     <header class="topbar"><div class="breadcrumb">Рабочее пространство <span>/</span> <strong id="breadcrumb-view">Обзор</strong></div><span class="private-badge">◉ Публичный доступ</span></header>
     <main id="main">
+      <section class="project-bar" aria-label="Выбор проекта"><div class="project-icon" aria-hidden="true">◫</div><label for="project-select">ПРОЕКТ<select id="project-select" disabled><option>Загрузка проектов…</option></select></label><p id="project-hint" class="muted">Выберите проект — аналитика обновится автоматически</p></section>
       <div class="page-heading"><div><p class="eyebrow">АНАЛИТИКА ПРИЛОЖЕНИЙ</p><h1 id="view-title">Обзор эффективности</h1><p id="view-description" class="muted">Закупка, выручка и результат — в одном отчёте.</p></div><div class="heading-actions"><button class="button" id="export" disabled><span aria-hidden="true">↓</span> Скачать CSV</button><button class="button primary" id="refresh" disabled><span aria-hidden="true">↻</span> Обновить</button></div></div>
+      <section class="panel cohort-panel" aria-labelledby="cohort-title"><div class="panel-heading"><div><p class="eyebrow">ОКУПАЕМОСТЬ ПОСЛЕ УСТАНОВКИ</p><h2 id="cohort-title">Когортный ROAS по дням</h2><p class="muted" id="cohort-scope">Накопленная выручка IAP NET + AppLovin MAX SDK / расход зрелой когорты</p></div><span class="cohort-key"><i></i> 100% — окупаемость</span></div><div id="cohort-summary" class="cohort-summary"></div><div id="cohort-table" class="table-scroll" role="region" aria-label="ROAS когорт по датам установки и дням жизни" tabindex="0"></div><p class="cohort-footnote muted">Строка — дата установки, D0–D30 — дни жизни когорты. Проценты взвешены по расходам. Прочерк — когорта не созрела, нет расхода или часть данных не передана. Числовые пороги применяются к детализации ниже.</p></section>
       <section class="filter-card" aria-label="Фильтры отчёта">
         <form id="filters-form">
           <div class="filter-top"><div><label class="field-label" for="date-start" id="date-label">Активность по календарным дням</label><div class="date-range"><input type="date" id="date-start" required aria-label="Дата начала"><span>—</span><input type="date" id="date-end" required aria-label="Дата окончания"></div></div><div class="presets" aria-label="Период"><button type="button" data-preset="7">7 дней</button><button type="button" data-preset="30" class="selected">30 дней</button><button type="button" data-preset="90">90 дней</button><button type="button" data-preset="month">Этот месяц</button><button type="button" data-preset="previous">Прошлый месяц</button></div></div>

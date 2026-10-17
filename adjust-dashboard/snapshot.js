@@ -85,7 +85,7 @@ export function buildReport(data,body) {
   const table=filtered.map(row=>Object.fromEntries([...dimensions,...metrics].map(field=>[field,row[field]])));
   const warnings=data.warnings||[];
   return {table:{rows:table,totals:tableTotals, data_warnings:warnings},summary:{rows:group(['app_token'],allMetrics),totals},trend:{rows:group(['day'],allMetrics,nativeRows||rows),totals},parameters:params,generated_at:data.generated_at,
-    notice:`Автоматическая выгрузка Adjust на ${new Date(data.generated_at).toLocaleString('ru-RU')}. Детальные суммы могут отличаться на копейки из-за округления строк Adjust.${numeric.length?' Числовые условия относятся к таблице, карточки и график показывают сегмент до порога.':''}`};
+    notice:`Автоматическая выгрузка Adjust на ${new Date(data.generated_at).toLocaleString('ru-RU')}. Детальные суммы могут отличаться на копейки из-за округления строк Adjust.${numeric.length?' Числовые условия относятся к таблице детализации; карточки, когорты и график показывают сегмент до порога.':''}`};
 }
 
 export async function snapshotRequest(url,options={}) {
@@ -94,11 +94,15 @@ export async function snapshotRequest(url,options={}) {
   if(url==='/api/catalog')return data.catalog;
   if(url==='/api/dashboard'){
     const [start,end]=String(body.parameters?.date_period||'').split(':');
-    const selected=(data.shards||[]).filter(shard=>shard.range[0]<=end&&shard.range[1]>=start);
+    const appFilters=Object.entries(body.parameters||{}).filter(([key])=>key.startsWith('app_token__'));
+    const selected=(data.shards||[]).filter(shard=>shard.range[0]<=end&&shard.range[1]>=start&&(!shard.app_token||appFilters.every(([key,value])=>matches(shard.app_token,key.slice('app_token__'.length),value))));
     const rows=[];
-    try { for(const shard of selected){
-      if(!chunks.has(shard.file))chunks.set(shard.file,fetch(new URL('./'+shard.file,import.meta.url)).then(async response=>{if(!response.ok){const error=Error('Не удалось загрузить часть выгрузки. Повторите обновление.');error.status=response.status;throw error;}return response.json();}).catch(error=>{chunks.delete(shard.file);throw error;}));
-      for(const row of await chunks.get(shard.file))rows.push(row);
+    try { for(let offset=0;offset<selected.length;offset+=6){
+      const parts=await Promise.all(selected.slice(offset,offset+6).map(shard=>{
+        if(!chunks.has(shard.file))chunks.set(shard.file,fetch(new URL('./'+shard.file,import.meta.url)).then(async response=>{if(!response.ok){const error=Error('Не удалось загрузить часть выгрузки. Повторите обновление.');error.status=response.status;throw error;}return response.json();}).catch(error=>{chunks.delete(shard.file);throw error;}));
+        return chunks.get(shard.file);
+      }));
+      for(const part of parts)for(const row of part)rows.push(row);
     }} catch(error) {
       // Открытая вкладка могла сохранить манифест предыдущей публикации.
       if(error.status===404&&!options.reloaded){current=null;return snapshotRequest(url,{...options,reloaded:true});}

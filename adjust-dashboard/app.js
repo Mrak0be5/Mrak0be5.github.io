@@ -63,10 +63,10 @@ function save() {
     return;
   }
   const parameters = {};
-  for (const [,key] of MULTI) parameters[key] = Array.from(document.querySelectorAll(`[data-multi="${key}"] option:checked`),x => x.value);
+  for (const [,key] of MULTI) parameters[key] = [...$(`[data-multi="${key}"]`).options].filter(x=>x.selected).map(x=>x.value);
   for (const [key] of SETTINGS) parameters[key] = settingValue(key);
   for (const key of ['campaign__contains','adgroup__contains','creative__contains']) parameters[key] = $(`[name="${key}"]`).value;
-  try {localStorage.setItem(STORAGE,JSON.stringify({theme:document.documentElement.dataset.theme,dates:[$('#date-start').value,$('#date-end').value],parameters,conditions:readConditions(false),view:state.view,dimensions:state.dimensions,metrics:state.metrics}));} catch { /* Приватный режим может запрещать localStorage. */ }
+  try {localStorage.setItem(STORAGE,JSON.stringify({project:$('#project-select').value,theme:document.documentElement.dataset.theme,dates:[$('#date-start').value,$('#date-end').value],parameters,conditions:readConditions(false),view:state.view,dimensions:state.dimensions,metrics:state.metrics}));} catch { /* Приватный режим может запрещать localStorage. */ }
 }
 function updateTheme() { $('#theme-toggle span').textContent = document.documentElement.dataset.theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'; }
 $('#theme-toggle').addEventListener('click',() => {document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';updateTheme();save();});
@@ -78,6 +78,18 @@ function buildFilters() {
     const selected = Array.isArray(saved.parameters?.[key]) ? saved.parameters[key] : [];
     return `<div><span class="filter-caption">${e(title)}</span><details class="multi-filter"><summary><span data-selection-label="${key}">Все</span></summary><div class="multi-popover"><input type="search" data-multi-search="${key}" placeholder="Поиск…" aria-label="Поиск: ${e(title)}"><select multiple data-multi="${key}" aria-label="${e(title)}">${values.map(item => `<option value="${e(item.id)}" ${selected.includes(item.id) ? 'selected' : ''}>${e(item.name)}</option>`).join('')}</select><button type="button" class="multi-clear" data-clear="${key}">Очистить выбор</button><p>${values.length ? 'Несколько значений: Ctrl / ⌘ + клик. На телефоне — системный выбор.' : 'Список недоступен в каталоге.'}</p></div></details></div>`;
   }).join('');
+  const projects=normalize(filters.apps), project=$('#project-select');
+  project.innerHTML='<option value="">Все проекты</option>'+options(projects,'',true)+'<option value="__multiple__" disabled>Несколько проектов</option>';
+  const appFilter=$('[data-multi="app_token__in"]');
+  if (!Object.hasOwn(saved,'project') && ![...appFilter.options].some(x=>x.selected)) {
+    const preferred=state.catalog.snapshot?.default_project || projects[0]?.id;
+    for(const option of appFilter.options)option.selected=option.value===preferred;
+  }
+  project.disabled=false;
+  project.addEventListener('change',()=>{
+    for(const option of appFilter.options)option.selected=project.value!=='' && option.value===project.value;
+    selectionLabels();markDirty();loadReport();
+  });
   $('#advanced-filters').innerHTML = SETTINGS.map(([key,source,title,fallback]) => {
     let items = normalize(filters[source]);
     if (!items.length) items = normalize(fallback);
@@ -108,6 +120,8 @@ function selectionLabels() {
     const selected = [...$(`[data-multi="${key}"]`).options].filter(x=>x.selected);
     $(`[data-selection-label="${key}"]`).textContent = selected.length === 1 ? selected[0].textContent : selected.length ? `Выбрано: ${selected.length}` : 'Все';
   }
+  const selected=[...$('[data-multi="app_token__in"]').options].filter(x=>x.selected);
+  $('#project-select').value=selected.length===1 ? selected[0].value : selected.length ? '__multiple__' : '';
 }
 function updateChips() {
   const current = Object.fromEntries(SETTINGS.map(([key]) => [key,settingValue(key)]));
@@ -162,7 +176,7 @@ function setView(view,restore = false) {
 }
 function updateEditorCounts() {$('#dimensions-count').textContent = state.dimensions.length;$('#metrics-count').textContent = state.metrics.length;}
 async function requestJSON(url,options = {}) {
-  if (SNAPSHOT_MODE) return (await import('./snapshot-client.js')).snapshotRequest(url,options);
+  if (SNAPSHOT_MODE) return (await import('./snapshot-client.js?v=cohorts2')).snapshotRequest(url,options);
   let response;
   try { response = await fetch(API_BASE + url,{credentials:'same-origin',cache:'no-store',...options}); }
   catch (error) { if (error.name === 'AbortError') throw error; throw new Error('Не удалось связаться с сервером. Проверьте подключение и повторите запрос.'); }
@@ -189,6 +203,9 @@ async function loadCatalog() {
   } catch(error) {state.error = error.message;setBusy(false);renderNotices(true);$('#connection').innerHTML = 'Нет подключения<small>Каталог не загружен</small>';}
 }
 function setBusy(busy) {
+  $('.cohort-panel').classList.toggle('report-loading',busy);$('.cohort-panel').setAttribute('aria-busy',String(busy));
+  if(busy)$('#project-hint').textContent='Загружаем аналитику проекта…';
+  else if(state.error)$('#project-hint').textContent=state.report?'Не удалось обновить. Показан предыдущий отчёт.':'Не удалось загрузить аналитику.';
   state.busy = busy;$('#report').setAttribute('aria-busy',String(busy));$('#report').classList.toggle('report-loading',busy);
   $('#refresh').disabled = busy || !state.catalog;$('#apply').disabled = busy || !state.catalog;
   $('#refresh').innerHTML = busy ? '<span aria-hidden="true">◌</span> Загрузка…' : '<span aria-hidden="true">↻</span> Обновить';
@@ -254,13 +271,35 @@ function renderReport() {
   $('#table-title').textContent = report ? VIEWS[state.snapshot.view].table : 'Детализация отчёта';
   const timestamp = report?.generated_at ? new Date(report.generated_at) : null;
   $('#report-time').textContent = timestamp && Number.isFinite(timestamp.getTime()) ? `Данные на ${timestamp.toLocaleString('ru-RU')} · ${state.snapshot.parameters.date_period}` : report ? `Отчёт за ${state.snapshot.parameters.date_period} · время обновления не указано` : 'Отчёт ещё не загружен';
-  renderKPIs();renderRevenue();
+  renderCohorts();renderKPIs();renderRevenue();
   $('.trend-panel .panel-heading .muted').textContent=state.snapshot?.view==='cohorts'?'По дате установки':'По календарным дням';
   $('.revenue-panel .panel-heading .muted').textContent=state.snapshot?.view==='cohorts'?'Накопленный доход зрелой когорты D7':'По итогам выбранного периода';
   const previous = $('#trend-metric').value;
-  $('#trend-metric').innerHTML = (state.snapshot?.metrics || []).map(id => `<option value="${e(id)}">${e(label(id))}</option>`).join('');
+  const trendMetrics=[...new Set(['roas_d7',...[0,1,2,3,14,30].map(day=>'roas_d'+day),...(state.snapshot?.metrics || [])])].filter(id=>state.catalog?.attributes.some(x=>x.id===id));
+  $('#trend-metric').innerHTML = trendMetrics.map(id => `<option value="${e(id)}">${e(label(id))}</option>`).join('');
   if ([...$('#trend-metric').options].some(x => x.value === previous)) $('#trend-metric').value = previous;
   renderTrend();renderTable();
+}
+function renderCohorts() {
+  const days=state.catalog?.snapshot?.roas_days || [0,1,2,3,7,14,30];
+  const report=state.report, target=$('#cohort-table');
+  if (!report) {target.innerHTML=empty('Загружаем когортный ROAS','Реальные данные Adjust для выбранного проекта.');return;}
+  const params=state.snapshot.parameters, projects=normalize(state.catalog.filters.apps);
+  const selected=String(params.app_token__in||'').split(',').filter(Boolean);
+  const projectName=selected.length===1 ? projects.find(x=>x.id===selected[0])?.name || selected[0] : selected.length ? 'Выбранные проекты' : 'Все проекты';
+  const share=/^GROSS_(\d+)$/.exec(params.iap_revenue_mode)?.[1] || '70';
+  $('#cohort-scope').textContent=`${projectName} · IAP после комиссии ${100-Number(share)}% + AppLovin MAX SDK · все фильтры сегмента`;
+  $('#project-hint').textContent=`Показан отчёт: ${projectName}`;
+  const totals=report.summary?.totals || {};
+  $('#cohort-summary').innerHTML=days.map(day=>`<div><span>ROAS D${day}</span><strong>${e(format(totals['roas_d'+day],'roas_d'+day))}</strong><small>Зрелые когорты периода</small></div>`).join('');
+  if(sectionError(report.trend)){target.innerHTML=empty('Когортные данные недоступны','Повторите обновление отчёта.');return;}
+  const rows=[...(report.trend.rows||[])].sort((a,b)=>String(b.day).localeCompare(String(a.day)));
+  if(!rows.length){target.innerHTML=empty('Для выбранных фильтров нет данных','Измените проект, период или другие условия.');return;}
+  target.innerHTML=`<table class="cohort-matrix"><thead><tr><th scope="col">Дата установки</th>${days.map(day=>`<th scope="col">D${day}</th>`).join('')}</tr></thead><tbody>${rows.map(row=>`<tr><th scope="row">${e(row.day)}</th>${days.map(day=>{
+    const value=number(row['roas_d'+day]);
+    const tone=value===null?'pending':value>=1?'paid-back':value>=.5?'growing':'early';
+    return `<td class="${tone}" title="${e(row.day)} · D${day}${value===null?' · Нет зрелых данных, расхода или данных выручки':''}">${e(format(value,'roas_d'+day))}</td>`;
+  }).join('')}</tr>`).join('')}</tbody></table>`;
 }
 function renderKPIs() {
   const section = state.report?.summary;
@@ -296,6 +335,9 @@ function renderRevenue() {
 }
 function renderTrend() {
   const trend = state.report?.trend,target = $('#trend-chart'),metric = $('#trend-metric').value;
+  const cohortMetric=/^roas_d\d+$/.test(metric);
+  $('.trend-panel h2').textContent=cohortMetric?'Когортный ROAS по дням':'Динамика показателей';
+  $('.trend-panel .panel-heading .muted').textContent=cohortMetric?'По дате установки · '+label(metric):state.snapshot?.view==='cohorts'?'По дате установки':'По календарным дням';
   if (sectionError(trend)) {target.innerHTML = empty('Динамика недоступна',state.report ? 'Не удалось получить этот раздел отчёта.' : 'Выберите фильтры и загрузите отчёт.');return;}
   const rows = Array.isArray(trend.rows) ? trend.rows.filter(row => row && /^\d{4}-\d{2}-\d{2}$/.test(String(row.day))).sort((a,b) => a.day.localeCompare(b.day)) : [];
   const points = rows.map(row => number(row[metric]));
