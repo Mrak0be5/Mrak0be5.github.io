@@ -19,15 +19,21 @@ function render(data) {
   el('api').textContent=api?.connected?'SD-карта · подключена':'Не подключён';
   el('api').className=api?.connected?'ok':'offline';
   el('storage').textContent='—';el('storageDetail').textContent='Нет данных SD-карты';
-  el('used').textContent='—';el('daysInfo').textContent='API списка записей не подключён.';
+  el('used').textContent='—';el('pics').textContent='—';el('vids').textContent='—';el('daysCount').textContent='—';
+  el('daysInfo').textContent='Подключите локальный пульт, чтобы увидеть, что снял робот.';
   if(api?.connected){
     el('robotStatus').textContent='Робот на связи · API SD-карты подключён';
     el('storage').textContent=(api.storage.free/1024**3).toLocaleString('ru-RU',{maximumFractionDigits:1})+' ГиБ';
     el('storageDetail').textContent='Свободно из '+(api.storage.total/1024**3).toLocaleString('ru-RU',{maximumFractionDigits:1})+' ГиБ';
-    el('recordings').textContent=String(api.recording_days.length);
     el('used').textContent=(api.storage.used/1024**2).toLocaleString('ru-RU',{maximumFractionDigits:1})+' МиБ';
-    el('daysInfo').textContent=api.recording_days.length===0?'На SD-карте пока нет дней с записями.':'Дней с записями на SD-карте: '+api.recording_days.length+'.';
-  }else el('recordings').textContent='—';
+    const pics=Number.isInteger(api.storage.pictures)?api.storage.pictures:0;
+    const vids=Number.isInteger(api.storage.videos)?api.storage.videos:0;
+    const days=api.recording_days.length;
+    el('pics').textContent=pics.toLocaleString('ru-RU');
+    el('vids').textContent=vids.toLocaleString('ru-RU');
+    el('daysCount').textContent=String(days);
+    el('daysInfo').textContent=(pics+vids+days===0)?'Робот пока ничего не снял — память пуста. Как только он найдёт и снимет кошку, фото и видео появятся здесь.':'Робот уже сохранил: фото — '+pics+', видео — '+vids+', дней с записями — '+days+'.';
+  }
   if(data.robot_now?.error){el('reach').textContent='Нет проверки';el('reachDetail').textContent=data.robot_now.error;el('robotStatus').textContent='Связь с роботом сейчас не проверена · API не подключён';}
   el('ble').textContent=Array.isArray(data.bluetooth)?String(data.bluetooth.length):'Ошибка';
   el('checked').textContent=new Date(data.robot_now?.checked_at||data.checked_at).toLocaleString('ru-RU');
