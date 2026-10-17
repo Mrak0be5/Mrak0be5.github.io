@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'">
+  <meta name="color-scheme" content="light dark"><title>Adjust · Аналитика</title>
+  <link rel="stylesheet" href="./styles.css"><script type="module" src="./app.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Перейти к отчёту</a>
+<div class="app-shell">
+  <aside class="sidebar" aria-label="Навигация">
+    <a class="brand" href="./" aria-label="Adjust Аналитика"><span class="brand-mark">a<span>↗</span></span><span>adjust<span class="brand-sub">ЦЕНТР АНАЛИТИКИ</span></span></a>
+    <div class="workspace"><span class="workspace-icon">A</span><div>Публичный дашборд<small>Данные Adjust</small></div><span class="lock" aria-label="Публичный">◇</span></div>
+    <p class="nav-label">РАБОЧЕЕ ПРОСТРАНСТВО</p>
+    <nav id="navigation">
+      <button data-view="overview" class="nav-button active"><span aria-hidden="true">◫</span>Обзор</button>
+      <button data-view="acquisition" class="nav-button"><span aria-hidden="true">↗</span>Привлечение</button>
+      <button data-view="cohorts" class="nav-button"><span aria-hidden="true">◷</span>Когорты</button>
+      <button data-view="constructor" class="nav-button"><span aria-hidden="true">⊞</span>Конструктор отчёта</button>
+    </nav>
+    <div class="sidebar-bottom"><div class="source-note"><span class="status-dot" id="connection-dot"></span><div id="connection">Проверяем подключение<small>Adjust Reporting API</small></div></div><button id="theme-toggle" class="theme-button" aria-label="Переключить тему">◐ <span>Тёмная тема</span></button><small class="private-note">Данные Adjust · ключ хранится на ПК</small></div>
+  </aside>
+  <div class="main-shell">
+    <header class="topbar"><div class="breadcrumb">Рабочее пространство <span>/</span> <strong id="breadcrumb-view">Обзор</strong></div><span class="private-badge">◉ Публичный доступ</span></header>
+    <main id="main">
+      <div class="page-heading"><div><p class="eyebrow">АНАЛИТИКА ПРИЛОЖЕНИЙ</p><h1 id="view-title">Обзор эффективности</h1><p id="view-description" class="muted">Закупка, выручка и результат — в одном отчёте.</p></div><div class="heading-actions"><button class="button" id="export" disabled><span aria-hidden="true">↓</span> Скачать CSV</button><button class="button primary" id="refresh" disabled><span aria-hidden="true">↻</span> Обновить</button></div></div>
+      <section class="filter-card" aria-label="Фильтры отчёта">
+        <form id="filters-form">
+          <div class="filter-top"><div><label class="field-label" for="date-start" id="date-label">Активность по календарным дням</label><div class="date-range"><input type="date" id="date-start" required aria-label="Дата начала"><span>—</span><input type="date" id="date-end" required aria-label="Дата окончания"></div></div><div class="presets" aria-label="Период"><button type="button" data-preset="7">7 дней</button><button type="button" data-preset="30" class="selected">30 дней</button><button type="button" data-preset="90">90 дней</button><button type="button" data-preset="month">Этот месяц</button><button type="button" data-preset="previous">Прошлый месяц</button></div></div>
+          <div id="main-filters" class="main-filters"></div>
+          <div class="text-filters"><label>Кампания содержит<input name="campaign__contains" placeholder="Название кампании" autocomplete="off"></label><label>Группа содержит<input name="adgroup__contains" placeholder="Название группы" autocomplete="off"></label><label>Креатив содержит<input name="creative__contains" placeholder="Название креатива" autocomplete="off"></label></div>
+          <details class="advanced"><summary>Дополнительные настройки <span>Атрибуция, валюта и выручка</span></summary><div id="advanced-filters" class="advanced-grid"></div></details>
+          <details class="advanced"><summary>Условия по измерениям и метрикам <span id="conditions-count"></span></summary><div id="conditions"></div><button type="button" class="button small" id="add-condition">＋ Добавить условие</button></details>
+          <div class="filter-footer"><div class="chips" id="parameter-chips"></div><div class="filter-actions"><button class="text-button" id="reset" type="button">Сбросить</button><button class="button primary" type="submit" id="apply" disabled>Применить фильтры <span aria-hidden="true">→</span></button></div></div>
+        </form>
+      </section>
+      <div class="report-toolbar"><div class="editor-buttons"><button class="button small" id="edit-dimensions" disabled>⊞ Измерения <span id="dimensions-count" class="count">0</span></button><button class="button small" id="edit-metrics" disabled>≡ Метрики <span id="metrics-count" class="count">0</span></button></div><p id="report-time" class="muted">Отчёт ещё не загружен</p></div>
+      <div id="notifications" aria-live="polite" aria-atomic="true"></div>
+      <section id="report" aria-label="Результаты отчёта" aria-busy="false">
+        <div id="kpis" class="kpi-grid"></div>
+        <div class="chart-grid"><section class="panel trend-panel"><div class="panel-heading"><div><h2>Динамика показателей</h2><p class="muted">По календарным дням</p></div><select id="trend-metric" aria-label="Метрика графика"></select></div><div id="trend-chart" class="chart-body"></div></section><section class="panel revenue-panel"><div class="panel-heading"><div><h2>Состав выручки</h2><p class="muted">По итогам выбранного периода</p></div><span class="panel-icon" aria-hidden="true">◔</span></div><div id="revenue-chart"></div></section></div>
+        <section class="panel table-panel"><div class="panel-heading table-heading"><div><h2 id="table-title">Эффективность по сетям</h2><p class="muted" id="row-count">Нет загруженных строк</p></div><label class="table-search"><span aria-hidden="true">⌕</span><input id="table-search" type="search" placeholder="Найти в таблице" aria-label="Поиск по таблице"></label></div><div id="table-container" class="table-scroll" role="region" aria-label="Данные отчёта" tabindex="0"></div><div class="table-footer"><span id="table-note">Только реальные данные Adjust</span><div class="pagination"><button class="button small" id="page-prev" aria-label="Предыдущая страница" disabled>←</button><span id="page-label">0 / 0</span><button class="button small" id="page-next" aria-label="Следующая страница" disabled>→</button></div></div></section>
+      </section>
+      <footer class="page-footer"><span>Adjust · Аналитика эффективности</span><span>Выручка IAP учитывает выбранную комиссию · рекламная — без комиссии</span></footer>
+    </main>
+  </div>
+</div>
+<dialog id="editor-dialog" aria-labelledby="editor-title"><form method="dialog" class="dialog-inner"><div class="panel-heading"><div><p class="eyebrow">НАСТРОЙКА ОТЧЁТА</p><h2 id="editor-title">Метрики</h2></div><button class="icon-button" value="cancel" aria-label="Закрыть">×</button></div><input type="search" id="editor-search" placeholder="Поиск по названию или ID" aria-label="Поиск полей"><p class="muted">Выберите поля. Порядок выбора определяет порядок столбцов.</p><div id="editor-list"></div><div class="dialog-footer"><span id="editor-selected" class="muted"></span><button class="button" value="cancel">Отмена</button><button class="button primary" id="editor-save" value="save">Сохранить и загрузить</button></div></form></dialog>
+<noscript><div class="notice error">Для работы дашборда включите JavaScript.</div></noscript>
+</body>
+</html>
