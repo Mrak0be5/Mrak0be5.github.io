@@ -1,0 +1,90 @@
+@charset "utf-8";
+/* Витрина «HELLCARD: Эхо» (PLAN_G2 C14, K28). Подключается после стилей шаблона Unity и блока HC-PORTRAIT (shell.html).
+   Десктоп — (pointer:fine) или без указателя (headless) и окно шире 600 CSS px: тёмный стол bg_table.jpg и раскрытая книга; холст — правая страница
+   (layout=page) или весь разворот (класс spread на <body> ставит window.HC_Layout из shell.js): арена H × H слева,
+   HUD 0,4615H × H справа, по границе — тень корешка. Телефон и узкое окно — холст на весь экран, без рамки.
+   Размер холста задаёт этот файл (!important — поверх box.style из fit() patch_index.mjs; буфер fit() считает
+   по clientWidth/clientHeight). Значения --hc-edge*, --hc-spine* проверяет make_bg.py --check. */
+:root {
+  --hc-ink: #1e1a17;              /* тушь (ART §4) */
+  --hc-edge: #a09683;             /* светлый срез листов, L* ≤ 70 */
+  --hc-edge-2: #8b826f;           /* срез глубже в блоке */
+  --hc-edge-d: #3b342c;           /* щели между листами */
+  --hc-cover: #26140f;            /* кожа переплёта */
+  --hc-spine-w: 20px;             /* тень корешка ≤ 24 px */
+  --hc-spine: rgba(8, 6, 5, .92); /* центр корешка: даже над белой страницей L* ≤ 12 */
+}
+
+/* Холст 6:13 (1080 × 2340) или разворот 19:13 вписан в окно; dvh — без панели адреса телефона, vh — запас. */
+html body #unity-container {
+  width: min(100vw, 100vh * 6 / 13) !important; width: min(100vw, 100dvh * 6 / 13) !important;
+  height: min(100vh, 100vw * 13 / 6) !important; height: min(100dvh, 100vw * 13 / 6) !important;
+}
+html body.spread #unity-container {
+  width: min(100vw, 100vh * 19 / 13) !important; width: min(100vw, 100dvh * 19 / 13) !important;
+  height: min(100vh, 100vw * 13 / 19) !important; height: min(100dvh, 100vw * 13 / 19) !important;
+}
+
+/* Тень корешка по границе страниц разворота: левая страница — 13/19 ширины холста; клики проходят в холст. */
+body.spread #unity-container::after {
+  content: ""; position: absolute; top: 0; bottom: 0; pointer-events: none;
+  left: calc(100% * 13 / 19 - var(--hc-spine-w) / 2); width: var(--hc-spine-w);
+  background: linear-gradient(90deg, rgba(8, 6, 5, 0), rgba(8, 6, 5, .5) 30%, var(--hc-spine) 50%, rgba(8, 6, 5, .5) 70%, rgba(8, 6, 5, 0));
+}
+
+/* (pointer: none) — headless Chrome smoke (wide, gpuwide): мыши там нет, но это десктоп; телефон — coarse. */
+@media (pointer: fine) and (min-width: 601px), (pointer: none) and (min-width: 601px) {
+  html body:not(.hc-bookless) { background: #0e0a08 url(bg_table.jpg) center / cover no-repeat; }
+  /* Холст ≤ 92 % высоты и ≤ 96 % ширины окна: вокруг видны срез, переплёт и стол. */
+  html body:not(.hc-bookless) #unity-container {
+    --hc-h: min(92vh, (47vw - 16px) * 13 / 6);
+    width: calc(var(--hc-h) * 6 / 13) !important; height: var(--hc-h) !important;
+    left: calc(50% + var(--hc-h) * 3 / 13) !important;
+  }
+  html body.spread:not(.hc-bookless) #unity-container { width: min(96vw, 92vh * 19 / 13) !important; height: min(92vh, 96vw * 13 / 19) !important; left: 50% !important; }
+  /* Холст — страница: тушевой контур и светлый срез листов (≤ 12 px, L* ≤ 70); на странице справа — вправо и чуть вверх-вниз,
+     у корешка среза нет; в развороте срез со всех сторон. Тень холста рисуется поверх ::before (обычный поток над z-index −1). */
+  html body:not(.hc-bookless) #unity-canvas {
+    box-shadow: 1px 0 0 1px var(--hc-edge-d), 2px 0 0 2px var(--hc-edge), 3px 0 0 3px var(--hc-edge-d),
+      4px 0 0 4px var(--hc-edge-2), 5px 0 0 5px var(--hc-ink);
+  }
+  html body.spread:not(.hc-bookless) #unity-canvas {
+    box-shadow: 0 0 0 1px var(--hc-edge-d), 0 0 0 3px var(--hc-edge), 0 0 0 4px var(--hc-edge-d), 0 0 0 6px var(--hc-edge-2),
+      0 0 0 7px var(--hc-edge-d), 0 0 0 9px var(--hc-edge-2), 0 0 0 10px var(--hc-ink);
+  }
+  /* Книга под холстом: кожаный переплёт с тенью на стол; на странице книга раскрыта на титуле — слева форзац на крышке
+     (тёмная бумага с ромбом, у корешка темнее); в развороте форзаца нет, обе страницы — холст. */
+  body:not(.hc-bookless) #unity-container::before {
+    content: ""; position: absolute; z-index: -1; pointer-events: none; top: -14px; bottom: -14px; right: -16px; left: calc(-100% - 14px);
+    background-color: var(--hc-cover);
+    background-image:
+      linear-gradient(90deg, rgba(0, 0, 0, .25), rgba(0, 0, 0, 0) 10%, rgba(0, 0, 0, 0) 80%, rgba(0, 0, 0, .6)),
+      repeating-linear-gradient(45deg, rgba(214, 170, 150, .06) 0 1px, transparent 1px 22px),
+      repeating-linear-gradient(-45deg, rgba(214, 170, 150, .06) 0 1px, transparent 1px 22px),
+      linear-gradient(180deg, #35222b, #2b1b22);
+    background-position: 14px 14px; background-size: calc(50% - 15px) calc(100% - 28px); background-repeat: no-repeat;
+    box-shadow: 0 0 0 2px #110806, 0 26px 56px 26px rgba(0, 0, 0, .55);
+  }
+  body.spread #unity-container::before { left: -16px; background-image: none; }
+}
+
+/* Экран загрузки — бумажный титул и тушевая полоса; ширину #unity-progress-bar-full (прогресс createUnityInstance)
+   и показ/скрытие #unity-loading-bar ведёт скрипт шаблона. */
+html body #unity-loading-bar {
+  left: 0; top: 0; right: 0; bottom: 0; transform: none; overflow: hidden; text-align: center;
+  background: radial-gradient(120% 80% at 50% 38%, #efe7d6, #e2d6bd 62%, #cbbb9c);
+  color: var(--hc-ink); font-family: Georgia, "Times New Roman", serif;
+}
+html body #unity-logo {
+  position: absolute; left: 0; right: 0; top: 31%; width: auto; height: auto; background: none;
+  font-size: min(4.6vh, 9vw); font-weight: 700; letter-spacing: .08em; line-height: 1.1;
+}
+#unity-logo::before { content: "HELLCARD:"; display: block; }
+#unity-logo::after { content: "Эхо"; display: block; margin-top: .12em; font-size: 1.6em; font-weight: 400; font-style: italic; letter-spacing: .02em; }
+html body #unity-progress-bar-empty {
+  position: absolute; left: 20%; right: 20%; top: 61%; width: auto; height: 2px; margin: 0; background: rgba(30, 26, 23, .22);
+}
+html body #unity-progress-bar-full {
+  height: 7px; margin: -2.5px 0 0; background: var(--hc-ink); transition: width .3s ease-out;
+  border-radius: 1px 5px 3px 6px / 3px 2px 4px 2px; box-shadow: 0 0 1.5px rgba(30, 26, 23, .7);
+}
