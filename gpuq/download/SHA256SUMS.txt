@@ -1,0 +1,2 @@
+63e92e8c0f97bc7d6f84469719fa4075d2449861ebf930a4d7ce9bb54cd344f5 *GpuQ-1.0.0-Setup.exe
+85fc3d126da90eecb8a1406168d24d7d202de813bec1706d5f7cec6c57ca73da *GpuQ-1.0.0-portable.zip

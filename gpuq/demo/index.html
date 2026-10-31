@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<script>if(!/[?&]mock=1/.test(location.search)){var u=new URL(location.href);u.searchParams.set("mock","1");history.replaceState(null,"",u)}</script>
+<meta name="robots" content="noindex">
+<meta charset="utf-8">
+<meta name="viewport" content="width=1100">
+<title>GpuQ — видеокарты</title>
+<link rel="stylesheet" href="app.css">
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-moon" viewBox="0 0 24 24"><path fill="currentColor" d="M20.6 14.9A8.6 8.6 0 0 1 9.1 3.4a.7.7 0 0 0-.9-.9A10 10 0 1 0 21.5 15.8a.7.7 0 0 0-.9-.9Z"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2.5c.6 0 1.1.3 1.4.8l8.7 15.1c.6 1.1-.2 2.4-1.4 2.4H3.3c-1.2 0-2-1.3-1.4-2.4l8.7-15.1c.3-.5.8-.8 1.4-.8Zm0 6a1 1 0 0 0-1 1v4.6a1 1 0 1 0 2 0V9.5a1 1 0 0 0-1-1Zm0 8.2a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4Z"/></symbol>
+  <symbol id="i-ok" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20Zm4.3 6.3a1 1 0 0 0-1.4 0L10.8 12.4 9.1 10.7a1 1 0 1 0-1.4 1.4l2.4 2.4c.4.4 1 .4 1.4 0l4.8-4.8a1 1 0 0 0 0-1.4Z"/></symbol>
+  <symbol id="i-err" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20Zm3.5 6.5a1 1 0 0 0-1.4 0L12 10.6 9.9 8.5a1 1 0 1 0-1.4 1.4l2.1 2.1-2.1 2.1a1 1 0 1 0 1.4 1.4l2.1-2.1 2.1 2.1a1 1 0 0 0 1.4-1.4L13.4 12l2.1-2.1a1 1 0 0 0 0-1.4Z"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20Zm0 8.5a1 1 0 0 0-1 1V17a1 1 0 1 0 2 0v-5.5a1 1 0 0 0-1-1Zm0-4a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4Z"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="m6 6 12 12M18 6 6 18"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="m15 5-7 7 7 7"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="m9 5 7 7-7 7"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" d="M7 4.6v14.8c0 .8.9 1.3 1.6.9l12-7.4c.6-.4.6-1.4 0-1.8l-12-7.4C7.9 3.3 7 3.8 7 4.6Z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Zm5.4-2.1L21 21"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M9 9h10v11H9zM5 15V4h10"/></symbol>
+  <symbol id="i-panel" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M4 4h16v16H4zM14 4v16"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M4 5h16v14H4zM4 16l5-5 4 4 2.5-2.5L20 17"/><circle cx="15.5" cy="9" r="1.6" fill="currentColor"/></symbol>
+  <symbol id="i-cube" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Zm0 0v18M4 7.5l8 4.5 8-4.5"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path fill="currentColor" d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M4 5h16v11H9l-5 4V5Z"/></symbol>
+  <symbol id="i-app" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M3 5h18v14H3zM3 9h18"/><circle cx="6" cy="7" r=".8" fill="currentColor"/><circle cx="8.6" cy="7" r=".8" fill="currentColor"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M12 19V6m0 0-5.5 5.5M12 6l5.5 5.5M5 3.5h14"/></symbol>
+  <symbol id="i-chip" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M7 7h10v10H7zM10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4"/></symbol>
+</svg>
+
+<header class="top">
+  <div class="brand"><span class="brand-mark" id="brandMark" aria-hidden="true"></span><span>GpuQ</span></div>
+  <nav class="tabs" role="tablist" aria-label="Разделы">
+    <button role="tab" id="tab-now" data-tab="now" aria-selected="true" aria-controls="view-now">Сейчас</button>
+    <button role="tab" id="tab-gallery" data-tab="gallery" aria-selected="false" aria-controls="view-gallery">Галерея</button>
+    <button role="tab" id="tab-history" data-tab="history" aria-selected="false" aria-controls="view-history">История</button>
+    <button role="tab" id="tab-report" data-tab="report" aria-selected="false" aria-controls="view-report">Отчёт</button>
+    <span class="tab-ink" aria-hidden="true"></span>
+  </nav>
+  <div class="summary" id="summary" aria-live="polite"></div>
+  <button class="quiet-btn" id="quietBtn" hidden aria-haspopup="dialog" aria-expanded="false"><svg><use href="#i-moon"/></svg><span id="quietText">Тихий режим</span></button>
+</header>
+
+<main id="main">
+  <section class="view" id="view-now" role="tabpanel" aria-labelledby="tab-now"></section>
+  <section class="view" id="view-gallery" role="tabpanel" aria-labelledby="tab-gallery" hidden></section>
+  <section class="view" id="view-history" role="tabpanel" aria-labelledby="tab-history" hidden></section>
+  <section class="view" id="view-report" role="tabpanel" aria-labelledby="tab-report" hidden></section>
+</main>
+
+<div class="tooltip" id="tooltip" role="status"></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<a class="demo-pill" href="../#download">Демо с условными данными · Скачать GpuQ</a>
+<style>.demo-pill{position:fixed;right:14px;bottom:14px;z-index:60;padding:9px 16px;border-radius:999px;background:#3987e5;color:#fff;font:600 13.5px/1 "Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;text-decoration:none;box-shadow:0 10px 30px -8px rgba(0,0,0,.7)}.demo-pill:hover{background:#4d96ee}</style>
+</body>
+</html>

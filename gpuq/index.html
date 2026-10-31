@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GpuQ — диспетчер видеокарт NVIDIA для Windows</title>
+<meta name="description" content="Бесплатный диспетчер видеокарт NVIDIA для Windows: задачи заранее бронируют видеопамять и RAM и ждут своей очереди, а не мешают друг другу. Панель, значки в трее, предупреждения о зависших задачах.">
+<meta name="theme-color" content="#0e0f11">
+<link rel="canonical" href="https://mrak0be5.github.io/gpuq/">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="ru_RU">
+<meta property="og:title" content="GpuQ — диспетчер видеокарт NVIDIA для Windows">
+<meta property="og:description" content="Одна видеокарта, много задач — и никакой драки за память. Бесплатно, без аккаунта, всё остаётся на вашем ПК.">
+<meta property="og:url" content="https://mrak0be5.github.io/gpuq/">
+<meta property="og:image" content="https://mrak0be5.github.io/gpuq/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="site.css">
+<script>document.documentElement.classList.add("js")</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"GpuQ","applicationCategory":"UtilitiesApplication","operatingSystem":"Windows",
+ "softwareVersion":"1.0.0","description":"Диспетчер видеокарт NVIDIA: аренды видеопамяти и оперативной памяти, панель, значки в трее.",
+ "offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"downloadUrl":"https://mrak0be5.github.io/gpuq/download/GpuQ-1.0.0-Setup.exe","inLanguage":"ru"}
+</script>
+</head>
+<body>
+<a class="skip" href="#main">К содержимому</a>
+<p class="sr" id="live" role="status" aria-live="polite"></p>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-chip" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" d="M7 7h10v10H7zM10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4"/></symbol>
+  <symbol id="i-ram" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" d="M3 6h18v10H3zM7 10h2v3H7zM11 10h2v3h-2zM15 10h2v3h-2zM6 16v3M10 16v3M14 16v3M18 16v3"/></symbol>
+  <symbol id="i-gauge" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" d="M4 16a8 8 0 1 1 16 0M12 16l4-5M7 19h10"/></symbol>
+  <symbol id="i-term" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" d="M3 5h18v14H3zM7 9l3 3-3 3M12 15h5"/></symbol>
+  <symbol id="i-panel" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" d="M3 5h18v14H3zM3 9h18M7 13h4M7 16h7"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" d="M6 17h12l-1.5-2v-4a4.5 4.5 0 0 0-9 0v4zM10 20a2 2 0 0 0 4 0"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" d="M12 4 21 19H3zM12 10v4M12 16.6v.1"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" d="M20 11a8 8 0 0 0-14-4M4 5v4h4M4 13a8 8 0 0 0 14 4M20 19v-4h-4"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" d="m12 3 9 5-9 5-9-5zM3 13l9 5 9-5"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" d="M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round" d="M9 9h10v11H9zM5 15V4h10"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" d="M5 12h14m0 0-5-5m5 5-5 5"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 7h16M4 12h16M4 17h16"/></symbol>
+</svg>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="GpuQ, в начало"><span class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i></span>GpuQ</a>
+    <nav class="nav" id="nav" aria-label="Разделы">
+      <a href="#problem">Зачем</a>
+      <a href="#features">Возможности</a>
+      <a href="#how">Как это работает</a>
+      <a href="#panel">Панель</a>
+      <a href="#checks">Проверки</a>
+      <a href="#faq">Вопросы</a>
+    </nav>
+    <a class="btn primary" href="#download"><svg aria-hidden="true"><use href="#i-down"/></svg>Скачать</a>
+    <button class="menu-btn" id="menuBtn" aria-label="Открыть меню" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" aria-hidden="true"><use href="#i-menu"/></svg></button>
+  </div>
+</header>
+
+<main id="main">
+
+<section class="hero" id="top">
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
+      <span class="eyebrow"><span class="dot" aria-hidden="true"></span>Бесплатно · для Windows · видеокарты NVIDIA</span>
+      <h1>Одна видеокарта, много задач — и <span class="hl-blue">никакой драки</span> за память</h1>
+      <p class="lead">GpuQ заранее бронирует видеопамять и RAM под каждую задачу, которая приходит через него. Кому не хватило — ждёт своей очереди, а не отнимает память у соседа. Обучение, рендер и генерация реже тормозят друг друга, а панель и значки в трее показывают, кто что считает.</p>
+      <div class="cta">
+        <a class="btn primary big" href="#download"><svg aria-hidden="true"><use href="#i-down"/></svg><span class="two-line">Скачать для Windows<small>GpuQ-1.0.0-Setup.exe · 13,8 МБ</small></span></a>
+        <a class="btn big" href="demo/">Открыть живое демо <svg aria-hidden="true"><use href="#i-arrow"/></svg></a>
+      </div>
+      <ul class="trust">
+        <li><svg aria-hidden="true"><use href="#i-check"/></svg>Без прав администратора</li>
+        <li><svg aria-hidden="true"><use href="#i-check"/></svg>Python внутри пакета</li>
+        <li><svg aria-hidden="true"><use href="#i-check"/></svg>Без аккаунта и телеметрии</li>
+        <li><svg aria-hidden="true"><use href="#i-check"/></svg>Слушает только 127.0.0.1</li>
+      </ul>
+    </div>
+    <figure>
+      <div class="window">
+        <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>GpuQ — панель</span></div>
+        <img src="assets/panel-now-1280.webp" srcset="assets/panel-now-1280.webp 1280w, assets/panel-now-1920.webp 1920w" sizes="(min-width: 1200px) 1160px, 100vw"
+             width="1280" height="860" fetchpriority="high"
+             alt="Панель GpuQ: две видеокарты, у каждой задача под арендой, кривая загрузки, температура, память и мощность; ниже очередь заданий и свежие результаты">
+      </div>
+      <figcaption>Панель GpuQ. На снимке условные данные: у вас будут ваши карты и задачи.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="problem" id="problem">
+  <div class="wrap">
+    <div class="head">
+      <h2>Знакомо?</h2>
+      <p class="lead">Видеокарта — общая, а программы об этом не знают. Каждая берёт себе всё, что нужно, и узнаёт о соседях, когда уже поздно.</p>
+    </div>
+    <div class="cards reveal">
+      <article class="card"><span class="num">01</span><h3>Две задачи на одной карте — обе ползут</h3>
+        <p>Когда видеопамяти не хватает, драйвер может молча вытеснить часть в оперативную. Карта показывает почти 100 % загрузки, а считает в разы медленнее: по наблюдениям автора, в 3–5 раз. У нас обучение на 64 ГБ и видео на 29 ГБ сели на одну карту с 96 ГБ — и она <strong>2 ч 18 мин почти не считала</strong>.</p></article>
+      <article class="card"><span class="num">02</span><h3>Задача зависла, а память занята</h3>
+        <p>Скрипт повис после ошибки, но держит десятки гигабайт, и никто этого не видит. Однажды обучение провисело <strong>около трёх часов</strong>: карта простаивала, а память была занята.</p></article>
+      <article class="card"><span class="num">03</span><h3>ПК ушёл в подкачку</h3>
+        <p>Обучению нужно 60 ГБ оперативной памяти, рядом стартует вторая тяжёлая задача — и Windows начинает писать память на диск. Всё тормозит, а причину приходится искать вручную.</p></article>
+    </div>
+  </div>
+</section>
+
+<section id="sim">
+  <div class="wrap">
+    <div class="head">
+      <h2>Одна карта на 24&nbsp;ГБ, четыре задачи</h2>
+      <p class="lead">Слева — как всё идёт без диспетчера: каждая задача берёт своё, и в какой-то момент память кончается. Справа — те же задачи с GpuQ: кому не хватает места, тот ждёт.</p>
+    </div>
+    <div class="sims" id="sims" role="group" aria-label="Иллюстрация: четыре задачи на карте с 24 ГБ видеопамяти без диспетчера и с GpuQ">
+      <noscript><p class="lead">Анимация работает со включённым JavaScript.</p></noscript>
+    </div>
+    <div class="sim-ctl">
+      <button type="button" id="simToggle" aria-pressed="false">Пауза</button>
+      <button type="button" id="simRestart">Сначала</button>
+      <span>Иллюстрация, а не замер: размеры, время и порядок ожидания упрощены. По наблюдениям автора, при переполнении видеопамяти карта работала в 3–5 раз медленнее; бенчмарка этой сборки на такую ситуацию нет.</span>
+    </div>
+  </div>
+</section>
+
+<section class="features" id="features">
+  <div class="wrap">
+    <div class="head">
+      <h2>Что умеет GpuQ</h2>
+      <p class="lead">Небольшая служба, которая знает, сколько памяти у каждой карты и кто её занял, и умеет об этом рассказать.</p>
+    </div>
+    <div class="cards reveal">
+      <article class="card"><span class="ico"><svg aria-hidden="true"><use href="#i-chip"/></svg></span><h3>Аренды видеопамяти</h3>
+        <p>Задача говорит, сколько ей нужно. Память делится по заявкам с запасом: 2&nbsp;ГБ, 6&nbsp;ГБ рядом с чужим ComfyUI, 8&nbsp;ГБ рядом с арендой от 50&nbsp;ГБ. Нет места — задача ждёт, а в панели написано, чего не хватает.</p></article>
+      <article class="card"><span class="ico"><svg aria-hidden="true"><use href="#i-ram"/></svg></span><h3>Бронь оперативной памяти</h3>
+        <p><code>--ram-mb 40000</code>: аренда ждёт, пока свободно 40&nbsp;ГБ плюс запас 8&nbsp;ГБ. Пока задача набирает память, её заявка закрыта от остальных, и ПК реже уходит в подкачку.</p></article>
+      <article class="card"><span class="ico"><svg aria-hidden="true"><use href="#i-gauge"/></svg></span><h3>Карта целиком для замеров</h3>
+        <p><code>--exclusive</code> для бенчмарков и замеров скорости: аренда ждёт, пока карту покинут все, и не пускает рядом другие аренды и задания очереди, чтобы цифры были честнее.</p></article>
+      <article class="card"><span class="ico"><svg aria-hidden="true"><use href="#i-term"/></svg></span><h3>Три способа подключиться</h3>
+        <p>Команда <code>gpuq-run</code>, библиотека для Python или обычный HTTP-запрос. Код менять не нужно: достаточно запустить программу через <code>gpuq-run</code>, и она увидит выданную карту (переменная <code>CUDA_VISIBLE_DEVICES</code>).</p></article>
+      <article class="card"><span class="ico"><svg aria-hidden="true"><use href="#i-panel"/></svg></span><h3>Панель вместо догадок</h3>
+        <p>Ряд на каждую карту: кто арендовал и сколько держит, кривая загрузки, память, мощность, температура. История занятости за 7 дней и отчёт за 30: кто занимал карты дольше всех и сколько задачи ждали.</p></article>
+      <article class="card"><span class="ico"><svg aria-hidden="true"><use href="#i-bell"/></svg></span><h3>Значки в трее</h3>
+        <p>Температура на цвете карты и полоска загрузки — видно без открытия окна. Левый клик открывает панель. Уведомления приходят пачками и без звука.</p></article>
+      <article class="card"><span class="ico"><svg aria-hidden="true"><use href="#i-warn"/></svg></span><h3>Сторож зависаний</h3>
+        <p>Аренда держит память, а карта 15 минут простаивает. Видеопамять занята на 98 %, а мощность упала. Программа держит карту больше 10 минут, не взяв аренду. Об этом вы узнаете сразу, а не вечером.</p></article>
+      <article class="card"><span class="ico"><svg aria-hidden="true"><use href="#i-refresh"/></svg></span><h3>Не рвёт идущую работу</h3>
+        <p>Аренду живого процесса служба не снимает, даже если продления не доходят, потому что ПК ушёл в подкачку. Перезапуск и обновление службы не прерывают задачи под арендой: клиент сам дожидается её возвращения. Задания встроенной очереди ComfyUI при перезапуске ставятся заново.</p></article>
+      <article class="card"><span class="ico"><svg aria-hidden="true"><use href="#i-layers"/></svg></span><h3>Очередь ComfyUI <small>(бета)</small></h3>
+        <p>Укажите каталог ComfyUI — и тот же порт раздаст задания по картам с учётом свободной памяти, покажет превью шагов и соберёт галерею результатов. Модели и расширения остаются вашими.</p></article>
+    </div>
+    <div class="band reveal">
+      <span class="ico"><svg aria-hidden="true"><use href="#i-lock"/></svg></span>
+      <div><h3>Всё остаётся на вашем ПК</h3>
+        <p>Служба слушает только <code>127.0.0.1</code> и отвечает на своё имя: страницы чужих сайтов не могут ни прочитать её, ни отправить команду. Данные лежат в SQLite в <code>%LOCALAPPDATA%\GpuQ</code>, в интернет ничего не уходит, а <code>Uninstall.exe</code> убирает файлы программы. Другие программы на этом же ПК к службе обратиться могут, поэтому для общих компьютеров она не рассчитана.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <div class="head">
+      <h2>Как это работает</h2>
+      <p class="lead">Установка занимает минуту. Дальше — одна приставка к команде, которой вы и так запускаете задачи.</p>
+    </div>
+    <div class="steps">
+      <div class="step"><h3>Установите</h3>
+        <p>Запустите установщик: права администратора не нужны, Python уже внутри. В трее появятся значки видеокарт.</p></div>
+      <div class="step"><h3>Берите карту через GpuQ</h3>
+        <p>Добавьте <code>gpuq-run</code> к команде или оберните код в <code>with lease(...)</code>. GpuQ выдаст карту, когда хватит памяти.</p></div>
+      <div class="step"><h3>Смотрите в панели</h3>
+        <p>Левый клик по значку: кто что считает, кто ждёт и почему, как загружены карты сейчас и за неделю.</p></div>
+    </div>
+    <div class="shots" style="margin-top:34px">
+      <div class="tabs" role="tablist" aria-label="Способ подключения" data-tabs="code">
+        <button role="tab" id="t-term" aria-selected="true" aria-controls="p-term">Терминал</button>
+        <button role="tab" id="t-py" aria-selected="false" aria-controls="p-py" tabindex="-1">Python</button>
+        <button role="tab" id="t-http" aria-selected="false" aria-controls="p-http" tabindex="-1">HTTP</button>
+      </div>
+      <div class="pane" role="tabpanel" id="p-term" aria-labelledby="t-term">
+        <div class="code"><pre><code><span class="c"># обучение: 20 ГБ видеопамяти и 40 ГБ оперативной памяти</span>
+<span class="f">gpuq-run</span> --owner train --vram-mb 20000 --ram-mb 40000 -- python train.py
+
+<span class="c"># замер скорости: карта целиком, рядом никого</span>
+<span class="f">gpuq-run</span> --owner bench --exclusive -- python benchmark.py
+
+<span class="c"># конкретная карта</span>
+<span class="f">gpuq-run</span> --card "RTX 4090" --vram-mb 8000 -- python render.py
+
+<span class="c"># что сейчас на картах</span>
+<span class="f">gpuq-status</span></code></pre><button class="copy" type="button" aria-label="Скопировать пример"><svg aria-hidden="true"><use href="#i-copy"/></svg></button></div>
+      </div>
+      <div class="pane" role="tabpanel" id="p-py" aria-labelledby="t-py" hidden>
+        <div class="code"><pre><code><span class="k">import</span> os, sys
+sys.path.insert(0, os.path.expandvars(r<span class="s">"%LOCALAPPDATA%\Programs\GpuQ\app"</span>))
+<span class="k">from</span> gpuq_client <span class="k">import</span> lease
+
+<span class="k">with</span> <span class="f">lease</span>(owner=<span class="s">"finetune"</span>, vram_mb=20000, ram_mb=40000) <span class="k">as</span> gpu:
+    os.environ[<span class="s">"CUDA_VISIBLE_DEVICES"</span>] = gpu.card   <span class="c"># UUID выданной карты</span>
+    os.environ[<span class="s">"CUDA_DEVICE_ORDER"</span>] = <span class="s">"PCI_BUS_ID"</span>
+    train()                                        <span class="c"># в долгом цикле вызывайте gpu.check()</span></code></pre><button class="copy" type="button" aria-label="Скопировать пример"><svg aria-hidden="true"><use href="#i-copy"/></svg></button></div>
+      </div>
+      <div class="pane" role="tabpanel" id="p-http" aria-labelledby="t-http" hidden>
+        <div class="code"><pre><code><span class="k">POST</span> http://127.0.0.1:8189/gpuq/lease
+{"owner": "tool", "vram_mb": 8000, "pid": 1234}
+
+<span class="c">→ {"waiting": true}                   повторяйте раз в 2 секунды</span>
+<span class="c">→ {"token": "…", "card": "GPU-…"}     карта выдана</span>
+
+<span class="k">POST</span> http://127.0.0.1:8189/gpuq/lease
+{"token": "…", "release": true}</code></pre><button class="copy" type="button" aria-label="Скопировать пример"><svg aria-hidden="true"><use href="#i-copy"/></svg></button></div>
+      </div>
+      <p style="color:var(--ink-3);font-size:15px">Если указан <code>pid</code>, аренда живёт, пока жив этот процесс. Полное описание — <a href="docs/api.html">в документации</a>.</p>
+    </div>
+  </div>
+</section>
+
+<section id="panel">
+  <div class="wrap">
+    <div class="head">
+      <h2>Панель, в которой видно всё</h2>
+      <p class="lead">Открывается кликом по значку в трее — в окне Edge или Chrome без вкладок и адресной строки. Никаких отдельных серверов: панель отдаёт сама служба.</p>
+    </div>
+    <div class="tabs" role="tablist" aria-label="Разделы панели" data-tabs="shots">
+      <button role="tab" id="s-now" aria-selected="true" aria-controls="sp-now">Сейчас</button>
+      <button role="tab" id="s-alerts" aria-selected="false" aria-controls="sp-alerts" tabindex="-1">Предупреждения</button>
+      <button role="tab" id="s-history" aria-selected="false" aria-controls="sp-history" tabindex="-1">История</button>
+      <button role="tab" id="s-report" aria-selected="false" aria-controls="sp-report" tabindex="-1">Отчёт</button>
+      <button role="tab" id="s-gallery" aria-selected="false" aria-controls="sp-gallery" tabindex="-1">Галерея</button>
+    </div>
+    <div class="shots" style="margin-top:20px">
+      <div class="pane shot" role="tabpanel" id="sp-now" aria-labelledby="s-now">
+        <div class="window"><img loading="lazy" src="assets/panel-now-1280.webp" srcset="assets/panel-now-1280.webp 1280w, assets/panel-now-1920.webp 1920w" sizes="(min-width: 1200px) 1160px, 100vw" width="1280" height="860" alt="Вкладка «Сейчас»: ряд на каждую карту, ряд ПК, очередь заданий и свежие результаты"></div>
+        <div class="shot-meta" style="margin-top:18px"><h3>Сейчас: кто что считает</h3><p>Состояние каждой карты словами, задача под арендой и сколько она держит, кривая загрузки за 5 минут, температура, память и мощность. Ряд «ПК» показывает процессор, оперативную и выделенную память — видно, почему тяжёлая задача ждёт.</p></div>
+      </div>
+      <div class="pane shot" role="tabpanel" id="sp-alerts" aria-labelledby="s-alerts" hidden>
+        <div class="window"><img loading="lazy" src="assets/panel-alerts-1280.webp" srcset="assets/panel-alerts-1280.webp 1280w, assets/panel-alerts-1920.webp 1920w" sizes="(min-width: 1200px) 1160px, 100vw" width="1280" height="860" alt="Предупреждение сверху: переполнена видеопамять RTX 4090; ряд ПК показывает нехватку оперативной памяти и ждущую тяжёлую задачу"></div>
+        <div class="shot-meta" style="margin-top:18px"><h3>Предупреждения: пока не поздно</h3><p>Переполненная видеопамять и зависшая аренда — жёлтая полоса сверху и уведомление в трее без звука. Нехватка RAM видна в ряду «ПК» и в причине ожидания. В тексте сразу названо, на какой карте и какие задачи в этом участвуют.</p></div>
+      </div>
+      <div class="pane shot" role="tabpanel" id="sp-history" aria-labelledby="s-history" hidden>
+        <div class="window"><img loading="lazy" src="assets/panel-history-1280.webp" srcset="assets/panel-history-1280.webp 1280w, assets/panel-history-1920.webp 1920w" sizes="(min-width: 1200px) 1160px, 100vw" width="1280" height="860" alt="Вкладка «История»: занятость двух карт за сутки и список завершённых заданий"></div>
+        <div class="shot-meta" style="margin-top:18px"><h3>История: занятость по минутам</h3><p>Когда каждая карта работала, простаивала или была недоступна, за 6 часов, сутки и 7 дней. Ниже — завершённые задания с устройством, источником и длительностью.</p></div>
+      </div>
+      <div class="pane shot" role="tabpanel" id="sp-report" aria-labelledby="s-report" hidden>
+        <div class="window"><img loading="lazy" src="assets/panel-report-1280.webp" srcset="assets/panel-report-1280.webp 1280w, assets/panel-report-1920.webp 1920w" sizes="(min-width: 1200px) 1160px, 100vw" width="1280" height="860" alt="Вкладка «Отчёт»: процент занятости карт, ожидание заданий и аренд, скрипты по GPU-часам"></div>
+        <div class="shot-meta" style="margin-top:18px"><h3>Отчёт: куда уходит время карт</h3><p>Занятость карт за 1, 7 и 30 дней, сколько задачи и аренды ждали карту (медиана, 90 %, максимум) и какие скрипты заняли больше всего GPU-часов. Отсюда видно, нужна ли вам вторая карта или просто другое расписание.</p></div>
+      </div>
+      <div class="pane shot" role="tabpanel" id="sp-gallery" aria-labelledby="s-gallery" hidden>
+        <div class="window"><img loading="lazy" src="assets/panel-gallery-1280.webp" srcset="assets/panel-gallery-1280.webp 1280w, assets/panel-gallery-1920.webp 1920w" sizes="(min-width: 1200px) 1160px, 100vw" width="1280" height="860" alt="Вкладка «Галерея»: результаты очереди ComfyUI в виде плиток"></div>
+        <div class="shot-meta" style="margin-top:18px"><h3>Галерея: результаты очереди ComfyUI</h3><p>Если подключить ComfyUI, готовые картинки и видео собираются здесь с фильтрами по карте и типу, поиском по промпту и просмотром на весь экран. Без ComfyUI вкладка остаётся пустой.</p></div>
+      </div>
+      <div class="demo-cta"><a class="btn primary" href="demo/">Открыть живое демо панели <svg aria-hidden="true"><use href="#i-arrow"/></svg></a><span>Полноценная панель с условными данными — ничего устанавливать не нужно.</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="limits">
+  <div class="wrap">
+    <div class="head">
+      <h2>Честно о границах</h2>
+      <p class="lead">Лучше узнать до установки, чего GpuQ не делает.</p>
+    </div>
+    <div class="limits reveal">
+      <div class="limit"><svg aria-hidden="true"><use href="#i-warn"/></svg><p><strong>Это договорённость, а не принуждение.</strong> Программы без аренды GpuQ не останавливает: он видит их на карте, показывает «мимо очереди» и предупреждает, если так длится больше 10 минут.</p></div>
+      <div class="limit"><svg aria-hidden="true"><use href="#i-warn"/></svg><p><strong>Порядок ожидания не строгий.</strong> Освободившееся место получает тот ждущий, кто первым спросит и кому оно подходит; большая заявка может ждать дольше маленьких. В анимации выше порядок упрощён.</p></div>
+      <div class="limit"><svg aria-hidden="true"><use href="#i-warn"/></svg><p><strong>Не для общих компьютеров.</strong> Служба отсеивает запросы со страниц чужих сайтов, но не проверяет, какая программа или какой пользователь Windows обращается к ней с этого же ПК.</p></div>
+      <div class="limit"><svg aria-hidden="true"><use href="#i-warn"/></svg><p><strong>Только NVIDIA и Windows (64 бита).</strong> Проверялось на Windows 11; на Windows 10 должно работать, но отдельно не проверялось. Карты AMD и Intel, Linux и macOS не поддерживаются. Нужен драйвер, при котором работает <code>nvidia-smi</code>.</p></div>
+      <div class="limit"><svg aria-hidden="true"><use href="#i-warn"/></svg><p><strong>Не управляет питанием и вентиляторами.</strong> Частоты, лимиты мощности и обороты GpuQ только читает через <code>nvidia-smi</code>. Менять их он не умеет и не станет.</p></div>
+      <div class="limit"><svg aria-hidden="true"><use href="#i-warn"/></svg><p><strong>Программа без цифровой подписи.</strong> Windows может показать предупреждение SmartScreen. Как сверить файл по SHA-256 и что внутри пакета — в разделе «Скачать».</p></div>
+      <div class="limit"><svg aria-hidden="true"><use href="#i-warn"/></svg><p><strong>Очередь ComfyUI — бета.</strong> Проверена меньше остального: в этой сборке — на простом тестовом графе, а на двух картах автора — на реальных задачах. С нестандартными установками возможны сюрпризы.</p></div>
+      <div class="limit"><svg aria-hidden="true"><use href="#i-warn"/></svg><p><strong>Нет гарантий.</strong> Программа бесплатна и распространяется «как есть». Исходники Python лежат внутри пакета в читаемом виде, чтобы можно было проверить, что она делает; это не открытая лицензия (условия — в <code>LICENSE.txt</code>).</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="checks">
+  <div class="wrap">
+    <div class="head">
+      <h2>Как это проверяли</h2>
+      <p class="lead">Перед выпуском собранный пакет прошёл автоматические проверки на реальном ПК с двумя видеокартами NVIDIA под Windows 11. Цифры взяты из журнала последнего прогона. Не проверялось: открытие панели кликом по значку на экране, Windows 10, видеокарты AMD и Intel, несколько настоящих одинаковых карт, долгая работа этой сборки.</p>
+    </div>
+    <div class="checks"><table><thead><tr><th>Что проверяли</th><th>Итог</th></tr></thead><tbody><tr><td>Служба из сборки: аренды и запас видеопамяти, «карта целиком», места, gpuq-run, перезапуск, защита от чужих сайтов, чтение настоящих карт</td><td><span class="ok"><svg aria-hidden="true"><use href="#i-check"/></svg>33 из 33</span></td></tr>
+<tr><td>Запрос, спрятанный в теле отклонённого запроса (чужой Origin или Host): не выполняется, соединение закрывается</td><td><span class="ok"><svg aria-hidden="true"><use href="#i-check"/></svg>14 из 14</span></td></tr>
+<tr><td>Результаты с HTML, SVG и скриптами отдаются как файлы, а не как страницы на адресе службы</td><td><span class="ok"><svg aria-hidden="true"><use href="#i-check"/></svg>5 из 5</span></td></tr>
+<tr><td>Запасы видеопамяти и RAM, зависшие аренды, переполнение, места, долгая работа без аренды: проверки рабочей версии против собранной копии</td><td><span class="ok"><svg aria-hidden="true"><use href="#i-check"/></svg>31 из 31</span></td></tr>
+<tr><td>Клиент аренд при остановке и возвращении службы</td><td><span class="ok"><svg aria-hidden="true"><use href="#i-check"/></svg>8 из 8</span></td></tr>
+<tr><td>Очередь ComfyUI: настоящий сервер, результат, миниатюра, галерея</td><td><span class="ok"><svg aria-hidden="true"><use href="#i-check"/></svg>9 из 9</span></td></tr>
+<tr><td>Трей сам запускает службу, получает карты и останавливает только свою службу</td><td><span class="ok"><svg aria-hidden="true"><use href="#i-check"/></svg>7 из 7</span></td></tr>
+<tr><td>Установка, обновление поверх, PATH, удаление</td><td><span class="ok"><svg aria-hidden="true"><use href="#i-check"/></svg>43 из 43</span></td></tr>
+<tr><td>Остановка службы только из своей папки</td><td><span class="ok"><svg aria-hidden="true"><use href="#i-check"/></svg>5 из 5</span></td></tr>
+<tr><td>Названия одинаковых карт и приоритет карт</td><td><span class="ok"><svg aria-hidden="true"><use href="#i-check"/></svg>7 из 7</span></td></tr>
+<tr><td>Значки в трее: самопроверка (16 пунктов) и запуск в сессии пользователя</td><td><span class="ok"><svg aria-hidden="true"><use href="#i-check"/></svg>пройдено</span></td></tr>
+<tr><td>Microsoft Defender (локальный движок, определения от 2026-10-30): установщик, архив, программа удаления и значок в трее; на других компьютерах облачные проверки могут вести себя иначе</td><td><span class="ok"><svg aria-hidden="true"><use href="#i-check"/></svg>угроз не найдено</span></td></tr>
+<tr><td>Личные пути, имена и ключи в собственных файлах пакета (текст и байты программ GpuQ; встроенный Python и библиотеки не сканировались)</td><td><span class="ok"><svg aria-hidden="true"><use href="#i-check"/></svg>не найдены</span></td></tr></tbody><tfoot><tr><td>Всего автоматических проверок</td><td>162 из 162</td></tr></tfoot></table></div>
+  </div>
+</section>
+
+<section id="download">
+  <div class="wrap">
+    <div class="head center">
+      <h2>Скачать GpuQ 1.0.0</h2>
+      <p class="lead">Windows (64 бита; проверялось на Windows 11), драйвер NVIDIA, около 30&nbsp;МБ на диске. Выпуск от 31 октября 2026.</p>
+    </div>
+    <div class="dl">
+      <div class="dl-card main">
+        <div><span class="tag">Рекомендуется</span><h3>Установщик</h3></div>
+        <ul><li>Ставится за минуту, права администратора не нужны</li><li>Ярлык в меню «Пуск», автозапуск, команды <code>gpuq-run</code> в PATH</li><li>Обновляется поверх, удаляется одним кликом</li></ul>
+        <a class="btn primary big" href="download/GpuQ-1.0.0-Setup.exe" download><svg aria-hidden="true"><use href="#i-down"/></svg><span class="two-line">Скачать установщик<small>GpuQ-1.0.0-Setup.exe · 13,8 МБ</small></span></a>
+        <div class="hash"><label for="h1">SHA-256</label><div class="row"><code id="h1">63e92e8c0f97bc7d6f84469719fa4075d2449861ebf930a4d7ce9bb54cd344f5</code><button class="copy" type="button" data-copy="63e92e8c0f97bc7d6f84469719fa4075d2449861ebf930a4d7ce9bb54cd344f5" aria-label="Скопировать SHA-256 установщика"><svg aria-hidden="true"><use href="#i-copy"/></svg></button></div></div>
+      </div>
+      <div class="dl-card">
+        <div><span class="tag" style="color:var(--ink-3)">Без установки</span><h3>Переносимая версия (zip)</h3></div>
+        <ul><li>Распакуйте куда угодно и запустите <code>GpuQ.exe</code></li><li>Подойдёт для флешки или запрета на установку программ</li><li>Те же программные файлы; установщик добавляет ярлыки, PATH, автозапуск и удаление</li></ul>
+        <a class="btn big" href="download/GpuQ-1.0.0-portable.zip" download><svg aria-hidden="true"><use href="#i-down"/></svg><span class="two-line">Скачать zip<small>GpuQ-1.0.0-portable.zip · 13,7 МБ</small></span></a>
+        <div class="hash"><label for="h2">SHA-256</label><div class="row"><code id="h2">85fc3d126da90eecb8a1406168d24d7d202de813bec1706d5f7cec6c57ca73da</code><button class="copy" type="button" data-copy="85fc3d126da90eecb8a1406168d24d7d202de813bec1706d5f7cec6c57ca73da" aria-label="Скопировать SHA-256 архива"><svg aria-hidden="true"><use href="#i-copy"/></svg></button></div></div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="note"><h3>Windows спросит про SmartScreen</h3>
+        <p style="color:var(--ink-2);font-size:15.5px">Файл не подписан и мало кому известен, поэтому Windows может показать окно «Windows защитил ваш компьютер», а браузер — сказать, что файл скачивают редко. Если вы решили запускать: в окне Windows «Подробнее» → «Выполнить в любом случае», в браузере «Сохранить» или «Оставить».</p>
+        <p style="margin-top:10px;color:var(--ink-3);font-size:14.5px">На компьютерах с политиками организации запуск может быть запрещён: тогда обратитесь к администратору.</p>
+        <p style="margin-top:10px;color:var(--ink-3);font-size:14.5px">Иногда и антивирус ложно срабатывает на неподписанный установщик: такие проверки смотрят на «внешность» файла, а не на то, что программа делает. Защиту при этом отключать не нужно: сверьте SHA-256, прочитайте исходники Python в папке <code>app</code>, а если файл попал в карантин, его можно отправить в Microsoft как ложное срабатывание.</p></div>
+      <div class="note"><h3>Проверьте файл</h3>
+        <p style="color:var(--ink-2);font-size:15.5px">В командной строке в папке со скачанным файлом:</p>
+        <pre>certutil -hashfile GpuQ-1.0.0-Setup.exe SHA256</pre>
+        <p style="margin-top:10px;color:var(--ink-3);font-size:14.5px">Результат должен совпасть со строкой выше. Это подтверждает, что файл не изменился после публикации, но не что он безопасен: код читаемый, проверять его вам. Суммы лежат и в файле <a href="download/SHA256SUMS.txt">SHA256SUMS.txt</a>.</p></div>
+      <div class="note"><h3>Что внутри пакета</h3>
+        <ul><li><code>GpuQ.exe</code> — значки в трее и сторож службы</li><li><code>python\</code> — встроенный Python 3.10, psutil и Pillow</li><li><code>app\</code> — служба, панель и клиент аренд (исходники Python для чтения)</li><li><code>README.md</code>, <code>docs\API.md</code>, лицензия</li></ul>
+        <p style="margin-top:10px"><a href="docs/">Читать документацию онлайн</a></p></div>
+    </div>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <div class="head center"><h2>Вопросы</h2></div>
+    <div class="faq">
+      <details><summary>Нужны ли права администратора?</summary><div class="ans"><p>Нет. Установщик пишет только в вашу папку (<code>%LOCALAPPDATA%\Programs\GpuQ</code> по умолчанию) и в ветки реестра текущего пользователя: автозапуск, PATH и запись в «Параметры → Приложения».</p></div></details>
+      <details><summary>Что будет с программами, которые про GpuQ не знают?</summary><div class="ans"><p>Они работают как раньше. GpuQ видит их на карте через <code>nvidia-smi</code>, учитывает занятую ими память при выдаче аренд и показывает в панели «мимо очереди». Принудительно он их не ограничивает и не останавливает.</p></div></details>
+      <details><summary>Меняет ли GpuQ лимиты мощности, частоты или вентиляторы?</summary><div class="ans"><p>Нет. Он только читает показания карт. В пакете нет кода, который что-либо записывает в драйвер.</p></div></details>
+      <details><summary>Что GpuQ отправляет в интернет?</summary><div class="ans"><p>Ничего. Служба слушает только <code>127.0.0.1</code>, отвечает на запросы с именем хоста <code>127.0.0.1</code> или <code>localhost</code> и отклоняет запросы со страниц чужих сайтов. Ни аккаунта, ни телеметрии, ни проверки обновлений нет: новую версию вы скачиваете сами.</p></div></details>
+      <details><summary>Работает ли это с PyTorch, TensorFlow, Blender, Unity, ComfyUI?</summary><div class="ans"><p>Любую программу можно запустить через <code>gpuq-run</code>: она получит карту через <code>CUDA_VISIBLE_DEVICES</code>. Для ComfyUI есть встроенная очередь (бета). Программы, которые не читают эту переменную и рисуют на карте по выбору системы (например, через Direct3D), GpuQ видит и показывает, но выбрать за них карту не может.</p></div></details>
+      <details><summary>А если у меня две одинаковые карты?</summary><div class="ans"><p>Они получают номера: <code>RTX 3090 #1</code> и <code>RTX 3090 #2</code>. Карту можно указать полным именем с номером (<code>--card "RTX 3090 #2"</code>) или UUID. Проверялось на подмене ответа <code>nvidia-smi</code>, а не на двух настоящих одинаковых картах.</p></div></details>
+      <details><summary>Что случится, если служба или ПК перезапустятся?</summary><div class="ans"><p>Аренды и история хранятся в базе и переживают перезапуск службы. Если служба молчит, клиент не обрывает задачу: он повторяет запрос и продолжает работу, когда служба вернётся. Задания встроенной очереди ComfyUI при перезапуске службы ставятся в очередь заново. После перезагрузки ПК процессов-клиентов уже нет, и их аренды служба снимает сама.</p></div></details>
+      <details><summary>Как удалить?</summary><div class="ans"><p>«Параметры → Приложения → GpuQ» или <code>Uninstall.exe</code> в папке программы. Удаляются только файлы программы из списка установки; ваши файлы в той же папке остаются. Настройки и история в <code>%LOCALAPPDATA%\GpuQ</code> остаются; чтобы стереть и их, запустите <code>Uninstall.exe /PURGE</code>. Переносимую версию достаточно удалить вместе с папкой; если включали автозапуск, снимите галочку в меню значка в трее.</p></div></details>
+      <details><summary>Файл не подписан. Как убедиться, что это безопасно?</summary><div class="ans"><p>Полной гарантии никто не даст, но проверить можно многое: сверьте SHA-256 с этой страницей, прочитайте <a href="docs/">документацию</a> и исходники Python в папке <code>app</code>, убедитесь, что служба слушает только свой порт (<code>netstat -ano | findstr 8189</code>) и что установщик создал только то, что перечислено в <code>install-manifest.txt</code>. Права администратора установка не просит.</p></div></details>
+      <details><summary>Почему программа бесплатная?</summary><div class="ans"><p>GpuQ вырос из очереди, которой автор делит две видеокарты на рабочем ПК, и оказался полезен не только ему. Условия — в файле <code>LICENSE.txt</code>: пользоваться бесплатно, гарантий нет.</p></div></details>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <span>GpuQ 1.0.0 · 31 октября 2026 · бесплатно, без гарантий</span>
+    <nav aria-label="Ссылки"><a href="docs/">Документация</a><a href="docs/api.html">HTTP API</a><a href="demo/">Демо панели</a><a href="download/SHA256SUMS.txt">SHA256SUMS</a><a href="#top">Наверх</a></nav>
+  </div>
+</footer>
+
+<script src="site.js" defer></script>
+</body>
+</html>

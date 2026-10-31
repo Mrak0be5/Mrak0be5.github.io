@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HTTP API — GpuQ</title>
+<meta name="description" content="Аренды видеопамяти и RAM, места для тяжёлых задач и данные панели: запросы и ответы службы GpuQ.">
+<meta name="theme-color" content="#0e0f11">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../site.css">
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <a class="brand" href="../" aria-label="GpuQ, на главную"><span class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i></span>GpuQ</a>
+  <nav class="nav" aria-label="Разделы"><a href="./">Документация</a><a href="api.html">HTTP API</a><a href="../demo/">Демо</a></nav>
+  <a class="btn primary" href="../#download">Скачать</a>
+</div></header>
+<main class="doc"><div class="wrap"><article class="prose">
+<a class="back" href="../">← На главную</a>
+<h1 id="gpuq-http-api">GpuQ: HTTP API</h1>
+<p>Служба слушает <code>http://127.0.0.1:8189</code> (порт задаётся в <code>config.json</code>). Ответы — JSON в UTF-8. Запросы с именем хоста, отличным от <code>127.0.0.1:&lt;порт&gt;</code>, <code>localhost:&lt;порт&gt;</code> или <code>[::1]:&lt;порт&gt;</code>, и <code>POST</code> с чужим заголовком <code>Origin</code> получают <code>403</code>, и соединение закрывается: страницы чужих сайтов управлять службой не могут.</p>
+<p><strong>Граница доверия.</strong> Служба не знает, какая программа или какой пользователь Windows обращается к ней с этого же компьютера: любой локальный процесс может читать данные и менять очередь. Для общих компьютеров она не рассчитана.</p>
+<h2 id="аренда-карты">Аренда карты</h2>
+<p><code>POST /gpuq/lease</code></p>
+<table><thead><tr><th>Поле</th><th>Тип</th><th>Смысл</th></tr></thead><tbody><tr><td><code>owner</code></td><td>строка до 200 знаков</td><td>как задача называется в панели</td></tr><tr><td><code>vram_mb</code></td><td>число</td><td>нужная видеопамять, МиБ; не меньше 1024; по умолчанию <code>default_vram_mb</code></td></tr><tr><td><code>ram_mb</code></td><td>число</td><td>оперативная память ПК, МиБ; 0 или не указано — не проверять</td></tr><tr><td><code>exclusive</code></td><td><code>true</code></td><td>карта целиком</td></tr><tr><td><code>card</code></td><td>строка</td><td>UUID карты (<code>GPU-…</code>) или её имя из панели</td></tr><tr><td><code>pid</code></td><td>число</td><td>процесс клиента: пока он жив, аренда не снимается</td></tr><tr><td><code>since</code></td><td>число</td><td>Unix-время, с которого клиент ждёт (для отчёта об ожидании)</td></tr><tr><td><code>ttl</code></td><td>число</td><td>срок продления, секунд, от 30 до 300 (по умолчанию 120)</td></tr></tbody></table>
+<p>Ответы:</p>
+<ul><li><code>{&quot;waiting&quot;: true}</code> — карты пока нет; повторите запрос через 2 секунды с теми же <code>owner</code> и <code>pid</code>. Причину ожидания по каждой карте видно в панели и в журнале службы.</li><li><code>{&quot;token&quot;: &quot;…&quot;, &quot;card&quot;: &quot;GPU-…&quot;, &quot;name&quot;: &quot;RTX 4090&quot;, &quot;ttl&quot;: 120, &quot;shared&quot;: true}</code> — карта выдана. Передайте <code>card</code> программе в <code>CUDA_VISIBLE_DEVICES</code> (вместе с <code>CUDA_DEVICE_ORDER=PCI_BUS_ID</code>).</li><li><code>{&quot;error&quot;: &quot;…&quot;}</code> — запрос отклонён.</li></ul>
+<p>Продление: <code>{&quot;token&quot;: &quot;…&quot;, &quot;ttl&quot;: 120}</code> → <code>{&quot;released&quot;: false, &quot;token&quot;: &quot;…&quot;, &quot;card&quot;: &quot;GPU-…&quot;}</code>, либо <code>{&quot;error&quot;: &quot;аренда истекла&quot;}</code>. Возврат: <code>{&quot;token&quot;: &quot;…&quot;, &quot;release&quot;: true}</code> → <code>{&quot;released&quot;: true, …}</code>.</p>
+<p>Если в запросе был <code>pid</code>, аренду служба держит, пока процесс (по PID и времени создания) жив, даже если продления не приходят. Без <code>pid</code> аренда снимается, когда проходит <code>ttl</code> без продления.</p>
+<h2 id="места-для-тяжёлых-задач-необязательно">Места для тяжёлых задач (необязательно)</h2>
+<p><code>POST /gpuq/slot</code> с <code>{&quot;kind&quot;: &quot;unity&quot; | &quot;heavy&quot;, &quot;owner&quot;: &quot;…&quot;, &quot;pid&quot;: 1234}</code>.</p>
+<ul><li><code>unity</code> — до 4 одновременно, нужно свободно 6 ГБ RAM и 8 ГБ выделенной памяти; идёт первым.</li><li><code>heavy</code> — до 2 одновременно, нужно свободно 10 ГБ RAM; уступает ожидающим <code>unity</code>.</li></ul>
+<p>Ответ <code>{&quot;granted&quot;: true, &quot;token&quot;: &quot;…&quot;}</code> или <code>{&quot;waiting&quot;: true, &quot;why&quot;: &quot;…&quot;, &quot;position&quot;: 1}</code>. Спрашивайте не реже раза в 30 секунд, иначе очередь забудет вас. Возврат: <code>{&quot;token&quot;: &quot;…&quot;, &quot;release&quot;: true}</code>. Место освобождается само, когда процесс <code>pid</code> завершится.</p>
+<h2 id="данные-для-панели-только-чтение">Данные для панели (только чтение)</h2>
+<table><thead><tr><th>Запрос</th><th>Что отдаёт</th></tr></thead><tbody><tr><td><code>GET /gpuq/dashboard?limit=N</code></td><td><code>workers</code> (карты: <code>name</code>, <code>state</code>, <code>reason</code>, <code>temp</code>, <code>util</code>, <code>used_mb</code>, <code>total_mb</code>, <code>power</code>, <code>power_limit</code>, <code>task</code>), <code>jobs</code>, <code>foreign</code> (вычисления на картах), <code>notices</code>, <code>alerts</code>, <code>pc</code> (процессор, RAM), <code>slots</code>, <code>summary</code></td></tr><tr><td><code>GET /gpuq/history?hours=24[&amp;card=имя]</code></td><td>минутные точки по каждой карте: загрузка, память, температура, мощность, состояние; сводка занятости. До 168 часов</td></tr><tr><td><code>GET /gpuq/report?days=7</code></td><td>занятость устройств, ожидание заданий и аренд, топ скриптов по GPU-часам, число запусков мимо аренд. От 1 до 30 дней</td></tr><tr><td><code>GET /gpuq/gallery?limit=N&amp;offset=M</code></td><td>результаты очереди ComfyUI с миниатюрами</td></tr></tbody></table>
+<p>Типы событий в <code>notices</code>: <code>done</code>, <code>error</code> — задания ComfyUI; <code>bypass</code>, <code>bypass_long</code> — работа на карте без аренды (второй тип — дольше 10 минут); <code>lease_stuck</code> — аренда держит память, а карта простаивает; <code>vram_overflow</code> — переполнена видеопамять; <code>free</code>, <code>free_error</code> — освобождение памяти чужого ComfyUI (если включено).</p>
+<h2 id="очередь-comfyui-бета">Очередь ComfyUI (бета)</h2>
+<p>Если в <code>config.json</code> указаны <code>comfy_root</code>, <code>comfy_python</code> и <code>comfy_output</code>, тот же порт отвечает как ComfyUI: <code>POST /prompt</code>, <code>GET /history/&lt;id&gt;</code>, <code>GET /queue</code>, <code>GET /view</code>, <code>POST /upload/image</code>, <code>POST /queue {&quot;delete&quot;: [id]}</code>. В <code>POST /prompt</code> можно добавить <code>&quot;priority&quot;: N</code> (число меньше нуля — фоновое задание) и <code>&quot;avoid&quot;: [&quot;имя карты&quot;]</code>. Без настройки <code>POST /prompt</code> отвечает <code>503</code> с пояснением.</p>
+</article></div></main>
+<footer class="foot"><div class="wrap"><span>GpuQ 1.0.0 · 31 октября 2026</span><nav aria-label="Ссылки"><a href="./">Документация</a><a href="api.html">HTTP API</a><a href="../">Главная</a></nav></div></footer>
+</body>
+</html>
