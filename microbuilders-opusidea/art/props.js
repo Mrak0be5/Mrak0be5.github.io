@@ -257,23 +257,34 @@
     cell('concrete', function () {
       g.fillStyle = '#dcd9d2';
       g.fillRect(0, 0, CELL, CELL);
-      speckle(320, 0.09);
-      g.fillStyle = 'rgba(0,0,0,0.08)';
+      speckle(480, 0.12);
+      g.fillStyle = 'rgba(0,0,0,0.12)';
       g.fillRect(0, 42, CELL, 2);
       g.fillRect(0, 86, CELL, 2);
+      g.fillStyle = 'rgba(255,255,255,0.22)';
+      g.fillRect(0, 44, CELL, 1.5);
+      g.fillRect(0, 88, CELL, 1.5);
+      for (const [cx, cy] of [[28, 22], [100, 22], [28, 64], [100, 64], [28, 108], [100, 108]]) {
+        g.fillStyle = 'rgba(0,0,0,0.24)';
+        g.beginPath();
+        g.arc(cx, cy, 3, 0, Math.PI * 2);
+        g.fill();
+      }
     });
     const map = new THREE.CanvasTexture(color);
     map.colorSpace = THREE.SRGBColorSpace;
     map.anisotropy = 4;
+    map.userData.shared = true;
     const glowMap = new THREE.CanvasTexture(glow);
     glowMap.colorSpace = THREE.SRGBColorSpace;
+    glowMap.userData.shared = true;
     maps = { map: map, glow: glowMap };
     return maps;
   }
 
   function material() {
     const m = atlas();
-    return new THREE.MeshStandardMaterial({ map: m.map, vertexColors: true, roughness: 0.84, metalness: 0, emissive: 0xffe2a8, emissiveMap: m.glow, emissiveIntensity: 0 });
+    return new THREE.MeshStandardMaterial({ map: m.map, bumpMap: m.map, bumpScale: 0.55, vertexColors: true, roughness: 0.84, metalness: 0, emissive: 0xffe2a8, emissiveMap: m.glow, emissiveIntensity: 0 });
   }
 
   function at(m, x, y, z, rx, ry, rz) {

@@ -799,6 +799,7 @@
   // ---------- камни, дерево, кирпич и прочие виды (balance.json → materials.ladder[].look) ----------
   // Особенности отдельных камней: крап (сколько и каких тонов), полосчатость, поры, вкрапления, окаменелости, звёзды.
   const STONE = {
+    'ladder-stone': { fleck: 1400, tones: [0x585346, 0xc8c0ae, 0x7c7260], bands: true, holes: 10 },
     'ladder-granite': { fleck: 1600, tones: [0x2b2a2a, 0xd8d2cc, 0xa07a70] },
     'ladder-granite-dark': { fleck: 1500, tones: [0x1d1b1a, 0xb9b2aa, 0x7a6a62] },
     'ladder-diorite': { fleck: 1800, tones: [0x2a2a2a, 0xf2f0ea] },
@@ -906,6 +907,10 @@
 
   // Дерево с особенностями: окаменелое — с кварцевыми искрами, тёмные «легендарные» — с тлеющими прожилками.
   const WOOD = {
+    'ladder-pine': { resin: true },
+    'ladder-oak': { pores: true, rays: true },
+    'ladder-larch': { resin: true },
+    'ladder-walnut': { pores: true },
     'ladder-petrified-wood': { glitter: true },
     'ladder-dragonwood': { glow: 0xff6a2a },
     'ladder-abyss-wood': { glow: 0x9a5aff },
@@ -915,6 +920,7 @@
   };
 
   const SAND = {
+    'ladder-sandstone': { pores: 'round', glitter: 0.35 },
     'ladder-travertine': { pores: 'long' },
     'ladder-tuff': { pores: 'round' },
     'ladder-shellrock': { shells: true },
@@ -1071,8 +1077,19 @@
       } else if (!bare) {
         vein(L, -10, L.r() * S, S * 1.4, (L.r() - 0.5) * 0.6, 1.4, css(sh(c, 1.35), 0.5), 0.8);
         crack(L, L.r() * S, L.r() * S, 50 + L.r() * 60, L.r() * 6.3, css(sh(c, 0.42), 0.6));
+      } else {
+        for (let i = 0; i < 5; i++) {
+          const x = L.r() * S;
+          const y = L.r() * S;
+          const r = 18 + L.r() * 24;
+          const up = L.r() < 0.5;
+          blot(L.h, x, y, r, up ? '185,185,185' : '82,82,82', 0.42);
+          blot(L.c, x - r * 0.25, y - r * 0.25, r * 0.75, trip(sh(c, up ? 1.1 : 0.88)), 0.18);
+        }
+        vein(L, L.r() * S * 0.4, L.r() * S, S * 0.7, (L.r() - 0.5) * 0.5, 1.1, css(sh(c, 1.28), 0.35), 0.6);
+        crack(L, 24 + L.r() * (S - 48), 24 + L.r() * (S - 48), 28 + L.r() * 34, L.r() * 6.3, css(sh(c, 0.48), 0.42));
       }
-      grain(L, 1400, 0.12);
+      grain(L, 1600, 0.13);
       edgeLight(L, trip(sh(c, 1.3)), 0.25);
     },
 
@@ -1090,9 +1107,21 @@
         for (let i = 0; i < 34; i++) {
           const x = L.r() * S * 1.4 - S * 0.2;
           const y = L.r() * S;
-          L.c.strokeStyle = css(sh(c, 0.78), 0.18);
-          L.c.lineWidth = 1;
+          L.c.strokeStyle = css(sh(c, 0.78), 0.22);
+          L.c.lineWidth = 1.1;
           L.c.stroke(line(x, y, x + 40 + L.r() * 40, y + 10 + L.r() * 14));
+        }
+      } else if (bare) {
+        for (let i = 0; i < 16; i++) {
+          const x = L.r() * S * 1.2 - S * 0.1;
+          const y = L.r() * S;
+          const path = line(x, y, x + 32 + L.r() * 36, y + (L.r() - 0.3) * 10);
+          L.c.strokeStyle = css(sh(c, 0.8), 0.16);
+          L.c.lineWidth = 1;
+          L.c.stroke(path);
+          L.h.strokeStyle = gray(114);
+          L.h.lineWidth = 1.2;
+          L.h.stroke(path);
         }
       }
       if ((!bare && v === 2) || k.chisel) draftedMargin(L, c, 14);
@@ -1181,6 +1210,17 @@
           L.c.fillStyle = g;
           L.c.fillRect(x, 0, w, len);
         }
+      } else {
+        for (let y = 64; y < S; y += 64) {
+          groove(L, line(0, y, S, y), 1.2, 14);
+          grainLines(L, sh(c, 0.94), 0, y - 60, S, 56, false, 4);
+        }
+        for (let i = 0; i < 240; i++) {
+          const x = L.r() * S;
+          const y = L.r() * S;
+          L.c.fillStyle = css(sh(c, L.r() < 0.5 ? 0.65 : 1.22), 0.35);
+          L.c.fillRect(x, y, 1.5 + L.r(), 1.5 + L.r());
+        }
       }
       for (let i = 0; i < 60; i++) {
         const x = L.r() * S;
@@ -1222,7 +1262,16 @@
       const k = WOOD[spec.id] || {};
       fillAll(L, css(c), 128, orm(0.74, 0));
       if (bare) {
-        grainLines(L, c, 0, 0, S, S, true, 70);
+        const n = 3;
+        const span = S / n;
+        for (let i = 0; i < n; i++) {
+          const tone = sh(c, 0.92 + L.r() * 0.16);
+          L.c.fillStyle = css(tone);
+          L.c.fillRect(0, i * span, S, span);
+          grainLines(L, tone, 0, i * span + 2, S, span - 4, false, 20);
+          if (i > 0) groove(L, line(0, i * span, S, i * span), 2.2, 38);
+        }
+        knot(L, c, 36 + L.r() * (S - 72), span * (0.35 + Math.floor(L.r() * n) + L.r() * 0.3), 3.5 + L.r() * 2.5);
       } else if (v === 0 || v === 1) {
         const vertical = v === 0;
         const n = vertical ? 3 : 4;
@@ -1281,6 +1330,34 @@
           L.o.fillRect(x, y, 1.5, 1.5);
         }
       }
+      if (k.resin) {
+        for (let i = 0; i < 10; i++) {
+          const rx = L.r() * S;
+          const ry = L.r() * S;
+          vein(L, rx, ry, 28 + L.r() * 44, (bare ? 0 : v === 0 ? Math.PI / 2 : 0) + (L.r() - 0.5) * 0.18, 1.6, css(sh(c, 0.58), 0.32), 0.8);
+        }
+      }
+      if (k.pores) {
+        const vert = !bare && v === 0;
+        for (let i = 0; i < 180; i++) {
+          const px = L.r() * S;
+          const py = L.r() * S;
+          const len = 3 + L.r() * 6;
+          L.c.fillStyle = css(sh(c, 0.48), 0.42);
+          L.c.fillRect(px, py, vert ? 1.1 : len, vert ? len : 1.1);
+          L.h.fillStyle = gray(98);
+          L.h.fillRect(px, py, vert ? 1.2 : len, vert ? len : 1.2);
+        }
+      }
+      if (k.rays) {
+        for (let i = 0; i < 24; i++) {
+          const rx = L.r() * S;
+          const ry = L.r() * S;
+          const len = 10 + L.r() * 18;
+          L.c.fillStyle = css(sh(c, 1.26), 0.22);
+          L.c.fillRect(rx, ry, len, 1.2);
+        }
+      }
       if (k.glow) {
         for (let i = 0; i < 6; i++) vein(L, L.r() * S, -10, S * 1.2, Math.PI / 2 + (L.r() - 0.5) * 0.3, 1.2, css(k.glow, 0.45), 1.2);
       }
@@ -1326,13 +1403,34 @@
           const g = L.c.createLinearGradient(0, y, 0, y + h);
           g.addColorStop(0, css(sh(tone, 1.08)));
           g.addColorStop(1, css(sh(tone, 0.9)));
-          paint(L, path, g, gray(160), orm(0.88, 0));
+          paint(L, path, g, gray(164), orm(0.88, 0));
+          // Тень в глубине верхнего шва и светлая верхняя кромка кирпича дают объём раствору.
+          L.c.fillStyle = css(sh(mortar, 0.52), 0.55);
+          L.c.fillRect(bx + 1, y - gap * 0.55, bw - 2, gap * 0.45);
+          L.h.fillStyle = gray(46);
+          L.h.fillRect(bx, y - gap * 0.6, bw, gap * 0.5);
           L.c.save();
           L.c.clip(path);
+          L.c.fillStyle = css(sh(tone, 1.26), 0.42);
+          L.c.fillRect(bx, y, bw, 2);
+          L.c.fillStyle = css(sh(tone, 0.62), 0.38);
+          L.c.fillRect(bx, y + h - 2, bw, 2);
           for (let i = 0; i < 4; i++) blot(L.c, bx + L.r() * bw, y + L.r() * h, 8 + L.r() * 20, trip(sh(tone, L.r() < 0.5 ? 0.72 : 1.2)), 0.35);
-          for (let i = 0; i < 40; i++) {
-            L.c.fillStyle = css(sh(tone, L.r() < 0.5 ? 0.55 : 1.3), 0.4);
-            L.c.fillRect(bx + L.r() * bw, y + L.r() * h, 1.5, 1.5);
+          if (spec.id === 'ladder-brick-red' && L.r() < 0.4) {
+            blot(L.c, bx + L.r() * bw, y + L.r() * h, 10 + L.r() * 16, '58,28,22', 0.34);
+          } else if (spec.id === 'ladder-brick-white') {
+            blot(L.c, bx + L.r() * bw, y + L.r() * h, 10 + L.r() * 14, '210,202,186', 0.32);
+          }
+          for (let i = 0; i < 55; i++) {
+            const px = bx + L.r() * bw;
+            const py = y + L.r() * h;
+            const dark = L.r() < 0.5;
+            L.c.fillStyle = css(sh(tone, dark ? 0.52 : 1.32), 0.45);
+            L.c.fillRect(px, py, 1.6, 1.6);
+            if (dark && i < 18) {
+              L.h.fillStyle = gray(108);
+              L.h.fillRect(px, py, 2, 1.5);
+            }
           }
           L.c.restore();
           if (L.r() < 0.25) {

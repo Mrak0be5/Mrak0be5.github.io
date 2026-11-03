@@ -1318,13 +1318,116 @@
 
   // The foundation of a camp building not started yet: a concrete slab over its pad with orange-and-
   // white corner posts — tap it to start the building (1 token + the coins of its first level).
-  const campFoundationMat = {
-    slab: new THREE.MeshStandardMaterial({ color: 0xb9b4aa, roughness: 0.92 }),
-    edge: new THREE.MeshStandardMaterial({ color: 0x8f8a80, roughness: 0.9 }),
-    post: new THREE.MeshStandardMaterial({ color: 0xf08a2a, roughness: 0.6 }),
-    cap: new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: 0.5 }),
-    wood: new THREE.MeshStandardMaterial({ color: 0x6a4a2f, roughness: 0.9 }),
-  };
+  const campFoundationMat = (function () {
+    let seed = 31;
+    function rnd() {
+      seed = (seed * 16807) % 2147483647;
+      return seed / 2147483647;
+    }
+    function makeTex(w, h, paint) {
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      paint(canvas.getContext('2d'), w, h);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 4;
+      tex.userData.shared = true;
+      return tex;
+    }
+    const slabTex = makeTex(256, 256, function (g, w, h) {
+      g.fillStyle = '#c4bfb4';
+      g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 18; i++) {
+        const x = rnd() * w, y = rnd() * h, r = 24 + rnd() * 48;
+        const gr = g.createRadialGradient(x, y, 0, x, y, r);
+        const tone = rnd() < 0.5 ? '168,162,150' : '216,210,198';
+        gr.addColorStop(0, 'rgba(' + tone + ',0.32)');
+        gr.addColorStop(1, 'rgba(' + tone + ',0)');
+        g.fillStyle = gr;
+        g.fillRect(x - r, y - r, r * 2, r * 2);
+      }
+      for (let y = 32; y < h; y += 32) {
+        g.fillStyle = 'rgba(86, 80, 72, 0.16)';
+        g.fillRect(0, y, w, 1.5);
+        g.fillStyle = 'rgba(244, 240, 232, 0.2)';
+        g.fillRect(0, y + 1.5, w, 1);
+      }
+      g.fillStyle = 'rgba(72, 66, 58, 0.38)';
+      g.fillRect(w / 2 - 1, 0, 2, h);
+      g.fillRect(0, h / 2 - 1, w, 2);
+      for (let i = 0; i < 2400; i++) {
+        g.fillStyle = rnd() < 0.5 ? 'rgba(68, 62, 54, 0.28)' : 'rgba(245, 240, 230, 0.32)';
+        g.fillRect(rnd() * w, rnd() * h, 1 + rnd() * 1.5, 1 + rnd() * 1.5);
+      }
+      for (let i = 0; i < 45; i++) {
+        g.fillStyle = 'rgba(64, 58, 50, 0.55)';
+        g.beginPath();
+        g.arc(rnd() * w, rnd() * h, 1 + rnd() * 2, 0, Math.PI * 2);
+        g.fill();
+      }
+      for (const [cx, cy] of [[42, 42], [w - 42, 42], [42, h - 42], [w - 42, h - 42]]) {
+        g.fillStyle = 'rgba(70, 64, 56, 0.55)';
+        g.beginPath();
+        g.arc(cx, cy, 4.5, 0, Math.PI * 2);
+        g.fill();
+        g.strokeStyle = 'rgba(240, 235, 224, 0.45)';
+        g.lineWidth = 1.2;
+        g.stroke();
+      }
+      g.strokeStyle = 'rgba(138, 118, 92, 0.42)';
+      g.lineWidth = 10;
+      g.strokeRect(5, 5, w - 10, h - 10);
+    });
+    const edgeTex = makeTex(128, 128, function (g, w, h) {
+      g.fillStyle = '#9c968b';
+      g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 900; i++) {
+        g.fillStyle = rnd() < 0.5 ? 'rgba(56, 52, 46, 0.32)' : 'rgba(228, 222, 210, 0.28)';
+        g.fillRect(rnd() * w, rnd() * h, 1.5, 1.5);
+      }
+      for (let x = 16; x < w; x += 16) {
+        g.fillStyle = 'rgba(54, 48, 42, 0.22)';
+        g.fillRect(x, 0, 1.5, h);
+      }
+    });
+    const postTex = makeTex(64, 128, function (g, w, h) {
+      const gr = g.createLinearGradient(0, 0, 0, h);
+      gr.addColorStop(0, '#f59332');
+      gr.addColorStop(0.75, '#e87e1e');
+      gr.addColorStop(1, '#9e5618');
+      g.fillStyle = gr;
+      g.fillRect(0, 0, w, h);
+      g.fillStyle = '#f4f1ea';
+      g.fillRect(0, h * 0.22, w, h * 0.14);
+      g.fillStyle = 'rgba(42, 32, 22, 0.35)';
+      g.fillRect(0, h * 0.86, w, h * 0.14);
+      for (let i = 0; i < 140; i++) {
+        g.fillStyle = rnd() < 0.5 ? 'rgba(40, 24, 12, 0.22)' : 'rgba(255, 230, 190, 0.22)';
+        g.fillRect(rnd() * w, rnd() * h, 1.5, 2.5);
+      }
+    });
+    const woodTex = makeTex(128, 128, function (g, w, h) {
+      g.fillStyle = '#745134';
+      g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 45; i++) {
+        const y = rnd() * h;
+        g.strokeStyle = i % 3 === 0 ? 'rgba(210, 165, 115, 0.18)' : 'rgba(38, 22, 10, 0.28)';
+        g.lineWidth = 1 + rnd() * 1.5;
+        g.beginPath();
+        g.moveTo(0, y);
+        g.bezierCurveTo(w * 0.33, y + 3, w * 0.66, y - 3, w, y + 1);
+        g.stroke();
+      }
+    });
+    return {
+      slab: new THREE.MeshStandardMaterial({ map: slabTex, bumpMap: slabTex, bumpScale: 0.65, roughness: 0.9 }),
+      edge: new THREE.MeshStandardMaterial({ map: edgeTex, bumpMap: edgeTex, bumpScale: 0.55, roughness: 0.9 }),
+      post: new THREE.MeshStandardMaterial({ map: postTex, roughness: 0.55, metalness: 0.15 }),
+      cap: new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: 0.45, metalness: 0.1 }),
+      wood: new THREE.MeshStandardMaterial({ map: woodTex, bumpMap: woodTex, bumpScale: 0.5, roughness: 0.88 }),
+    };
+  })();
   const machineMat = {
     yellow: new THREE.MeshStandardMaterial({ color: 0xf2b91f, roughness: 0.45, metalness: 0.3 }),
     dark: new THREE.MeshStandardMaterial({ color: 0x2f3236, roughness: 0.7, metalness: 0.3 }),
@@ -3278,7 +3381,7 @@
     };
     paint();
     if (document.fonts && !document.fonts.check('800 40px Manrope')) document.fonts.load('800 40px Manrope').then(paint, function () {});
-    const face = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.85 });
+    const face = new THREE.MeshStandardMaterial({ map: texture, bumpMap: texture, bumpScale: 0.38, roughness: 0.82 });
     const wood = campFoundationMat.wood;
     const boardGeo = new THREE.BoxGeometry(width, height, 0.08);
     const stakeGeo = new THREE.BoxGeometry(0.1, 0.62, 0.1);
@@ -3303,22 +3406,41 @@
     const ctx = canvas.getContext('2d');
     const w = canvas.width, h = canvas.height;
     const grain = ctx.createLinearGradient(0, 0, 0, h);
-    grain.addColorStop(0, '#8a6440');
-    grain.addColorStop(1, '#6b4a2e');
+    grain.addColorStop(0, '#916943');
+    grain.addColorStop(0.49, '#7a5636');
+    grain.addColorStop(0.51, '#86603d');
+    grain.addColorStop(1, '#68472b');
     ctx.fillStyle = grain;
     ctx.fillRect(0, 0, w, h);
-    ctx.strokeStyle = 'rgba(40, 24, 12, 0.18)';
-    ctx.lineWidth = 2;
-    for (let i = 1; i < 7; i++) {
-      const y = h * i / 7 + Math.sin(i * 2.3) * 3;
+    ctx.fillStyle = 'rgba(32, 18, 8, 0.48)';
+    ctx.fillRect(8, Math.round(h * 0.5) - 1, w - 16, 2.5);
+    ctx.fillStyle = 'rgba(255, 220, 175, 0.22)';
+    ctx.fillRect(8, Math.round(h * 0.5) + 1.5, w - 16, 1.5);
+    for (let i = 1; i < 16; i++) {
+      const y = h * i / 16 + Math.sin(i * 2.1) * 2.5;
+      ctx.strokeStyle = i % 3 === 0 ? 'rgba(235, 190, 140, 0.16)' : 'rgba(38, 22, 10, 0.22)';
+      ctx.lineWidth = 1.4 + (i % 2) * 0.8;
       ctx.beginPath();
       ctx.moveTo(0, y);
       ctx.bezierCurveTo(w * 0.3, y + 4, w * 0.6, y - 4, w, y + 2);
       ctx.stroke();
     }
-    ctx.strokeStyle = 'rgba(30, 18, 8, 0.55)';
-    ctx.lineWidth = 6;
-    ctx.strokeRect(5, 5, w - 10, h - 10);
+    ctx.strokeStyle = 'rgba(30, 18, 8, 0.65)';
+    ctx.lineWidth = 7;
+    ctx.strokeRect(4, 4, w - 8, h - 8);
+    ctx.strokeStyle = 'rgba(255, 220, 175, 0.24)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(9, 9, w - 18, h - 18);
+    for (const [cx, cy] of [[18, 18], [w - 18, 18], [18, h - 18], [w - 18, h - 18]]) {
+      ctx.fillStyle = '#3b2b1e';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255, 235, 205, 0.45)';
+      ctx.beginPath();
+      ctx.arc(cx - 1.2, cy - 1.2, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
     let size = Math.round(h * 0.5);
     ctx.font = '800 ' + size + 'px Manrope, sans-serif';
     const fit = (w - 56) / ctx.measureText(name).width;
@@ -3327,9 +3449,9 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const x = w / 2, y = h / 2 + size * 0.04;
-    ctx.fillStyle = 'rgba(255, 226, 180, 0.45)';
+    ctx.fillStyle = 'rgba(255, 226, 180, 0.5)';
     ctx.fillText(name, x, y + 2.5);
-    ctx.fillStyle = '#2a170a';
+    ctx.fillStyle = '#241307';
     ctx.fillText(name, x, y);
   }
 
@@ -8697,9 +8819,10 @@
     MicroBuildersProfiler.add('scaffoldView', performance.now() - started);
   }
 
-  // Deck floors of the five scaffold types, painted once on 64×64 canvases (steady pseudo-random grain).
+  // Deck floors of the five scaffold types, painted once on 256×256 canvases (steady pseudo-random grain).
   function scaffoldFloorTextures() {
     if (scaffoldFloors) return scaffoldFloors;
+    const S = 256;
     let seed = 7;
     const rnd = function () {
       seed = (seed * 16807) % 2147483647;
@@ -8707,8 +8830,8 @@
     };
     function floor(paint) {
       const canvas = document.createElement('canvas');
-      canvas.width = 64;
-      canvas.height = 64;
+      canvas.width = S;
+      canvas.height = S;
       paint(canvas.getContext('2d'));
       const texture = new THREE.CanvasTexture(canvas);
       texture.colorSpace = THREE.SRGBColorSpace;
@@ -8718,84 +8841,136 @@
     // Chequer plate: raised ticks in alternating diagonals, lit from the top-left.
     function chequer(g, base, light, dark) {
       g.fillStyle = base;
-      g.fillRect(0, 0, 64, 64);
-      for (let y = 0; y < 64; y += 8) {
-        for (let x = 0; x < 64; x += 8) {
+      g.fillRect(0, 0, S, S);
+      for (let y = 0; y < S; y += 32) {
+        for (let x = 0; x < S; x += 32) {
           g.save();
-          g.translate(x + 4, y + 4);
-          g.rotate((x + y) % 16 === 0 ? Math.PI / 4 : -Math.PI / 4);
+          g.translate(x + 16, y + 16);
+          g.rotate((x + y) % 64 === 0 ? Math.PI / 4 : -Math.PI / 4);
           g.fillStyle = dark;
-          g.fillRect(-3, 0, 6, 1.6);
+          g.fillRect(-12, 0, 24, 6);
           g.fillStyle = light;
-          g.fillRect(-3, -1.4, 6, 1.4);
+          g.fillRect(-12, -5.5, 24, 5.5);
           g.restore();
         }
       }
     }
     function edge(g, width) {
       g.beginPath();
-      g.rect(0, 0, 64, 64);
-      g.rect(width, width, 64 - 2 * width, 64 - 2 * width);
+      g.rect(0, 0, S, S);
+      g.rect(width, width, S - 2 * width, S - 2 * width);
     }
     scaffoldFloors = [
       floor(function (g) {
-        // Wood: four boards, grain, dark gaps and nail heads.
+        // Wood: four rough-sawn pine boards, wavy grain, knots, dark gaps, double nail heads and dusty walkway.
         const tones = ['#c39058', '#b07b45', '#c79a63', '#a9753f'];
+        const bh = S / 4;
         for (let b = 0; b < 4; b++) {
-          const y = b * 16;
+          const y = b * bh;
           g.fillStyle = tones[b];
-          g.fillRect(0, y, 64, 16);
-          g.fillStyle = 'rgba(92, 56, 24, 0.32)';
-          for (let k = 0; k < 5; k++) g.fillRect(0, y + 2 + Math.floor(rnd() * 11), 64, 1);
+          g.fillRect(0, y, S, bh);
+          g.fillStyle = 'rgba(255, 230, 190, 0.22)';
+          g.fillRect(0, y, S, 3);
+          for (let k = 0; k < 18; k++) {
+            const gy = y + 4 + rnd() * (bh - 10);
+            g.strokeStyle = k % 4 === 0 ? 'rgba(242, 204, 155, 0.22)' : 'rgba(84, 48, 20, 0.3)';
+            g.lineWidth = 1 + rnd() * 1.6;
+            g.beginPath();
+            g.moveTo(0, gy);
+            g.bezierCurveTo(S * 0.33, gy + (rnd() - 0.5) * 6, S * 0.66, gy + (rnd() - 0.5) * 6, S, gy + (rnd() - 0.5) * 4);
+            g.stroke();
+          }
+          const kx = 40 + rnd() * (S - 80);
+          const ky = y + 14 + rnd() * (bh - 28);
+          for (let r = 8; r >= 2; r -= 2) {
+            g.strokeStyle = 'rgba(68, 38, 16, 0.35)';
+            g.lineWidth = 1.2;
+            g.beginPath();
+            g.ellipse(kx, ky, r * 1.5, r, 0, 0, Math.PI * 2);
+            g.stroke();
+          }
+          g.fillStyle = '#472a12';
+          g.beginPath();
+          g.ellipse(kx, ky, 3.5, 2.2, 0, 0, Math.PI * 2);
+          g.fill();
+          const cutX = Math.floor(32 + rnd() * (S - 64));
           g.fillStyle = '#5a391b';
-          g.fillRect(0, y + 15, 64, 1);
-          g.fillRect(Math.floor(8 + rnd() * 48), y, 1, 15);
-          g.fillStyle = '#3e2812';
-          g.fillRect(3, y + 7, 2, 2);
-          g.fillRect(59, y + 7, 2, 2);
+          g.fillRect(0, y + bh - 4, S, 4);
+          g.fillRect(cutX, y, 3, bh - 4);
+          for (const nx of [14, S - 14]) {
+            for (const ny of [y + 18, y + bh - 18]) {
+              g.fillStyle = '#2e1d0d';
+              g.beginPath();
+              g.arc(nx, ny, 3.5, 0, Math.PI * 2);
+              g.fill();
+              g.fillStyle = 'rgba(255, 235, 205, 0.35)';
+              g.beginPath();
+              g.arc(nx - 1, ny - 1, 1.3, 0, Math.PI * 2);
+              g.fill();
+            }
+          }
         }
+        const dust = g.createRadialGradient(S * 0.5, S * 0.5, 16, S * 0.5, S * 0.5, S * 0.45);
+        dust.addColorStop(0, 'rgba(138, 114, 84, 0.22)');
+        dust.addColorStop(1, 'rgba(138, 114, 84, 0)');
+        g.fillStyle = dust;
+        g.fillRect(0, 0, S, S);
       }),
       floor(function (g) {
-        // Concrete: four slabs, speckles, seams.
+        // Concrete: four slabs, aggregate speckles, pores, bevelled seams and lifting loops.
         g.fillStyle = '#aaa79f';
-        g.fillRect(0, 0, 64, 64);
-        for (let i = 0; i < 700; i++) {
-          g.fillStyle = rnd() < 0.5 ? 'rgba(70, 68, 62, 0.28)' : 'rgba(232, 229, 220, 0.32)';
-          g.fillRect(Math.floor(rnd() * 64), Math.floor(rnd() * 64), 1, 1);
+        g.fillRect(0, 0, S, S);
+        for (let i = 0; i < 3200; i++) {
+          g.fillStyle = rnd() < 0.5 ? 'rgba(64, 62, 56, 0.3)' : 'rgba(236, 233, 224, 0.34)';
+          g.fillRect(rnd() * S, rnd() * S, 1.5 + rnd() * 2, 1.5 + rnd() * 2);
         }
-        g.fillStyle = '#76736c';
-        g.fillRect(31, 0, 2, 64);
-        g.fillRect(0, 31, 64, 2);
-        g.fillRect(0, 0, 64, 1);
-        g.fillRect(0, 0, 1, 64);
+        for (let i = 0; i < 40; i++) {
+          g.fillStyle = 'rgba(58, 55, 50, 0.5)';
+          g.beginPath();
+          g.arc(rnd() * S, rnd() * S, 1.2 + rnd() * 2.2, 0, Math.PI * 2);
+          g.fill();
+        }
+        g.fillStyle = '#6e6b64';
+        g.fillRect(125, 0, 6, S);
+        g.fillRect(0, 125, S, 6);
+        g.fillRect(0, 0, S, 4);
+        g.fillRect(0, 0, 4, S);
+        g.fillStyle = 'rgba(245, 242, 234, 0.35)';
+        g.fillRect(131, 0, 2, S);
+        g.fillRect(0, 131, S, 2);
       }),
       floor(function (g) {
         // Painted plywood: green paint, lighter anti-slip dots, a darker painted rim.
         g.fillStyle = '#3d9862';
-        g.fillRect(0, 0, 64, 64);
+        g.fillRect(0, 0, S, S);
         g.fillStyle = '#62b985';
-        for (let y = 4; y < 64; y += 8) {
-          for (let x = (y / 8) % 2 ? 8 : 4; x < 64; x += 8) g.fillRect(x - 1, y - 1, 2, 2);
+        for (let y = 16; y < S; y += 24) {
+          for (let x = (y / 24) % 2 ? 24 : 12; x < S; x += 24) {
+            g.fillRect(x - 3, y - 3, 6, 6);
+            g.fillStyle = 'rgba(24, 68, 40, 0.35)';
+            g.fillRect(x - 3, y + 3, 6, 2);
+            g.fillStyle = '#62b985';
+          }
         }
         g.fillStyle = '#2a7046';
-        edge(g, 3);
+        edge(g, 12);
         g.fill('evenodd');
       }),
       floor(function (g) {
         // Chequer plate, a yellow-black hazard edge.
         chequer(g, '#9da4ab', '#cfd5da', '#686f76');
         g.save();
-        edge(g, 7);
+        edge(g, 28);
         g.clip('evenodd');
         g.fillStyle = '#1e1e1e';
-        g.fillRect(0, 0, 64, 64);
+        g.fillRect(0, 0, S, S);
         g.fillStyle = '#f2c230';
-        for (let k = -64; k < 128; k += 12) {
+        for (let k = -S; k < S * 2; k += 48) {
           g.beginPath();
           g.moveTo(k, 0);
-          g.lineTo(k + 6, 0);
-          g.lineTo(k + 70, 64);
-          g.lineTo(k + 64, 64);
+          g.lineTo(k + 24, 0);
+          g.lineTo(k + S + 24, S);
+          g.lineTo(k + S, S);
           g.closePath();
           g.fill();
         }
@@ -8805,7 +8980,7 @@
         // Dark chequer plate, a red edge.
         chequer(g, '#4a5058', '#727a83', '#2c3036');
         g.fillStyle = '#c8262e';
-        edge(g, 5);
+        edge(g, 20);
         g.fill('evenodd');
       }),
     ];
@@ -9057,7 +9232,7 @@
         timber: !!look.timber,
         frame: new THREE.MeshStandardMaterial({ color: look.frame, roughness: look.rough, metalness: look.metal }),
         brace: new THREE.MeshStandardMaterial({ color: look.brace, roughness: 0.55, metalness: Math.min(0.3, look.metal) }),
-        deck: new THREE.MeshStandardMaterial({ map: floors[i], color: 0xffffff, roughness: look.deckRough, metalness: look.deckMetal }),
+        deck: new THREE.MeshStandardMaterial({ map: floors[i], bumpMap: floors[i], bumpScale: 0.55, color: 0xffffff, roughness: look.deckRough, metalness: look.deckMetal }),
       };
     });
     // Снег и мокрость на настилах, как на земле (weatherSurface): шапка на досках лесов.

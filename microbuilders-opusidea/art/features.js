@@ -34,41 +34,190 @@
     return t;
   }
 
-  // Дверное полотно: четыре доски, две железные полосы и латунная ручка.
+  // Дверное полотно 256×512: четыре дубовые доски с волокнами, сучками и фасками, кованые петли с заклёпками и латунная ручка.
   function paintPlanks(g, w, h) {
-    const tones = ['#8a5a34', '#7b4f2e', '#94623a', '#83552f'];
+    const tones = ['#8c5b34', '#7c4f2d', '#96633b', '#83542e'];
+    const pw = w / 4;
     for (let i = 0; i < 4; i++) {
-      g.fillStyle = tones[i];
-      g.fillRect(i * w / 4, 0, w / 4, h);
+      const x0 = i * pw;
+      const gr = g.createLinearGradient(x0, 0, x0 + pw, 0);
+      gr.addColorStop(0, '#6e4526');
+      gr.addColorStop(0.12, tones[i]);
+      gr.addColorStop(0.88, tones[i]);
+      gr.addColorStop(1, '#5e3a1f');
+      g.fillStyle = gr;
+      g.fillRect(x0, 0, pw, h);
+      for (let k = 0; k < 28; k++) {
+        const gx = x0 + 4 + ((k * 19 + i * 11) % (pw - 8));
+        const gy = (k * 43 + i * 29) % h;
+        const len = 36 + ((k * 17) % 64);
+        g.strokeStyle = k % 3 === 0 ? 'rgba(235, 185, 130, 0.16)' : 'rgba(46, 26, 12, 0.24)';
+        g.lineWidth = 1 + (k % 2) * 0.8;
+        g.beginPath();
+        g.moveTo(gx, gy);
+        g.bezierCurveTo(gx + 2, gy + len * 0.33, gx - 2, gy + len * 0.66, gx + 1, Math.min(h, gy + len));
+        g.stroke();
+      }
+      const kx = x0 + pw * (0.35 + (i % 2) * 0.28);
+      const ky = h * (0.28 + ((i * 37) % 45) / 100);
+      for (let r = 10; r >= 2; r -= 2.5) {
+        g.strokeStyle = 'rgba(48, 26, 12, 0.28)';
+        g.lineWidth = 1.2;
+        g.beginPath();
+        g.ellipse(kx, ky, r * 0.65, r * 1.15, 0, 0, Math.PI * 2);
+        g.stroke();
+      }
+      g.fillStyle = '#3b2110';
+      g.beginPath();
+      g.ellipse(kx, ky, 2.5, 4, 0, 0, Math.PI * 2);
+      g.fill();
     }
-    g.fillStyle = 'rgba(52, 30, 14, 0.22)';
-    for (let i = 0; i < 20; i++) g.fillRect((i * 13) % w, (i * 37) % h, 1, 22);
-    g.fillStyle = '#3b2414';
-    for (let i = 1; i < 4; i++) g.fillRect(i * w / 4 - 1, 0, 2, h);
-    g.fillStyle = '#3a3836';
-    g.fillRect(0, h * 0.16, w, 7);
-    g.fillRect(0, h * 0.78, w, 7);
-    g.fillStyle = '#d6b15a';
+    const wear = g.createLinearGradient(0, h * 0.72, 0, h);
+    wear.addColorStop(0, 'rgba(38, 22, 10, 0)');
+    wear.addColorStop(1, 'rgba(38, 22, 10, 0.35)');
+    g.fillStyle = wear;
+    g.fillRect(0, h * 0.72, w, h * 0.28);
+    for (let i = 1; i < 4; i++) {
+      g.fillStyle = '#2d1a0c';
+      g.fillRect(i * pw - 2, 0, 4, h);
+      g.fillStyle = 'rgba(255, 215, 165, 0.2)';
+      g.fillRect(i * pw + 2, 0, 1.5, h);
+    }
+    for (const hy of [h * 0.16, h * 0.78]) {
+      const sh = Math.round(h * 0.055);
+      g.fillStyle = 'rgba(20, 12, 6, 0.45)';
+      g.fillRect(0, hy + 3, w * 0.88, sh);
+      const hg = g.createLinearGradient(0, hy, 0, hy + sh);
+      hg.addColorStop(0, '#54585c');
+      hg.addColorStop(0.45, '#383a3d');
+      hg.addColorStop(1, '#242628');
+      g.fillStyle = hg;
+      g.fillRect(0, hy, w * 0.86, sh);
+      g.fillStyle = 'rgba(255, 255, 255, 0.22)';
+      g.fillRect(0, hy + 1, w * 0.86, 2);
+      for (let i = 0; i < 4; i++) {
+        const rx = i * pw + pw * 0.5;
+        if (rx > w * 0.84) continue;
+        const ry = hy + sh * 0.5;
+        g.fillStyle = '#1c1d1f';
+        g.beginPath();
+        g.arc(rx + 1, ry + 1.5, 4.5, 0, Math.PI * 2);
+        g.fill();
+        g.fillStyle = '#6c7177';
+        g.beginPath();
+        g.arc(rx, ry, 4, 0, Math.PI * 2);
+        g.fill();
+        g.fillStyle = 'rgba(255, 255, 255, 0.45)';
+        g.beginPath();
+        g.arc(rx - 1.2, ry - 1.2, 1.5, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+    const lx = w * 0.84;
+    const ly = h * 0.52;
+    g.fillStyle = 'rgba(24, 14, 6, 0.5)';
     g.beginPath();
-    g.arc(w * 0.84, h * 0.52, 3.5, 0, Math.PI * 2);
+    g.roundRect(lx - 11, ly - 24, 24, 50, 5);
     g.fill();
+    const bg = g.createLinearGradient(lx - 12, ly - 25, lx + 12, ly + 25);
+    bg.addColorStop(0, '#f2cf78');
+    bg.addColorStop(0.5, '#cfa448');
+    bg.addColorStop(1, '#8f6b24');
+    g.fillStyle = bg;
+    g.beginPath();
+    g.roundRect(lx - 12, ly - 25, 24, 48, 5);
+    g.fill();
+    g.fillStyle = '#2a1c0e';
+    g.beginPath();
+    g.arc(lx, ly + 10, 3, 0, Math.PI * 2);
+    g.fillRect(lx - 1.5, ly + 10, 3, 8);
+    g.fill();
+    g.strokeStyle = '#ffe59e';
+    g.lineWidth = 4;
+    g.beginPath();
+    g.arc(lx, ly - 4, 8, 0, Math.PI * 2);
+    g.stroke();
   }
 
-  // Оконное стекло: тёплое, светлое, с мягким бликом по диагонали — стекло, а не крашеная доска.
+  function paintPlanksBump(g, w, h) {
+    g.fillStyle = 'rgb(128,128,128)';
+    g.fillRect(0, 0, w, h);
+    const pw = w / 4;
+    for (let i = 0; i < 4; i++) {
+      const x0 = i * pw;
+      for (let k = 0; k < 28; k++) {
+        const gx = x0 + 4 + ((k * 19 + i * 11) % (pw - 8));
+        const gy = (k * 43 + i * 29) % h;
+        const len = 36 + ((k * 17) % 64);
+        g.strokeStyle = k % 3 === 0 ? 'rgb(148,148,148)' : 'rgb(104,104,104)';
+        g.lineWidth = 1.4;
+        g.beginPath();
+        g.moveTo(gx, gy);
+        g.lineTo(gx, Math.min(h, gy + len));
+        g.stroke();
+      }
+    }
+    for (let i = 1; i < 4; i++) {
+      g.fillStyle = 'rgb(55,55,55)';
+      g.fillRect(i * pw - 2.5, 0, 5, h);
+    }
+    for (const hy of [h * 0.16, h * 0.78]) {
+      const sh = Math.round(h * 0.055);
+      g.fillStyle = 'rgb(185,185,185)';
+      g.fillRect(0, hy, w * 0.86, sh);
+      for (let i = 0; i < 4; i++) {
+        const rx = i * pw + pw * 0.5;
+        if (rx > w * 0.84) continue;
+        g.fillStyle = 'rgb(230,230,230)';
+        g.beginPath();
+        g.arc(rx, hy + sh * 0.5, 4, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+    g.fillStyle = 'rgb(210,210,210)';
+    g.beginPath();
+    g.roundRect(w * 0.84 - 12, h * 0.52 - 25, 24, 48, 5);
+    g.fill();
+    g.strokeStyle = 'rgb(245,245,245)';
+    g.lineWidth = 4;
+    g.beginPath();
+    g.arc(w * 0.84, h * 0.52 - 4, 8, 0, Math.PI * 2);
+    g.stroke();
+  }
+
+  // Оконное стекло 256×256: тёплый тон, мягкое затенение у рамы и двойной диагональный блик.
   function paintPane(g, w, h) {
     const grad = g.createLinearGradient(0, 0, 0, h);
-    grad.addColorStop(0, '#fff3d6');
-    grad.addColorStop(1, '#e6c38a');
+    grad.addColorStop(0, '#fff4da');
+    grad.addColorStop(0.55, '#f2d7a4');
+    grad.addColorStop(1, '#e2be82');
     g.fillStyle = grad;
     g.fillRect(0, 0, w, h);
-    g.fillStyle = 'rgba(255, 255, 255, 0.4)';
+    const vig = g.createRadialGradient(w * 0.5, h * 0.5, w * 0.25, w * 0.5, h * 0.5, w * 0.72);
+    vig.addColorStop(0, 'rgba(255, 248, 230, 0.15)');
+    vig.addColorStop(1, 'rgba(140, 96, 46, 0.26)');
+    g.fillStyle = vig;
+    g.fillRect(0, 0, w, h);
+    g.fillStyle = 'rgba(255, 255, 255, 0.44)';
     g.beginPath();
-    g.moveTo(w * 0.12, h);
-    g.lineTo(w * 0.4, h);
-    g.lineTo(w * 0.92, 0);
-    g.lineTo(w * 0.64, 0);
+    g.moveTo(w * 0.1, h);
+    g.lineTo(w * 0.36, h);
+    g.lineTo(w * 0.88, 0);
+    g.lineTo(w * 0.62, 0);
     g.closePath();
     g.fill();
+    g.fillStyle = 'rgba(255, 255, 255, 0.24)';
+    g.beginPath();
+    g.moveTo(w * 0.44, h);
+    g.lineTo(w * 0.54, h);
+    g.lineTo(w, h * 0.12);
+    g.lineTo(w, 0);
+    g.lineTo(w * 0.94, 0);
+    g.closePath();
+    g.fill();
+    g.strokeStyle = 'rgba(120, 82, 40, 0.32)';
+    g.lineWidth = 6;
+    g.strokeRect(3, 3, w - 6, h - 6);
   }
 
   // Стекло грани: тёплый тон, альфа 1 у кромки и 0,55 в середине (переход 10 px), мягкая светлая полоса блика по диагонали.
@@ -94,16 +243,23 @@
   // Металл матовый: без карты окружения блестящий металл чернеет (как у лесов).
   const MAT = {
     steel: function () { return new THREE.MeshStandardMaterial({ color: 0x5d656b, roughness: 0.55, metalness: 0.3 }); },
-    wood: function () { return new THREE.MeshStandardMaterial({ map: texture('planks', 64, 128, paintPlanks), roughness: 0.8 }); },
+    wood: function () {
+      return new THREE.MeshStandardMaterial({
+        map: texture('planks', 256, 512, paintPlanks),
+        bumpMap: texture('planksBump', 256, 512, paintPlanksBump),
+        bumpScale: 1.0,
+        roughness: 0.78,
+      });
+    },
     // Слабая подсветка той же текстурой: стекло в глубине проёма и в тени остаётся светлым. Ночью (night()) окна
     // pane горят тёплым светом, paneDim — тёмные комнаты: стекло темнеет и отражает небо.
     pane: function () {
-      const map = texture('pane', 64, 64, paintPane);
-      return new THREE.MeshStandardMaterial({ map: map, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.3, roughness: 0.25, metalness: 0.05 });
+      const map = texture('pane', 256, 256, paintPane);
+      return new THREE.MeshStandardMaterial({ map: map, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.3, roughness: 0.22, metalness: 0.06 });
     },
     paneDim: function () {
-      const map = texture('pane', 64, 64, paintPane);
-      return new THREE.MeshStandardMaterial({ map: map, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.3, roughness: 0.25, metalness: 0.05 });
+      const map = texture('pane', 256, 256, paintPane);
+      return new THREE.MeshStandardMaterial({ map: map, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.3, roughness: 0.22, metalness: 0.06 });
     },
     // Тёплое прозрачное стекло: не путается с голубыми призраками недостроенных блоков. Купол — без текстуры (шов развёртки).
     clear: function () { return glassMaterial(true); },

@@ -401,7 +401,22 @@
     if (look === 'metal') return ORE.tin;
     if (look === 'platinum') return ORE.silver;
     if (GEM_LOOKS[look]) return { rock: 0x6a6660, mix: 0.3, vein: [0xd8d2c8, 0, 0.5, 0.02], spot: [tone, 0.1, 0.2, 0.36, 2.2] };
-    return { rock: tone, mix: 1 };
+    if (id === 'ladder-granite' || id === 'ladder-granite-dark') {
+      return { rock: tone, mix: 0.9, vein: [0xe6dcd2, 0, 0.45, 0.024], spot: [0x24201e, 0.12, 0.35, 0.44, 1.5] };
+    }
+    if (look === 'sand') {
+      return { rock: tone, mix: 0.92, bands: [mixHex(tone, 0x6e5032, 0.34), mixHex(tone, 0xfff0d4, 0.28)], bandMix: 0.36, spot: [0xfff8e8, 0.15, 0.3, 0.24, 1.2] };
+    }
+    if (look === 'wood') {
+      return { rock: tone, mix: 0.9, bands: [mixHex(tone, 0x3b2312, 0.44), mixHex(tone, 0xf5c98c, 0.24)], bandMix: 0.38, vein: [0x422815, 0, 0.85, 0.024] };
+    }
+    if (look === 'brick') {
+      return { rock: tone, mix: 0.9, bands: [mixHex(tone, 0x5c281c, 0.32), mixHex(tone, 0xf2d2b0, 0.22)], bandMix: 0.32, rust: mixHex(tone, 0x6e321e, 0.45), spot: [0x3d231a, 0, 0.85, 0.22, 1.4] };
+    }
+    if (look === 'concrete') {
+      return { rock: tone, mix: 0.92, vein: [0x7c7a74, 0, 0.85, 0.02], spot: [0x585550, 0, 0.75, 0.36, 1.5] };
+    }
+    return { rock: tone, mix: 0.92, vein: [0xe6e0d2, 0, 0.55, 0.022], spot: [0x4a443c, 0, 0.8, 0.26, 1.5] };
   }
   const oreCache = new Map();
 
@@ -515,7 +530,7 @@
           // Малахит: концентрические полосы тёмной и светлой зелени.
           const s = 0.5 + 0.5 * Math.sin((fbm(X * 0.7 + 4, Y * 0.7) * 9 + (px + py) / T * 1.5) * 6.283);
           const c = s * s;
-          blend([dark[0] + (light[0] - dark[0]) * c, dark[1] + (light[1] - dark[1]) * c, dark[2] + (light[2] - dark[2]) * c], 0.75);
+          blend([dark[0] + (light[0] - dark[0]) * c, dark[1] + (light[1] - dark[1]) * c, dark[2] + (light[2] - dark[2]) * c], o.bandMix || 0.75);
         }
         let near = 0;
         if (vein) {

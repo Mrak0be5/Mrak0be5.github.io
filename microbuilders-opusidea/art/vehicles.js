@@ -65,70 +65,106 @@
   }
 
   // Коробка в список частей; stripe — грани берут полосы из атласа.
-  // Чертёж 256×144: синяя калька с сеткой, белый фасад с зубцами, окнами и аркой, план, размерная линия и штамп.
+  // Чертёж 512×288: синяя калька с миллиметровкой, сгибами листа, фасадом с кладкой, планом, осевыми линиями и штампом.
   function blueprintTexture() {
     const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 144;
+    canvas.width = 512;
+    canvas.height = 288;
     const g = canvas.getContext('2d');
-    g.fillStyle = '#3a76ad';
-    g.fillRect(0, 0, 256, 144);
-    g.strokeStyle = 'rgba(255,255,255,0.14)';
+    const bg = g.createRadialGradient(256, 144, 30, 256, 144, 300);
+    bg.addColorStop(0, '#417fb8');
+    bg.addColorStop(1, '#2d6296');
+    g.fillStyle = bg;
+    g.fillRect(0, 0, 512, 288);
+    g.strokeStyle = 'rgba(255,255,255,0.08)';
     g.lineWidth = 1;
     g.beginPath();
-    for (let x = 8; x < 256; x += 12) {
+    for (let x = 8; x < 512; x += 8) {
       g.moveTo(x + 0.5, 0);
-      g.lineTo(x + 0.5, 144);
+      g.lineTo(x + 0.5, 288);
     }
-    for (let y = 8; y < 144; y += 12) {
+    for (let y = 8; y < 288; y += 8) {
       g.moveTo(0, y + 0.5);
-      g.lineTo(256, y + 0.5);
+      g.lineTo(512, y + 0.5);
     }
+    g.stroke();
+    g.strokeStyle = 'rgba(255,255,255,0.18)';
+    g.beginPath();
+    for (let x = 16; x < 512; x += 32) {
+      g.moveTo(x + 0.5, 0);
+      g.lineTo(x + 0.5, 288);
+    }
+    for (let y = 16; y < 288; y += 32) {
+      g.moveTo(0, y + 0.5);
+      g.lineTo(512, y + 0.5);
+    }
+    g.stroke();
+    // Сгибы бумажного листа.
+    g.strokeStyle = 'rgba(255,255,255,0.12)';
+    g.lineWidth = 2;
+    g.beginPath();
+    g.moveTo(256, 12);
+    g.lineTo(256, 276);
+    g.moveTo(12, 144);
+    g.lineTo(500, 144);
     g.stroke();
     g.strokeStyle = '#eef6ff';
     g.lineJoin = 'round';
-    g.lineWidth = 3;
-    g.strokeRect(6, 6, 244, 132);
+    g.lineWidth = 4;
+    g.strokeRect(12, 12, 488, 264);
+    g.lineWidth = 1.5;
+    g.strokeRect(18, 18, 476, 252);
+    // Главный фасад с зубцами, аркой ворот, окнами с переплётом и отметками высот.
+    g.lineWidth = 3.5;
     g.beginPath();
-    g.moveTo(30, 112);
-    g.lineTo(30, 28);
+    g.moveTo(60, 224);
+    g.lineTo(60, 56);
     for (let i = 0; i < 6; i++) {
-      const x = 30 + i * 22;
-      g.lineTo(x + 11, 28);
-      g.lineTo(x + 11, 40);
-      g.lineTo(x + 22, 40);
-      g.lineTo(x + 22, 28);
+      const x = 60 + i * 44;
+      g.lineTo(x + 22, 56);
+      g.lineTo(x + 22, 80);
+      g.lineTo(x + 44, 80);
+      g.lineTo(x + 44, 56);
     }
-    g.lineTo(162, 112);
+    g.lineTo(324, 224);
     g.closePath();
-    g.moveTo(84, 112);
-    g.lineTo(84, 84);
-    g.arc(96, 84, 12, Math.PI, 0);
-    g.lineTo(108, 112);
-    g.rect(46, 58, 16, 16);
-    g.rect(130, 58, 16, 16);
-    g.rect(184, 28, 52, 52);
-    g.moveTo(210, 28);
-    g.lineTo(210, 60);
-    g.lineTo(236, 60);
+    g.moveTo(168, 224);
+    g.lineTo(168, 168);
+    g.arc(192, 168, 24, Math.PI, 0);
+    g.lineTo(216, 224);
+    g.rect(92, 116, 32, 32);
+    g.rect(260, 116, 32, 32);
+    g.rect(368, 56, 104, 104);
+    g.moveTo(420, 56);
+    g.lineTo(420, 120);
+    g.lineTo(472, 120);
     g.stroke();
-    g.lineWidth = 2;
+    g.lineWidth = 1.6;
     g.beginPath();
-    g.moveTo(30, 126);
-    g.lineTo(162, 126);
-    g.moveTo(30, 120);
-    g.lineTo(30, 132);
-    g.moveTo(162, 120);
-    g.lineTo(162, 132);
-    g.rect(184, 96, 52, 30);
-    g.moveTo(184, 108);
-    g.lineTo(236, 108);
-    g.moveTo(206, 108);
-    g.lineTo(206, 126);
+    g.moveTo(108, 116); g.lineTo(108, 148); g.moveTo(92, 132); g.lineTo(124, 132);
+    g.moveTo(276, 116); g.lineTo(276, 148); g.moveTo(260, 132); g.lineTo(292, 132);
+    g.moveTo(192, 144); g.lineTo(192, 224);
+    g.rect(376, 64, 88, 88);
+    // Размерные линии и штамп чертежа.
+    g.lineWidth = 2.5;
+    g.moveTo(60, 252);
+    g.lineTo(324, 252);
+    g.moveTo(60, 240);
+    g.lineTo(60, 264);
+    g.moveTo(324, 240);
+    g.lineTo(324, 264);
+    g.rect(368, 192, 104, 60);
+    g.moveTo(368, 216);
+    g.lineTo(472, 216);
+    g.moveTo(368, 234);
+    g.lineTo(472, 234);
+    g.moveTo(412, 216);
+    g.lineTo(412, 252);
     g.stroke();
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = 4;
+    texture.userData.shared = true;
     return texture;
   }
 
@@ -240,6 +276,10 @@
         'float mbLamp = step( 0.1, mbU ) * step( mbU, 0.2 );',
         'float mbWood = step( 0.3, mbU ) * step( mbU, 0.5 );',
         'float mbPaint = 1.0 - mbGlass - mbLamp - mbWood;',
+        // Волокна, годовые кольца и сучки на досках поддонов и столов планирования (mbWood).
+        'float mbWg = sin( ( vMbLocal.x * 26.0 + mbNoise( vMbLocal * vec3( 4.0, 18.0, 4.0 ) ) * 4.5 ) * 3.14159 );',
+        'float mbWk = smoothstep( 0.78, 0.88, mbNoise( vMbLocal * vec3( 9.0, 9.0, 3.5 ) + 2.3 ) );',
+        'diffuseColor.rgb *= 1.0 + mbWood * ( 0.08 * mbWg - 0.24 * mbWk );',
         // Сколы и подтёки — только по жёлтой краске техники: тёмный металл пятнами, вертикальные потёки грязи.
         'float mbYel = mbPaint * smoothstep( 0.3, 0.6, diffuseColor.r - diffuseColor.b );',
         // Сколы редкие: мелкий шум только там, где крупный (3/м) уже высок, — несколько потёртых мест, а не «леопард».
