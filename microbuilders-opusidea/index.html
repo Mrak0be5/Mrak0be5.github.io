@@ -16,7 +16,7 @@
 <canvas id="view"></canvas>
 <script src="balance.js?v=120"></script>
 <script src="upgrade-graph.js?v=3"></script>
-<script src="ui.js?v=84"></script>
+<script src="ui.js?v=85"></script>
 <!-- three.js r160 as an ES module (r161 drops build/three.min.js). The scripts after it use the global
      THREE: the module sets it, then adds them in this order (async = false keeps it). -->
 <script type="module">
@@ -33,15 +33,15 @@ window.THREE = THREE;
   'worker-log.js?v=13',
   'cpu-profiler.js?v=14',
   'camera-controller.js?v=10',
-  'art/post.js?v=1',
-  'block-materials.js?v=2',
+  'art/post.js?v=2',
+  'block-materials.js?v=3',
   'art/features.js?v=1',
   'art/fx.js?v=2',
   'art/quarry.js?v=3',
   'art/props.js?v=2',
   'art/vehicles.js?v=3',
   'art/ambient.js?v=1',
-  'game.js?v=276',
+  'game.js?v=277',
 ].forEach(function (src) {
   const script = document.createElement('script');
   script.src = src;

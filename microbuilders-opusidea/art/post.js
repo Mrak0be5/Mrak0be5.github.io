@@ -5,7 +5,11 @@
 // Альфа 0 на самом холсте браузер сводит в белое, поэтому смешивание маски включено только пока идёт пост
 // (setActive): без поста помеченные материалы рисуются как обычные.
 (function () {
+  // Учёт помеченных материалов — слабые ссылки: материал, который выбросили, уходит со сборкой мусора, а живой
+  // остаётся на учёте и после dispose (смена стройки освобождает и общие материалы — огни техники, ношу, городок:
+  // three соберёт их заново, а свечение и смешивание при выключении поста должны остаться верными).
   const glowing = new Set();
+  const known = new WeakSet();
   let active = false;
 
   function apply(m) {
@@ -24,21 +28,17 @@
   // Пометить материал как светящийся (on = false — снять).
   function mark(m, on) {
     const want = on !== false;
+    if (want && !known.has(m)) {
+      known.add(m);
+      glowing.add(new WeakRef(m));
+    }
     if (!!m.userData.mbGlow === want) return;
     m.userData.mbGlow = want;
-    if (want && !glowing.has(m)) {
-      glowing.add(m);
-      m.addEventListener('dispose', forget);
-    }
     apply(m);
   }
 
-  // Уничтоженный материал забывается и снова обычный: кэшированные материалы (ноша, городок) после смены
-  // стройки рисуются без свечения, но не белым, когда пост выключат.
-  function forget(event) {
-    const m = event.target;
-    m.removeEventListener('dispose', forget);
-    glowing.delete(m);
+  // Копия помеченного материала (material.clone переносит userData и смешивание): обычная, без свечения.
+  function plain(m) {
     m.userData.mbGlow = false;
     m.blending = THREE.NormalBlending;
   }
@@ -47,7 +47,11 @@
   function setActive(on) {
     if (active === on) return;
     active = on;
-    glowing.forEach(apply);
+    glowing.forEach(function (ref) {
+      const m = ref.deref();
+      if (m) apply(m);
+      else glowing.delete(ref);
+    });
   }
 
   // null, если WebGL 1 (нет MSAA у RT): тогда игра рисует как раньше.
@@ -106,6 +110,10 @@
         blur.uniforms.px.value.set(1 / rtDown.width, 1 / rtDown.height);
       }
       comp.uniforms.glow.value = glow;
+      // Посту нужен только цвет: глубину и трафарет из MSAA не копировать (внутренний флаг three r160, его же ставит
+      // WebXR). Иначе three копирует их каждый кадр, а на ANGLE/D3D11 это дороже всего поста: 3.11, RTX 4090 под
+      // нагрузкой, кадр 1056×2112 — 24,7 мс с копией, 10,7 мс без неё. Флаг — каждый кадр: setSize и сброс контекста его стирают.
+      renderer.properties.get(rt).__ignoreDepthValues = true;
       renderer.setRenderTarget(rt);
       renderer.render(scene, camera);
       const calls = renderer.info.render.calls;
@@ -127,8 +135,8 @@
       rtBlur.setSize(1, 1);
     }
 
-    return { render: render, release: release };
+    return { render: render, release: release, targets: { main: rt, down: rtDown, blur: rtBlur } };
   }
 
-  window.MicroBuildersPost = { create: create, mark: mark, setActive: setActive };
+  window.MicroBuildersPost = { create: create, mark: mark, plain: plain, setActive: setActive };
 })();

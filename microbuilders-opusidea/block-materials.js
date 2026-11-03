@@ -2062,13 +2062,16 @@
         'normal = normalize( mix( normal, normalize( ( viewMatrix * vec4( sign( vMbOff ), 0.0 ) ).xyz ), 0.85 * mbCorner ) );',
         '#endif',
         // Погода: по нормали геометрии (без рельефа фактуры). У здания снег ложится и узкой полосой по верхней
-        // кромке боковых граней блока, открытого сверху.
-        'vec3 mbFlat = normalize( vNormal );',
-        'vec2 mbW = mbWeather( vMbWorld, ( vec4( mbFlat, 0.0 ) * viewMatrix ).xyz );',
-        '#ifdef MB_NB',
-        'mbW.x = max( mbW.x, 0.9 * mbWall * smoothstep( 0.36, 0.46, vMbOff.y ) * ( 1.0 - mbSide( mbNbI.y, vec3( 0.0, 1.0, 0.0 ) ) ) * smoothstep( 0.55, 0.85, mbSnow ) );',
-        '#endif',
-        'mbWeatherApply( mbW, mbFlat, diffuseColor.rgb, roughnessFactor, metalnessFactor, normal );',
+        // кромке боковых граней блока, открытого сверху. В ясную погоду она ничего не меняет — шум не считается
+        // (ветвь по uniform: все пиксели кадра идут одной дорогой).
+        'if ( mbSnow > 0.0 || mbWet > 0.0 ) {',
+        '  vec3 mbFlat = normalize( vNormal );',
+        '  vec2 mbW = mbWeather( vMbWorld, ( vec4( mbFlat, 0.0 ) * viewMatrix ).xyz );',
+        '  #ifdef MB_NB',
+        '  mbW.x = max( mbW.x, 0.9 * mbWall * smoothstep( 0.36, 0.46, vMbOff.y ) * ( 1.0 - mbSide( mbNbI.y, vec3( 0.0, 1.0, 0.0 ) ) ) * smoothstep( 0.55, 0.85, mbSnow ) );',
+        '  #endif',
+        '  mbWeatherApply( mbW, mbFlat, diffuseColor.rgb, roughnessFactor, metalnessFactor, normal );',
+        '}',
       ].join('\n'))
       .replace('#include <aomap_fragment>', [
         '#include <aomap_fragment>',
@@ -2139,8 +2142,7 @@
       ].join('\n'))
       .replace('#include <normal_fragment_maps>', [
         '#include <normal_fragment_maps>',
-        'vec3 mbFlat = normalize( vNormal );',
-        'mbWeatherApply( mbWeather( vMbP, normalize( vMbN ) ), mbFlat, diffuseColor.rgb, roughnessFactor, metalnessFactor, normal );',
+        'if ( mbSnow > 0.0 || mbWet > 0.0 ) mbWeatherApply( mbWeather( vMbP, normalize( vMbN ) ), normalize( vNormal ), diffuseColor.rgb, roughnessFactor, metalnessFactor, normal );',
       ].join('\n'));
   }
 
@@ -2275,6 +2277,8 @@
     };
   }
 
+  let pmrem = null;
+  let envTarget = null;
   // Окружение для отражений металла: небо, тёплый горизонт, земля, солнце и два облака.
   // Только блокам (envMap), не всей сцене: иначе пересветит траву и рабочих.
   function environment(renderer) {
@@ -2297,10 +2301,13 @@
     const texture = new THREE.CanvasTexture(canvas);
     texture.mapping = THREE.EquirectangularReflectionMapping;
     texture.colorSpace = THREE.SRGBColorSpace;
-    const pmrem = new THREE.PMREMGenerator(renderer);
-    env = pmrem.fromEquirectangular(texture).texture;
+    // Повторный вызов (game.js после сброса контекста видеокарты: содержимое цели было только на ней) рисует в ту же
+    // цель, и материалы блоков, ссылаясь на ту же текстуру, снова видят отражения. Генератор живёт с игрой: только
+    // свой (с проходами размытия) умеет рисовать в готовую цель.
+    if (!pmrem) pmrem = new THREE.PMREMGenerator(renderer);
+    envTarget = pmrem.fromEquirectangular(texture, envTarget);
+    env = envTarget.texture;
     texture.dispose();
-    pmrem.dispose();
   }
 
   window.MicroBuildersBlocks = {

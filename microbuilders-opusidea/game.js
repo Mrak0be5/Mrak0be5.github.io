@@ -8,9 +8,9 @@
   // Телефон или планшет (основной ввод — палец): тени 2048 вместо 4096, иначе риск потери WebGL-контекста.
   const handheld = mobileRendering || matchMedia('(pointer: coarse)').matches;
   // Качество графики (меню → «Графика»): high — свечение (art/post.js), тени 4096, полная чёткость; medium — тени
-  // 2048, чёткость до 1,5; low — тени 1024, чёткость 1. «Авто» начинает с high (на телефоне — с medium) и опускает
-  // на ступень, если на стройке меньше 40 кадров в секунду 8 секунд подряд (watchQuality). ?quality=high|medium|low —
-  // жёстко, без авто (снимки и замеры).
+  // 2048, чёткость до 1,5; low — тени 1024, чёткость 1. «Авто» начинает с high (на телефоне — с medium), опускает
+  // на ступень, если на стройке меньше 40 кадров в секунду 8 секунд подряд, и возвращает, когда видеокарта
+  // освободилась (watchQuality). ?quality=high|medium|low — жёстко, без авто (снимки и замеры).
   const QUALITY = {
     high: { shadow: 4096, ratio: 3, post: true },
     medium: { shadow: 2048, ratio: 1.5, post: false },
@@ -20,12 +20,31 @@
   const QUALITY_ORDER = ['auto', 'high', 'medium', 'low'];
   const forcedQuality = QUALITY[new URLSearchParams(window.location.search).get('quality')] ? new URLSearchParams(window.location.search).get('quality') : null;
   let qualitySetting = 'auto';
-  let qualityLevel = forcedQuality || (mobileRendering ? 'low' : handheld ? 'medium' : 'high');
-  const qualityWatch = { t: 0, frames: 0, strikes: 0, grace: 8 };
+  const QUALITY_TOP = mobileRendering ? 'low' : handheld ? 'medium' : 'high';
+  let qualityLevel = forcedQuality || QUALITY_TOP;
+  const qualityWatch = { t: 0, frames: 0, strikes: 0, good: 0, grace: 8, droppedAt: 0, raisedAt: -1e9, noRaise: false };
   // Пост свечения: создаётся при первом кадре на «высоком», null — WebGL 1 или ещё не нужен.
   let post = null;
   let postTried = false;
-  const renderer = new THREE.WebGLRenderer({ canvas: view, antialias: !mobileRendering });
+  let postBlocked = false; // Dev: MicroBuildersDebug.post(false) — замеры цены поста
+  // Без WebGL игры нет. Браузер не дал контекст (сбой видеокарты или драйвера, после сбоя браузер на время
+  // отключает 3D сайту, выключено аппаратное ускорение) — окно с объяснением вместо пустой страницы.
+  let renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas: view, antialias: !mobileRendering });
+  } catch (error) {
+    window.MicroBuildersUI.overlay.open({
+      id: 'no-webgl',
+      kicker: 'Графика',
+      title: 'Не удалось включить 3D-графику',
+      body: '<p>Браузер не дал игре видеокарту. Так бывает после сбоя видеокарты или драйвера, когда её целиком заняла ' +
+        'другая программа, или если в браузере выключено аппаратное ускорение. Прогресс сохранён.</p>' +
+        '<p>Обновите страницу; если не поможет — перезапустите браузер.</p>',
+      closable: false,
+      actions: [{ label: 'Обновить страницу', primary: true, onClick: function () { window.location.reload(); } }],
+    });
+    return;
+  }
   // The framed desktop preview is CSS-scaled, so render at the scaled resolution to stay sharp.
   function renderPixelRatio() {
     return mobileRendering ? 1 : Math.min(QUALITY[qualityLevel].ratio, window.devicePixelRatio * MicroBuildersStage.scale());
@@ -139,6 +158,44 @@
   scene.add(sun.target);
   // Окружение для отражений металла и самоцветов (block-materials.js): только блокам, не всей сцене.
   Blocks.environment(renderer);
+
+  // Видеокарта сбросила контекст (её заняла другая программа, сбой драйвера, нехватка памяти): кадр пустой, игра
+  // идёт дальше. three ждёт восстановления сам (preventDefault в своём обработчике) и потом заново загружает
+  // геометрию и фактуры; отражения блоков живут только на видеокарте — их рисуем заново, а «Авто» опускает
+  // качество на ступень, чтобы сброс не повторился. Не восстановился за GL_LOST_WAIT секунд — окно с перезапуском.
+  const GL_LOST_WAIT = 4;
+  let glLostTimer = 0;
+  view.addEventListener('webglcontextlost', function () {
+    if (!glLostTimer) glLostTimer = setTimeout(openGraphicsLost, GL_LOST_WAIT * 1000);
+  });
+  view.addEventListener('webglcontextrestored', function () {
+    clearTimeout(glLostTimer);
+    glLostTimer = 0;
+    UI.overlay.close('graphics-lost');
+    Blocks.environment(renderer);
+    if (!forcedQuality && qualitySetting === 'auto') {
+      qualityWatch.noRaise = true; // после сброса «Авто» качество обратно не поднимает
+      if (qualityLevel !== 'low') applyQuality(qualityLevel === 'high' ? 'medium' : 'low');
+    }
+  });
+
+  function openGraphicsLost() {
+    glLostTimer = 0;
+    if (!renderer.getContext().isContextLost()) return;
+    saveLive({ awaySince: null });
+    if (meta) Meta.save(meta);
+    UI.overlay.open({
+      id: 'graphics-lost',
+      kicker: 'Графика',
+      title: 'Видеокарта сбросила графику',
+      body: '<p>Так бывает, когда видеокарту целиком заняла другая программа или сбоит драйвер. Стройка идёт, ' +
+        'прогресс сохранён — нужно перезапустить графику.</p>',
+      actions: [
+        { label: 'Перезапустить графику', primary: true, onClick: function () { window.location.reload(); } },
+        { label: 'Подождать' },
+      ],
+    });
+  }
 
   // ---- time of day (docs/gdd/08-needs-weather-events.md → «День и ночь») ----
   // The sky dome, the fog, the hemisphere light and the sun follow the site clock
@@ -936,8 +993,10 @@
   const OUTLINE_DIM = new THREE.Color(0xa88848);
   const OUTLINE_BRIGHT = new THREE.Color(0xf3dfae);
   let featureState = Features.createState();
-  // Призраки здания видны сразу: ярус, который строят, и силуэт цели (переключатель «Подсветка» в Dev).
+  // Призраки здания: ярус, который строят, виден сразу (переключатель «Подсветка» в Dev); бледный силуэт цели — только
+  // если игрок включил его в меню («Силуэт здания», meta.settings.silhouette), по умолчанию выключен.
   let ghostsOn = true;
+  let silhouetteOn = false;
   let scaffoldLookup = new Map();
   // Wear marks by piece id (crack lines, the tape cross of a broken piece) and the pieces on view.
   let scaffoldCrackLookup = new Map();
@@ -1092,8 +1151,17 @@
     qualitySetting = QUALITY_ORDER[(QUALITY_ORDER.indexOf(qualitySetting) + 1) % QUALITY_ORDER.length];
     meta.settings.quality = qualitySetting;
     Meta.save(meta);
-    if (!forcedQuality) applyQuality(qualitySetting === 'auto' ? (handheld ? 'medium' : 'high') : qualitySetting);
+    if (!forcedQuality) applyQuality(qualitySetting === 'auto' ? QUALITY_TOP : qualitySetting);
     paintQuality();
+  });
+  // «Силуэт здания»: бледный силуэт непоставленных блоков выше яруса, который строят; по умолчанию выключен.
+  document.getElementById('silhouette').addEventListener('click', function () {
+    silhouetteOn = !silhouetteOn;
+    meta.settings.silhouette = silhouetteOn;
+    Meta.save(meta);
+    paintSilhouette();
+    ghostTier = NaN;
+    refreshGhosts();
   });
   // Browsers start audio only from a gesture: the first touch anywhere unlocks it and starts the music.
   document.addEventListener('pointerdown', function () {
@@ -1309,6 +1377,11 @@
       features: function () { return featureState; },
       chapterTint: function () { return chapterTint; },
       quality: function () { return { setting: qualitySetting, level: qualityLevel, forced: forcedQuality, post: !!post, handheld: handheld }; },
+      // Замеры графики (tools/runs/tf/perf.mjs): рендерер и сцена как есть, пост вкл/выкл.
+      renderer: function () { return renderer; },
+      post: function (on) { postBlocked = on === false; return !postBlocked; },
+      postTargets: function () { return post && post.targets; },
+      scene: function () { return scene; },
       // Что под точкой экрана (sx, sy — доли от левого верхнего угла): проверка графики.
       pick: function (sx, sy) {
         workerPointer.set(sx * 2 - 1, 1 - sy * 2);
@@ -1517,6 +1590,8 @@
     qualitySetting = QUALITY_ORDER.indexOf(meta.settings.quality) >= 0 ? meta.settings.quality : 'auto';
     if (!forcedQuality && qualitySetting !== 'auto') applyQuality(qualitySetting);
     paintQuality();
+    silhouetteOn = meta.settings.silhouette === true;
+    paintSilhouette();
     // The absence started when the page was hidden (or, after a crash, at the last save).
     const company = Meta.claimAway(meta, meta.hiddenAt || meta.lastSeenAt, true);
     const key = Meta.activeSite(meta);
@@ -1596,6 +1671,10 @@
       (setting === 'auto' ? ' · ' + QUALITY_NAMES[qualityLevel] : '');
   }
 
+  function paintSilhouette() {
+    document.getElementById('silhouette').textContent = 'Силуэт здания: ' + (silhouetteOn ? 'вкл' : 'выкл');
+  }
+
   // Новое качество: размер карты теней (карту three создаст заново), чёткость холста, пост свечения.
   function applyQuality(level) {
     qualityLevel = level;
@@ -1612,14 +1691,17 @@
     qualityWatch.t = 0;
     qualityWatch.frames = 0;
     qualityWatch.strikes = 0;
+    qualityWatch.good = 0;
     qualityWatch.grace = 6;
     paintQuality();
   }
 
-  // «Авто»: средний кадр на стройке за 4 секунды; два таких отрезка подряд ниже 40 кадров — ступень ниже.
+  // «Авто»: средний кадр на стройке за 4 секунды; два таких отрезка подряд ниже 40 кадров — ступень ниже. Три подряд
+  // от 57 кадров не раньше чем через минуту после спуска (видеокарту отпустила другая программа) — ступень выше, до
+  // стартовой. Спуск меньше чем через 30 секунд после подъёма запрещает подъёмы до конца сеанса — без качелей.
   // Первые секунды уровня (сборка шейдеров) и рывки длиннее полсекунды не считаются.
   function watchQuality(wallDt) {
-    if (forcedQuality || qualitySetting !== 'auto' || qualityLevel === 'low') return;
+    if (forcedQuality || qualitySetting !== 'auto') return;
     if (currentScreen !== 'build' || document.visibilityState === 'hidden' || !world || wallDt > 0.5) {
       qualityWatch.t = 0;
       qualityWatch.frames = 0;
@@ -1636,13 +1718,22 @@
     qualityWatch.t = 0;
     qualityWatch.frames = 0;
     qualityWatch.strikes = fps < 40 ? qualityWatch.strikes + 1 : 0;
-    if (qualityWatch.strikes >= 2) applyQuality(qualityLevel === 'high' ? 'medium' : 'low');
+    qualityWatch.good = fps >= 57 ? qualityWatch.good + 1 : 0;
+    const now = performance.now();
+    if (qualityWatch.strikes >= 2 && qualityLevel !== 'low') {
+      if (now - qualityWatch.raisedAt < 30000) qualityWatch.noRaise = true;
+      qualityWatch.droppedAt = now;
+      applyQuality(qualityLevel === 'high' ? 'medium' : 'low');
+    } else if (qualityWatch.good >= 3 && !qualityWatch.noRaise && qualityLevel !== QUALITY_TOP && now - qualityWatch.droppedAt > 60000) {
+      qualityWatch.raisedAt = now;
+      applyQuality(qualityLevel === 'low' ? 'medium' : 'high');
+    }
   }
 
   // Кадр на экран: на «высоком» ПК — через пост свечения (art/post.js), иначе как раньше. ?quality=high включает
   // пост и на «телефоне» (снимки в headless Chrome, где указатель считается пальцем).
   function renderScene(night) {
-    if (QUALITY[qualityLevel].post && (!handheld || forcedQuality === 'high')) {
+    if (QUALITY[qualityLevel].post && !postBlocked && (!handheld || forcedQuality === 'high')) {
       if (!postTried) {
         postTried = true;
         post = MicroBuildersPost.create(renderer);
@@ -8946,6 +9037,8 @@
     const copy = material.clone();
     copy.onBeforeCompile = material.onBeforeCompile;
     copy.defines = Object.assign({}, material.defines);
+    // Копии — прозрачные кубы рентгена: смешивание по прозрачности, без маски свечения (art/post.js).
+    MicroBuildersPost.plain(copy);
     return copy;
   }
 
@@ -9003,7 +9096,7 @@
   }
 
   // Ярус, который сейчас строят (высота блока-фокуса — самый ранний готовый к укладке), — рамка и еле заметное
-  // стекло; остальные непоставленные блоки — бледный силуэт цели: с первых секунд видно, что строим.
+  // стекло; остальные непоставленные блоки — бледный силуэт цели, если он включён в меню («Силуэт здания»).
   // Двери и окна — только на ярусе.
   function refreshGhosts() {
     if (!world || !ghostGlass) return;
@@ -9017,7 +9110,7 @@
       const block = world.blocks[i];
       const record = blockViews.get(block.id);
       if (!record) continue;
-      const shown = !block.built && tier >= 0;
+      const shown = !block.built && tier >= 0 && (silhouetteOn || block.y === tier);
       if (record.ghost) {
         setInstanceScale(record.ghost, record.ghostIndex, shown ? 1 : 0.001);
         if (shown) ghostBlocks.push(block);
@@ -9510,9 +9603,13 @@
       }
       for (let i = pops.length - 1; i >= 0; i--) if (pops[i].id === block.id) pops.splice(i, 1);
       const record = blockViews.get(block.id);
-      if (record) setBlockVisualScale(record, 0.001, 1);
+      if (record) setBlockVisualScale(record, 0.001, 0.001);
       shatterCube(block, x, y - 0.5, z);
     });
+    // Призраки сбитых кубов вернёт refreshGhosts в этом же кадре: рамка яруса или силуэт (если он включён), маски соседей.
+    // Счётчик сброшен тоже: за кадр могли и поставить столько же блоков, и тогда число непоставленных не изменится.
+    ghostTier = NaN;
+    ghostRemaining = -1;
     // The bolt with two branches off its lower half.
     const main = boltPath(x, y, z, 34, 10);
     const lines = [{ points: main, width: 0.07 }];
@@ -10219,16 +10316,22 @@
         SNOW_FIELD_GLSL + shader.fragmentShader
         .replace('#include <map_fragment>', [
           '#include <map_fragment>',
-          'float snowGrain = 1.0;',
-          '#ifdef USE_MAP',
-          'snowGrain = 0.82 + 0.18 * fract(sin(dot(floor(vMapUv * 96.0), vec2(12.9898, 78.233))) * 43758.5453);',
-          '#endif',
-          'float snowN = snowField(vSnowWorld.xz) + ' + lift + ';',
-          'float snowC = snowLevel(uSnow);',
-          'float snowAmt = smoothstep(snowN - 0.05, snowN + 0.05, snowC);',
-          'float slush = smoothstep(snowN - 0.24, snowN - 0.04, snowC) * (1.0 - snowAmt) * uMelt;',
-          'diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.93, 0.97), clamp(snowAmt * ' + mix.toFixed(2) + ' * snowGrain, 0.0, 1.0));',
-          'diffuseColor.rgb *= 1.0 - 0.34 * slush;',
+          'float snowAmt = 0.0;',
+          'float slush = 0.0;',
+          // Снег и слякоть — только пока они есть: без них поле снега ничего не меняет, его шум не считается
+          // (ветвь по uniform — весь кадр идёт одной дорогой). Остаток таяния ниже 0,001 — меньше ступени цвета.
+          'if (uSnow > 0.0 || uMelt > 0.001) {',
+          '  float snowGrain = 1.0;',
+          '  #ifdef USE_MAP',
+          '  snowGrain = 0.82 + 0.18 * fract(sin(dot(floor(vMapUv * 96.0), vec2(12.9898, 78.233))) * 43758.5453);',
+          '  #endif',
+          '  float snowN = snowField(vSnowWorld.xz) + ' + lift + ';',
+          '  float snowC = snowLevel(uSnow);',
+          '  snowAmt = smoothstep(snowN - 0.05, snowN + 0.05, snowC);',
+          '  slush = smoothstep(snowN - 0.24, snowN - 0.04, snowC) * (1.0 - snowAmt) * uMelt;',
+          '  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.93, 0.97), clamp(snowAmt * ' + mix.toFixed(2) + ' * snowGrain, 0.0, 1.0));',
+          '  diffuseColor.rgb *= 1.0 - 0.34 * slush;',
+          '}',
           'diffuseColor.rgb *= 1.0 - 0.38 * uWet * (1.0 - snowAmt);',
           'float dryAmt = smoothstep(0.0, 1.0, uDry) * ' + scorch + ';',
           'diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.5, 1.18, 0.42) + vec3(0.12, 0.08, 0.0), dryAmt * (1.0 - snowAmt));',
@@ -11727,7 +11830,12 @@
       return;
     }
     cameraController.frameHome({ animate: true, seconds: COMPLETE_SWEEP, azimuth: cameraController.getView().azimuth + 0.8 });
-    setTimeout(function () { openCompleteDialog(reward); }, COMPLETE_SWEEP * 1000);
+    // Игрок мог уйти раньше (кнопка «Следующий заказ» под полосой): окно старой стройки уже не открывать — награда
+    // выдана, а его «Следующий заказ» считал бы следующий уровень от нового и пропустил бы один.
+    const done = campaign;
+    setTimeout(function () {
+      if (campaign === done && campaign.status === 'complete') openCompleteDialog(reward);
+    }, COMPLETE_SWEEP * 1000);
   }
 
   function rewardTile(icon, value, label, extraClass) {
@@ -16041,12 +16149,13 @@
     });
   }
 
-  // Frees what an object tree holds on the GPU: geometries, materials and the canvas textures painted
-  // for it (mine labels, camp name boards…). Textures of shared caches carry userData.shared and stay;
-  // a freed canvas texture that is drawn again is simply uploaded again by three.js.
+  // Frees what an object tree holds on the GPU: geometries, materials, the canvas textures painted
+  // for it (mine labels, camp name boards…) and the instance buffers of instanced meshes. Textures of
+  // shared caches carry userData.shared and stay; whatever is drawn again is simply uploaded again by three.js.
   function disposeObject(root, freed) {
     const done = freed || new Set();
     root.traverse(function (object) {
+      if (object.isInstancedMesh) object.dispose();
       if (object.geometry && !done.has(object.geometry)) {
         done.add(object.geometry);
         object.geometry.dispose();
