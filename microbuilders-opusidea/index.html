@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#2a221b">
+<title>MicroBuilders</title>
+<link rel="icon" href="icons/icon-up-builders.jpg">
+<link rel="apple-touch-icon" href="icons/icon-up-builders.jpg">
+<link rel="stylesheet" href="ui.css?v=127">
+</head>
+<body>
+<canvas id="view"></canvas>
+<script src="balance.js?v=120"></script>
+<script src="upgrade-graph.js?v=3"></script>
+<script src="ui.js?v=84"></script>
+<!-- three.js r160 as an ES module (r161 drops build/three.min.js). The scripts after it use the global
+     THREE: the module sets it, then adds them in this order (async = false keeps it). -->
+<script type="module">
+import * as THREE from './three.module.min.js?v=160';
+window.THREE = THREE;
+[
+  'worker-model.js?v=2',
+  'build-pattern-editor.js?v=10',
+  'levels.js?v=38',
+  'feature-blocks.js?v=14',
+  'logic.js?v=205',
+  'meta.js?v=89',
+  'sim.js?v=43',
+  'worker-log.js?v=13',
+  'cpu-profiler.js?v=14',
+  'camera-controller.js?v=10',
+  'art/post.js?v=1',
+  'block-materials.js?v=2',
+  'art/features.js?v=1',
+  'art/fx.js?v=2',
+  'art/quarry.js?v=3',
+  'art/props.js?v=2',
+  'art/vehicles.js?v=3',
+  'art/ambient.js?v=1',
+  'game.js?v=276',
+].forEach(function (src) {
+  const script = document.createElement('script');
+  script.src = src;
+  script.async = false;
+  document.body.appendChild(script);
+});
+</script>
+</body>
+</html>
