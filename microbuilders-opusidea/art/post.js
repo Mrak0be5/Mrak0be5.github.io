@@ -62,6 +62,9 @@
     rt.isXRRenderTarget = true;
     const rtDown = new THREE.WebGLRenderTarget(1, 1, { depthBuffer: false });
     const rtBlur = new THREE.WebGLRenderTarget(1, 1, { depthBuffer: false });
+    // «Миниатюра» (tilt-shift): 1/8 кадра из размытого 1/4 (его rgb — обычный цвет кадра) и ещё одно размытие.
+    const rtTiltA = new THREE.WebGLRenderTarget(1, 1, { depthBuffer: false });
+    const rtTiltB = new THREE.WebGLRenderTarget(1, 1, { depthBuffer: false });
     const size = new THREE.Vector2();
     const vertexShader = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
     function pass(uniforms, fragmentShader) {
@@ -73,17 +76,29 @@
       'vec4 tap(vec2 d){ vec4 c = texture2D(src, vUv + d * px); float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722)); return vec4(c.rgb, (1.0 - c.a) * smoothstep(0.3, 0.85, l)); }',
       'void main(){ gl_FragColor = 0.25 * (tap(vec2(-1.0, -1.0)) + tap(vec2(1.0, -1.0)) + tap(vec2(-1.0, 1.0)) + tap(vec2(1.0, 1.0))); }',
     ].join('\n'));
-    const blur = pass({ src: { value: rtDown.texture }, px: { value: new THREE.Vector2() } }, [
+    const BLUR = [
       'uniform sampler2D src; uniform vec2 px; varying vec2 vUv;',
       'vec4 t(float x, float y){ return texture2D(src, vUv + vec2(x, y) * px); }',
       'void main(){ gl_FragColor = 0.25 * t(0.0, 0.0) + 0.125 * (t(1.5, 0.0) + t(-1.5, 0.0) + t(0.0, 1.5) + t(0.0, -1.5)) + 0.0625 * (t(1.5, 1.5) + t(-1.5, 1.5) + t(1.5, -1.5) + t(-1.5, -1.5)); }',
+    ].join('\n');
+    const blur = pass({ src: { value: rtDown.texture }, px: { value: new THREE.Vector2() } }, BLUR);
+    const tiltDown = pass({ src: { value: rtBlur.texture }, px: { value: new THREE.Vector2() } }, [
+      'uniform sampler2D src; uniform vec2 px; varying vec2 vUv;',
+      'void main(){ gl_FragColor = 0.25 * (texture2D(src, vUv + vec2(-0.5, -0.5) * px) + texture2D(src, vUv + vec2(0.5, -0.5) * px) +',
+      '  texture2D(src, vUv + vec2(-0.5, 0.5) * px) + texture2D(src, vUv + vec2(0.5, 0.5) * px)); }',
     ].join('\n'));
-    // Сведение в экранных значениях: ореол вокруг маски цвета самого свечения; альфа холста — 1.
-    const comp = pass({ tMain: { value: rt.texture }, tSoft: { value: rtBlur.texture }, glow: { value: 0 } }, [
-      'uniform sampler2D tMain; uniform sampler2D tSoft; uniform float glow; varying vec2 vUv;',
+    const tiltBlur = pass({ src: { value: rtTiltA.texture }, px: { value: new THREE.Vector2() } }, BLUR);
+    // Сведение в экранных значениях: «миниатюра» — выше и ниже полосы фокуса (focus — доля высоты, где стройка) кадр
+    // плавно переходит в размытый; ореол вокруг маски цвета самого свечения; альфа холста — 1.
+    const comp = pass({ tMain: { value: rt.texture }, tSoft: { value: rtBlur.texture }, tTilt: { value: rtTiltB.texture },
+      glow: { value: 0 }, tilt: { value: 0 }, focus: { value: 0.5 } }, [
+      'uniform sampler2D tMain; uniform sampler2D tSoft; uniform sampler2D tTilt; uniform float glow; uniform float tilt;',
+      'uniform float focus; varying vec2 vUv;',
       'void main(){',
       '  vec4 c = texture2D(tMain, vUv); vec4 b = texture2D(tSoft, vUv);',
-      '  vec3 col = c.rgb + b.rgb / max(max(max(b.r, b.g), b.b), 0.001) * b.a * glow * (0.4 + 0.6 * c.a);',
+      '  vec3 col = c.rgb;',
+      '  if (tilt > 0.0) col = mix(col, texture2D(tTilt, vUv).rgb, tilt * smoothstep(0.14, 0.46, abs(vUv.y - focus)));',
+      '  col += b.rgb / max(max(max(b.r, b.g), b.b), 0.001) * b.a * glow * (0.4 + 0.6 * c.a);',
       '  gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);',
       '}',
     ].join('\n'));
@@ -99,17 +114,24 @@
       renderer.render(quadScene, quadCamera);
     }
 
-    // Вместо renderer.render(scene, camera): glow — сила ореола (днём ~0,3, ночью ~0,55).
-    function render(scene, camera, glow) {
+    // Вместо renderer.render(scene, camera): glow — сила ореола (днём ~0,3, ночью ~0,55), tilt — сила «миниатюры»
+    // (0 — без неё), focus — где по высоте кадра (0 — низ, 1 — верх) полоса резкости.
+    function render(scene, camera, glow, tilt, focus) {
       renderer.getDrawingBufferSize(size);
       if (size.x !== rt.width || size.y !== rt.height) {
         rt.setSize(size.x, size.y);
         rtDown.setSize(Math.ceil(size.x / 4), Math.ceil(size.y / 4));
         rtBlur.setSize(Math.ceil(size.x / 4), Math.ceil(size.y / 4));
+        rtTiltA.setSize(Math.ceil(size.x / 8), Math.ceil(size.y / 8));
+        rtTiltB.setSize(Math.ceil(size.x / 8), Math.ceil(size.y / 8));
         down.uniforms.px.value.set(1 / size.x, 1 / size.y);
         blur.uniforms.px.value.set(1 / rtDown.width, 1 / rtDown.height);
+        tiltDown.uniforms.px.value.set(1 / rtBlur.width, 1 / rtBlur.height);
+        tiltBlur.uniforms.px.value.set(1 / rtTiltA.width, 1 / rtTiltA.height);
       }
       comp.uniforms.glow.value = glow;
+      comp.uniforms.tilt.value = tilt || 0;
+      comp.uniforms.focus.value = focus === undefined ? 0.5 : focus;
       // Посту нужен только цвет: глубину и трафарет из MSAA не копировать (внутренний флаг three r160, его же ставит
       // WebXR). Иначе three копирует их каждый кадр, а на ANGLE/D3D11 это дороже всего поста: 3.11, RTX 4090 под
       // нагрузкой, кадр 1056×2112 — 24,7 мс с копией, 10,7 мс без неё. Флаг — каждый кадр: setSize и сброс контекста его стирают.
@@ -122,10 +144,15 @@
       renderer.autoClear = false; // полноэкранные проходы перекрывают всё сами
       run(down, rtDown);
       run(blur, rtBlur);
+      if (tilt > 0) {
+        run(tiltDown, rtTiltA);
+        run(tiltBlur, rtTiltB);
+      }
       run(comp, null);
       renderer.autoClear = autoClear;
-      renderer.info.render.calls = calls + 3; // счётчик кадра как у сцены плюс три прохода
-      renderer.info.render.triangles = triangles + 6;
+      const passes = tilt > 0 ? 5 : 3;
+      renderer.info.render.calls = calls + passes; // счётчик кадра как у сцены плюс полноэкранные проходы
+      renderer.info.render.triangles = triangles + passes * 2;
     }
 
     // Выключили пост (качество ниже «высокого»): освободить буферы, при включении они создадутся заново.
@@ -133,6 +160,8 @@
       rt.setSize(1, 1);
       rtDown.setSize(1, 1);
       rtBlur.setSize(1, 1);
+      rtTiltA.setSize(1, 1);
+      rtTiltB.setSize(1, 1);
     }
 
     return { render: render, release: release, targets: { main: rt, down: rtDown, blur: rtBlur } };

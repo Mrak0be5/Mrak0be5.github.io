@@ -23,10 +23,18 @@
   const QUALITY_TOP = mobileRendering ? 'low' : handheld ? 'medium' : 'high';
   let qualityLevel = forcedQuality || QUALITY_TOP;
   const qualityWatch = { t: 0, frames: 0, strikes: 0, good: 0, grace: 8, droppedAt: 0, raisedAt: -1e9, noRaise: false };
+  // «Авто» на очень чётком экране (рамка телефона на 4K — чёткость 2,7) сначала снижает только чёткость до SOFT_RATIO
+  // (свечение и тени 4096 остаются), и лишь потом — до «средней». qualityCap — этот предел, Infinity — без него.
+  const SOFT_RATIO = 2.2;
+  let qualityCap = Infinity;
   // Пост свечения: создаётся при первом кадре на «высоком», null — WebGL 1 или ещё не нужен.
   let post = null;
   let postTried = false;
   let postBlocked = false; // Dev: MicroBuildersDebug.post(false) — замеры цены поста
+  // Шейдеры новой стройки собираются до первого кадра (shadersReady): ждём не дольше SHADER_WAIT секунд.
+  const SHADER_WAIT = 4;
+  let shadersDirty = false;
+  let shaderJob = null; // { started, materials } — собираются; null — не ждём
   // Без WebGL игры нет. Браузер не дал контекст (сбой видеокарты или драйвера, после сбоя браузер на время
   // отключает 3D сайту, выключено аппаратное ускорение) — окно с объяснением вместо пустой страницы.
   let renderer;
@@ -46,8 +54,11 @@
     return;
   }
   // The framed desktop preview is CSS-scaled, so render at the scaled resolution to stay sharp.
+  function fullPixelRatio() {
+    return window.devicePixelRatio * MicroBuildersStage.scale();
+  }
   function renderPixelRatio() {
-    return mobileRendering ? 1 : Math.min(QUALITY[qualityLevel].ratio, window.devicePixelRatio * MicroBuildersStage.scale());
+    return mobileRendering ? 1 : Math.min(QUALITY[qualityLevel].ratio, qualityCap, fullPixelRatio());
   }
   renderer.setPixelRatio(renderPixelRatio());
   renderer.setSize(MicroBuildersStage.width(), MicroBuildersStage.height());
@@ -175,6 +186,7 @@
     Blocks.environment(renderer);
     if (!forcedQuality && qualitySetting === 'auto') {
       qualityWatch.noRaise = true; // после сброса «Авто» качество обратно не поднимает
+      qualityCap = Infinity;
       if (qualityLevel !== 'low') applyQuality(qualityLevel === 'high' ? 'medium' : 'low');
     }
   });
@@ -757,6 +769,12 @@
   let simElapsed = 0;
   const stickViews = new Map();
   const vehicleViews = new Map();
+  // Общие детали машин (batchVehicle, syncVehicleBatches): геометрии по размерам, InstancedMesh по виду детали.
+  const vehicleGeometries = new Map();
+  const VEHICLE_LAYER = 30;
+  const vehicleBatches = new Map();
+  const vehicleHidden = new THREE.Matrix4().makeScale(0, 0, 0);
+  const vehicleRoots = new Set();
   const planningDesks = new Set();
   const blockViews = new Map();
   const pourViews = new Map();
@@ -997,6 +1015,11 @@
   // если игрок включил его в меню («Силуэт здания», meta.settings.silhouette), по умолчанию выключен.
   let ghostsOn = true;
   let silhouetteOn = false;
+  // «Миниатюра» (меню, meta.settings.tilt, по умолчанию включена): выше и ниже стройки кадр плавно размыт, как снимок
+  // макета (art/post.js) — только на «высокой», где идёт пост свечения.
+  let tiltOn = true;
+  const TILT = 0.75;
+  const tiltPoint = new THREE.Vector3();
   let scaffoldLookup = new Map();
   // Wear marks by piece id (crack lines, the tape cross of a broken piece) and the pieces on view.
   let scaffoldCrackLookup = new Map();
@@ -1151,10 +1174,17 @@
     qualitySetting = QUALITY_ORDER[(QUALITY_ORDER.indexOf(qualitySetting) + 1) % QUALITY_ORDER.length];
     meta.settings.quality = qualitySetting;
     Meta.save(meta);
+    qualityCap = Infinity;
     if (!forcedQuality) applyQuality(qualitySetting === 'auto' ? QUALITY_TOP : qualitySetting);
     paintQuality();
   });
   // «Силуэт здания»: бледный силуэт непоставленных блоков выше яруса, который строят; по умолчанию выключен.
+  document.getElementById('tilt').addEventListener('click', function () {
+    tiltOn = !tiltOn;
+    meta.settings.tilt = tiltOn;
+    Meta.save(meta);
+    paintSilhouette();
+  });
   document.getElementById('silhouette').addEventListener('click', function () {
     silhouetteOn = !silhouetteOn;
     meta.settings.silhouette = silhouetteOn;
@@ -1376,7 +1406,7 @@
       world: function () { return world; },
       features: function () { return featureState; },
       chapterTint: function () { return chapterTint; },
-      quality: function () { return { setting: qualitySetting, level: qualityLevel, forced: forcedQuality, post: !!post, handheld: handheld }; },
+      quality: function () { return { setting: qualitySetting, level: qualityLevel, cap: qualityCap, ratio: renderer.getPixelRatio(), forced: forcedQuality, post: !!post, handheld: handheld }; },
       // Замеры графики (tools/runs/tf/perf.mjs): рендерер и сцена как есть, пост вкл/выкл.
       renderer: function () { return renderer; },
       post: function (on) { postBlocked = on === false; return !postBlocked; },
@@ -1591,6 +1621,7 @@
     if (!forcedQuality && qualitySetting !== 'auto') applyQuality(qualitySetting);
     paintQuality();
     silhouetteOn = meta.settings.silhouette === true;
+    tiltOn = meta.settings.tilt !== false;
     paintSilhouette();
     // The absence started when the page was hidden (or, after a crash, at the last save).
     const company = Meta.claimAway(meta, meta.hiddenAt || meta.lastSeenAt, true);
@@ -1609,6 +1640,7 @@
       buildCity();
       openScreen('build', { silent: true });
       showTitle();
+      Blocks.paint(Infinity); // загрузка игры: фактуры сразу, без смены заливки на рисунок
       requestAnimationFrame(frame);
       return;
     }
@@ -1629,6 +1661,7 @@
       requestRun({ mode: 'campaign', levelIndex: meta.campaignLevel, reason: 'boot' });
     }
     paintHud();
+    Blocks.paint(Infinity);
     requestAnimationFrame(frame);
   }
 
@@ -1673,6 +1706,15 @@
 
   function paintSilhouette() {
     document.getElementById('silhouette').textContent = 'Силуэт здания: ' + (silhouetteOn ? 'вкл' : 'выкл');
+    document.getElementById('tilt').textContent = 'Миниатюра: ' + (tiltOn ? 'вкл' : 'выкл');
+  }
+
+  // Полоса резкости «миниатюры» — где на экране то, на что смотрит камера сейчас (точка на луче взгляда на расстоянии
+  // орбиты; доля высоты снизу). Не цель вида (getView): при слежении за рабочим это сохранённый вид, а не кадр.
+  function tiltFocus() {
+    camera.getWorldDirection(tiltPoint);
+    tiltPoint.multiplyScalar(cameraController.radius || 10).add(camera.position).project(camera);
+    return Number.isFinite(tiltPoint.y) ? Math.min(0.85, Math.max(0.15, (tiltPoint.y + 1) / 2)) : 0.5;
   }
 
   // Новое качество: размер карты теней (карту three создаст заново), чёткость холста, пост свечения.
@@ -1720,14 +1762,61 @@
     qualityWatch.strikes = fps < 40 ? qualityWatch.strikes + 1 : 0;
     qualityWatch.good = fps >= 57 ? qualityWatch.good + 1 : 0;
     const now = performance.now();
+    // Ступени «Авто» сверху вниз: высокая → высокая с чёткостью SOFT_RATIO (если экран чётче) → средняя → низкая.
+    const soft = fullPixelRatio() > SOFT_RATIO;
     if (qualityWatch.strikes >= 2 && qualityLevel !== 'low') {
       if (now - qualityWatch.raisedAt < 30000) qualityWatch.noRaise = true;
       qualityWatch.droppedAt = now;
-      applyQuality(qualityLevel === 'high' ? 'medium' : 'low');
-    } else if (qualityWatch.good >= 3 && !qualityWatch.noRaise && qualityLevel !== QUALITY_TOP && now - qualityWatch.droppedAt > 60000) {
+      if (qualityLevel === 'high' && qualityCap === Infinity && soft) {
+        qualityCap = SOFT_RATIO;
+        applyQuality('high');
+      } else {
+        qualityCap = Infinity;
+        applyQuality(qualityLevel === 'high' ? 'medium' : 'low');
+      }
+    } else if (qualityWatch.good >= 3 && !qualityWatch.noRaise && (qualityLevel !== QUALITY_TOP || qualityCap !== Infinity) &&
+      now - qualityWatch.droppedAt > 60000) {
       qualityWatch.raisedAt = now;
-      applyQuality(qualityLevel === 'low' ? 'medium' : 'high');
+      if (qualityLevel === 'high') {
+        qualityCap = Infinity;
+        applyQuality('high');
+      } else if (qualityLevel === 'medium' && QUALITY_TOP === 'high') {
+        qualityCap = soft ? SOFT_RATIO : Infinity;
+        applyQuality('high');
+      } else {
+        applyQuality('medium');
+      }
     }
+  }
+
+  // Шейдеры новой стройки: первый кадр после сборки ждал бы их синхронно — на ANGLE/D3D11 1–2 с замершей игры.
+  // Их собирают параллельно (KHR_parallel_shader_compile, renderer.compileAsync), пока открыт брифинг; до готовности
+  // кадр не рисуется (на холсте остаётся прошлый, интерфейс живой), но не дольше SHADER_WAIT секунд (состояние — вверху).
+  // Готовность — каждый кадр по своим материалам (не опросом compileAsync: тот падает, если материал освободили, пока
+  // шла сборка, — новая стройка, сброс контекста); у освобождённого материала программы нет, его не ждём.
+  function shadersReady() {
+    if (shadersDirty) {
+      shadersDirty = false;
+      shaderJob = null;
+      // Без параллельной сборки (SwiftShader, часть телефонов) ждать нечего: шейдеры соберёт первый кадр, как раньше.
+      if (!renderer.extensions.has('KHR_parallel_shader_compile') || renderer.getContext().isContextLost()) return true;
+      try {
+        shaderJob = { started: performance.now(), materials: renderer.compile(scene, camera) };
+      } catch (error) {
+        shaderJob = null;
+      }
+    }
+    if (!shaderJob) return true;
+    let ready = performance.now() - shaderJob.started > SHADER_WAIT * 1000;
+    if (!ready) {
+      ready = true;
+      shaderJob.materials.forEach(function (material) {
+        const program = renderer.properties.get(material).currentProgram;
+        if (program && !program.isReady()) ready = false;
+      });
+    }
+    if (ready) shaderJob = null;
+    return ready;
   }
 
   // Кадр на экран: на «высоком» ПК — через пост свечения (art/post.js), иначе как раньше. ?quality=high включает
@@ -1740,7 +1829,7 @@
       }
       if (post) {
         MicroBuildersPost.setActive(true);
-        post.render(scene, camera, 0.3 + 0.15 * night);
+        post.render(scene, camera, 0.3 + 0.15 * night, tiltOn ? TILT : 0, tiltOn ? tiltFocus() : 0.5);
         return;
       }
     }
@@ -2120,6 +2209,7 @@
     viewStarted = performance.now();
     updateSticks(time, realDt);
     updateVehicles(realDt);
+    syncVehicleBatches();
     MicroBuildersProfiler.add('workersView', performance.now() - viewStarted);
     viewStarted = performance.now();
     updateWorkerPlan(time);
@@ -2132,6 +2222,8 @@
     viewStarted = performance.now();
     cameraController.update(realDt, campaign ? campaign.status : '');
     applyShake(realDt);
+    // Страховка: камера с NaN навсегда дала бы пустой кадр цвета неба — она возвращается домой.
+    if (!Number.isFinite(camera.position.x + camera.position.y + camera.position.z)) recoverCamera();
     updateGlint(realDt);
     updateAudio(realDt);
     if (cityRoot.visible) placeCitySigns();
@@ -2157,11 +2249,17 @@
       MicroBuildersAmbient.update(realDt, world, groundPose, timeScale, ambientEnv);
     }
     MicroBuildersProfiler.add('cameraView', performance.now() - viewStarted);
+    // Фактуры новых материалов (block-materials.js): по набору за кадр, пока кадр не рисуется — больше.
+    Blocks.paint(shaderJob ? 12 : 3);
+    // Глыбы карьера (art/quarry.js): рядом с камерой — полные, вдали — упрощённые.
+    MicroBuildersQuarry.lod(camera, realDt);
     fitShadow();
     const renderStarted = performance.now();
-    renderScene(night);
-    renderHaze(time);
-    watchQuality(wallDt);
+    if (shadersReady()) {
+      renderScene(night);
+      renderHaze(time);
+      watchQuality(wallDt);
+    }
     MicroBuildersProfiler.add('render', performance.now() - renderStarted);
     MicroBuildersProfiler.count('drawCalls', renderer.info.render.calls);
     MicroBuildersProfiler.count('triangles', renderer.info.render.triangles);
@@ -2868,6 +2966,9 @@
 
   function buildLevelView() {
     simEstimate = null;
+    // Шейдеры новой стройки — параллельно, до первого кадра (shadersReady); первые секунды «Авто» не меряет.
+    shadersDirty = true;
+    qualityWatch.grace = Math.max(qualityWatch.grace, 6);
     disposeLevel();
     const level = world.level;
     const footprint = level.footprint;
@@ -3155,8 +3256,9 @@
       group.add(post, cap);
     });
     const plate = buildCampPlate(group, box, name);
+    const merged = mergeStatic(group);
     group.visible = false;
-    return { group: group, geos: [slabGeo, edgeGeo, postGeo, capGeo].concat(plate.geos), plate: plate };
+    return { group: group, geos: [slabGeo, edgeGeo, postGeo, capGeo].concat(plate.geos, merged), plate: plate };
   }
 
   // The name board: two stakes at the front edge (the camera's side, +z) and a wooden board leaning
@@ -5411,6 +5513,7 @@
       const vehicle = world.vehicles[i];
       if (vehicleViews.has(vehicle)) continue;
       const group = vehicle.kind === 'heli' ? createHeliView() : createVehicleView();
+      batchVehicle(group);
       group.userData.displayX = vehicle.cell[0] + 0.5;
       group.userData.displayZ = vehicle.cell[2] + 0.5;
       group.position.set(group.userData.displayX, 0, group.userData.displayZ);
@@ -5419,8 +5522,167 @@
     }
   }
 
+  // Геометрии с матрицами — в одну (позиция, нормаль, uv, индекс): основа mergeStatic.
+  function mergeParts(parts) {
+    let vertices = 0;
+    let indices = 0;
+    const withUv = parts.every(function (part) { return !!part.geometry.attributes.uv; });
+    parts.forEach(function (part) {
+      vertices += part.geometry.attributes.position.count;
+      indices += part.geometry.index.count;
+    });
+    const position = new Float32Array(vertices * 3);
+    const normal = new Float32Array(vertices * 3);
+    const uv = withUv ? new Float32Array(vertices * 2) : null;
+    const index = new (vertices > 65535 ? Uint32Array : Uint16Array)(indices);
+    const v = new THREE.Vector3();
+    const normalMatrix = new THREE.Matrix3();
+    let vo = 0;
+    let io = 0;
+    parts.forEach(function (part) {
+      const g = part.geometry;
+      const p = g.attributes.position;
+      const n = g.attributes.normal;
+      normalMatrix.getNormalMatrix(part.matrix);
+      for (let i = 0; i < p.count; i++) {
+        v.fromBufferAttribute(p, i).applyMatrix4(part.matrix);
+        position[(vo + i) * 3] = v.x;
+        position[(vo + i) * 3 + 1] = v.y;
+        position[(vo + i) * 3 + 2] = v.z;
+        v.fromBufferAttribute(n, i).applyMatrix3(normalMatrix).normalize();
+        normal[(vo + i) * 3] = v.x;
+        normal[(vo + i) * 3 + 1] = v.y;
+        normal[(vo + i) * 3 + 2] = v.z;
+        if (uv) {
+          uv[(vo + i) * 2] = g.attributes.uv.getX(i);
+          uv[(vo + i) * 2 + 1] = g.attributes.uv.getY(i);
+        }
+      }
+      for (let i = 0; i < g.index.count; i++) index[io + i] = g.index.getX(i) + vo;
+      vo += p.count;
+      io += g.index.count;
+    });
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
+    geometry.setAttribute('normal', new THREE.BufferAttribute(normal, 3));
+    if (uv) geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    geometry.setIndex(new THREE.BufferAttribute(index, 1));
+    geometry.computeBoundingSphere();
+    return geometry;
+  }
+
+  // Неподвижные детали одного узла с одним материалом и одними флагами тени — одной геометрией: вид тот же, вызовов
+  // отрисовки меньше (кран — 44 детали, фундамент городка — 13). Детали и узлы, на которые ссылается userData (их
+  // двигает кадр), и прозрачные (сортировка) остаются как есть. Вернёт новые геометрии.
+  function mergeStatic(root) {
+    const keep = new Set();
+    const visit = function (value, depth) {
+      if (!value || typeof value !== 'object' || depth > 3) return;
+      if (value.isObject3D) keep.add(value);
+      else if (Array.isArray(value)) value.forEach(function (item) { visit(item, depth + 1); });
+      else if (Object.getPrototypeOf(value) === Object.prototype) Object.keys(value).forEach(function (key) { visit(value[key], depth + 1); });
+    };
+    const nodes = [];
+    root.traverse(function (object) {
+      Object.keys(object.userData).forEach(function (key) { visit(object.userData[key], 0); });
+      if (object.children.length > 1) nodes.push(object);
+    });
+    const made = [];
+    nodes.forEach(function (node) {
+      const sets = new Map();
+      node.children.forEach(function (child) {
+        if (!child.isMesh || child.isInstancedMesh || child.isSkinnedMesh || child.children.length || keep.has(child) || !child.visible) return;
+        const material = child.material;
+        const g = child.geometry;
+        if (!material || Array.isArray(material) || material.transparent || !g.index || !g.attributes.normal || g.morphAttributes.position) return;
+        const key = material.uuid + '|' + child.castShadow + '|' + child.receiveShadow + '|' + child.renderOrder + '|' + !!g.attributes.uv;
+        if (!sets.has(key)) sets.set(key, []);
+        sets.get(key).push(child);
+      });
+      sets.forEach(function (list) {
+        if (list.length < 2) return;
+        const geometry = mergeParts(list.map(function (child) {
+          child.updateMatrix();
+          return { geometry: child.geometry, matrix: child.matrix };
+        }));
+        const mesh = new THREE.Mesh(geometry, list[0].material);
+        mesh.castShadow = list[0].castShadow;
+        mesh.receiveShadow = list[0].receiveShadow;
+        mesh.renderOrder = list[0].renderOrder;
+        list.forEach(function (child) { node.remove(child); });
+        node.add(mesh);
+        made.push(geometry);
+      });
+    });
+    return made;
+  }
+
+  // Геометрии деталей машин общие (vehicleGeometries — вверху): одинаковые детали всех машин стройки — один экземпляр
+  // в общем InstancedMesh.
+  function vehicleGeometry(key, make) {
+    let geometry = vehicleGeometries.get(key);
+    if (!geometry) {
+      geometry = make();
+      vehicleGeometries.set(key, geometry);
+    }
+    return geometry;
+  }
+
+  // Детали машин (кран, вертолёт) рисуются общими InstancedMesh: деталь одного вида (геометрия × материал × тень) у
+  // всех машин стройки — один вызов отрисовки вместо одного на машину. Сами детали остаются в дереве машины (их
+  // двигает кадр, шейдер грязи считает по их своим координатам) на слое VEHICLE_LAYER, которого камера не видит;
+  // syncVehicleBatches раз в кадр переносит их мировые матрицы в экземпляры. Прозрачные детали рисуются как были.
+  // Состояние (VEHICLE_LAYER, vehicleBatches, vehicleRoots) — вверху, рядом с vehicleViews.
+  function batchVehicle(group) {
+    vehicleRoots.add(group);
+    group.traverse(function (part) {
+      if (!part.isMesh || part.isInstancedMesh || Array.isArray(part.material) || part.material.transparent) return;
+      const key = part.geometry.uuid + '|' + part.material.uuid + '|' + part.castShadow + '|' + part.receiveShadow;
+      let batch = vehicleBatches.get(key);
+      if (!batch) {
+        batch = { geometry: part.geometry, material: part.material, cast: part.castShadow, receive: part.receiveShadow, mesh: null, parts: [] };
+        vehicleBatches.set(key, batch);
+      }
+      batch.parts.push({ part: part, root: group });
+      part.layers.set(VEHICLE_LAYER);
+    });
+  }
+
+  function vehiclePartShown(part, root) {
+    for (let object = part; object; object = object.parent) {
+      if (!object.visible) return false;
+      if (object === root) return true;
+    }
+    return true;
+  }
+
+  function syncVehicleBatches() {
+    if (!vehicleBatches.size) return;
+    vehicleRoots.forEach(function (root) { root.updateMatrixWorld(true); });
+    vehicleBatches.forEach(function (batch) {
+      if (!batch.mesh || batch.mesh.instanceMatrix.count < batch.parts.length) {
+        if (batch.mesh) {
+          levelRoot.remove(batch.mesh);
+          batch.mesh.dispose();
+        }
+        batch.mesh = new THREE.InstancedMesh(batch.geometry, batch.material, batch.parts.length + 2);
+        batch.mesh.castShadow = batch.cast;
+        batch.mesh.receiveShadow = batch.receive;
+        batch.mesh.frustumCulled = false;
+        batch.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        levelRoot.add(batch.mesh);
+      }
+      batch.mesh.count = batch.parts.length;
+      for (let i = 0; i < batch.parts.length; i++) {
+        const item = batch.parts[i];
+        batch.mesh.setMatrixAt(i, vehiclePartShown(item.part, item.root) ? item.part.matrixWorld : vehicleHidden);
+      }
+      batch.mesh.instanceMatrix.needsUpdate = true;
+    });
+  }
+
   function vehicleBox(parent, material, size, position) {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(size[0], size[1], size[2]), material);
+    const mesh = new THREE.Mesh(vehicleGeometry('box|' + size.join('|'), function () { return new THREE.BoxGeometry(size[0], size[1], size[2]); }), material);
     mesh.position.set(position[0], position[1], position[2]);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -5429,7 +5691,7 @@
   }
 
   function vehicleCylinder(parent, material, radius, length, position, axis) {
-    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, length, 14), material);
+    const mesh = new THREE.Mesh(vehicleGeometry('cyl|' + radius + '|' + length, function () { return new THREE.CylinderGeometry(radius, radius, length, 14); }), material);
     if (axis === 'x') mesh.rotation.z = Math.PI / 2;
     if (axis === 'z') mesh.rotation.x = Math.PI / 2;
     mesh.position.set(position[0], position[1], position[2]);
@@ -5457,7 +5719,7 @@
       lights.push(vehicleBox(group, m.light, [0.14, 0.08, 0.03], [side * 0.42, 0.6, 0.855]));
     }
     const beacon = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.05, 0.06, 0.08, 10),
+      vehicleGeometry('beacon', function () { return new THREE.CylinderGeometry(0.05, 0.06, 0.08, 10); }),
       new THREE.MeshStandardMaterial({ color: 0xff8a1c, emissive: 0xff6a00, emissiveIntensity: 0.2 })
     );
     MicroBuildersPost.mark(beacon.material); // маячок мигает со свечением (art/post.js)
@@ -5469,10 +5731,10 @@
       for (let side = -1; side <= 1; side += 2) {
         const pivot = new THREE.Group();
         pivot.position.set(side * 0.6, 0.27, end * 0.62);
-        const tyre = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.2, 16), m.tyre);
+        const tyre = new THREE.Mesh(vehicleGeometry('tyre', function () { return new THREE.CylinderGeometry(0.27, 0.27, 0.2, 16); }), m.tyre);
         tyre.rotation.z = Math.PI / 2;
         tyre.castShadow = true;
-        const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.21, 10), m.steel);
+        const rim = new THREE.Mesh(vehicleGeometry('rim', function () { return new THREE.CylinderGeometry(0.13, 0.13, 0.21, 10); }), m.steel);
         rim.rotation.z = Math.PI / 2;
         const spin = new THREE.Group();
         spin.add(tyre, rim);
@@ -5510,7 +5772,7 @@
     vehicleBox(head, m.yellow, [0.14, 0.12, 0.55], [0, 0.12, -0.3]);
     vehicleBox(head, m.dark, [0.26, 0.2, 0.18], [0, 0.08, -0.55]);
     const trolley = vehicleBox(head, m.dark, [0.2, 0.08, 0.16], [0, 0.02, 1]);
-    const cable = new THREE.Mesh(new THREE.BoxGeometry(0.03, 1, 0.03), m.dark);
+    const cable = new THREE.Mesh(vehicleGeometry('cable', function () { return new THREE.BoxGeometry(0.03, 1, 0.03); }), m.dark);
     head.add(cable);
     const hook = new THREE.Group();
     vehicleBox(hook, m.yellow, [0.22, 0.16, 0.14], [0, 0.04, 0]);
@@ -5553,7 +5815,7 @@
     const m = machineMat;
     const body = new THREE.Group();
     group.add(body);
-    const hull = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, 0.9, 6, 14), m.heli);
+    const hull = new THREE.Mesh(vehicleGeometry('hull', function () { return new THREE.CapsuleGeometry(0.34, 0.9, 6, 14); }), m.heli);
     hull.rotation.x = Math.PI / 2;
     hull.position.set(0, 0.45, 0.05);
     hull.castShadow = true;
@@ -5563,7 +5825,7 @@
     const canopy = vehicleBox(body, m.glass, [0.5, 0.26, 0.34], [0, 0.56, 0.58]);
     canopy.rotation.x = -0.35;
     vehicleBox(body, m.heliWhite, [0.52, 0.04, 0.5], [0, 0.72, 0.32]);
-    const boomTail = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.13, 1.3, 10), m.heli);
+    const boomTail = new THREE.Mesh(vehicleGeometry('boom', function () { return new THREE.CylinderGeometry(0.06, 0.13, 1.3, 10); }), m.heli);
     boomTail.rotation.x = Math.PI / 2;
     boomTail.position.set(0, 0.55, -1.0);
     boomTail.castShadow = true;
@@ -5585,12 +5847,12 @@
     rotor.position.set(0, 0.96, 0.05);
     vehicleBox(rotor, m.dark, [2.7, 0.025, 0.12], [0, 0, 0]);
     vehicleBox(rotor, m.dark, [0.12, 0.025, 2.7], [0, 0, 0]);
-    const disc = new THREE.Mesh(new THREE.CircleGeometry(1.35, 32), m.blur);
+    const disc = new THREE.Mesh(vehicleGeometry('disc', function () { return new THREE.CircleGeometry(1.35, 32); }), m.blur);
     disc.rotation.x = -Math.PI / 2;
     rotor.add(disc);
     body.add(rotor);
     vehicleBox(body, m.dark, [0.16, 0.12, 0.16], [0, 0.08, 0.05]);
-    const cable = new THREE.Mesh(new THREE.BoxGeometry(0.03, 1, 0.03), m.dark);
+    const cable = new THREE.Mesh(vehicleGeometry('cable', function () { return new THREE.BoxGeometry(0.03, 1, 0.03); }), m.dark);
     cable.position.y = 0.2;
     group.add(cable);
     const hook = new THREE.Group();
@@ -9141,19 +9403,33 @@
     }
     const f = world.level.footprint;
     fx.tier(list, prev, (f.minX + f.maxX) / 2 + 0.5, (f.minZ + f.maxZ) / 2 + 0.5);
-    shake(0.3);
+    shakeCamera(0.3);
     sfx('tier');
   }
 
-  // Тряска камеры (сила 0…1): сдвиг кадра гаснет за ~0,5 с; на ×5 и выше и в городе её нет.
-  function shake(power) {
-    if (timeScale >= 5) return;
+  // Тряска камеры (сила 0…1): сдвиг кадра гаснет за ~0,5 с; на ×5 и выше и в городе её нет. Своё имя: shake(el) —
+  // тряска кнопки интерфейса; одно имя на двоих отдавало кнопку (DOM-элемент) сюда как силу — NaN в камере, пустой кадр.
+  function shakeCamera(power) {
+    if (timeScale >= 5 || !(power > 0)) return;
     shakeAmp = Math.max(shakeAmp, power);
     shakeT = 0;
   }
 
+  let cameraRecovered = false;
+  function recoverCamera() {
+    shakeAmp = 0;
+    const view = cameraController.getView();
+    cameraController.frameHome(Number.isFinite(view.azimuth) ? {} : { azimuth: 0.69 });
+    cameraController.snap();
+    if (!cameraRecovered) console.warn('MicroBuilders: камера была не числом — возвращена домой');
+    cameraRecovered = true;
+  }
+
   function applyShake(dt) {
-    if (shakeAmp <= 0) return;
+    if (!(shakeAmp > 0)) {
+      shakeAmp = 0;
+      return;
+    }
     shakeT += dt;
     const k = shakeAmp * Math.exp(-shakeT * 7);
     if (k < 0.01 || cityRoot.visible) {
@@ -9199,7 +9475,7 @@
     if (top) fx.flag(top.x + 0.5, top.y + 1, top.z + 0.5, Math.min(2.5, Math.max(1, radius / 5)));
     glintT = 0;
     cheerT = CHEER;
-    shake(0.6);
+    shakeCamera(0.6);
     sfx('complete');
   }
 
@@ -16193,6 +16469,8 @@
     clearWorkerViews();
     stickViews.clear();
     vehicleViews.clear();
+    vehicleBatches.clear();
+    vehicleRoots.clear();
     planningDesks.clear();
     blockViews.clear();
     pourViews.clear();

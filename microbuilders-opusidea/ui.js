@@ -187,6 +187,7 @@
         <button type="button" id="mute">Звук: вкл</button>
         <button type="button" id="quality">Графика: авто</button>
         <button type="button" id="silhouette">Силуэт здания: выкл</button>
+        <button type="button" id="tilt">Миниатюра: вкл</button>
         <button type="button" id="hide-interface">Скрыть интерфейс</button>
         <button type="button" id="restart">Начать заказ заново</button>
         <button type="button" id="abandon-run" hidden>Бросить заказ</button>
@@ -797,8 +798,8 @@
   });
   const settingsMenu = document.getElementById('settings-menu');
   settingsMenu.addEventListener('click', function (event) {
-    // «Звук», «Графика» и «Силуэт здания» stay open to show their new state; the others lead somewhere else.
-    if (event.target.closest('button') && !event.target.closest('#mute, #quality, #silhouette')) setHudPop(null);
+    // «Звук», «Графика», «Силуэт здания» и «Миниатюра» stay open to show their new state; the others lead somewhere else.
+    if (event.target.closest('button') && !event.target.closest('#mute, #quality, #silhouette, #tilt')) setHudPop(null);
   });
   window.MicroBuildersHudPop = {
     close: function () { setHudPop(null); },

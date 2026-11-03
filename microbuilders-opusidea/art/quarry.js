@@ -14,6 +14,12 @@
   // Сухая трава: соломенно-оливковая, как выгоревший луг вокруг карьера.
   const GRASS = 0x9a9a62;
   const GRASS_CSS = '#9a9a62';
+  // Глыбы дальше от камеры (м) — с крупной ячейкой (lod); раскладка — раз в ROCK_LOD_EVERY с или при сдвиге камеры.
+  const ROCK_FAR = 40;
+  const ROCK_LOD_EVERY = 0.5;
+  let rockLods = [];
+  const rockLodAt = new THREE.Vector3(Infinity, 0, 0);
+  let rockLodT = 0;
   let groundCanvas = null;
   let groundTexture = null;
   let gritTexture = null;
@@ -305,9 +311,9 @@
   // Колотая глыба: скруглённый куб (суперэллипсоид), углы срезаны плоскими сколами, поверх лёгкая неровность.
   // Деформация — функция исходной точки, поэтому общие вершины соседних треугольников не расходятся.
   // atlas: развёртка под атлас 2×2 сырой руды (oreMaps) вместо повторяющейся фактуры.
-  function rockGeometry(seed, atlas) {
+  function rockGeometry(seed, atlas, detail) {
     const rand = rng(seed);
-    const geo = new THREE.IcosahedronGeometry(1, 4);
+    const geo = new THREE.IcosahedronGeometry(1, detail || 4);
     const chips = [];
     const count = (atlas ? 8 : 6) + Math.floor(rand() * 4);
     for (let i = 0; i < count; i++) {
@@ -1248,16 +1254,17 @@
     mesh.setMatrixAt(index, dummy.matrix);
   }
 
-  function paintGround(level, cx, cz, gx, gz, half, size, rim, b) {
-    if (!groundCanvas || groundCanvas.width !== size) {
-      groundCanvas = document.createElement('canvas');
-      groundCanvas.width = size;
-      groundCanvas.height = size;
-      if (groundTexture) groundTexture.dispose();
-      groundTexture = new THREE.CanvasTexture(groundCanvas);
-      groundTexture.colorSpace = THREE.SRGBColorSpace;
-    }
-    const ctx = groundCanvas.getContext('2d');
+  // Рисунок земли по данным уровня (d — то, что собирает paintGround). Кроме rng и GRASS_CSS ничего из модуля не берёт:
+  // тот же код уходит текстом в поток (groundThread) и рисует там на OffscreenCanvas.
+  function drawGround(ctx, d) {
+    const level = d.level;
+    const cx = d.cx;
+    const gx = d.gx;
+    const gz = d.gz;
+    const half = d.half;
+    const size = d.size;
+    const rim = d.rim;
+    const b = d.b;
     const k = size / (half * 2);
     const px = function (x) { return (x - gx + half) * k; };
     const pz = function (z) { return (z - gz + half) * k; };
@@ -1398,7 +1405,77 @@
       ctx.fillStyle = 'rgba(' + v + ',' + (v - 10) + ',' + (v - 22) + ',0.55)';
       ctx.fillRect(rand() * size, rand() * size, (0.07 + rand() * 0.08) * k, (0.05 + rand() * 0.06) * k);
     }
+  }
+
+  // Поток рисования земли: на больших уровнях это до секунды canvas-работы (на занятой видеокарте — дольше), которая
+  // иначе замораживала переход на заказ. Готовый кадр копируется в общий canvas текстуры одним drawImage. null — ещё
+  // не пробовали, false — потока нет (старый браузер, ошибка): рисуем здесь, как раньше.
+  let groundWorker = null;
+  let groundJob = 0;
+  let groundData = null;
+
+  function groundThread() {
+    if (groundWorker !== null) return groundWorker;
+    try {
+      if (typeof OffscreenCanvas === 'undefined' || typeof Worker === 'undefined') throw new Error('no OffscreenCanvas');
+      const src = 'const GRASS_CSS = ' + JSON.stringify(GRASS_CSS) + ';\n' + rng.toString() + '\n' + drawGround.toString() + '\n' +
+        'onmessage = function (e) { const c = new OffscreenCanvas(e.data.size, e.data.size); drawGround(c.getContext("2d"), e.data);' +
+        ' const bitmap = c.transferToImageBitmap(); postMessage({ job: e.data.job, bitmap: bitmap }, [bitmap]); };';
+      const url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+      groundWorker = new Worker(url);
+      URL.revokeObjectURL(url);
+      groundWorker.onmessage = function (event) {
+        const bitmap = event.data.bitmap;
+        if (event.data.job === groundJob && groundCanvas && groundCanvas.width === bitmap.width) {
+          groundCanvas.getContext('2d').drawImage(bitmap, 0, 0);
+          groundTexture.needsUpdate = true;
+        }
+        bitmap.close();
+      };
+      // Поток не завёлся (CSP, OffscreenCanvas без 2D): последнюю землю дорисовать здесь, дальше — только здесь.
+      groundWorker.onerror = function (event) {
+        if (event && event.preventDefault) event.preventDefault();
+        groundWorker = false;
+        if (groundData) paintHere(groundData);
+      };
+    } catch (error) {
+      groundWorker = false;
+    }
+    return groundWorker;
+  }
+
+  function paintHere(d) {
+    drawGround(groundCanvas.getContext('2d'), d);
     groundTexture.needsUpdate = true;
+  }
+
+  // Земля уровня в общей canvas-текстуре. Первый раз (загрузка игры) — сразу здесь; дальше — в потоке: до его кадра
+  // под брифингом лежит земля прошлого заказа.
+  function paintGround(level, cx, cz, gx, gz, half, size, rim, b) {
+    const fresh = !groundCanvas || groundCanvas.width !== size;
+    if (fresh) {
+      groundCanvas = document.createElement('canvas');
+      groundCanvas.width = size;
+      groundCanvas.height = size;
+      if (groundTexture) groundTexture.dispose();
+      groundTexture = new THREE.CanvasTexture(groundCanvas);
+      groundTexture.colorSpace = THREE.SRGBColorSpace;
+    }
+    groundData = {
+      job: ++groundJob, cx: cx, gx: gx, gz: gz, half: half, size: size,
+      rim: rim.map(function (p) { return { x: p.x, z: p.z }; }),
+      b: { minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ },
+      level: {
+        index: level.index,
+        footprint: { minX: level.footprint.minX, maxX: level.footprint.maxX, minZ: level.footprint.minZ, maxZ: level.footprint.maxZ },
+        mines: level.mines.map(function (m) {
+          return { x: m.x, z: m.z, rocks: m.rocks.map(function (r) { return { x: r.x, y: r.y, z: r.z }; }) };
+        }),
+      },
+    };
+    const worker = fresh ? false : groundThread();
+    if (worker) worker.postMessage(groundData);
+    else paintHere(groundData);
     return groundTexture;
   }
 
@@ -1541,6 +1618,8 @@
   // options: { materials: MB.MATERIAL, blocks: MicroBuildersBlocks, mobile, anisotropy }
   function build(level, cx, cz, options) {
     const group = new THREE.Group();
+    rockLods = [];
+    rockLodAt.set(Infinity, 0, 0);
     const rand = rng(level.index * 7919 + 17);
     const dummy = new THREE.Object3D();
     // Подкова по рамке всего, куда ходят рабочие и техника (здание, камни, места добычи, точки появления),
@@ -1718,30 +1797,41 @@
         shader.vertexShader = shader.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\nvec2 mbOff = fract( instanceMatrix[3].xz * vec2( 0.37, 0.53 ) );\nvMapUv += mbOff;\nvBumpMapUv += mbOff;');
       };
       surface(material, 'stone');
-      // Три формы колотых глыб вперемешку: соседние камни не повторяют один силуэт.
+      // Три формы колотых глыб вперемешку: соседние камни не повторяют один силуэт. У каждой формы два меша: рядом с
+      // камерой — полная глыба (500 треугольников), дальше ROCK_FAR — та же глыба с ячейкой крупнее (320): на таком
+      // расстоянии она в несколько десятков пикселей, разницы не видно. Глыбы раскладывает по ним lod() из кадра game.js.
       const shapes = [0, 1, 2].map(function (v) {
-        const list = boulders.filter(function (_, i) { return i % 3 === v; });
-        return list.length ? new THREE.InstancedMesh(rockGeometry(level.index * 13 + v * 71 + 5), material, list.length) : null;
+        const count = boulders.filter(function (_, i) { return i % 3 === v; }).length;
+        if (!count) return null;
+        const seed = level.index * 13 + v * 71 + 5;
+        return { near: new THREE.InstancedMesh(rockGeometry(seed), material, count), far: new THREE.InstancedMesh(rockGeometry(seed, false, 3), material, count), items: [] };
       });
-      const used = [0, 0, 0];
       for (let i = 0; i < boulders.length; i++) {
         const item = boulders[i];
         const s = item.size;
-        const mesh = shapes[i % 3];
-        const at = used[i % 3]++;
+        const shape = shapes[i % 3];
+        const at = shape.items.length;
         // Блок развёрнут вдоль стены, с небольшим разбросом — штабель, а не россыпь.
-        place(mesh, at, dummy, item.x, item.y, item.z, s, item.sy, s * (0.85 + rand() * 0.3), Math.atan2(item.at.nx, item.at.nz) + (rand() - 0.5) * 0.6, (rand() - 0.5) * 0.12);
+        place(shape.near, at, dummy, item.x, item.y, item.z, s, item.sy, s * (0.85 + rand() * 0.3), Math.atan2(item.at.nx, item.at.nz) + (rand() - 0.5) * 0.6, (rand() - 0.5) * 0.12);
         tint.setHex(CUT[Math.floor(rand() * CUT.length)]);
         const near = nearestMine(level, item.at.x, item.at.z);
         if (near.mine && near.distance < 10 && rand() < 0.4) tint.lerp(new THREE.Color(options.materials[near.mine.materialId].color), 0.35);
-        mesh.setColorAt(at, tint);
+        shape.near.setColorAt(at, tint);
+        shape.far.setColorAt(at, tint);
+        shape.items.push({ matrix: dummy.matrix.clone(), color: tint.clone(), x: item.x, y: item.y, z: item.z });
       }
-      for (let v = 0; v < 3; v++) {
-        if (!shapes[v]) continue;
-        shapes[v].castShadow = true;
-        shapes[v].receiveShadow = true;
-        group.add(shapes[v]);
-      }
+      shapes.forEach(function (shape) {
+        if (!shape) return;
+        shape.near.computeBoundingSphere();
+        shape.far.boundingSphere = shape.near.boundingSphere.clone(); // рамка всех глыб формы: раскладка её не меняет
+        shape.far.count = 0;
+        [shape.near, shape.far].forEach(function (mesh) {
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          group.add(mesh);
+        });
+        rockLods.push(shape);
+      });
     }
     // Щебень россыпью по площадке: кучками у рудников и редко по двору, не ближе 2 клеток к зданию.
     const pebbles = level.mines.length * 7 + 24;
@@ -1765,20 +1855,34 @@
       rubble.push([x, z, rand() < 0.08 ? 0.1 + rand() * 0.12 : 0.025 + rand() * 0.06]);
     }
     if (rubble.length) {
-      const mesh = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ roughness: 1, flatShading: true }), rubble.length);
-      surface(mesh.material, 'stone');
+      // Щебень — тоже по четвертям вокруг стройки: невидимые четверти отсекаются.
+      const geometry = new THREE.DodecahedronGeometry(1, 0);
+      const material = new THREE.MeshStandardMaterial({ roughness: 1, flatShading: true });
+      surface(material, 'stone');
+      const quarterOf = function (r) { return Math.floor((Math.atan2(r[1] - cz, r[0] - cx) / (Math.PI * 2) + 1) * 4) % 4; };
+      const counts = [0, 0, 0, 0];
+      for (let i = 0; i < rubble.length; i++) counts[quarterOf(rubble[i])]++;
+      const meshes = counts.map(function (count) { return count ? new THREE.InstancedMesh(geometry, material, count) : null; });
+      const used = [0, 0, 0, 0];
       for (let i = 0; i < rubble.length; i++) {
         const r = rubble[i];
+        const q = quarterOf(r);
+        const mesh = meshes[q];
+        const at = used[q]++;
         // Осколки у груды лежат на склоне подсыпки, а не под ней.
         const y = Math.max(0, mound.at(r[0], r[1]));
         const flat = r[4] || 0.7;
-        place(mesh, i, dummy, r[0], y + r[2] * flat * 0.55, r[1], r[2], r[2] * flat, r[2], rand() * 6, 0);
+        place(mesh, at, dummy, r[0], y + r[2] * flat * 0.55, r[1], r[2], r[2] * flat, r[2], rand() * 6, 0);
         if (r[2] > 0.1) blobs.push([r[0], y, r[1], r[2] * 2.6, r[2] * 2.6, 0]);
-        mesh.setColorAt(i, tint.setHex(r[3] !== undefined ? r[3] : PEBBLE[Math.floor(rand() * PEBBLE.length)]).multiplyScalar(0.85 + rand() * 0.2));
+        mesh.setColorAt(at, tint.setHex(r[3] !== undefined ? r[3] : PEBBLE[Math.floor(rand() * PEBBLE.length)]).multiplyScalar(0.85 + rand() * 0.2));
       }
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      group.add(mesh);
+      meshes.forEach(function (mesh) {
+        if (!mesh) return;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.computeBoundingSphere();
+        group.add(mesh);
+      });
     }
     if (gems.length) {
       const mesh = new THREE.InstancedMesh(
@@ -1811,5 +1915,36 @@
     return group;
   }
 
-  window.MicroBuildersQuarry = { build: build, clouds: clouds, occlusion: occlusion, blob: blob, keep: keep };
+  // Кадр (game.js): глыбы рядом с камерой — в полные меши, дальние — в упрощённые. dt — секунды кадра.
+  function lod(camera, dt) {
+    rockLodT -= dt;
+    if (!rockLods.length || (rockLodT > 0 && camera.position.distanceToSquared(rockLodAt) < 2.25)) return;
+    rockLodT = ROCK_LOD_EVERY;
+    rockLodAt.copy(camera.position);
+    const far2 = ROCK_FAR * ROCK_FAR;
+    const p = camera.position;
+    for (let s = 0; s < rockLods.length; s++) {
+      const shape = rockLods[s];
+      let near = 0;
+      let far = 0;
+      for (let i = 0; i < shape.items.length; i++) {
+        const item = shape.items[i];
+        const dx = item.x - p.x;
+        const dy = item.y - p.y;
+        const dz = item.z - p.z;
+        const mesh = dx * dx + dy * dy + dz * dz > far2 ? shape.far : shape.near;
+        const at = mesh === shape.far ? far++ : near++;
+        mesh.setMatrixAt(at, item.matrix);
+        mesh.setColorAt(at, item.color);
+      }
+      shape.near.count = near;
+      shape.far.count = far;
+      [shape.near, shape.far].forEach(function (mesh) {
+        mesh.instanceMatrix.needsUpdate = true;
+        mesh.instanceColor.needsUpdate = true;
+      });
+    }
+  }
+
+  window.MicroBuildersQuarry = { build: build, clouds: clouds, occlusion: occlusion, blob: blob, keep: keep, lod: lod };
 })();

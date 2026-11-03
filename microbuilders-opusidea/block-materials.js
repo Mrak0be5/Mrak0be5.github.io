@@ -1795,35 +1795,69 @@
   // Атлас 2S×S: слева грань с рисунком (эмблема, слитки, клёпки), справа та же фактура без него.
   // Половину выбирает шейдер по маске look().mask; без маски (ноша, штабели, город) — всегда левая.
   // small — вдвое мельче (город, штабели, техника): меньше памяти, а издали разницы нет.
+  // Набор фактур создаётся сразу ровной заливкой (цвет, плоский рельеф, шероховатость и металл вида), а рисунок — по
+  // очереди в paint(): новая стройка с десятками материалов иначе замирала на полсекунды, пока рисуются атласы. game.js
+  // рисует по наборам каждый кадр (под брифингом успевает) и всё сразу при загрузке игры; Blocks.paint(Infinity) — сразу всё.
+  const queue = [];
   function textures(id, variant, small) {
     const name = id + ':' + variant + (small ? ':s' : '');
     let set = cache.get(name);
     if (set) return set;
     const spec = specOf(id);
-    const seed = seedOf(id) * 13 + 17 * variant + 7;
-    const A = layers(seed);
-    const B = layers(seed + 500);
-    const painter = PAINT[spec.look] || PAINT.stone;
-    painter(A, variant, false, spec);
-    painter(B, variant, true, spec);
+    const finish = FINISH[spec.look] || FINISH.stone;
     const k = small ? 0.5 : 1;
-    const atlas = function (a, b) {
+    const atlas = function (fill) {
       const canvas = document.createElement('canvas');
       canvas.width = S * 2 * k;
       canvas.height = S * k;
       const ctx = canvas.getContext('2d');
-      ctx.drawImage(a.canvas, 0, 0, S * k, S * k);
-      ctx.drawImage(b.canvas, S * k, 0, S * k, S * k);
+      ctx.fillStyle = fill;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
       const texture = new THREE.CanvasTexture(canvas);
       texture.userData.shared = true;
       return texture;
     };
-    const map = atlas(A.c, B.c);
+    const map = atlas(css(spec.color));
     map.colorSpace = THREE.SRGBColorSpace;
     map.anisotropy = 4;
-    set = { map: map, bump: atlas(A.h, B.h), orm: atlas(A.o, B.o), id: id, small: !!small };
+    set = { map: map, bump: atlas(gray(128)), orm: atlas(orm(finish[0], finish[1])), id: id, variant: variant, small: !!small, pending: true };
     cache.set(name, set);
+    queue.push(set);
     return set;
+  }
+
+  function paintSet(set) {
+    set.pending = false;
+    const spec = specOf(set.id);
+    const seed = seedOf(set.id) * 13 + 17 * set.variant + 7;
+    const A = layers(seed);
+    const B = layers(seed + 500);
+    const painter = PAINT[spec.look] || PAINT.stone;
+    painter(A, set.variant, false, spec);
+    painter(B, set.variant, true, spec);
+    const k = set.small ? 0.5 : 1;
+    const draw = function (texture, a, b) {
+      const canvas = texture.image;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(a.canvas, 0, 0, S * k, S * k);
+      ctx.drawImage(b.canvas, S * k, 0, S * k, S * k);
+      texture.needsUpdate = true;
+    };
+    draw(set.map, A.c, B.c);
+    draw(set.bump, A.h, B.h);
+    draw(set.orm, A.o, B.o);
+  }
+
+  // Дорисовать наборы из очереди за budget мс (хотя бы один); вернёт, сколько осталось. (paint — уже кисть рисунка выше.)
+  function paintQueue(budget) {
+    const end = performance.now() + budget;
+    while (queue.length) {
+      const set = queue.shift();
+      if (set.pending) paintSet(set);
+      if (performance.now() >= end) break;
+    }
+    return queue.length;
   }
 
   // Оставить в кэше крупные фактуры только этих материалов (смена стройки): остальные освобождают видеопамять
@@ -1836,6 +1870,7 @@
       set.map.dispose();
       set.bump.dispose();
       set.orm.dispose();
+      set.pending = false; // из очереди его выбросит paint()
       cache.delete(name);
       dropped.add(set.id);
     });
@@ -2311,7 +2346,7 @@
   }
 
   window.MicroBuildersBlocks = {
-    VARIANTS: VARIANTS, geometry: geometry, material: material, plain: plain, look: look, environment: environment,
+    VARIANTS: VARIANTS, geometry: geometry, material: material, plain: plain, look: look, environment: environment, paint: paintQueue,
     glint: glint, keep: keep, env: function () { return env; }, noise: NOISE, weather: WEATHER,
   };
 })();
