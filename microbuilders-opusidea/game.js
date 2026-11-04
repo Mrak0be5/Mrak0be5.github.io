@@ -1324,13 +1324,13 @@
       seed = (seed * 16807) % 2147483647;
       return seed / 2147483647;
     }
-    function makeTex(w, h, paint) {
+    function makeTex(w, h, paint, linear) {
       const canvas = document.createElement('canvas');
       canvas.width = w;
       canvas.height = h;
       paint(canvas.getContext('2d'), w, h);
       const tex = new THREE.CanvasTexture(canvas);
-      tex.colorSpace = THREE.SRGBColorSpace;
+      if (!linear) tex.colorSpace = THREE.SRGBColorSpace;
       tex.anisotropy = 4;
       tex.userData.shared = true;
       return tex;
@@ -1420,11 +1420,49 @@
         g.stroke();
       }
     });
+    const slabBump = makeTex(256, 256, function (g, w, h) {
+      g.fillStyle = '#848484';
+      g.fillRect(0, 0, w, h);
+      for (let y = 32; y < h; y += 32) {
+        g.fillStyle = '#505050';
+        g.fillRect(0, y, w, 1.5);
+        g.fillStyle = '#a4a4a4';
+        g.fillRect(0, y + 1.5, w, 1);
+      }
+      g.fillStyle = '#282828';
+      g.fillRect(w / 2 - 1.5, 0, 3, h);
+      g.fillRect(0, h / 2 - 1.5, w, 3);
+      for (let i = 0; i < 1600; i++) {
+        g.fillStyle = rnd() < 0.5 ? 'rgba(32,32,32,0.35)' : 'rgba(220,220,220,0.3)';
+        g.fillRect(rnd() * w, rnd() * h, 1.5, 1.5);
+      }
+      for (const [cx, cy] of [[42, 42], [w - 42, 42], [42, h - 42], [w - 42, h - 42]]) {
+        g.fillStyle = '#383838';
+        g.beginPath();
+        g.arc(cx, cy, 5.5, 0, Math.PI * 2);
+        g.fill();
+        g.fillStyle = '#dcdcdc';
+        g.beginPath();
+        g.arc(cx, cy, 2.5, 0, Math.PI * 2);
+        g.fill();
+      }
+    }, true);
+    const capTex = makeTex(64, 64, function (g, w, h) {
+      g.fillStyle = '#f4f1ea';
+      g.fillRect(0, 0, w, h);
+      g.strokeStyle = 'rgba(72, 66, 58, 0.35)';
+      g.lineWidth = 4;
+      g.strokeRect(2, 2, w - 4, h - 4);
+      g.fillStyle = '#8b857c';
+      g.beginPath();
+      g.arc(w / 2, h / 2, 5, 0, Math.PI * 2);
+      g.fill();
+    });
     return {
-      slab: new THREE.MeshStandardMaterial({ map: slabTex, bumpMap: slabTex, bumpScale: 0.65, roughness: 0.9 }),
+      slab: new THREE.MeshStandardMaterial({ map: slabTex, bumpMap: slabBump, bumpScale: 0.7, roughness: 0.9 }),
       edge: new THREE.MeshStandardMaterial({ map: edgeTex, bumpMap: edgeTex, bumpScale: 0.55, roughness: 0.9 }),
-      post: new THREE.MeshStandardMaterial({ map: postTex, roughness: 0.55, metalness: 0.15 }),
-      cap: new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: 0.45, metalness: 0.1 }),
+      post: new THREE.MeshStandardMaterial({ map: postTex, bumpMap: postTex, bumpScale: 0.25, roughness: 0.55, metalness: 0.15 }),
+      cap: new THREE.MeshStandardMaterial({ map: capTex, bumpMap: capTex, bumpScale: 0.25, roughness: 0.45, metalness: 0.15 }),
       wood: new THREE.MeshStandardMaterial({ map: woodTex, bumpMap: woodTex, bumpScale: 0.5, roughness: 0.88 }),
     };
   })();
@@ -3372,16 +3410,22 @@
     const canvas = document.createElement('canvas');
     canvas.width = 512;
     canvas.height = Math.round(512 * height / width);
+    const bumpCanvas = document.createElement('canvas');
+    bumpCanvas.width = canvas.width;
+    bumpCanvas.height = canvas.height;
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = 4;
+    const bump = new THREE.CanvasTexture(bumpCanvas);
+    bump.anisotropy = 4;
     const paint = function () {
-      paintCampPlate(canvas, name);
+      paintCampPlate(canvas, bumpCanvas, name);
       texture.needsUpdate = true;
+      bump.needsUpdate = true;
     };
     paint();
     if (document.fonts && !document.fonts.check('800 40px Manrope')) document.fonts.load('800 40px Manrope').then(paint, function () {});
-    const face = new THREE.MeshStandardMaterial({ map: texture, bumpMap: texture, bumpScale: 0.38, roughness: 0.82 });
+    const face = new THREE.MeshStandardMaterial({ map: texture, bumpMap: bump, bumpScale: 0.55, roughness: 0.82 });
     const wood = campFoundationMat.wood;
     const boardGeo = new THREE.BoxGeometry(width, height, 0.08);
     const stakeGeo = new THREE.BoxGeometry(0.1, 0.62, 0.1);
@@ -3397,13 +3441,14 @@
       stake.castShadow = true;
       group.add(stake);
     });
-    return { geos: [boardGeo, stakeGeo], texture: texture, face: face };
+    return { geos: [boardGeo, stakeGeo], texture: texture, bump: bump, face: face };
   }
 
   // Dark planks, the name cut in: the groove is in shadow on its upper edge and catches the light
   // on its lower one.
-  function paintCampPlate(canvas, name) {
+  function paintCampPlate(canvas, bumpCanvas, name) {
     const ctx = canvas.getContext('2d');
+    const b = bumpCanvas.getContext('2d');
     const w = canvas.width, h = canvas.height;
     const grain = ctx.createLinearGradient(0, 0, 0, h);
     grain.addColorStop(0, '#916943');
@@ -3412,10 +3457,14 @@
     grain.addColorStop(1, '#68472b');
     ctx.fillStyle = grain;
     ctx.fillRect(0, 0, w, h);
+    b.fillStyle = '#888888';
+    b.fillRect(0, 0, w, h);
     ctx.fillStyle = 'rgba(32, 18, 8, 0.48)';
     ctx.fillRect(8, Math.round(h * 0.5) - 1, w - 16, 2.5);
     ctx.fillStyle = 'rgba(255, 220, 175, 0.22)';
     ctx.fillRect(8, Math.round(h * 0.5) + 1.5, w - 16, 1.5);
+    b.fillStyle = '#242424';
+    b.fillRect(8, Math.round(h * 0.5) - 1.5, w - 16, 3);
     for (let i = 1; i < 16; i++) {
       const y = h * i / 16 + Math.sin(i * 2.1) * 2.5;
       ctx.strokeStyle = i % 3 === 0 ? 'rgba(235, 190, 140, 0.16)' : 'rgba(38, 22, 10, 0.22)';
@@ -3424,6 +3473,12 @@
       ctx.moveTo(0, y);
       ctx.bezierCurveTo(w * 0.3, y + 4, w * 0.6, y - 4, w, y + 2);
       ctx.stroke();
+      b.strokeStyle = i % 3 === 0 ? 'rgba(170,170,170,0.35)' : 'rgba(72,72,72,0.4)';
+      b.lineWidth = 1.2;
+      b.beginPath();
+      b.moveTo(0, y);
+      b.bezierCurveTo(w * 0.3, y + 4, w * 0.6, y - 4, w, y + 2);
+      b.stroke();
     }
     ctx.strokeStyle = 'rgba(30, 18, 8, 0.65)';
     ctx.lineWidth = 7;
@@ -3431,6 +3486,9 @@
     ctx.strokeStyle = 'rgba(255, 220, 175, 0.24)';
     ctx.lineWidth = 1.5;
     ctx.strokeRect(9, 9, w - 18, h - 18);
+    b.strokeStyle = '#303030';
+    b.lineWidth = 4;
+    b.strokeRect(8, 8, w - 16, h - 16);
     for (const [cx, cy] of [[18, 18], [w - 18, 18], [18, h - 18], [w - 18, h - 18]]) {
       ctx.fillStyle = '#3b2b1e';
       ctx.beginPath();
@@ -3440,6 +3498,10 @@
       ctx.beginPath();
       ctx.arc(cx - 1.2, cy - 1.2, 1.6, 0, Math.PI * 2);
       ctx.fill();
+      b.fillStyle = '#dcdcdc';
+      b.beginPath();
+      b.arc(cx, cy, 4.5, 0, Math.PI * 2);
+      b.fill();
     }
     let size = Math.round(h * 0.5);
     ctx.font = '800 ' + size + 'px Manrope, sans-serif';
@@ -3453,6 +3515,13 @@
     ctx.fillText(name, x, y + 2.5);
     ctx.fillStyle = '#241307';
     ctx.fillText(name, x, y);
+    b.font = ctx.font;
+    b.textAlign = 'center';
+    b.textBaseline = 'middle';
+    b.fillStyle = '#a8a8a8';
+    b.fillText(name, x, y + 2);
+    b.fillStyle = '#181818';
+    b.fillText(name, x, y);
   }
 
   function buildCampView(site) {
@@ -3463,6 +3532,7 @@
       previous.geos.forEach(function (geo) { geo.dispose(); });
       if (previous.plate) {
         previous.plate.texture.dispose();
+        if (previous.plate.bump) previous.plate.bump.dispose();
         previous.plate.face.dispose();
       }
       ghostMaterials = ghostMaterials.filter(function (material) { return material !== previous.ghostMat; });

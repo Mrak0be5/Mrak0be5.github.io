@@ -2,8 +2,9 @@
 // башенный кран, бытовки и миниатюры 1–3 прошлых строек; во дворе — техника компании, её больше с номером заказа.
 // Только вид: уровень читает, но не меняет. Фон — один меш (один draw call), техника — второй.
 (function () {
-  const ATLAS = 512;
-  const CELL = 128;
+  const ATLAS = 1024;
+  const CELL = 256;
+  const S = 128;
   // Клетки атласа [столбец, ряд]. Почти всё нарисовано в сером: цвет даёт вершина.
   const R = {
     plain: [0, 0], truss: [1, 0], wall: [2, 0], door: [3, 0],
@@ -13,8 +14,8 @@
   const UV = {};
   for (const name in R) {
     const c = R[name];
-    // Отступ 2 px: соседние клетки не просачиваются на мипах.
-    UV[name] = [(c[0] * CELL + 2) / ATLAS, 1 - ((c[1] + 1) * CELL - 2) / ATLAS, ((c[0] + 1) * CELL - 2) / ATLAS, 1 - (c[1] * CELL + 2) / ATLAS];
+    // Отступ 4 px: соседние клетки не просачиваются на мипах.
+    UV[name] = [(c[0] * CELL + 4) / ATLAS, 1 - ((c[1] + 1) * CELL - 4) / ATLAS, ((c[0] + 1) * CELL - 4) / ATLAS, 1 - (c[1] * CELL + 4) / ATLAS];
   }
   // Ступени техники во дворе по номеру заказа кампании: компания растёт — у карьера больше машин.
   const TIERS = [3, 8, 15, 25];
@@ -50,241 +51,554 @@
     };
   }
 
-  // Атлас 512² рисуется один раз на всю игру; второй холст — маска свечения (только стёкла прожекторов).
+  // Атлас 1024² (ячейки по 256²) рисуется один раз на всю игру: цвет, рельеф (bump) и маска свечения прожекторов.
   function atlas() {
     if (maps) return maps;
     const color = document.createElement('canvas');
+    const bump = document.createElement('canvas');
     const glow = document.createElement('canvas');
-    color.width = color.height = glow.width = glow.height = ATLAS;
+    color.width = color.height = bump.width = bump.height = glow.width = glow.height = ATLAS;
     const g = color.getContext('2d');
+    const b = bump.getContext('2d');
     const e = glow.getContext('2d');
+    b.fillStyle = '#808080';
+    b.fillRect(0, 0, ATLAS, ATLAS);
     e.fillStyle = '#000';
     e.fillRect(0, 0, ATLAS, ATLAS);
     const rand = rng(17);
     function cell(name, draw) {
-      g.save();
-      g.translate(R[name][0] * CELL, R[name][1] * CELL);
-      g.beginPath();
-      g.rect(0, 0, CELL, CELL);
-      g.clip();
+      for (const ctx of [g, b, e]) {
+        ctx.save();
+        ctx.translate(R[name][0] * CELL, R[name][1] * CELL);
+        ctx.scale(CELL / S, CELL / S);
+        ctx.beginPath();
+        ctx.rect(0, 0, S, S);
+        ctx.clip();
+      }
       draw();
       g.restore();
+      b.restore();
+      e.restore();
     }
-    function speckle(n, alpha) {
+    function speckle(n, alpha, bumpAlpha) {
       for (let i = 0; i < n; i++) {
-        g.fillStyle = (rand() < 0.5 ? 'rgba(0,0,0,' : 'rgba(255,255,255,') + (alpha * rand()).toFixed(3) + ')';
-        g.fillRect(rand() * CELL, rand() * CELL, 1 + rand() * 3, 1 + rand() * 3);
+        const x = rand() * S;
+        const y = rand() * S;
+        const w = 1 + rand() * 2.5;
+        const h = 1 + rand() * 2.5;
+        const dark = rand() < 0.5;
+        g.fillStyle = (dark ? 'rgba(0,0,0,' : 'rgba(255,255,255,') + (alpha * rand()).toFixed(3) + ')';
+        g.fillRect(x, y, w, h);
+        if (bumpAlpha) {
+          b.fillStyle = (dark ? 'rgba(60,60,60,' : 'rgba(195,195,195,') + (bumpAlpha * rand()).toFixed(3) + ')';
+          b.fillRect(x, y, w, h);
+        }
       }
     }
     function glass(x, y, w, h) {
       const gr = g.createLinearGradient(x, y, x + w * 0.4, y + h);
-      gr.addColorStop(0, '#6c8194');
-      gr.addColorStop(1, '#2c3946');
+      gr.addColorStop(0, '#6e8498');
+      gr.addColorStop(0.55, '#465868');
+      gr.addColorStop(1, '#283542');
       g.fillStyle = gr;
       g.fillRect(x, y, w, h);
-      g.fillStyle = 'rgba(255,255,255,0.16)';
+      g.fillStyle = 'rgba(0,0,0,0.22)';
+      g.fillRect(x, y, w, 2.5);
+      g.fillRect(x, y, 2.5, h);
+      g.fillStyle = 'rgba(255,255,255,0.22)';
       g.beginPath();
-      g.moveTo(x + w * 0.15, y + h);
-      g.lineTo(x + w * 0.45, y);
-      g.lineTo(x + w * 0.62, y);
-      g.lineTo(x + w * 0.32, y + h);
+      g.moveTo(x + w * 0.14, y + h);
+      g.lineTo(x + w * 0.44, y);
+      g.lineTo(x + w * 0.6, y);
+      g.lineTo(x + w * 0.3, y + h);
       g.fill();
+      g.fillStyle = 'rgba(255,255,255,0.1)';
+      g.beginPath();
+      g.moveTo(x + w * 0.66, y + h);
+      g.lineTo(x + w * 0.88, y);
+      g.lineTo(x + w * 0.96, y);
+      g.lineTo(x + w * 0.74, y + h);
+      g.fill();
+      b.fillStyle = '#484848';
+      b.fillRect(x, y, w, h);
     }
     function corrugated() {
       g.fillStyle = '#eeeeec';
-      g.fillRect(0, 0, CELL, CELL);
-      for (let x = 0; x < CELL; x += 8) {
-        g.fillStyle = 'rgba(0,0,0,0.07)';
-        g.fillRect(x, 0, 3, CELL);
-        g.fillStyle = 'rgba(255,255,255,0.35)';
-        g.fillRect(x + 4, 0, 1, CELL);
+      g.fillRect(0, 0, S, S);
+      b.fillStyle = '#808080';
+      b.fillRect(0, 0, S, S);
+      for (let x = 0; x < S; x += 8) {
+        g.fillStyle = 'rgba(0,0,0,0.09)';
+        g.fillRect(x, 0, 3, S);
+        g.fillStyle = 'rgba(0,0,0,0.04)';
+        g.fillRect(x + 3, 0, 1, S);
+        g.fillStyle = 'rgba(255,255,255,0.42)';
+        g.fillRect(x + 4, 0, 2, S);
+        b.fillStyle = '#4c4c4c';
+        b.fillRect(x, 0, 3, S);
+        b.fillStyle = '#bababa';
+        b.fillRect(x + 4, 0, 3, S);
       }
-      g.fillStyle = 'rgba(0,0,0,0.16)';
-      g.fillRect(0, CELL - 9, CELL, 9);
-      g.fillStyle = 'rgba(0,0,0,0.08)';
-      g.fillRect(0, 0, CELL, 5);
+      // Горизонтальный стык листов профнастила и заклёпки.
+      g.fillStyle = 'rgba(0,0,0,0.14)';
+      g.fillRect(0, 63, S, 1.5);
+      g.fillStyle = 'rgba(255,255,255,0.32)';
+      g.fillRect(0, 64.5, S, 1);
+      b.fillStyle = '#424242';
+      b.fillRect(0, 63, S, 2);
+      for (let rx = 6; rx < S; rx += 16) {
+        g.fillStyle = 'rgba(60,60,60,0.45)';
+        g.beginPath();
+        g.arc(rx, 61, 1.1, 0, Math.PI * 2);
+        g.fill();
+        b.fillStyle = '#e0e0e0';
+        b.beginPath();
+        b.arc(rx, 61, 1.3, 0, Math.PI * 2);
+        b.fill();
+      }
+      // Тень под козырьком сверху и придорожная пыль с брызгами у земли снизу.
+      const topSh = g.createLinearGradient(0, 0, 0, 12);
+      topSh.addColorStop(0, 'rgba(0,0,0,0.22)');
+      topSh.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = topSh;
+      g.fillRect(0, 0, S, 12);
+      const botDust = g.createLinearGradient(0, S - 28, 0, S);
+      botDust.addColorStop(0, 'rgba(116,96,72,0)');
+      botDust.addColorStop(0.65, 'rgba(116,96,72,0.18)');
+      botDust.addColorStop(1, 'rgba(78,62,44,0.36)');
+      g.fillStyle = botDust;
+      g.fillRect(0, S - 28, S, 28);
+      g.fillStyle = 'rgba(0,0,0,0.18)';
+      g.fillRect(0, S - 8, S, 8);
+      speckle(140, 0.04, 0.08);
     }
     cell('plain', function () {
       g.fillStyle = '#f2f2f0';
-      g.fillRect(0, 0, CELL, CELL);
-      speckle(160, 0.05);
+      g.fillRect(0, 0, S, S);
+      speckle(260, 0.06, 0.14);
+      g.strokeStyle = 'rgba(0,0,0,0.08)';
+      g.lineWidth = 2;
+      g.strokeRect(1, 1, S - 2, S - 2);
     });
-    // Ферма: светлые пояса и раскосы, просветы тёмные — издали мачта читается сплошной, вблизи — решёткой.
+    // Ферма: светлые пояса, раскос и косынки с заклёпками, просветы тёмные — издали мачта читается сплошной, вблизи — решёткой.
     cell('truss', function () {
-      g.fillStyle = '#4a4742';
-      g.fillRect(0, 0, CELL, CELL);
+      g.fillStyle = '#484540';
+      g.fillRect(0, 0, S, S);
+      b.fillStyle = '#383838';
+      b.fillRect(0, 0, S, S);
       g.strokeStyle = '#f2f2f0';
-      g.lineWidth = 10;
+      g.lineWidth = 11;
       g.beginPath();
-      g.moveTo(8, CELL - 6);
-      g.lineTo(CELL - 8, 6);
+      g.moveTo(8, S - 6);
+      g.lineTo(S - 8, 6);
       g.stroke();
+      b.strokeStyle = '#b8b8b8';
+      b.lineWidth = 11;
+      b.beginPath();
+      b.moveTo(8, S - 6);
+      b.lineTo(S - 8, 6);
+      b.stroke();
       g.fillStyle = '#f2f2f0';
-      g.fillRect(0, 0, 15, CELL);
-      g.fillRect(CELL - 15, 0, 15, CELL);
-      g.fillRect(0, 0, CELL, 9);
-      g.fillRect(0, CELL - 9, CELL, 9);
-      g.fillStyle = 'rgba(0,0,0,0.22)';
-      g.fillRect(13, 0, 2, CELL);
-      g.fillRect(CELL - 15, 0, 2, CELL);
+      g.fillRect(0, 0, 15, S);
+      g.fillRect(S - 15, 0, 15, S);
+      g.fillRect(0, 0, S, 10);
+      g.fillRect(0, S - 10, S, 10);
+      b.fillStyle = '#c4c4c4';
+      b.fillRect(0, 0, 15, S);
+      b.fillRect(S - 15, 0, 15, S);
+      b.fillRect(0, 0, S, 10);
+      b.fillRect(0, S - 10, S, 10);
+      // Угловые косынки с заклёпками.
+      for (const [gx, gy] of [[13, 8], [S - 29, 8], [13, S - 24], [S - 29, S - 24]]) {
+        g.fillStyle = '#e4e4e0';
+        g.fillRect(gx, gy, 16, 16);
+        b.fillStyle = '#dadada';
+        b.fillRect(gx, gy, 16, 16);
+        for (const [rx, ry] of [[gx + 4, gy + 4], [gx + 12, gy + 4], [gx + 4, gy + 12], [gx + 12, gy + 12]]) {
+          g.fillStyle = 'rgba(0,0,0,0.35)';
+          g.beginPath();
+          g.arc(rx, ry, 1.3, 0, Math.PI * 2);
+          g.fill();
+          b.fillStyle = '#f4f4f4';
+          b.beginPath();
+          b.arc(rx, ry, 1.5, 0, Math.PI * 2);
+          b.fill();
+        }
+      }
+      g.fillStyle = 'rgba(0,0,0,0.26)';
+      g.fillRect(14, 0, 2, S);
+      g.fillRect(S - 16, 0, 2, S);
     });
     cell('wall', function () {
       corrugated();
+      g.fillStyle = 'rgba(0,0,0,0.24)';
+      g.fillRect(26, 29, 76, 56);
       g.fillStyle = '#fafafa';
       g.fillRect(28, 28, 72, 54);
+      g.strokeStyle = 'rgba(0,0,0,0.22)';
+      g.lineWidth = 1.5;
+      g.strokeRect(28.5, 28.5, 71, 53);
+      b.fillStyle = '#d4d4d4';
+      b.fillRect(28, 28, 72, 54);
       glass(33, 33, 62, 44);
-      g.fillStyle = '#fafafa';
+      // Горизонтальная фрамуга, средник и отлив подоконника.
+      g.fillStyle = 'rgba(255,255,255,0.14)';
+      for (let ly = 37; ly < 52; ly += 4) g.fillRect(34, ly, 27, 1.2);
+      g.fillStyle = '#f4f4f2';
       g.fillRect(62, 33, 4, 44);
-      g.fillStyle = 'rgba(0,0,0,0.28)';
-      g.fillRect(26, 82, 76, 4);
+      g.fillRect(33, 52, 62, 3);
+      b.fillStyle = '#cfcfcf';
+      b.fillRect(62, 33, 4, 44);
+      b.fillRect(33, 52, 62, 3);
+      g.fillStyle = '#e6e6e2';
+      g.fillRect(25, 81, 78, 4);
+      g.fillStyle = 'rgba(0,0,0,0.32)';
+      g.fillRect(25, 85, 78, 3);
+      b.fillStyle = '#ececec';
+      b.fillRect(25, 81, 78, 4);
     });
     cell('door', function () {
       corrugated();
-      g.fillStyle = '#d9d9d6';
+      g.fillStyle = 'rgba(0,0,0,0.26)';
+      g.fillRect(36, 23, 56, 105);
+      g.fillStyle = '#dcdcd8';
       g.fillRect(38, 24, 52, 104);
-      g.strokeStyle = 'rgba(0,0,0,0.35)';
-      g.lineWidth = 3;
+      b.fillStyle = '#c8c8c8';
+      b.fillRect(38, 24, 52, 104);
+      b.fillStyle = '#8c8c8c';
+      b.fillRect(41, 27, 46, 98);
+      g.strokeStyle = 'rgba(0,0,0,0.38)';
+      g.lineWidth = 2.5;
       g.strokeRect(39.5, 25.5, 49, 101);
+      // Окошко двери в рамке и нижняя штампованная филёнка.
+      g.fillStyle = '#c8c8c4';
+      g.fillRect(48, 34, 32, 26);
+      b.fillStyle = '#dcdcdc';
+      b.fillRect(48, 34, 32, 26);
       glass(50, 36, 28, 22);
-      g.fillStyle = '#3a3a3a';
-      g.fillRect(80, 80, 6, 4);
+      g.strokeStyle = 'rgba(0,0,0,0.22)';
+      g.lineWidth = 1.5;
+      g.strokeRect(48, 66, 32, 38);
+      g.strokeStyle = 'rgba(255,255,255,0.35)';
+      g.strokeRect(49.5, 67.5, 29, 35);
+      b.fillStyle = '#686868';
+      b.fillRect(48, 66, 32, 38);
+      b.fillStyle = '#929292';
+      b.fillRect(51, 69, 26, 32);
+      // Защитная пластина внизу двери, три петли и нажимная ручка.
+      g.fillStyle = '#a8a6a0';
+      g.fillRect(40, 112, 48, 14);
+      b.fillStyle = '#b4b4b4';
+      b.fillRect(40, 112, 48, 14);
+      for (const hy of [36, 68, 100]) {
+        g.fillStyle = '#4a4a4c';
+        g.fillRect(37, hy, 3.5, 8);
+        b.fillStyle = '#e4e4e4';
+        b.fillRect(37, hy, 3.5, 8);
+      }
+      g.fillStyle = '#2e2e30';
+      g.fillRect(79, 75, 5, 12);
+      g.fillStyle = '#525458';
+      g.fillRect(73, 79, 10, 3.5);
+      b.fillStyle = '#f2f2f2';
+      b.fillRect(73, 75, 11, 12);
     });
     // Прожекторы 2 × 2 в тёмной раме; в маске свечения горят только стёкла.
     cell('lamp', function () {
       g.fillStyle = '#2e2f31';
-      g.fillRect(0, 0, CELL, CELL);
+      g.fillRect(0, 0, S, S);
+      b.fillStyle = '#484848';
+      b.fillRect(0, 0, S, S);
       for (let i = 0; i < 2; i++) {
         for (let j = 0; j < 2; j++) {
           const x = 8 + i * 60;
           const y = 8 + j * 60;
           const gr = g.createRadialGradient(x + 26, y + 26, 2, x + 26, y + 26, 30);
-          gr.addColorStop(0, '#f6f7f6');
+          gr.addColorStop(0, '#f8f9f8');
           gr.addColorStop(1, '#8f979d');
           g.fillStyle = gr;
           g.fillRect(x, y, 52, 52);
-          g.strokeStyle = 'rgba(0,0,0,0.3)';
+          b.fillStyle = '#b0b0b0';
+          b.fillRect(x - 2, y - 2, 56, 56);
+          b.fillStyle = '#707070';
+          b.fillRect(x, y, 52, 52);
+          g.strokeStyle = 'rgba(0,0,0,0.32)';
           g.lineWidth = 2;
+          b.strokeStyle = '#d8d8d8';
+          b.lineWidth = 2;
           for (let k = 1; k < 4; k++) {
             g.beginPath();
             g.moveTo(x + k * 13, y);
             g.lineTo(x + k * 13, y + 52);
             g.stroke();
+            b.beginPath();
+            b.moveTo(x + k * 13, y);
+            b.lineTo(x + k * 13, y + 52);
+            b.stroke();
           }
-          const ex = R.lamp[0] * CELL + x;
-          const ey = R.lamp[1] * CELL + y;
-          const eg = e.createRadialGradient(ex + 26, ey + 26, 2, ex + 26, ey + 26, 34);
+          const eg = e.createRadialGradient(x + 26, y + 26, 2, x + 26, y + 26, 34);
           eg.addColorStop(0, '#ffffff');
           eg.addColorStop(1, '#a0a0a0');
           e.fillStyle = eg;
-          e.fillRect(ex, ey, 52, 52);
+          e.fillRect(x, y, 52, 52);
         }
       }
     });
     // Лента: отрезок между столбиками растянут на клетку, поэтому полосы почти вертикальные, 6 на пролёт.
     cell('tape', function () {
       g.fillStyle = '#f3efe6';
-      g.fillRect(0, 0, CELL, CELL);
+      g.fillRect(0, 0, S, S);
+      b.fillStyle = '#848484';
+      b.fillRect(0, 0, S, S);
       g.fillStyle = '#d23a2b';
-      const period = CELL / 6;
+      const period = S / 6;
       for (let k = -1; k <= 6; k++) {
         const x = k * period;
         g.beginPath();
         g.moveTo(x + 6, 0);
         g.lineTo(x + 6 + period / 2, 0);
-        g.lineTo(x + period / 2, CELL);
-        g.lineTo(x, CELL);
+        g.lineTo(x + period / 2, S);
+        g.lineTo(x, S);
         g.fill();
       }
+      for (let y = 4; y < S; y += 6) {
+        g.fillStyle = 'rgba(0,0,0,0.05)';
+        g.fillRect(0, y, S, 1.5);
+        b.fillStyle = y % 12 === 4 ? '#969696' : '#6e6e6e';
+        b.fillRect(0, y, S, 2);
+      }
     });
-    // Звено гусеницы или протектор: тёмная плитка с рамкой — читается в любом направлении.
+    // Звено гусеницы или протектор: тёмная плитка с грунтозацепом и болтами — читается в любом направлении.
     cell('tread', function () {
-      g.fillStyle = '#2a2a2b';
-      g.fillRect(0, 0, CELL, CELL);
+      g.fillStyle = '#262628';
+      g.fillRect(0, 0, S, S);
+      b.fillStyle = '#343434';
+      b.fillRect(0, 0, S, S);
       g.fillStyle = '#48484a';
-      g.fillRect(12, 12, CELL - 24, CELL - 24);
-      g.fillStyle = '#3a3a3c';
-      g.fillRect(12, 52, CELL - 24, 24);
-      g.fillStyle = 'rgba(255,255,255,0.12)';
-      g.fillRect(12, 12, CELL - 24, 3);
+      g.fillRect(10, 10, S - 20, S - 20);
+      b.fillStyle = '#989898';
+      b.fillRect(10, 10, S - 20, S - 20);
+      g.fillStyle = '#363638';
+      g.fillRect(10, 48, S - 20, 32);
+      b.fillStyle = '#dcdcdc';
+      b.fillRect(14, 18, S - 28, 22);
+      b.fillRect(14, 88, S - 28, 22);
+      g.fillStyle = 'rgba(255,255,255,0.16)';
+      g.fillRect(12, 12, S - 24, 3);
+      g.fillRect(12, 88, S - 24, 3);
+      for (const [bx, by] of [[26, 64], [64, 64], [102, 64]]) {
+        g.fillStyle = '#1e1e20';
+        g.beginPath();
+        g.arc(bx, by, 4, 0, Math.PI * 2);
+        g.fill();
+        b.fillStyle = '#ececec';
+        b.beginPath();
+        b.arc(bx, by, 4, 0, Math.PI * 2);
+        b.fill();
+      }
     });
     cell('tire', function () {
-      g.fillStyle = '#262627';
-      g.fillRect(0, 0, CELL, CELL);
+      g.fillStyle = '#242426';
+      g.fillRect(0, 0, S, S);
+      b.fillStyle = '#404040';
+      b.fillRect(0, 0, S, S);
+      // Грунтозацепы боковины шины.
+      for (let k = 0; k < 16; k++) {
+        const a = k * Math.PI / 8;
+        g.strokeStyle = '#343436';
+        g.lineWidth = 5;
+        g.beginPath();
+        g.moveTo(64 + Math.cos(a) * 40, 64 + Math.sin(a) * 40);
+        g.lineTo(64 + Math.cos(a) * 60, 64 + Math.sin(a) * 60);
+        g.stroke();
+        b.strokeStyle = '#9a9a9a';
+        b.lineWidth = 5;
+        b.beginPath();
+        b.moveTo(64 + Math.cos(a) * 40, 64 + Math.sin(a) * 40);
+        b.lineTo(64 + Math.cos(a) * 60, 64 + Math.sin(a) * 60);
+        b.stroke();
+      }
       g.fillStyle = '#d8d8d8';
       g.beginPath();
       g.arc(64, 64, 36, 0, Math.PI * 2);
       g.fill();
-      g.fillStyle = '#9a9a9a';
+      b.fillStyle = '#c8c8c8';
+      b.beginPath();
+      b.arc(64, 64, 36, 0, Math.PI * 2);
+      b.fill();
+      g.strokeStyle = 'rgba(0,0,0,0.28)';
+      g.lineWidth = 2.5;
+      g.beginPath();
+      g.arc(64, 64, 29, 0, Math.PI * 2);
+      g.stroke();
+      b.fillStyle = '#787878';
+      b.beginPath();
+      b.arc(64, 64, 28, 0, Math.PI * 2);
+      b.fill();
+      g.fillStyle = '#969698';
       g.beginPath();
       g.arc(64, 64, 14, 0, Math.PI * 2);
       g.fill();
-      g.fillStyle = '#5a5a5a';
-      for (let k = 0; k < 6; k++) {
-        const a = k * Math.PI / 3;
-        g.fillRect(64 + Math.cos(a) * 24 - 3, 64 + Math.sin(a) * 24 - 3, 6, 6);
+      b.fillStyle = '#e8e8e8';
+      b.beginPath();
+      b.arc(64, 64, 14, 0, Math.PI * 2);
+      b.fill();
+      for (let k = 0; k < 8; k++) {
+        const a = k * Math.PI / 4;
+        const nx = 64 + Math.cos(a) * 22;
+        const ny = 64 + Math.sin(a) * 22;
+        g.fillStyle = '#525254';
+        g.beginPath();
+        g.arc(nx, ny, 3, 0, Math.PI * 2);
+        g.fill();
+        b.fillStyle = '#f0f0f0';
+        b.beginPath();
+        b.arc(nx, ny, 3, 0, Math.PI * 2);
+        b.fill();
       }
     });
     cell('vent', function () {
       g.fillStyle = '#efefed';
-      g.fillRect(0, 0, CELL, CELL);
-      speckle(80, 0.05);
-      g.fillStyle = 'rgba(0,0,0,0.55)';
-      for (let y = 24; y < 100; y += 13) g.fillRect(18, y, 92, 6);
-      g.strokeStyle = 'rgba(0,0,0,0.25)';
+      g.fillRect(0, 0, S, S);
+      b.fillStyle = '#888888';
+      b.fillRect(0, 0, S, S);
+      speckle(120, 0.05, 0.1);
+      for (let y = 22; y < 100; y += 12) {
+        g.fillStyle = 'rgba(0,0,0,0.62)';
+        g.fillRect(18, y, 92, 6);
+        g.fillStyle = 'rgba(255,255,255,0.45)';
+        g.fillRect(18, y - 2, 92, 2);
+        b.fillStyle = '#2e2e2e';
+        b.fillRect(18, y, 92, 6);
+        b.fillStyle = '#d4d4d4';
+        b.fillRect(18, y - 3, 92, 3);
+      }
+      g.strokeStyle = 'rgba(0,0,0,0.3)';
       g.lineWidth = 3;
       g.strokeRect(12.5, 16.5, 103, 92);
+      b.strokeStyle = '#c8c8c8';
+      b.lineWidth = 4;
+      b.strokeRect(12.5, 16.5, 103, 92);
+      for (const [cx, cy] of [[18, 22], [110, 22], [18, 102], [110, 102]]) {
+        g.fillStyle = 'rgba(0,0,0,0.4)';
+        g.beginPath();
+        g.arc(cx, cy, 2, 0, Math.PI * 2);
+        g.fill();
+        b.fillStyle = '#eeeeee';
+        b.beginPath();
+        b.arc(cx, cy, 2.2, 0, Math.PI * 2);
+        b.fill();
+      }
     });
     cell('glass', function () {
       g.fillStyle = '#efefed';
-      g.fillRect(0, 0, CELL, CELL);
+      g.fillRect(0, 0, S, S);
+      b.fillStyle = '#a8a8a8';
+      b.fillRect(0, 0, S, S);
+      g.fillStyle = '#26282a';
+      g.fillRect(11, 9, 106, 98);
       glass(14, 12, 100, 90);
-      g.fillStyle = 'rgba(0,0,0,0.2)';
+      // Щётка стеклоочистителя и резиновый уплотнитель.
+      g.strokeStyle = '#222426';
+      g.lineWidth = 2.5;
+      g.beginPath();
+      g.moveTo(64, 102);
+      g.lineTo(42, 46);
+      g.moveTo(34, 54);
+      g.lineTo(52, 38);
+      g.stroke();
+      b.strokeStyle = '#c8c8c8';
+      b.lineWidth = 2.5;
+      b.beginPath();
+      b.moveTo(64, 102);
+      b.lineTo(42, 46);
+      b.stroke();
+      g.fillStyle = 'rgba(0,0,0,0.24)';
       g.fillRect(14, 102, 100, 4);
     });
     cell('stripe', function () {
       g.fillStyle = '#f4f4f2';
-      g.fillRect(0, 0, CELL, CELL);
+      g.fillRect(0, 0, S, S);
+      b.fillStyle = '#868686';
+      b.fillRect(0, 0, S, S);
       g.fillStyle = '#222224';
-      for (let k = -CELL; k < CELL * 2; k += 32) {
+      b.fillStyle = '#727272';
+      for (let k = -S; k < S * 2; k += 32) {
         g.beginPath();
-        g.moveTo(k, CELL);
-        g.lineTo(k + 16, CELL);
-        g.lineTo(k + 16 + CELL, 0);
-        g.lineTo(k + CELL, 0);
+        g.moveTo(k, S);
+        g.lineTo(k + 16, S);
+        g.lineTo(k + 16 + S, 0);
+        g.lineTo(k + S, 0);
         g.fill();
+        b.beginPath();
+        b.moveTo(k, S);
+        b.lineTo(k + 16, S);
+        b.lineTo(k + 16 + S, 0);
+        b.lineTo(k + S, 0);
+        b.fill();
       }
+      speckle(160, 0.06, 0.12);
     });
     cell('concrete', function () {
       g.fillStyle = '#dcd9d2';
-      g.fillRect(0, 0, CELL, CELL);
-      speckle(480, 0.12);
-      g.fillStyle = 'rgba(0,0,0,0.12)';
-      g.fillRect(0, 42, CELL, 2);
-      g.fillRect(0, 86, CELL, 2);
-      g.fillStyle = 'rgba(255,255,255,0.22)';
-      g.fillRect(0, 44, CELL, 1.5);
-      g.fillRect(0, 88, CELL, 1.5);
+      g.fillRect(0, 0, S, S);
+      b.fillStyle = '#848484';
+      b.fillRect(0, 0, S, S);
+      speckle(560, 0.13, 0.24);
+      // Потёки сверху и пыль у основания блока.
+      const topStain = g.createLinearGradient(0, 0, 0, 22);
+      topStain.addColorStop(0, 'rgba(72,66,58,0.22)');
+      topStain.addColorStop(1, 'rgba(72,66,58,0)');
+      g.fillStyle = topStain;
+      g.fillRect(0, 0, S, 22);
+      const botDust = g.createLinearGradient(0, S - 26, 0, S);
+      botDust.addColorStop(0, 'rgba(116,96,72,0)');
+      botDust.addColorStop(1, 'rgba(92,74,52,0.32)');
+      g.fillStyle = botDust;
+      g.fillRect(0, S - 26, S, 26);
+      // Русты опалубки с фаской.
+      for (const y of [42, 86]) {
+        g.fillStyle = 'rgba(0,0,0,0.16)';
+        g.fillRect(0, y, S, 2);
+        g.fillStyle = 'rgba(255,255,255,0.26)';
+        g.fillRect(0, y + 2, S, 1.5);
+        b.fillStyle = '#404040';
+        b.fillRect(0, y, S, 2.5);
+        b.fillStyle = '#b4b4b4';
+        b.fillRect(0, y + 2.5, S, 1.5);
+      }
+      // Конусы стяжек опалубки и микротрещины.
       for (const [cx, cy] of [[28, 22], [100, 22], [28, 64], [100, 64], [28, 108], [100, 108]]) {
-        g.fillStyle = 'rgba(0,0,0,0.24)';
+        g.fillStyle = 'rgba(0,0,0,0.28)';
         g.beginPath();
-        g.arc(cx, cy, 3, 0, Math.PI * 2);
+        g.arc(cx, cy, 3.2, 0, Math.PI * 2);
         g.fill();
+        g.strokeStyle = 'rgba(255,255,255,0.28)';
+        g.lineWidth = 1;
+        g.stroke();
+        b.fillStyle = '#323232';
+        b.beginPath();
+        b.arc(cx, cy, 3.4, 0, Math.PI * 2);
+        b.fill();
       }
     });
     const map = new THREE.CanvasTexture(color);
     map.colorSpace = THREE.SRGBColorSpace;
     map.anisotropy = 4;
     map.userData.shared = true;
+    const bumpMap = new THREE.CanvasTexture(bump);
+    bumpMap.anisotropy = 4;
+    bumpMap.userData.shared = true;
     const glowMap = new THREE.CanvasTexture(glow);
     glowMap.colorSpace = THREE.SRGBColorSpace;
     glowMap.userData.shared = true;
-    maps = { map: map, glow: glowMap };
+    maps = { map: map, bump: bumpMap, glow: glowMap };
     return maps;
   }
 
   function material() {
     const m = atlas();
-    return new THREE.MeshStandardMaterial({ map: m.map, bumpMap: m.map, bumpScale: 0.55, vertexColors: true, roughness: 0.84, metalness: 0, emissive: 0xffe2a8, emissiveMap: m.glow, emissiveIntensity: 0 });
+    return new THREE.MeshStandardMaterial({ map: m.map, bumpMap: m.bump, bumpScale: 0.85, vertexColors: true, roughness: 0.84, metalness: 0, emissive: 0xffe2a8, emissiveMap: m.glow, emissiveIntensity: 0 });
   }
 
   function at(m, x, y, z, rx, ry, rz) {

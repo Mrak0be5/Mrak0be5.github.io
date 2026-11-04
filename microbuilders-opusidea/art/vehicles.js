@@ -33,34 +33,36 @@
   // Ночь (0..1, часы стройки — night()): фары и лампы светятся только ночью; uniform общий для всей краски.
   const NIGHT = { value: 0 };
 
-  // Атлас 64×32: левая половина белая (цвет даёт вершина), правая — чёрно-жёлтые косые полосы.
+  // Атлас 256×128: левая половина белая (цвет даёт вершина), правая — чёткие чёрно-жёлтые сигнальные полосы с потёртой кромкой.
   function stripeTexture() {
     const canvas = document.createElement('canvas');
-    canvas.width = 64;
-    canvas.height = 32;
+    canvas.width = 256;
+    canvas.height = 128;
     const g = canvas.getContext('2d');
     g.fillStyle = '#ffffff';
-    g.fillRect(0, 0, 32, 32);
+    g.fillRect(0, 0, 128, 128);
     g.fillStyle = '#f2b21c';
-    g.fillRect(32, 0, 32, 32);
+    g.fillRect(128, 0, 128, 128);
     g.fillStyle = '#1d1e20';
-    for (let k = -32; k < 64; k += 16) {
+    for (let k = -128; k < 256; k += 64) {
       g.beginPath();
-      g.moveTo(32 + k, 32);
-      g.lineTo(40 + k, 32);
-      g.lineTo(72 + k, 0);
-      g.lineTo(64 + k, 0);
+      g.moveTo(128 + k, 128);
+      g.lineTo(160 + k, 128);
+      g.lineTo(288 + k, 0);
+      g.lineTo(256 + k, 0);
       g.closePath();
       g.fill();
     }
+    g.strokeStyle = 'rgba(255,240,190,0.28)';
+    g.lineWidth = 3;
+    g.strokeRect(130, 2, 124, 124);
     // Полосы не должны залезать в белую половину.
     g.fillStyle = '#ffffff';
-    g.fillRect(0, 0, 32, 32);
+    g.fillRect(0, 0, 128, 128);
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
-    texture.magFilter = THREE.NearestFilter;
-    texture.minFilter = THREE.LinearFilter;
-    texture.generateMipmaps = false;
+    texture.anisotropy = 4;
+    texture.userData.shared = true;
     return texture;
   }
 
@@ -202,7 +204,8 @@
         color[(at + k) * 3 + 1] = tint.g;
         color[(at + k) * 3 + 2] = tint.b;
         const c = parts[i][1];
-        uv[(at + k) * 2] = parts[i][2] ? 0.5 + src[k * 2] * 0.5 : c === C.glass ? 0.05 : c === C.light || c === C.beacon ? 0.15 : base;
+        const isWood = c === C.wood || c === C.woodDark || c === 0xc08a52 || c === 0xd9b07a || c === 0xc4915a;
+        uv[(at + k) * 2] = parts[i][2] ? 0.5 + src[k * 2] * 0.5 : c === C.glass ? 0.05 : c === C.light || c === C.beacon ? 0.15 : isWood ? 0.35 : (wood ? 0.44 : base);
         uv[(at + k) * 2 + 1] = parts[i][2] ? src[k * 2 + 1] : 0.5;
       }
       at += n;
@@ -275,11 +278,16 @@
         'float mbGlass = step( mbU, 0.1 );',
         'float mbLamp = step( 0.1, mbU ) * step( mbU, 0.2 );',
         'float mbWood = step( 0.3, mbU ) * step( mbU, 0.5 );',
+        'float mbBoard = step( 0.3, mbU ) * step( mbU, 0.4 );',
         'float mbPaint = 1.0 - mbGlass - mbLamp - mbWood;',
-        // Волокна, годовые кольца и сучки на досках поддонов и столов планирования (mbWood).
-        'float mbWg = sin( ( vMbLocal.x * 26.0 + mbNoise( vMbLocal * vec3( 4.0, 18.0, 4.0 ) ) * 4.5 ) * 3.14159 );',
-        'float mbWk = smoothstep( 0.78, 0.88, mbNoise( vMbLocal * vec3( 9.0, 9.0, 3.5 ) + 2.3 ) );',
-        'diffuseColor.rgb *= 1.0 + mbWood * ( 0.08 * mbWg - 0.24 * mbWk );',
+        // Волокна, годовые кольца, сучки и тёмные торцы спила на досках поддонов и столов планирования (mbBoard).
+        'vec3 mbLNorm = normalize( cross( dFdx( vMbLocal ), dFdy( vMbLocal ) ) );',
+        'float mbEnd = smoothstep( 0.65, 0.85, abs( mbLNorm.x ) );',
+        'float mbWg = sin( ( ( vMbLocal.z * 32.0 + vMbLocal.y * 24.0 ) + mbNoise( vMbLocal * vec3( 3.5, 16.0, 16.0 ) ) * 5.0 ) * 3.14159 );',
+        'float mbRing = sin( length( vMbLocal.yz * 28.0 + mbNoise( vMbLocal * 12.0 ) * 2.5 ) * 3.14159 );',
+        'float mbWk = smoothstep( 0.76, 0.87, mbNoise( vMbLocal * vec3( 8.0, 10.0, 10.0 ) + 2.3 ) );',
+        'float mbSeam = smoothstep( 0.92, 0.98, abs( sin( vMbLocal.z * 20.1 ) ) );',
+        'diffuseColor.rgb *= 1.0 + mbBoard * ( mix( 0.09 * mbWg, 0.11 * mbRing - 0.14, mbEnd ) - 0.26 * mbWk - 0.12 * mbSeam );',
         // Сколы и подтёки — только по жёлтой краске техники: тёмный металл пятнами, вертикальные потёки грязи.
         'float mbYel = mbPaint * smoothstep( 0.3, 0.6, diffuseColor.r - diffuseColor.b );',
         // Сколы редкие: мелкий шум только там, где крупный (3/м) уже высок, — несколько потёртых мест, а не «леопард».
@@ -300,6 +308,7 @@
       ].join('\n'))
       .replace('#include <roughnessmap_fragment>', [
         '#include <roughnessmap_fragment>',
+        'roughnessFactor = mix( roughnessFactor, clamp( 0.82 - 0.08 * mbWg + 0.12 * mbWk + 0.08 * mbEnd, 0.55, 0.98 ), mbBoard );',
         'roughnessFactor = mix( mix( mix( roughnessFactor, 1.0, min( 1.0, mbMud * 1.6 ) ), 0.06, mbGlass ), 0.2, mbLamp );',
       ].join('\n'))
       .replace('#include <emissivemap_fragment>', [

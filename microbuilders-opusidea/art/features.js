@@ -20,14 +20,14 @@
 
   // ---------- текстуры (общие на страницу) ----------
 
-  function texture(name, w, h, paint) {
+  function texture(name, w, h, paint, linear) {
     if (textures[name]) return textures[name];
     const canvas = document.createElement('canvas');
     canvas.width = w;
     canvas.height = h;
     paint(canvas.getContext('2d'), w, h);
     const t = new THREE.CanvasTexture(canvas);
-    t.colorSpace = THREE.SRGBColorSpace;
+    if (!linear) t.colorSpace = THREE.SRGBColorSpace;
     t.anisotropy = 4;
     t.userData.shared = true;
     textures[name] = t;
@@ -185,7 +185,43 @@
     g.stroke();
   }
 
-  // Оконное стекло 256×256: тёплый тон, мягкое затенение у рамы и двойной диагональный блик.
+  // Карта шероховатости (G) и металличности (B) дверного полотна: матовый дуб, кованое железо петель и полированная латунь ручки.
+  function paintPlanksOrm(g, w, h) {
+    const pw = w / 4;
+    const roughs = [198, 206, 194, 202];
+    for (let i = 0; i < 4; i++) {
+      g.fillStyle = 'rgb(0,' + roughs[i] + ',0)';
+      g.fillRect(i * pw, 0, pw, h);
+    }
+    for (let i = 1; i < 4; i++) {
+      g.fillStyle = 'rgb(0,242,0)';
+      g.fillRect(i * pw - 2, 0, 4, h);
+    }
+    for (const hy of [h * 0.16, h * 0.78]) {
+      const sh = Math.round(h * 0.055);
+      g.fillStyle = 'rgb(0,104,216)';
+      g.fillRect(0, hy, w * 0.86, sh);
+      for (let i = 0; i < 4; i++) {
+        const rx = i * pw + pw * 0.5;
+        if (rx > w * 0.84) continue;
+        g.fillStyle = 'rgb(0,82,235)';
+        g.beginPath();
+        g.arc(rx, hy + sh * 0.5, 4, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+    g.fillStyle = 'rgb(0,70,238)';
+    g.beginPath();
+    g.roundRect(w * 0.84 - 12, h * 0.52 - 25, 24, 48, 5);
+    g.fill();
+    g.strokeStyle = 'rgb(0,58,245)';
+    g.lineWidth = 4;
+    g.beginPath();
+    g.arc(w * 0.84, h * 0.52 - 4, 8, 0, Math.PI * 2);
+    g.stroke();
+  }
+
+  // Оконное стекло 256×256: тёплый тон, затенение у рамы, двойной диагональный блик и тонкая деревянная раскладка переплёта.
   function paintPane(g, w, h) {
     const grad = g.createLinearGradient(0, 0, 0, h);
     grad.addColorStop(0, '#fff4da');
@@ -193,11 +229,20 @@
     grad.addColorStop(1, '#e2be82');
     g.fillStyle = grad;
     g.fillRect(0, 0, w, h);
-    const vig = g.createRadialGradient(w * 0.5, h * 0.5, w * 0.25, w * 0.5, h * 0.5, w * 0.72);
-    vig.addColorStop(0, 'rgba(255, 248, 230, 0.15)');
-    vig.addColorStop(1, 'rgba(140, 96, 46, 0.26)');
+    const vig = g.createRadialGradient(w * 0.5, h * 0.5, w * 0.22, w * 0.5, h * 0.5, w * 0.72);
+    vig.addColorStop(0, 'rgba(255, 248, 230, 0.16)');
+    vig.addColorStop(1, 'rgba(132, 88, 40, 0.3)');
     g.fillStyle = vig;
     g.fillRect(0, 0, w, h);
+    // Лёгкая волнистость выдувного стекла.
+    for (let y = 12; y < h; y += 22) {
+      g.strokeStyle = 'rgba(255, 252, 240, 0.12)';
+      g.lineWidth = 3;
+      g.beginPath();
+      g.moveTo(0, y);
+      g.bezierCurveTo(w * 0.33, y + 4, w * 0.66, y - 4, w, y + 2);
+      g.stroke();
+    }
     g.fillStyle = 'rgba(255, 255, 255, 0.44)';
     g.beginPath();
     g.moveTo(w * 0.1, h);
@@ -215,9 +260,42 @@
     g.lineTo(w * 0.94, 0);
     g.closePath();
     g.fill();
-    g.strokeStyle = 'rgba(120, 82, 40, 0.32)';
-    g.lineWidth = 6;
-    g.strokeRect(3, 3, w - 6, h - 6);
+    // Тонкий деревянный переплёт (средник и фрамуга) с тенью и светлой фаской.
+    const mx = Math.round(w * 0.5);
+    const my = Math.round(h * 0.38);
+    g.fillStyle = 'rgba(72, 44, 18, 0.24)';
+    g.fillRect(mx - 2, 0, 8, h);
+    g.fillRect(0, my - 1, w, 8);
+    g.fillStyle = '#8c5e35';
+    g.fillRect(mx - 3, 0, 6, h);
+    g.fillRect(0, my - 3, w, 6);
+    g.fillStyle = 'rgba(255, 232, 195, 0.38)';
+    g.fillRect(mx - 3, 0, 1.5, h);
+    g.fillRect(0, my - 3, w, 1.5);
+    g.strokeStyle = 'rgba(112, 74, 34, 0.42)';
+    g.lineWidth = 8;
+    g.strokeRect(4, 4, w - 8, h - 8);
+  }
+
+  function paintPaneBump(g, w, h) {
+    g.fillStyle = 'rgb(120,120,120)';
+    g.fillRect(0, 0, w, h);
+    for (let y = 12; y < h; y += 22) {
+      g.strokeStyle = 'rgb(132,132,132)';
+      g.lineWidth = 4;
+      g.beginPath();
+      g.moveTo(0, y);
+      g.bezierCurveTo(w * 0.33, y + 4, w * 0.66, y - 4, w, y + 2);
+      g.stroke();
+    }
+    const mx = Math.round(w * 0.5);
+    const my = Math.round(h * 0.38);
+    g.fillStyle = 'rgb(205,205,205)';
+    g.fillRect(mx - 3, 0, 6, h);
+    g.fillRect(0, my - 3, w, 6);
+    g.strokeStyle = 'rgb(215,215,215)';
+    g.lineWidth = 8;
+    g.strokeRect(4, 4, w - 8, h - 8);
   }
 
   // Стекло грани: тёплый тон, альфа 1 у кромки и 0,55 в середине (переход 10 px), мягкая светлая полоса блика по диагонали.
@@ -244,22 +322,28 @@
   const MAT = {
     steel: function () { return new THREE.MeshStandardMaterial({ color: 0x5d656b, roughness: 0.55, metalness: 0.3 }); },
     wood: function () {
+      const orm = texture('planksOrm', 256, 512, paintPlanksOrm, true);
       return new THREE.MeshStandardMaterial({
         map: texture('planks', 256, 512, paintPlanks),
-        bumpMap: texture('planksBump', 256, 512, paintPlanksBump),
+        bumpMap: texture('planksBump', 256, 512, paintPlanksBump, true),
         bumpScale: 1.0,
-        roughness: 0.78,
+        roughnessMap: orm,
+        metalnessMap: orm,
+        roughness: 1,
+        metalness: 1,
       });
     },
     // Слабая подсветка той же текстурой: стекло в глубине проёма и в тени остаётся светлым. Ночью (night()) окна
     // pane горят тёплым светом, paneDim — тёмные комнаты: стекло темнеет и отражает небо.
     pane: function () {
       const map = texture('pane', 256, 256, paintPane);
-      return new THREE.MeshStandardMaterial({ map: map, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.3, roughness: 0.22, metalness: 0.06 });
+      const bump = texture('paneBump', 256, 256, paintPaneBump, true);
+      return new THREE.MeshStandardMaterial({ map: map, bumpMap: bump, bumpScale: 0.25, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.3, roughness: 0.22, metalness: 0.06 });
     },
     paneDim: function () {
       const map = texture('pane', 256, 256, paintPane);
-      return new THREE.MeshStandardMaterial({ map: map, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.3, roughness: 0.22, metalness: 0.06 });
+      const bump = texture('paneBump', 256, 256, paintPaneBump, true);
+      return new THREE.MeshStandardMaterial({ map: map, bumpMap: bump, bumpScale: 0.25, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.3, roughness: 0.22, metalness: 0.06 });
     },
     // Тёплое прозрачное стекло: не путается с голубыми призраками недостроенных блоков. Купол — без текстуры (шов развёртки).
     clear: function () { return glassMaterial(true); },
