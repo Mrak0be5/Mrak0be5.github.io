@@ -416,6 +416,24 @@
     if (look === 'concrete') {
       return { rock: tone, mix: 0.92, vein: [0x7c7a74, 0, 0.85, 0.02], spot: [0x585550, 0, 0.75, 0.36, 1.5] };
     }
+    if (look === 'marble') {
+      return { rock: tone, mix: 0.92, bands: [mixHex(tone, 0x707580, 0.22), mixHex(tone, 0xffffff, 0.25)], bandMix: 0.3, vein: [0x6e737c, 0.08, 0.22, 0.024] };
+    }
+    if (look === 'tile') {
+      return { rock: tone, mix: 0.88, bands: [mixHex(tone, 0x6e5846, 0.28), mixHex(tone, 0xf4eee2, 0.24)], bandMix: 0.32, vein: [0xd8d0c0, 0.05, 0.25, 0.02] };
+    }
+    if (look === 'obsidian') {
+      return { rock: tone, mix: 0.92, vein: [mixHex(tone, 0x9ab4e8, 0.45), 0.35, 0.14, 0.022], spot: [0x12141a, 0.4, 0.12, 0.3, 1.8] };
+    }
+    if (look === 'magma') {
+      return { rock: 0x321c16, mix: 0.45, rust: 0x8a3818, vein: [tone, 0.1, 0.25, 0.035], spot: [0xffc864, 0.15, 0.2, 0.28, 1.8], onVein: true };
+    }
+    if (look === 'cosmic') {
+      return { rock: 0x261c38, mix: 0.55, vein: [tone, 0.35, 0.18, 0.032], spot: [0xffffff, 0.8, 0.12, 0.34, 1.4] };
+    }
+    if (look === 'glass') {
+      return { rock: tone, mix: 0.85, vein: [0xffffff, 0.2, 0.12, 0.026], spot: [0xd8f4ff, 0.25, 0.1, 0.3, 1.6] };
+    }
     return { rock: tone, mix: 0.92, vein: [0xe6e0d2, 0, 0.55, 0.022], spot: [0x4a443c, 0, 0.8, 0.26, 1.5] };
   }
   const oreCache = new Map();

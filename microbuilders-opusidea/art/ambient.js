@@ -28,53 +28,75 @@
   function puffMap() {
     if (puffTexture) return puffTexture;
     const canvas = document.createElement('canvas');
-    canvas.width = 64;
-    canvas.height = 64;
+    canvas.width = 128;
+    canvas.height = 128;
     const ctx = canvas.getContext('2d');
-    for (let i = 0; i < 9; i++) {
-      const a = i * 2.4;
-      const r = i ? 9 + (i % 3) * 3 : 0;
-      const x = 32 + Math.cos(a) * r;
-      const y = 32 + Math.sin(a) * r;
-      const s = i ? 13 + (i % 2) * 4 : 22;
+    for (let i = 0; i < 14; i++) {
+      const a = i * 2.399;
+      const r = i ? 16 + (i % 4) * 6 : 0;
+      const x = 64 + Math.cos(a) * r;
+      const y = 64 + Math.sin(a) * r;
+      const s = i ? 24 + (i % 3) * 7 : 44;
       const g = ctx.createRadialGradient(x, y, 0, x, y, s);
-      g.addColorStop(0, 'rgba(255,255,255,' + (i ? 0.32 : 0.55) + ')');
+      g.addColorStop(0, 'rgba(255,255,255,' + (i ? 0.28 : 0.58) + ')');
+      g.addColorStop(0.55, 'rgba(255,255,255,' + (i ? 0.14 : 0.28) + ')');
       g.addColorStop(1, 'rgba(255,255,255,0)');
       ctx.fillStyle = g;
-      ctx.fillRect(0, 0, 64, 64);
+      ctx.fillRect(0, 0, 128, 128);
     }
     puffTexture = new THREE.CanvasTexture(canvas);
     return puffTexture;
   }
 
-  // Атлас следов 128×128: слева отпечаток ботинка (носок вверху), справа отрезок шины с шевронами и мягкими концами.
+  // Атлас следов 256×256: слева отпечаток рабочего ботинка с каблуком и протектором, справа отрезок шины погрузчика.
   function decalMap() {
     if (decalTexture) return decalTexture;
     const canvas = document.createElement('canvas');
-    canvas.width = 128;
-    canvas.height = 128;
+    canvas.width = 256;
+    canvas.height = 256;
     const ctx = canvas.getContext('2d');
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.save();
+    ctx.scale(2, 2);
+    // Мягкая вдавленная кромка вокруг следа ботинка
+    ctx.fillStyle = 'rgba(255,255,255,0.32)';
     ctx.beginPath();
-    ctx.ellipse(32, 38, 19, 32, 0, 0, Math.PI * 2);
+    ctx.ellipse(32, 39, 21, 34, 0, 0, Math.PI * 2);
+    ctx.ellipse(32, 103, 18, 19, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Передняя часть подошвы и каблук
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.beginPath();
+    ctx.ellipse(32, 38, 18.5, 31, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.ellipse(32, 104, 16, 17, 0, 0, Math.PI * 2);
+    ctx.roundRect(17, 86, 30, 33, [4, 4, 14, 14]);
     ctx.fill();
-    // Грунтозацепы подошвы: светлые полоски поперёк.
+    // Протектор подошвы: поперечные канавки, центральный желоб и боковые зубья
     ctx.globalCompositeOperation = 'destination-out';
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    for (let y = 14; y < 120; y += 10) if (y < 70 || y > 90) ctx.fillRect(8, y, 48, 3);
+    ctx.fillStyle = 'rgba(0,0,0,0.68)';
+    for (let y = 14; y < 66; y += 8) {
+      ctx.fillRect(10, y, 18, 2.6);
+      ctx.fillRect(36, y, 18, 2.6);
+    }
+    ctx.fillRect(30.5, 16, 3, 46);
+    for (let y = 92; y < 114; y += 7) {
+      ctx.fillRect(14, y, 36, 2.6);
+    }
     ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    // Колея шины: подложка, центральное ребро и грунтозацепы «ёлочкой»
+    ctx.fillStyle = 'rgba(255,255,255,0.38)';
     ctx.fillRect(68, 0, 56, 128);
-    ctx.strokeStyle = 'rgba(255,255,255,0.95)';
-    ctx.lineWidth = 6;
-    for (let y = -8; y < 136; y += 16) {
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.fillRect(94, 0, 4, 128);
+    ctx.strokeStyle = 'rgba(255,255,255,0.96)';
+    ctx.lineWidth = 5.5;
+    ctx.lineCap = 'round';
+    for (let y = -10; y < 138; y += 14) {
       ctx.beginPath();
-      ctx.moveTo(70, y);
-      ctx.lineTo(96, y + 9);
-      ctx.lineTo(122, y);
+      ctx.moveTo(71, y);
+      ctx.lineTo(92, y + 8);
+      ctx.moveTo(121, y + 3);
+      ctx.lineTo(100, y + 11);
       ctx.stroke();
     }
     // Концы отрезка мягкие: соседние отрезки перекрываются без тёмного шва.
@@ -86,6 +108,7 @@
     g.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = g;
     ctx.fillRect(64, 0, 64, 128);
+    ctx.restore();
     decalTexture = new THREE.CanvasTexture(canvas);
     decalTexture.anisotropy = 4;
     return decalTexture;

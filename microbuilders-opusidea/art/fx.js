@@ -316,24 +316,32 @@
     p.points.visible = false;
   }
 
-  // Блик: четырёхлучевая звёздочка с мягким центром.
+  // Блик: четырёхлучевая звёздочка с косыми лучами и мягким центром.
   function starTexture() {
     const canvas = document.createElement('canvas');
-    canvas.width = 64;
-    canvas.height = 64;
+    canvas.width = 128;
+    canvas.height = 128;
     const ctx = canvas.getContext('2d');
+    ctx.scale(2, 2);
     const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
     g.addColorStop(0, 'rgba(255,255,255,1)');
-    g.addColorStop(0.3, 'rgba(255,255,255,0.45)');
+    g.addColorStop(0.32, 'rgba(255,255,255,0.52)');
     g.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.moveTo(32, 0); ctx.lineTo(35, 29); ctx.lineTo(64, 32); ctx.lineTo(35, 35);
-    ctx.lineTo(32, 64); ctx.lineTo(29, 35); ctx.lineTo(0, 32); ctx.lineTo(29, 29);
+    ctx.moveTo(32, 0); ctx.lineTo(34.8, 29.2); ctx.lineTo(64, 32); ctx.lineTo(34.8, 34.8);
+    ctx.lineTo(32, 64); ctx.lineTo(29.2, 34.8); ctx.lineTo(0, 32); ctx.lineTo(29.2, 29.2);
     ctx.closePath();
     ctx.fill();
+    ctx.save();
+    ctx.translate(32, 32);
+    ctx.rotate(Math.PI / 4);
+    ctx.scale(0.55, 0.55);
+    ctx.translate(-32, -32);
+    ctx.fill();
+    ctx.restore();
     ctx.beginPath();
-    ctx.arc(32, 32, 9, 0, Math.PI * 2);
+    ctx.arc(32, 32, 9.5, 0, Math.PI * 2);
     ctx.fill();
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
@@ -343,15 +351,16 @@
   // hard — плотное ядро до половины радиуса (искры), иначе мягкий клубок (пыль).
   function dotTexture(hard) {
     const canvas = document.createElement('canvas');
-    canvas.width = 64;
-    canvas.height = 64;
+    canvas.width = 128;
+    canvas.height = 128;
     const ctx = canvas.getContext('2d');
-    const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
     g.addColorStop(0, 'rgba(255,255,255,1)');
-    g.addColorStop(0.45, hard ? 'rgba(255,255,255,1)' : 'rgba(255,255,255,0.55)');
+    g.addColorStop(0.45, hard ? 'rgba(255,255,255,1)' : 'rgba(255,255,255,0.58)');
+    g.addColorStop(0.78, hard ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.22)');
     g.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.fillStyle = g;
-    ctx.fillRect(0, 0, 64, 64);
+    ctx.fillRect(0, 0, 128, 128);
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     return texture;

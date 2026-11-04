@@ -482,7 +482,24 @@
       fillAll(L, css(c), 100, orm(0.3, 1));
       grain(L, 1200, 0.08);
       if (bare) {
-        for (let i = 0; i < 10; i++) blot(L.c, L.r() * S, L.r() * S, 30 + L.r() * 60, trip(sh(c, L.r() < 0.5 ? 1.2 : 0.76)), 0.3);
+        for (let i = 0; i < 12; i++) {
+          const bx = L.r() * S, by = L.r() * S, br = 26 + L.r() * 54;
+          const up = L.r() < 0.5;
+          blot(L.c, bx, by, br, trip(sh(c, up ? 1.2 : 0.76)), 0.3);
+          blot(L.h, bx, by, br * 0.7, up ? '156,156,156' : '96,96,96', 0.32);
+        }
+        for (let i = 0; i < 28; i++) {
+          const px = L.r() * S, py = L.r() * S, pr = 1 + L.r() * 1.8;
+          L.c.fillStyle = css(sh(c, 0.45), 0.5);
+          L.c.fillRect(px, py, pr, pr);
+          L.h.fillStyle = gray(78);
+          L.h.fillRect(px, py, pr + 0.5, pr + 0.5);
+        }
+        for (let i = 0; i < 2; i++) {
+          const x = i === 0 ? 22 + L.r() * 20 : S - 22 - L.r() * 20;
+          const y = L.r() < 0.5 ? 22 + L.r() * 20 : S - 22 - L.r() * 20;
+          paint(L, lump(L.r, x, y, 5 + L.r() * 5, 7), 'rgba(90,150,120,0.38)', null, orm(0.82, 0.15));
+        }
         edgeWear(L, trip(sh(c, 1.3)), 0.3, 0.25);
         return;
       }
@@ -655,7 +672,14 @@
         }
       };
       if (bare) {
-        // Гладкий лист: без заклёпок и швов.
+        // Прокатный лист: тонкий шов прокатки и микрорельеф окалины.
+        groove(L, line(0, S / 2, S, S / 2), 2.2, 32);
+        for (let i = 0; i < 10; i++) {
+          const sx = L.r() * S, sy = L.r() * S, sr = 14 + L.r() * 26;
+          blot(L.h, sx, sy, sr, L.r() < 0.5 ? '155,155,155' : '95,95,95', 0.35);
+          blot(L.o, sx, sy, sr, ormRgb(0.42 + L.r() * 0.25, 0.85), 0.4);
+        }
+        row(22, S / 2 - 12, S - 22, S / 2 - 12, 3);
       } else if (v === 0) {
         row(22, 22, S - 22, 22, 6);
         row(22, S - 22, S - 22, S - 22, 6);
@@ -1450,19 +1474,32 @@
       const dark = lum(c) < 0.3;
       const ink = MARBLE_VEIN[spec.id] || (dark ? sh(c, 1.7) : sh(mix(c, 0x6a6f78, 0.6), 0.85));
       fillAll(L, css(c), 128, orm(spec.id === 'ladder-marble-polished' ? 0.08 : 0.18, 0));
-      for (let i = 0; i < 12; i++) blot(L.c, L.r() * S, L.r() * S, 30 + L.r() * 70, trip(sh(c, L.r() < 0.5 ? 0.94 : 1.05)), 0.4);
+      for (let i = 0; i < 16; i++) {
+        const bx = L.r() * S, by = L.r() * S, br = 28 + L.r() * 68;
+        const up = L.r() < 0.5;
+        blot(L.c, bx, by, br, trip(sh(c, up ? 0.93 : 1.06)), 0.42);
+        blot(L.h, bx, by, br * 0.75, up ? '118,118,118' : '138,138,138', 0.25);
+      }
       const count = bare ? 2 : [3, 7, 2][v];
       for (let i = 0; i < count; i++) {
         const x = L.r() * S;
         const y = L.r() < 0.5 ? -10 : L.r() * S;
         const width = (v === 2 && !bare ? 4.5 : 2.2) + L.r() * 1.6;
         const path = vein(L, x, y, S * (0.9 + L.r() * 0.6), Math.PI * (0.15 + L.r() * 0.7), width, css(ink, (0.7 + L.r() * 0.25).toFixed(2)), 1);
-        for (let b = 0; b < 3; b++) vein(L, L.r() * S, L.r() * S, 30 + L.r() * 50, L.r() * 6.3, 0.8 + L.r() * 0.8, css(ink, 0.5), 0.6);
-        L.h.strokeStyle = gray(118);
-        L.h.lineWidth = 1.5;
+        for (let b = 0; b < 3; b++) {
+          const bp = vein(L, L.r() * S, L.r() * S, 30 + L.r() * 50, L.r() * 6.3, 0.8 + L.r() * 0.8, css(ink, 0.5), 0.6);
+          L.h.strokeStyle = gray(120);
+          L.h.lineWidth = 1;
+          L.h.stroke(bp);
+        }
+        L.h.strokeStyle = gray(112);
+        L.h.lineWidth = 1.6;
         L.h.stroke(path);
+        L.o.strokeStyle = orm(0.28, 0);
+        L.o.lineWidth = width;
+        L.o.stroke(path);
       }
-      for (let i = 0; i < 20; i++) vein(L, L.r() * S, L.r() * S, 20 + L.r() * 40, L.r() * 6.3, 0.5, css(ink, 0.18), 0.3);
+      for (let i = 0; i < 24; i++) vein(L, L.r() * S, L.r() * S, 20 + L.r() * 40, L.r() * 6.3, 0.5, css(ink, 0.2), 0.3);
       if (spec.id === 'ladder-quartzite') sparkles(L, 18, 'rgba(255,255,255,0.7)');
       edgeLight(L, '255,255,255', dark ? 0.12 : 0.25);
     },
@@ -1471,7 +1508,7 @@
     tile: function (L, v, bare, spec) {
       const c = spec.color;
       const grout = mix(0xcfc8b8, c, 0.15);
-      fillAll(L, css(grout), 80, orm(0.92, 0));
+      fillAll(L, css(grout), 54, orm(0.92, 0));
       const n = !bare && v === 1 ? 2 : 4;
       const cell = S / n;
       for (let y = 0; y < n; y++) {
@@ -1480,31 +1517,38 @@
           const path = new Path2D();
           path.roundRect(x * cell + 3, y * cell + 3, cell - 6, cell - 6, 4);
           const g = L.c.createLinearGradient(x * cell, y * cell, x * cell + cell, y * cell + cell);
-          g.addColorStop(0, css(sh(tone, 1.12)));
-          g.addColorStop(1, css(sh(tone, 0.9)));
-          paint(L, path, g, gray(150), orm(0.12, 0));
-          L.c.fillStyle = 'rgba(255,255,255,0.3)';
-          L.c.fillRect(x * cell + 7, y * cell + 7, cell * 0.35, 2.5);
+          g.addColorStop(0, css(sh(tone, 1.14)));
+          g.addColorStop(1, css(sh(tone, 0.88)));
+          paint(L, path, g, gray(152), orm(0.11, 0));
+          const cx = x * cell + cell / 2;
+          const cy = y * cell + cell / 2;
+          blot(L.h, cx, cy, cell * 0.42, '182,182,182', 0.45);
+          L.c.fillStyle = 'rgba(255,255,255,0.34)';
+          L.c.fillRect(x * cell + 7, y * cell + 6, cell * 0.38, 2.5);
+          L.c.fillRect(x * cell + 6, y * cell + 7, 2.5, cell * 0.32);
+          L.c.fillStyle = css(sh(grout, 0.55), 0.45);
+          L.c.fillRect(x * cell + 3, y * cell + 1, cell - 6, 2);
           if (!bare && v === 1) {
-            const cx = x * cell + cell / 2;
-            const cy = y * cell + cell / 2;
             const rosette = new Path2D();
             for (let p = 0; p < 8; p++) {
               const a = (p / 8) * Math.PI * 2;
               rosette.ellipse(cx + Math.cos(a) * cell * 0.18, cy + Math.sin(a) * cell * 0.18, cell * 0.14, cell * 0.06, a, 0, Math.PI * 2);
             }
-            paint(L, rosette, css(sh(c, lum(c) > 0.5 ? 0.62 : 1.5), 0.75), gray(160), null);
+            paint(L, rosette, css(sh(c, lum(c) > 0.5 ? 0.62 : 1.5), 0.75), gray(168), null);
             const dot = new Path2D();
             dot.arc(cx, cy, cell * 0.07, 0, Math.PI * 2);
-            paint(L, dot, css(sh(c, 1.6), 0.9), gray(170), null);
+            paint(L, dot, css(sh(c, 1.6), 0.9), gray(178), null);
           }
         }
       }
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < 12; i++) {
         const path = crackPath(L.r, L.r() * S, L.r() * S, 20 + L.r() * 30, L.r() * 6.3);
-        L.c.strokeStyle = css(sh(c, 0.55), 0.22);
+        L.c.strokeStyle = css(sh(c, 0.55), 0.24);
         L.c.lineWidth = 0.7;
         L.c.stroke(path);
+        L.h.strokeStyle = gray(122);
+        L.h.lineWidth = 0.8;
+        L.h.stroke(path);
       }
     },
 
@@ -1543,7 +1587,14 @@
           L.h.stroke(path);
         }
       } else {
-        for (let i = 0; i < 40; i++) vein(L, L.r() * S, L.r() * S, 30 + L.r() * 60, L.r() * 6.3, 0.7, css(sh(c, 1.35), 0.16), 0.5);
+        for (let i = 0; i < 42; i++) {
+          const vp = vein(L, L.r() * S, L.r() * S, 30 + L.r() * 60, L.r() * 6.3, 0.8, css(sh(c, 1.38), 0.18), 0.5);
+          if (i % 3 === 0) {
+            L.h.strokeStyle = gray(i % 6 === 0 ? 144 : 112);
+            L.h.lineWidth = 1.2;
+            L.h.stroke(vp);
+          }
+        }
         for (let i = 0; i < 8; i++) blot(L.o, L.r() * S, L.r() * S, 30 + L.r() * 40, '190,51,0', 0.5);
       }
       grain(L, 600, 0.06);
@@ -1669,16 +1720,21 @@
       const c = spec.color;
       fillAll(L, css(c), 128, orm(0.3, 0));
       for (let i = 0; i < 18; i++) blot(L.c, L.r() * S, L.r() * S, 20 + L.r() * 50, trip(sh(c, L.r() < 0.5 ? 0.7 : 1.22)), 0.35);
-      for (let i = 0; i < (bare ? 1 : 3); i++) vein(L, -10, L.r() * S, S * 1.3, (L.r() - 0.5) * 0.8, 2 + L.r() * 3, 'rgba(232,238,244,0.45)', 1.5);
-      for (let i = 0; i < 70; i++) {
+      for (let i = 0; i < (bare ? 2 : 3); i++) {
+        const vp = vein(L, -10, L.r() * S, S * 1.3, (L.r() - 0.5) * 0.8, 2 + L.r() * 3, 'rgba(232,238,244,0.45)', 1.5);
+        L.h.strokeStyle = gray(110);
+        L.h.lineWidth = 2;
+        L.h.stroke(vp);
+      }
+      for (let i = 0; i < 80; i++) {
         const x = L.r() * S;
         const y = L.r() * S;
-        const s = 1 + L.r() * 2.5;
+        const s = 1 + L.r() * 2.6;
         L.c.fillStyle = L.r() < 0.5 ? '#f5d76e' : '#d9b443';
         L.c.fillRect(x, y, s, s);
-        L.o.fillStyle = orm(0.25, 1);
+        L.o.fillStyle = orm(0.22, 1);
         L.o.fillRect(x, y, s, s);
-        L.h.fillStyle = gray(170);
+        L.h.fillStyle = gray(176);
         L.h.fillRect(x, y, s, s);
       }
       grain(L, 900, 0.08);
@@ -1691,8 +1747,13 @@
       g.addColorStop(0, css(sh(c, 1.35)));
       g.addColorStop(1, css(sh(c, 0.62)));
       fillAll(L, g, 128, orm(0.14, 0));
-      for (let i = 0; i < 8; i++) vein(L, -10, L.r() * S, S * 1.3, (L.r() - 0.5) * 0.4, 6 + L.r() * 10, css(sh(c, L.r() < 0.5 ? 0.8 : 1.2), 0.2), 4);
-      for (let i = 0; i < 16; i++) {
+      for (let i = 0; i < 10; i++) {
+        const vp = vein(L, -10, L.r() * S, S * 1.3, (L.r() - 0.5) * 0.4, 6 + L.r() * 10, css(sh(c, L.r() < 0.5 ? 0.8 : 1.2), 0.22), 4);
+        L.h.strokeStyle = gray(i % 2 ? 142 : 114);
+        L.h.lineWidth = 3;
+        L.h.stroke(vp);
+      }
+      for (let i = 0; i < 18; i++) {
         const x = L.r() * S;
         const y = L.r() * S;
         const r = 1.5 + L.r() * 2.5;
@@ -1703,6 +1764,8 @@
         L.c.stroke();
         L.c.fillStyle = 'rgba(255,255,255,0.7)';
         L.c.fillRect(x - r * 0.5, y - r * 0.5, 1, 1);
+        L.h.fillStyle = gray(162);
+        L.h.fillRect(x - 1, y - 1, 2, 2);
       }
       if (!bare && v === 1) {
         const x = S * (0.35 + L.r() * 0.3);
@@ -1738,7 +1801,7 @@
       fillAll(L, css(c), 128, orm(0.12, 0.05));
       if (spec.id === 'ladder-pearl') {
         const tints = ['255,200,220', '200,255,230', '215,205,255', '255,240,200'];
-        for (let y = -10; y < S + 10; y += 8 + L.r() * 10) band(L, y, 6 + L.r() * 8, 'rgba(' + tints[Math.floor(L.r() * tints.length)] + ',0.2)', null);
+        for (let y = -10; y < S + 10; y += 8 + L.r() * 10) band(L, y, 6 + L.r() * 8, 'rgba(' + tints[Math.floor(L.r() * tints.length)] + ',0.22)', gray(122 + Math.floor(L.r() * 14)));
         for (let i = 0; i < 8; i++) blot(L.c, L.r() * S, L.r() * S, 40 + L.r() * 50, '255,255,255', 0.25);
       } else if (spec.id === 'ladder-labradorite') {
         for (let i = 0; i < 14; i++) blot(L.c, L.r() * S, L.r() * S, 20 + L.r() * 50, trip(sh(c, L.r() < 0.5 ? 0.7 : 1.15)), 0.4);
@@ -1746,23 +1809,28 @@
         for (let i = 0; i < 9; i++) blot(L.c, L.r() * S, L.r() * S, 30 + L.r() * 50, flash[i % flash.length], 0.45);
         for (let i = 0; i < 16; i++) {
           const x = L.r() * S;
+          const p = line(x, 0, x + (L.r() - 0.5) * 60, S);
           L.c.strokeStyle = css(sh(c, 0.5), 0.35);
           L.c.lineWidth = 1 + L.r() * 2;
-          L.c.stroke(line(x, 0, x + (L.r() - 0.5) * 60, S));
+          L.c.stroke(p);
+          L.h.strokeStyle = gray(110);
+          L.h.lineWidth = 1.2;
+          L.h.stroke(p);
         }
       } else {
         const fire = [0xff8ac8, 0x7cf0c0, 0x7cb4ff, 0xc890ff, 0xffd890];
         const n = bare ? 30 : [40, 60, 24][v];
         const seeds = [];
-        for (let i = 0; i < n; i++) seeds.push({ x: L.r() * S, y: L.r() * S, t: rgbOf(mix(c, fire[Math.floor(L.r() * fire.length)], 0.3 + L.r() * 0.35)) });
+        for (let i = 0; i < n; i++) seeds.push({ x: L.r() * S, y: L.r() * S, t: rgbOf(mix(c, fire[Math.floor(L.r() * fire.length)], 0.3 + L.r() * 0.35)), h: 116 + Math.floor(L.r() * 28) });
         voronoi(L, seeds, function (s, d1, d2, x, y, p, col, hgt, srf) {
           const fade = Math.min(1, (d2 - d1) / 6);
           const base = rgbOf(c);
           for (let ch = 0; ch < 3; ch++) col[p + ch] = base[ch] + (s.t[ch] - base[ch]) * fade;
-          hgt[p] = hgt[p + 1] = hgt[p + 2] = 128;
-          srf[p] = 160;
-          srf[p + 1] = 30;
-          srf[p + 2] = 12;
+          const hh = fade < 0.3 ? 102 : s.h;
+          hgt[p] = hgt[p + 1] = hgt[p + 2] = hh;
+          srf[p] = 165;
+          srf[p + 1] = fade < 0.3 ? 65 : 26;
+          srf[p + 2] = 14;
         });
       }
       grain(L, 500, 0.05);
@@ -1785,12 +1853,13 @@
           const fire = glow[ch] + (hot[ch] - glow[ch]) * heat * heat;
           col[p + ch] = crust + (fire - crust) * Math.min(1, heat * 1.6);
         }
-        const h = heat > 0 ? 60 : 150 + 30 * (1 - inner);
+        const h = heat > 0 ? 52 : 148 + 34 * (1 - inner);
         hgt[p] = hgt[p + 1] = hgt[p + 2] = h;
         srf[p] = 0;
-        srf[p + 1] = heat > 0 ? 120 : 210;
+        srf[p + 1] = heat > 0 ? 110 : 215;
         srf[p + 2] = 0;
       });
+      grain(L, 650, 0.09);
     },
 
     // Звёздное ядро: яркий центр, лучи и искры; без рисунка — звёздное поле с туманностью, 2 — спиральные рукава.

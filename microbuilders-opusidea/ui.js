@@ -3,34 +3,35 @@
     return '<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">' + body + '</svg>';
   }
   const ICONS = {
-    build: svg('<path d="M12 3 20 7.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/>'),
-    hq: svg('<path d="M4 21V9l6-4v16M10 21V5l10 4v12M3 21h18"/><path d="M13.5 10h3M13.5 14h3M6.5 12h1M6.5 16h1"/>'),
-    foremen: svg('<path d="M5 13a7 7 0 0 1 14 0z"/><path d="M3.5 13h17M12 6V4.5"/><path d="M7 16.5a5 5 0 0 0 10 0"/>'),
-    exchange: svg('<path d="M4 8h13l-3-3M20 16H7l3 3"/>'),
-    contract: svg('<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h7M9 16h5"/>'),
-    clock: svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'),
-    pause: svg('<path d="M9 6v12M15 6v12"/>'),
-    gear: svg('<path d="M4 7h16M4 12h16M4 17h16"/>'),
-    eye: svg('<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>'),
+    build: svg('<path fill="currentColor" fill-opacity="0.22" stroke="none" d="M12 3 20 7.5 12 12 4 7.5z"/><path fill="currentColor" fill-opacity="0.1" stroke="none" d="M12 12 20 7.5v9L12 21z"/><path d="M12 3 20 7.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5 12 12l8-4.5M12 12v9M8 5.3l8 4.5"/>'),
+    hq: svg('<path fill="currentColor" fill-opacity="0.18" stroke="none" d="M10 21V5l10 4v12z"/><path d="M4 21V9l6-4v16M10 21V5l10 4v12M2.5 21h19"/><path d="M13.5 9.5h3M13.5 13h3M13.5 16.5h3M6.5 11.5h1.2M6.5 15h1.2"/>'),
+    foremen: svg('<path fill="currentColor" fill-opacity="0.2" stroke="none" d="M5 13a7 7 0 0 1 14 0z"/><path d="M5 13a7 7 0 0 1 14 0z"/><path d="M3 13h18M12 5.5v4M9.2 6.4l.6 3.1M14.8 6.4l-.6 3.1"/><path d="M6.8 16a5.2 5.2 0 0 0 10.4 0"/>'),
+    exchange: svg('<path fill="currentColor" fill-opacity="0.18" stroke="none" d="M12 8.5 15.5 12 12 15.5 8.5 12z"/><path d="M4 8h15l-3.5-3.5M19 8l-3.5 3.5M20 16H5l3.5 3.5M5 16l3.5-3.5"/>'),
+    contract: svg('<path fill="currentColor" fill-opacity="0.16" stroke="none" d="M6 3h9l4 4v14H6z"/><path d="M6 3h9l4 4v14H6z"/><path d="M14.5 3v4.5H19M9 11h6M9 14.5h4"/><circle cx="15.5" cy="16.5" r="2"/>'),
+    clock: svg('<circle cx="12" cy="12" r="8.5" fill="currentColor" fill-opacity="0.16"/><path d="M12 7v5l3.2 2M12 3.5v1.2M12 19.3v1.2M3.5 12h1.2M19.3 12h1.2"/>'),
+    pause: svg('<rect x="7.5" y="5.5" width="3.2" height="13" rx="1" fill="currentColor" fill-opacity="0.25"/><rect x="13.3" y="5.5" width="3.2" height="13" rx="1" fill="currentColor" fill-opacity="0.25"/>'),
+    gear: svg('<path fill="currentColor" fill-opacity="0.16" d="M12 8.8a3.2 3.2 0 1 0 0 6.4 3.2 3.2 0 0 0 0-6.4z"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6"/><circle cx="12" cy="12" r="6.2"/>'),
+    eye: svg('<path fill="currentColor" fill-opacity="0.15" stroke="none" d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3" fill="currentColor" fill-opacity="0.28"/>'),
+    home: svg('<circle cx="12" cy="12" r="7.5" fill="currentColor" fill-opacity="0.14"/><circle cx="12" cy="12" r="2.2" fill="currentColor"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/>'),
     chevron: svg('<path d="M6 9.5 12 15l6-5.5"/>'),
     // site chip and HQ signs
-    pick: svg('<path d="M5 19 15 9"/><path d="M8.5 4.5Q18 6 19.5 15.5"/>'),
-    office: svg('<rect x="3.5" y="7.5" width="17" height="12" rx="2"/><path d="M9 7.5v-2h6v2M3.5 12.5h17"/>'),
-    personnel: svg('<path d="M4 10h16v3a6 6 0 0 1-6 6h-4a6 6 0 0 1-6-6z"/><path d="M2.5 10h19M9.5 6.5c0-1 1-1.5 1-2.5M14 6.5c0-1 1-1.5 1-2.5"/>'),
-    truck: svg('<path d="M3 16.5v-10h11v10M14 9.5h4l3 3.5v3.5h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>'),
-    check: svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
-    exit: svg('<path d="M10 4H5v16h5"/><path d="M9 12h11"/><path d="M16 8l4 4-4 4"/>'),
-    lock: svg('<rect x="5.5" y="10.5" width="13" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>'),
-    crane: svg('<path d="M7 21V4M4 21h7M7 4h13M7 4l4 4M17 4v6M15.5 12h3"/>'),
-    smoke: svg('<path d="M3 14h15v4H3zM15 14v4M20 14v4M8 10c-3-3 3-3 0-6M13 10c-3-3 3-3 0-6"/>'),
+    pick: svg('<path d="M4.5 19.5 15.5 8.5"/><path fill="currentColor" fill-opacity="0.2" d="M7.5 4.2Q17.8 5.8 19.8 16.5Q15.2 12 12 8.8Q8.8 5.6 7.5 4.2z"/><path d="M12.5 6.5 17.5 11.5"/>'),
+    office: svg('<rect x="3.5" y="7.5" width="17" height="12" rx="2" fill="currentColor" fill-opacity="0.16"/><path d="M9 7.5v-2.2a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2.2M3.5 12.5h17M10.5 12.5v2h3v-2"/>'),
+    personnel: svg('<path fill="currentColor" fill-opacity="0.18" d="M4 10h13v3.5a5.5 5.5 0 0 1-5.5 5.5h-2A5.5 5.5 0 0 1 4 13.5z"/><path d="M17 11h1.8a2.2 2.2 0 0 1 0 4.4H17M3 19.5h15M8.5 6.8c0-1.2 1.2-1.6 1.2-2.8M12.8 6.8c0-1.2 1.2-1.6 1.2-2.8"/>'),
+    truck: svg('<path fill="currentColor" fill-opacity="0.18" d="M2.5 16V7l11-1v10z"/><path d="M13.5 9.5h4.2l3.3 3.5v3h-7.5M2.5 16h18.5"/><circle cx="6.8" cy="17.5" r="2" fill="currentColor" fill-opacity="0.25"/><circle cx="17" cy="17.5" r="2" fill="currentColor" fill-opacity="0.25"/>'),
+    check: svg('<path d="M4.5 12.5 9.5 17.5 19.5 7"/>'),
+    exit: svg('<path fill="currentColor" fill-opacity="0.14" stroke="none" d="M4.5 4h6v16h-6z"/><path d="M10.5 4h-6v16h6"/><path d="M9.5 12h10.5"/><path d="M16 8l4 4-4 4"/>'),
+    lock: svg('<rect x="5.5" y="10.5" width="13" height="9.5" rx="2.2" fill="currentColor" fill-opacity="0.2"/><path d="M8.5 10.5V7.8a3.5 3.5 0 0 1 7 0v2.7M12 14.2v2.4"/>'),
+    crane: svg('<path d="M7 21V3.5M4 21h6.5M3.5 6.5h17M7 3.5l4.5 3M7 3.5l-3.5 3M17 6.5v5.5"/><path fill="currentColor" fill-opacity="0.22" d="M15.2 12h3.6v2.5h-3.6z"/>'),
+    smoke: svg('<rect x="3" y="14" width="17" height="3.8" rx="1" fill="currentColor" fill-opacity="0.18"/><path d="M15.5 14v3.8M8.5 10.5c-2.5-2.5 2.5-2.5 0-5.5M13.5 10.5c-2.5-2.5 2.5-2.5 0-5.5"/>'),
     // weather badges on the day clock
-    snow: svg('<path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9"/><path d="M9.5 4.5 12 7l2.5-2.5M9.5 19.5 12 17l2.5 2.5"/>'),
-    heat: svg('<path d="M10 14.5V5a2 2 0 0 1 4 0v9.5a4 4 0 1 1-4 0z"/><path d="M12 9v7"/>'),
-    rain: svg('<path d="M7 14.5a4.5 4.5 0 1 1 1.2-8.8A5.5 5.5 0 0 1 18.5 9a3.5 3.5 0 0 1-.5 5.5z"/><path d="M8 18l-1 2.5M12.5 18l-1 2.5M17 18l-1 2.5"/>'),
-    storm: svg('<path d="M13.5 3 6 13.5h5L10 21l8-11h-5z"/>'),
-    quake: svg('<path d="M2.5 12h3l2-5 3.5 10 3-8 2 3h5.5"/>'),
-    sun: svg('<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/>'),
-    moon: svg('<path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z"/>'),
+    snow: svg('<path d="M12 2.5v19M3.8 7.2l16.4 9.6M3.8 16.8l16.4-9.6"/><path d="M9.5 4.2 12 6.8l2.5-2.6M9.5 19.8 12 17.2l2.5 2.6M4.8 10.2l2.8-.6-.8-2.7M19.2 13.8l-2.8.6.8 2.7"/>'),
+    heat: svg('<path fill="currentColor" fill-opacity="0.18" d="M10 14.2V5a2 2 0 0 1 4 0v9.2a4 4 0 1 1-4 0z"/><path d="M12 8.5v8M16.5 6h2M16.5 9.5h2.5M16.5 13h2"/><circle cx="12" cy="17.2" r="1.6" fill="currentColor"/>'),
+    rain: svg('<path fill="currentColor" fill-opacity="0.2" d="M7 14.5a4.5 4.5 0 1 1 1.2-8.8A5.5 5.5 0 0 1 18.5 9a3.5 3.5 0 0 1-.5 5.5z"/><path d="M8 17.5l-1.2 3M12.5 17.5l-1.2 3M17 17.5l-1.2 3"/>'),
+    storm: svg('<path fill="currentColor" fill-opacity="0.24" d="M13.5 3 6 13.5h5.2L9.8 21 18.5 10h-5.2z"/>'),
+    quake: svg('<path d="M2 12h3.2l2.2-5.5 3.4 11 3.2-8.5 2.2 3H22"/><path d="M6 19.5h12" stroke-opacity="0.45"/>'),
+    sun: svg('<circle cx="12" cy="12" r="4.2" fill="currentColor" fill-opacity="0.24"/><path d="M12 2.2v2.6M12 19.2v2.6M2.2 12h2.6M19.2 12h2.6M5.1 5.1l1.9 1.9M17 17l1.9 1.9M5.1 18.9 7 17M17 7l1.9-1.9"/>'),
+    moon: svg('<path fill="currentColor" fill-opacity="0.22" d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z"/><path d="M16.5 4.5v2M15.5 5.5h2"/>'),
     chevronUp: svg('<path d="M6 14.5 12 9l6 5.5"/>'),
   };
   window.MicroBuildersIcons = ICONS;
@@ -77,7 +78,7 @@
 <div id="fx-layer" aria-hidden="true"></div>
 <div id="new-version" class="dev-only">NEW</div>
 <button type="button" id="interface-toggle" class="round-btn" aria-label="Скрыть интерфейс" title="Скрыть интерфейс">${ICONS.eye}</button>
-<button type="button" id="camera-home" class="round-btn" aria-label="Вернуть камеру" title="Вернуть камеру" hidden>◎</button>
+<button type="button" id="camera-home" class="round-btn" aria-label="Вернуть камеру" title="Вернуть камеру" hidden>${ICONS.home}</button>
 <div id="worker-log" class="dev-only" hidden></div>
 <section id="worker-card" hidden aria-label="Рабочий">
   <header class="worker-card-head">
