@@ -3,13 +3,14 @@
 // склад → взять ношу → дойти (по сетке путей, через двери и лестницы) → при надобности приставная лестница →
 // уложить элементы по одному (молоток, мастерок, шуруповёрт) → назад. Монеты — за каждый элемент.
 import * as THREE from 'three';
-import { buildPiece, GRID, STORY, PLINTH, TIERS, TIER_NAMES } from './pieces.js?v=3ae8fc6';
-import { BUILDINGS, planBuilding } from './blueprints.js?v=3ae8fc6';
-import { createNav } from './nav.js?v=3ae8fc6';
-import { createYard, ladder } from './props.js?v=3ae8fc6';
-import { animateWorker } from './people.js?v=3ae8fc6';
-import { ROOMS } from './materials.js?v=3ae8fc6';
-import { rng } from './geo.js?v=3ae8fc6';
+import { buildPiece, GRID, STORY, PLINTH, TIERS, TIER_NAMES } from './pieces.js?v=83604fc';
+import { BUILDINGS, planBuilding } from './blueprints.js?v=83604fc';
+import { createNav } from './nav.js?v=83604fc';
+import { createYard, ladder } from './props.js?v=83604fc';
+import { animateWorker, BARROW } from './people.js?v=83604fc';
+import { ROOMS } from './materials.js?v=83604fc';
+import { rng } from './geo.js?v=83604fc';
+import { linkSkyTree } from './world.js?v=83604fc';
 
 const VALUE = { sticks: 1, planks: 3, stones: 4, sheets: 9, plates: 14, box: 20 };
 const CAP = { sticks: 6, planks: 6, stones: 6, sheets: 2, plates: 2, box: 1 };
@@ -57,7 +58,8 @@ export function createSite(ctx) {
     });
     S.total = S.built.reduce(function (s, b) { return s + b.stages.reduce(function (a, st) { return a + st.elements.length; }, 0); }, 0);
     S.placed = 0; S.piecesDone = 0; S.done = false;
-    S.yard = createYard(S.plan, terrain, mats, 5 + S.index);
+    S.yard = createYard(S.plan, terrain, mats, 5 + S.index, { shadowSize: ctx.quality ? ctx.quality.spotShadow : 0 });
+    if (ctx.wear) ctx.wear.fade(0.55);
     S.group.add(S.yard.group);
     scene.add(S.group);
     S.nav = createNav(S.plan, 40, function (x, z) { return terrain.heightAt(x, z); });
@@ -75,6 +77,8 @@ export function createSite(ctx) {
     // рабочие — к бытовке
     S.workers.forEach(function (w, i) { placeWorker(w, i); w.state = 'idle'; w.task = null; w.wait = 0.3 * i; });
     updateRooms();
+    // новые материалы склада — сразу с тенью облаков (иначе первый кадр соберёт лишние шейдеры)
+    linkSkyTree(S.group);
     emit('start', { index: S.index, name: BUILDINGS[S.index].name });
   }
 
@@ -203,6 +207,7 @@ export function createSite(ctx) {
     w.pos.y = S.nav.groundY(w.pos.x, w.pos.z);
     w.heading = r() * Math.PI * 2;
     w.setCarry(null);
+    w.barrowOff();
     w.climbing = false;
     w.onLadder = 0;
   }
@@ -269,6 +274,7 @@ export function createSite(ctx) {
     }
     w.task = null;
     w.setCarry(null);
+    if (w.barrowState === 'park') w.pushBarrow();
     w.state = 'idle';
     w.wait = 0.5;
   }
@@ -284,6 +290,7 @@ export function createSite(ctx) {
     if (!el) { finishTrip(w); return; }
     const s = standFor(w.task.b, el, w);
     w.stand = s;
+    if (w.barrowState === 'park') w.pushBarrow();
     const tgt = s.ladder ? s.ladder.base : new THREE.Vector3(s.x, s.y, s.z);
     if (!goTo(w, tgt, s.layer, 'arrive')) {
       // изнутри стена не достаётся — с другой стороны
@@ -297,6 +304,7 @@ export function createSite(ctx) {
     const st = b.stages[b.stage];
     w.setCarry(null);
     if (w.onLadder > 0.01) { w.state = 'descend'; return; }
+    if (w.barrowState === 'park') w.pushBarrow();
     hideLadder(w);
     if (st.revealed < st.elements.length && !b.done) { beginTrip(w, b); return; }
     b.lock = null;
@@ -399,6 +407,11 @@ export function createSite(ctx) {
         w.pos.y += dy * Math.min(1, step / Math.max(d, 0.001));
         turnTo(w, Math.atan2(dx, dz), dt);
         a.speed = sp;
+        // тропы: по земле ноги утаптывают пятно, колесо тачки — узкую колею
+        if (ctx.wear && w.pos.y < 0.25) {
+          ctx.wear.add(w.pos.x, w.pos.z, dt * 0.05, 0.32);
+          if (w.barrowState === 'push') ctx.wear.add(w.pos.x + Math.sin(w.heading) * BARROW.wheel[2], w.pos.z + Math.cos(w.heading) * BARROW.wheel[2], dt * 0.16, 0.12);
+        }
       }
       a.action = 'walk';
     } else if (w.state === 'pickup') {
@@ -474,6 +487,7 @@ export function createSite(ctx) {
         if (far) {
           if (w.onLadder > 0.01) { w.state = 'descend'; w.resume = true; return; }
           w.stand = s;
+          if (w.barrowState === 'park') w.pushBarrow();
           const tgt = s.ladder ? s.ladder.base : new THREE.Vector3(s.x, s.y, s.z);
           if (!goTo(w, tgt, s.layer, 'arrive')) release(w, true);
           return;
@@ -492,6 +506,11 @@ export function createSite(ctx) {
 
   function arrive(w) {
     if (w.then === 'pickup') { w.state = 'pickup'; w.timer = 0.9; return; }
+    // тачку с камнем — на опоры за спину, поперёк хода (к стене она не упрётся)
+    if (w.barrowState === 'push') {
+      const h = w.heading, fx = Math.sin(h), fz = Math.cos(h), rx = -Math.cos(h), rz = Math.sin(h);
+      w.parkBarrow(S.group, w.pos.x - fx * 0.8 + rx * 0.75, w.pos.y, w.pos.z - fz * 0.8 + rz * 0.75, h + Math.PI / 2);
+    }
     const s = w.stand;
     if (s && s.ladder) {
       showLadder(w, s.ladder);
@@ -511,6 +530,7 @@ export function createSite(ctx) {
 
   function step(dt, time) {
     if (!S.plan) return;
+    if (ctx.wear) ctx.wear.update(dt);
     const n = Math.max(1, Math.ceil(dt / 0.05));
     const h = dt / n;
     for (let k = 0; k < n; k++) {

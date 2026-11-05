@@ -7,8 +7,10 @@
 // подъём по лестнице, отдых.
 import * as THREE from 'three';
 import { edgeTable, triTable } from 'three/addons/objects/MarchingCubes.js';
-import { rng, plank, stone as stonePrim, corrugated, cylinder } from './geo.js?v=3ae8fc6';
-import { TEXTURE_TILES as TILE } from './textures.js?v=3ae8fc6';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { rng, plank, stone as stonePrim, corrugated, cylinder } from './geo.js?v=83604fc';
+import { TEXTURE_TILES as TILE } from './textures.js?v=83604fc';
+import { linkSky } from './world.js?v=83604fc';
 
 // ---------- скелет ----------
 
@@ -48,40 +50,34 @@ function primitives(build) {
   const cone = function (bone, reg, k, a, b, r1, r2) { P.push({ t: 1, bone, reg, k, a, b, r1, r2 }); return P.length - 1; };
   TORSO.add(ell(B.hips, R.pants, 0.04, [0, 0.955, -0.005], [0.165 * W, 0.105, 0.118 * W]));
   TORSO.add(ell(B.spine, R.jacket, 0.05, [0, 1.095, 0.008 + belly * 0.02], [0.148 * W * (1 + belly * 0.12), 0.12, 0.108 * W * (1 + belly * 0.35)]));
-  TORSO.add(ell(B.chest, R.jacket, 0.05, [0, 1.29, 0.012], [0.178 * W, 0.15, 0.118 * W]));
-  TORSO.add(cone(B.chest, R.jacket, 0.04, [-0.155 * W, 1.415, -0.004], [0.155 * W, 1.415, -0.004], 0.068, 0.068));
-  TORSO.add(ell(B.chest, R.jacket, 0.04, [0, 1.33, -0.03], [0.16 * W, 0.12, 0.09]));
-  cone(B.neck, R.skin, 0.03, [0, 1.43, -0.005], [0, 1.585, 0.012], 0.054, 0.052);
-  ell(B.head, R.skin, 0.03, [0, 1.672, 0.012], [0.079, 0.102, 0.095]);
-  ell(B.head, R.skin, 0.03, [0, 1.612, 0.034], [0.063, 0.05, 0.07]);
-  ell(B.head, R.skin, 0.02, [0, 1.585, 0.06], [0.032, 0.025, 0.03]);
-  cone(B.head, R.skin, 0.012, [0, 1.668, 0.092], [0, 1.638, 0.112], 0.0125, 0.012);
-  [1, -1].forEach(function (s) {
-    ell(B.head, R.skin, 0.008, [s * 0.079, 1.66, 0.002], [0.011, 0.027, 0.017]);
-    ell(B.head, R.skin, 0.02, [s * 0.04, 1.64, 0.07], [0.03, 0.025, 0.025]);
-  });
-  ell(B.head, R.skin, 0.02, [0, 1.701, 0.072], [0.062, 0.016, 0.024]);
+  TORSO.add(ell(B.chest, R.jacket, 0.05, [0, 1.29, 0.012], [0.19 * W, 0.155, 0.125 * W]));
+  TORSO.add(cone(B.chest, R.jacket, 0.04, [-0.158 * W, 1.415, -0.004], [0.158 * W, 1.415, -0.004], 0.073, 0.073));
+  TORSO.add(ell(B.chest, R.jacket, 0.04, [0, 1.33, -0.03], [0.168 * W, 0.12, 0.095]));
+  // воротник куртки вокруг шеи; голова — отдельной сеткой на кости головы (buildHead)
+  ell(B.chest, R.jacket, 0.018, [0, 1.462, -0.008], [0.078, 0.024, 0.072]);
+  cone(B.neck, R.skin, 0.03, [0, 1.43, -0.008], [0, 1.57, 0.0], 0.06, 0.057);
   ['L', 'R'].forEach(function (side) {
     const s = side === 'L' ? 1 : -1;
     const a = ARM[side], d = a.d;
     const up = B['upperArm' + side], fo = B['foreArm' + side], ha = B['hand' + side];
-    ell(up, R.jacket, 0.035, [s * 0.18 * W, 1.425, -0.004], [0.068 * W, 0.072, 0.066]);
-    cone(up, R.jacket, 0.02, a.sh, a.el, 0.056 * W, 0.046);
-    ell(fo, R.jacket, 0.015, a.el, [0.047, 0.047, 0.047]);
-    cone(fo, R.jacket, 0.02, a.el, a.wr, 0.047, 0.036);
+    ell(up, R.jacket, 0.035, [s * 0.18 * W, 1.425, -0.004], [0.073 * W, 0.076, 0.07]);
+    cone(up, R.jacket, 0.02, a.sh, a.el, 0.061 * W, 0.05);
+    ell(fo, R.jacket, 0.015, a.el, [0.051, 0.051, 0.051]);
+    cone(fo, R.jacket, 0.02, a.el, a.wr, 0.05, 0.04);
     const k1 = [a.wr[0] + d[0] * 0.1, a.wr[1] + d[1] * 0.1, a.wr[2]];
     const k2 = [a.wr[0] + d[0] * 0.18, a.wr[1] + d[1] * 0.18, a.wr[2]];
-    cone(ha, R.glove, 0.015, a.wr, k1, 0.037, 0.033);
-    cone(ha, R.glove, 0.012, [a.wr[0] + d[0] * 0.09, a.wr[1] + d[1] * 0.09, a.wr[2]], k2, 0.029, 0.021);
-    cone(ha, R.glove, 0.01, [a.wr[0] + d[0] * 0.035, a.wr[1] + d[1] * 0.035, a.wr[2] + 0.022], [a.wr[0] + d[0] * 0.08, a.wr[1] + d[1] * 0.08, a.wr[2] + 0.052], 0.016, 0.013);
+    cone(ha, R.glove, 0.015, a.wr, k1, 0.041, 0.036);
+    cone(ha, R.glove, 0.012, [a.wr[0] + d[0] * 0.09, a.wr[1] + d[1] * 0.09, a.wr[2]], k2, 0.032, 0.024);
+    cone(ha, R.glove, 0.01, [a.wr[0] + d[0] * 0.035, a.wr[1] + d[1] * 0.035, a.wr[2] + 0.022], [a.wr[0] + d[0] * 0.08, a.wr[1] + d[1] * 0.08, a.wr[2] + 0.054], 0.018, 0.015);
     const l = LEG[side];
     const th = B['thigh' + side], sh = B['shin' + side], ft = B['foot' + side];
-    cone(th, R.pants, 0.04, l.hip, l.knee, 0.092 * W, 0.06);
-    ell(sh, R.pants, 0.02, l.knee, [0.056, 0.06, 0.058]);
-    cone(sh, R.pants, 0.02, l.knee, l.ankle, 0.058, 0.045);
-    ell(sh, R.pants, 0.03, [s * 0.108, 0.34, -0.028], [0.052, 0.11, 0.052]);
-    cone(ft, R.boot, 0.02, [s * 0.112, 0.21, -0.012], [s * 0.112, 0.06, -0.01], 0.057, 0.06);
-    cone(ft, R.boot, 0.03, [s * 0.112, 0.055, -0.07], [s * 0.112, 0.05, 0.165], 0.054, 0.047);
+    cone(th, R.pants, 0.04, l.hip, l.knee, 0.097 * W, 0.063);
+    ell(th, R.pants, 0.012, [s * 0.158 * W, 0.64, 0.004], [0.022, 0.065, 0.05]);
+    ell(sh, R.pants, 0.02, l.knee, [0.059, 0.062, 0.061]);
+    cone(sh, R.pants, 0.02, l.knee, l.ankle, 0.061, 0.048);
+    ell(sh, R.pants, 0.03, [s * 0.108, 0.34, -0.028], [0.055, 0.11, 0.055]);
+    cone(ft, R.boot, 0.02, [s * 0.112, 0.21, -0.012], [s * 0.112, 0.06, -0.01], 0.06, 0.063);
+    cone(ft, R.boot, 0.03, [s * 0.112, 0.055, -0.072], [s * 0.112, 0.05, 0.17], 0.058, 0.05);
   });
   return P;
 }
@@ -144,30 +140,9 @@ function regionOf(prim, pi, x, y, z) {
   return reg;
 }
 
-export function buildBody(build, cell) {
-  const P = primitives(build);
-  const x0 = -0.74, y0 = -0.012, z0 = -0.22, x1 = 0.74, y1 = 1.84, z1 = 0.3;
-  const nx = Math.ceil((x1 - x0) / cell) + 1, ny = Math.ceil((y1 - y0) / cell) + 1, nz = Math.ceil((z1 - z0) / cell) + 1;
-  const F = new Float32Array(nx * ny * nz).fill(1e9);
+// Marching cubes по сетке значений поля F (nx × ny × nz, шаг cell от x0, y0, z0); вершины на рёбрах — общие.
+function polygonize(F, nx, ny, nz, x0, y0, z0, cell) {
   const idx = function (i, j, k) { return i + nx * (j + ny * k); };
-  // поле по коробкам примитивов: каждый обновляет только свою область
-  P.forEach(function (q) {
-    const b = primBox(q);
-    const i0 = Math.max(0, Math.floor((b[0] - x0) / cell)), i1 = Math.min(nx - 1, Math.ceil((b[3] - x0) / cell));
-    const j0 = Math.max(0, Math.floor((b[1] - y0) / cell)), j1 = Math.min(ny - 1, Math.ceil((b[4] - y0) / cell));
-    const k0 = Math.max(0, Math.floor((b[2] - z0) / cell)), k1 = Math.min(nz - 1, Math.ceil((b[5] - z0) / cell));
-    for (let k = k0; k <= k1; k++) for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
-      const x = x0 + i * cell, y = y0 + j * cell, z = z0 + k * cell;
-      const id = idx(i, j, k);
-      F[id] = smin(F[id], primDist(q, x, y, z), q.k);
-    }
-  });
-  for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
-    const y = y0 + j * cell;
-    const id = idx(i, j, k);
-    F[id] = Math.max(F[id], -y);
-  }
-  // marching cubes с общими вершинами по рёбрам
   const pos = [], index = [];
   const edgeVert = new Map();
   function vertexOn(i, j, k, e) {
@@ -192,6 +167,45 @@ export function buildBody(build, cell) {
       index.push(vertexOn(i, j, k, triTable[ci * 16 + t]), vertexOn(i, j, k, triTable[ci * 16 + t + 1]), vertexOn(i, j, k, triTable[ci * 16 + t + 2]));
     }
   }
+  return { pos, index };
+}
+// Обход треугольников — по нормали поля (наружу).
+function orientByNormals(pos, index, nrm) {
+  for (let t = 0; t < index.length; t += 3) {
+    const a = index[t], b = index[t + 1], c = index[t + 2];
+    const ux = pos[b * 3] - pos[a * 3], uy = pos[b * 3 + 1] - pos[a * 3 + 1], uz = pos[b * 3 + 2] - pos[a * 3 + 2];
+    const vx = pos[c * 3] - pos[a * 3], vy = pos[c * 3 + 1] - pos[a * 3 + 1], vz = pos[c * 3 + 2] - pos[a * 3 + 2];
+    const cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx;
+    // по средней нормали трёх вершин: на изломах поля нормаль одной вершины бывает неверной (дырки)
+    const nx = nrm[a * 3] + nrm[b * 3] + nrm[c * 3], ny = nrm[a * 3 + 1] + nrm[b * 3 + 1] + nrm[c * 3 + 1], nz = nrm[a * 3 + 2] + nrm[b * 3 + 2] + nrm[c * 3 + 2];
+    if (cx * nx + cy * ny + cz * nz < 0) { index[t + 1] = c; index[t + 2] = b; }
+  }
+}
+
+export function buildBody(build, cell) {
+  const P = primitives(build);
+  const x0 = -0.74, y0 = -0.012, z0 = -0.22, x1 = 0.74, y1 = 1.84, z1 = 0.3;
+  const nx = Math.ceil((x1 - x0) / cell) + 1, ny = Math.ceil((y1 - y0) / cell) + 1, nz = Math.ceil((z1 - z0) / cell) + 1;
+  const F = new Float32Array(nx * ny * nz).fill(1e9);
+  const idx = function (i, j, k) { return i + nx * (j + ny * k); };
+  // поле по коробкам примитивов: каждый обновляет только свою область
+  P.forEach(function (q) {
+    const b = primBox(q);
+    const i0 = Math.max(0, Math.floor((b[0] - x0) / cell)), i1 = Math.min(nx - 1, Math.ceil((b[3] - x0) / cell));
+    const j0 = Math.max(0, Math.floor((b[1] - y0) / cell)), j1 = Math.min(ny - 1, Math.ceil((b[4] - y0) / cell));
+    const k0 = Math.max(0, Math.floor((b[2] - z0) / cell)), k1 = Math.min(nz - 1, Math.ceil((b[5] - z0) / cell));
+    for (let k = k0; k <= k1; k++) for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const x = x0 + i * cell, y = y0 + j * cell, z = z0 + k * cell;
+      const id = idx(i, j, k);
+      F[id] = smin(F[id], primDist(q, x, y, z), q.k);
+    }
+  });
+  for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const y = y0 + j * cell;
+    const id = idx(i, j, k);
+    F[id] = Math.max(F[id], -y);
+  }
+  const { pos, index } = polygonize(F, nx, ny, nz, x0, y0, z0, cell);
   const n = pos.length / 3;
   const nrm = new Float32Array(n * 3), skinI = new Uint16Array(n * 4), skinW = new Float32Array(n * 4), reg = new Float32Array(n);
   const e = cell * 0.5;
@@ -212,14 +226,7 @@ export function buildBody(build, cell) {
     order.forEach(function (b, k) { skinI[v * 4 + k] = b; skinW[v * 4 + k] = acc[b] / sum; });
     reg[v] = regionOf(P[pmin], pmin, x, y, z);
   }
-  // согласовать обход треугольников с нормалью поля
-  for (let t = 0; t < index.length; t += 3) {
-    const a = index[t], b = index[t + 1], c = index[t + 2];
-    const ux = pos[b * 3] - pos[a * 3], uy = pos[b * 3 + 1] - pos[a * 3 + 1], uz = pos[b * 3 + 2] - pos[a * 3 + 2];
-    const vx = pos[c * 3] - pos[a * 3], vy = pos[c * 3 + 1] - pos[a * 3 + 1], vz = pos[c * 3 + 2] - pos[a * 3 + 2];
-    const cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx;
-    if (cx * nrm[a * 3] + cy * nrm[a * 3 + 1] + cz * nrm[a * 3 + 2] < 0) { index[t + 1] = c; index[t + 2] = b; }
-  }
+  orientByNormals(pos, index, nrm);
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
@@ -232,10 +239,124 @@ export function buildBody(build, cell) {
   return g;
 }
 
+// ---------- голова ----------
+// Голова — своя сетка с шагом 4 мм на кости головы (жёстко): череп, лицо, скулы, челюсть, подбородок, надбровье,
+// нос со спинкой и крыльями, губы, уши; глазницы, рот и ушные раковины вырезаны мягким вычитанием. Варианты:
+// 0 — обычное лицо, 1 — шире, 2 — с бородой. Глаза — отдельные сферы с радужкой (eyeGeometry).
+export const HEAD_REST = BONES[5][2];
+function smax(a, b, k) { return -smin(-a, -b, k); }
+function headPrims(v) {
+  const P = [], sub = [];
+  const ell = function (reg, k, c, r) { P.push({ t: 0, reg, k, c, r }); };
+  const cone = function (reg, k, a, b, r1, r2) { P.push({ t: 1, reg, k, a, b, r1, r2 }); };
+  const w = v === 1 ? 1.07 : 1.0;
+  ell(R.skin, 0.03, [0, 1.69, -0.008], [0.076 * w, 0.094, 0.091]);
+  ell(R.skin, 0.03, [0, 1.645, 0.03], [0.063 * w, 0.07, 0.072]);
+  ell(R.skin, 0.025, [0, 1.594, 0.043], [0.046 * w, 0.031, 0.042]);
+  ell(R.skin, 0.015, [0, 1.58, 0.077], [0.019, 0.017, 0.014]);
+  [1, -1].forEach(function (sd) {
+    ell(R.skin, 0.02, [sd * 0.043 * w, 1.658, 0.071], [0.021, 0.016, 0.019]);
+    ell(R.skin, 0.008, [sd * 0.078 * w, 1.668, 0.002], [0.01, 0.028, 0.018]);
+    ell(R.skin, 0.006, [sd * 0.0115, 1.646, 0.106], [0.0085, 0.008, 0.008]);
+  });
+  cone(R.skin, 0.012, [-0.046, 1.703, 0.083], [0.046, 1.703, 0.083], 0.01, 0.01);
+  cone(R.skin, 0.008, [0, 1.69, 0.095], [0, 1.655, 0.114], 0.0075, 0.0105);
+  ell(R.skin, 0.006, [0, 1.648, 0.115], [0.012, 0.011, 0.012]);
+  ell(R.skin, 0.006, [0, 1.612, 0.094], [0.02, 0.008, 0.006]);
+  [1, -1].forEach(function (sd) {
+    // веки обтягивают глазное яблоко слоем 1,5 мм (глаз — отдельная сфера r 11,5 мм внутри)
+    ell(R.skin, 0.004, [sd * 0.031, 1.679, 0.0765], [0.013, 0.013, 0.013]);
+  });
+  cone(R.skin, 0.03, [0, 1.535, -0.012], [0, 1.6, -0.002], 0.058, 0.056);
+  if (v === 2) ell(R.beard, 0.02, [0, 1.598, 0.056], [0.056, 0.04, 0.046]);
+  [1, -1].forEach(function (sd) {
+    // прорезь век — миндалина 2,7 × 1,1 см: видна только часть глазного яблока
+    // прорезь век — миндалина 2,7 × 1,1 см только сквозь кожу века: глаз виден вровень с веками
+    sub.push({ t: 0, k: 0.002, c: [sd * 0.031, 1.6792, 0.0915], r: [0.0135, 0.0056, 0.0045] });
+    sub.push({ t: 0, k: 0.004, c: [sd * 0.084 * w, 1.668, 0.008], r: [0.005, 0.014, 0.008] });
+  });
+  sub.push({ t: 1, k: 0.002, a: [-0.015, 1.6115, 0.1035], b: [0.015, 1.6115, 0.1035], r1: 0.0012, r2: 0.0012 });
+  return { P, sub };
+}
+function headField(H, x, y, z) {
+  let d = 1e9;
+  for (let i = 0; i < H.P.length; i++) d = smin(d, primDist(H.P[i], x, y, z), H.P[i].k);
+  for (let i = 0; i < H.sub.length; i++) d = smax(d, -primDist(H.sub[i], x, y, z), H.sub[i].k);
+  return Math.max(d, 1.548 - y);
+}
+function headRegion(H, v, x, y, z) {
+  let dmin = 1e9, reg = R.skin;
+  H.P.forEach(function (q) { const d = primDist(q, x, y, z); if (d < dmin) { dmin = d; reg = q.reg; } });
+  const ax = Math.abs(x);
+  if ((ax / 0.0205) * (ax / 0.0205) + ((y - 1.6115) / 0.0082) * ((y - 1.6115) / 0.0082) < 1 && z > 0.086) return R.lips;
+  if (y > 1.704 && y < 1.716 && ax > 0.011 && ax < 0.056 && z > 0.072) return R.brow;
+  if ((y > 1.63 && z < -0.035) || (y > 1.71 && z < 0.045) || (ax > 0.058 && y > 1.69 && z < 0.035)) return R.hair;
+  if (reg === R.beard) return R.beard;
+  return R.skin;
+}
+// Щетина — плавная маска по коже (0..1): подбородок, щёки ниже скул, над губой; не на губах.
+function stubble(x, y, z) {
+  const ax = Math.abs(x);
+  const s = (1 - THREE.MathUtils.smoothstep(y, 1.622, 1.646)) * THREE.MathUtils.smoothstep(z, -0.01, 0.03) * (1 - THREE.MathUtils.smoothstep(ax, 0.052, 0.072));
+  const lip = Math.abs(y - 1.612) < 0.011 && ax < 0.024 && z > 0.08 ? 0.15 : 1;
+  return s * lip * (y > 1.556 ? 1 : THREE.MathUtils.smoothstep(y, 1.54, 1.556));
+}
+export function buildHead(v, cell) {
+  const H = headPrims(v);
+  const x0 = -0.11, y0 = 1.53, z0 = -0.115, x1 = 0.11, y1 = 1.8, z1 = 0.145;
+  const nx = Math.ceil((x1 - x0) / cell) + 1, ny = Math.ceil((y1 - y0) / cell) + 1, nz = Math.ceil((z1 - z0) / cell) + 1;
+  const F = new Float32Array(nx * ny * nz);
+  for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) F[i + nx * (j + ny * k)] = headField(H, x0 + i * cell, y0 + j * cell, z0 + k * cell);
+  const { pos, index } = polygonize(F, nx, ny, nz, x0, y0, z0, cell);
+  const n = pos.length / 3, e = cell * 0.5;
+  const nrm = new Float32Array(n * 3), reg = new Float32Array(n), local = new Float32Array(n * 3), beard = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = pos[i * 3], y = pos[i * 3 + 1], z = pos[i * 3 + 2];
+    const gx = headField(H, x + e, y, z) - headField(H, x - e, y, z);
+    const gy = headField(H, x, y + e, z) - headField(H, x, y - e, z);
+    const gz = headField(H, x, y, z + e) - headField(H, x, y, z - e);
+    const gl = Math.hypot(gx, gy, gz) || 1;
+    nrm[i * 3] = gx / gl; nrm[i * 3 + 1] = gy / gl; nrm[i * 3 + 2] = gz / gl;
+    reg[i] = headRegion(H, v, x, y, z);
+    beard[i] = reg[i] === R.skin ? stubble(x, y, z) : 0;
+    local[i * 3] = x - HEAD_REST[0]; local[i * 3 + 1] = y - HEAD_REST[1]; local[i * 3 + 2] = z - HEAD_REST[2];
+  }
+  orientByNormals(pos, index, nrm);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(local, 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
+  g.setAttribute('aReg', new THREE.BufferAttribute(reg, 1));
+  g.setAttribute('aBeard', new THREE.BufferAttribute(beard, 1));
+  g.setAttribute('aRest', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(n > 65535 ? new THREE.Uint32BufferAttribute(index, 1) : new THREE.Uint16BufferAttribute(index, 1));
+  g.computeBoundingSphere();
+  return g;
+}
+// Глаза: две сферы, спереди радужка и зрачок (цвет вершин); блик даёт окружение.
+const EYE_COLORS = [0x4a2e1c, 0x5b3a22, 0x3c5a73, 0x55603f, 0x2e2018];
+function eyeGeometry(iris) {
+  const c = new THREE.Color(iris), white = new THREE.Color(0.64, 0.6, 0.55), black = new THREE.Color(0.015, 0.012, 0.01);
+  const parts = [1, -1].map(function (sd) {
+    const g = new THREE.SphereGeometry(0.0115, 20, 14);
+    g.rotateX(Math.PI / 2);
+    const p = g.attributes.position.array, col = new Float32Array(p.length);
+    for (let i = 0; i < p.length; i += 3) {
+      const f = p[i + 2] / 0.0115;
+      const k = f > 0.965 ? black : f > 0.83 ? c : white;
+      col[i] = k.r; col[i + 1] = k.g; col[i + 2] = k.b;
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    g.translate(sd * 0.031 - HEAD_REST[0], 1.679 - HEAD_REST[1], 0.0765 - HEAD_REST[2]);
+    return g;
+  });
+  return mergeGeometries(parts);
+}
+
 // ---------- материал рабочего ----------
 
 const BODY_VERT_HEAD = /* glsl */ `
 attribute float aReg;
+attribute float aBeard;
 attribute vec3 aRest;
 uniform vec3 uColors[15];
 uniform float uRough[15];
@@ -244,15 +365,18 @@ varying float vRegRough;
 varying vec3 vRest;
 varying float vCloth;
 varying float vTape;
+varying float vSkinMask;
 `;
 const BODY_VERT = /* glsl */ `
 {
   int ri = int(aReg + 0.5);
   vRegColor = uColors[ri];
+  if (ri == 0) vRegColor = mix(vRegColor, uColors[14], aBeard * 0.5);
   vRegRough = uRough[ri];
   vRest = aRest;
   vCloth = (ri == 1 || ri == 2 || ri == 4) ? 1.0 : 0.0;
   vTape = ri == 3 ? 1.0 : 0.0;
+  vSkinMask = (ri == 0 || ri == 12) ? 1.0 : 0.0;
 }
 `;
 const BODY_FRAG_HEAD = /* glsl */ `
@@ -261,6 +385,12 @@ varying float vRegRough;
 varying vec3 vRest;
 varying float vCloth;
 varying float vTape;
+varying float vSkinMask;
+// кожа: свет заходит в полутень с красниной (рассеяние под кожей)
+vec3 mbTranslucent(vec3 L, vec3 V, vec3 N) {
+  float nl = dot(N, L);
+  return vSkinMask * vec3(0.75, 0.3, 0.18) * (max(0.0, (nl + 0.45) / 1.45) - max(nl, 0.0)) * RECIPROCAL_PI;
+}
 float bHash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 float bNoise(vec3 x) {
   vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f);
@@ -272,6 +402,7 @@ float bNoise(vec3 x) {
 export function workerMaterial(look) {
   const colors = look.colors.map(function (c) { return new THREE.Color(c); });
   const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, metalness: 0 });
+  m.defines = { MB_TRANSLUCENT: '' };
   m.onBeforeCompile = function (shader) {
     shader.uniforms.uColors = { value: colors };
     shader.uniforms.uRough = { value: look.rough };
@@ -294,7 +425,7 @@ export function workerMaterial(look) {
         }`)
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vRegColor * vTape * 0.35;');
   };
-  m.customProgramCacheKey = function () { return 'worker1'; };
+  m.customProgramCacheKey = function () { return 'worker2'; };
   return m;
 }
 
@@ -314,7 +445,9 @@ export function workerLook(seed) {
   const beard = r() < 0.5 ? skinC.clone().multiplyScalar(0.72).getHex() : skin;
   const colors = [skin, pick(JACKETS), pick(VESTS), 0xd9dcd6, pick(PANTS), 0x2a1f16, pick(GLOVES), 0x4a3424, 0x151515, pick(HAIR), 0x1a120d, 0xd8d0c4, 0x9a5c50, 0x2a1e16, beard];
   const rough = [0.55, 0.86, 0.72, 0.34, 0.86, 0.62, 0.78, 0.6, 0.9, 0.8, 0.3, 0.3, 0.45, 0.8, 0.62];
-  return { colors, rough, helmet: pick(HELMETS), build: r() < 0.65 ? 0 : 1 };
+  const face = r() < 0.3 ? 2 : r() < 0.5 ? 1 : 0;
+  if (face === 2) colors[14] = skinC.clone().multiplyScalar(0.45).lerp(new THREE.Color(colors[9]), 0.6).getHex();
+  return { colors, rough, helmet: pick(HELMETS), build: r() < 0.65 ? 0 : 1, face, eyes: Math.floor(r() * EYE_COLORS.length) };
 }
 
 // ---------- каска, инструмент, ноша ----------
@@ -330,9 +463,9 @@ function helmetGeometry() {
     p[i + 2] *= 1.07;
   }
   g.computeVertexNormals();
-  const ridge = new THREE.CapsuleGeometry(0.013, 0.14, 4, 8);
+  const ridge = new THREE.CapsuleGeometry(0.012, 0.085, 4, 8);
   ridge.rotateX(Math.PI / 2);
-  ridge.translate(0, 0.118, 0.0);
+  ridge.translate(0, 0.115, -0.004);
   return [g, ridge];
 }
 
@@ -346,6 +479,7 @@ function shared() {
   SHARED.wood = new THREE.MeshStandardMaterial({ color: 0x8a6a46, roughness: 0.7 });
   SHARED.yellow = new THREE.MeshStandardMaterial({ color: 0xe8b81a, roughness: 0.45 });
   SHARED.black = new THREE.MeshStandardMaterial({ color: 0x1c1c1c, roughness: 0.6 });
+  [SHARED.steel, SHARED.wood, SHARED.yellow, SHARED.black].forEach(linkSky);
   SHARED.ready = true;
   return SHARED;
 }
@@ -428,50 +562,95 @@ function cachedCarry(kind, count, mats) {
   return proto.clone();
 }
 
-// Тачка: корыто из листа, колесо, ручки; камни кладутся внутрь.
+// Тачка в координатах рабочего (он смотрит по +z): ручки — в руках (x ±0,27, y 0,84, z 0,2), колесо — на земле
+// в 1,45 м впереди. Группа-шарнир стоит на оси колеса: на стоянке тачка наклоняется вперёд на опоры (ручки
+// опускаются до 0,44 м). Корыто — гнутый лист с закатанным краем, рама из трубы до оси, шина со ступицей.
+export const BARROW = { wheel: [0, 0.19, 1.45], rest: -0.3, wheelR: 0.195 };
+function tubeBetween(a, b, r, mat, seg = 10) {
+  const d = new THREE.Vector3().subVectors(b, a);
+  const len = d.length();
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, seg, 1, false), mat);
+  m.position.copy(a).addScaledVector(d, 0.5);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.divideScalar(len));
+  return m;
+}
 export function wheelbarrow(mats) {
   const S = shared();
-  const g = new THREE.Group();
-  const paint = new THREE.MeshStandardMaterial({ color: 0x2f5e2c, roughness: 0.45, metalness: 0.35, side: THREE.DoubleSide });
-  // корыто: дно и четыре наклонных борта (передний пологий — к колесу)
-  const tub = new THREE.Group();
-  const plate = function (w, d, x, y, z, rx, rz) {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.006, d), paint);
-    m.position.set(x, y, z);
-    m.rotation.set(rx, 0, rz);
-    tub.add(m);
-  };
-  plate(0.46, 0.5, 0, 0, 0, 0, 0);
-  plate(0.46, 0.42, 0, 0.161, 0.385, -0.87, 0);
-  plate(0.46, 0.3, 0, 0.136, -0.313, 1.13, 0);
-  plate(0.3, 0.6, 0.305, 0.13, 0.03, 0, 1.05);
-  plate(0.3, 0.6, -0.305, 0.13, 0.03, 0, -1.05);
-  tub.position.set(0, 0.42, 0.32);
-  const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.045, 10, 20), S.black);
-  wheel.rotation.y = Math.PI / 2;
-  wheel.position.set(0, 0.2, 0.8);
-  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.07, 12), S.steel);
+  const pivot = new THREE.Group();
+  const body = new THREE.Group();
+  body.position.set(-BARROW.wheel[0], -BARROW.wheel[1], -BARROW.wheel[2]);
+  pivot.add(body);
+  // корыто: дно, задний и передний (пологий) борта, бока — плоские грани
+  const B = [[-0.2, 0.47, 0.66], [0.2, 0.47, 0.66], [0.2, 0.47, 1.06], [-0.2, 0.47, 1.06]];
+  const T = [[-0.31, 0.77, 0.44], [0.31, 0.77, 0.44], [0.31, 0.77, 1.3], [-0.31, 0.77, 1.3]];
+  const quads = [[B[0], B[1], B[2], B[3]], [B[1], B[0], T[0], T[1]], [B[3], B[2], T[2], T[3]], [B[0], B[3], T[3], T[0]], [B[2], B[1], T[1], T[2]]];
+  const pos = [], col = [];
+  const green = new THREE.Color(0.2, 0.42, 0.19);
+  quads.forEach(function (q) {
+    [0, 1, 2, 0, 2, 3].forEach(function (k) { pos.push(q[k][0], q[k][1], q[k][2]); col.push(green.r, green.g, green.b); });
+  });
+  const tg = new THREE.BufferGeometry();
+  tg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  tg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  tg.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(pos.length / 3 * 2), 2));
+  tg.computeVertexNormals();
+  const paint = mats.paint.clone();
+  paint.side = THREE.DoubleSide;
+  paint.metalness = 0.35;
+  paint.roughness = 0.5;
+  linkSky(paint);
+  body.add(new THREE.Mesh(tg, paint));
+  const rimMat = new THREE.MeshStandardMaterial({ color: 0x2f5a2c, roughness: 0.45, metalness: 0.4 });
+  linkSky(rimMat);
+  for (let k = 0; k < 4; k++) body.add(tubeBetween(new THREE.Vector3(...T[k]), new THREE.Vector3(...T[(k + 1) % 4]), 0.012, rimMat, 6));
+  // рама: ручки от рук до оси колеса, поперечины, опоры, кронштейны оси
+  [-1, 1].forEach(function (sd) {
+    const grip = new THREE.Vector3(sd * 0.27, 0.84, 0.2), axle = new THREE.Vector3(sd * 0.07, 0.21, 1.4);
+    body.add(tubeBetween(grip, axle, 0.016, S.steel));
+    const back = grip.clone().addScaledVector(axle.clone().sub(grip).normalize(), -0.15);
+    body.add(tubeBetween(back, grip.clone().addScaledVector(axle.clone().sub(grip).normalize(), 0.02), 0.021, S.black));
+    const onRail = grip.clone().lerp(axle, 0.36);
+    body.add(tubeBetween(onRail, new THREE.Vector3(sd * 0.24, 0.25, 0.64), 0.013, S.steel, 6));
+    body.add(tubeBetween(axle, new THREE.Vector3(sd * 0.05, BARROW.wheel[1], BARROW.wheel[2]), 0.012, S.steel, 6));
+  });
+  [0.62, 1.12].forEach(function (z) {
+    const t = (z - 0.2) / 1.2;
+    const y = 0.84 + (0.21 - 0.84) * t, x = 0.27 + (0.07 - 0.27) * t;
+    body.add(tubeBetween(new THREE.Vector3(-x, y, z), new THREE.Vector3(x, y, z), 0.012, S.steel, 6));
+  });
+  body.add(tubeBetween(new THREE.Vector3(-0.25, 0.25, 0.64), new THREE.Vector3(0.25, 0.25, 0.64), 0.012, S.steel, 6));
+  // колесо: шина, обод, ступица
+  const wheel = new THREE.Group();
+  wheel.position.set(BARROW.wheel[0], BARROW.wheel[1], BARROW.wheel[2]);
+  const tire = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.045, 12, 28), S.black);
+  tire.rotation.y = Math.PI / 2;
+  const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.115, 0.115, 0.05, 20), S.steel);
+  rim.rotation.z = Math.PI / 2;
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.1, 10), S.steel);
   hub.rotation.z = Math.PI / 2;
-  hub.position.copy(wheel.position);
-  g.add(tub, wheel, hub);
-  [-1, 1].forEach(function (s) {
-    const h = new THREE.Mesh(new THREE.CylinderGeometry(0.017, 0.017, 1.5, 8), S.steel);
-    h.rotation.x = Math.PI / 2 - 0.2;
-    h.position.set(s * 0.25, 0.44, 0.08);
-    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.14, 8), S.black);
-    grip.rotation.x = Math.PI / 2 - 0.2;
-    grip.position.set(s * 0.25, 0.3, -0.6);
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.34, 6), S.steel);
-    leg.position.set(s * 0.2, 0.2, 0.12);
-    g.add(h, grip, leg);
+  wheel.add(tire, rim, hub);
+  body.add(wheel);
+  // детали одного материала — одной сеткой (тачка у каждого рабочего: меньше вызовов отрисовки)
+  [body, wheel].forEach(function (grp) {
+    const byMat = new Map();
+    grp.children.slice().forEach(function (m) {
+      if (!m.isMesh) return;
+      m.updateMatrix();
+      const g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
+      g.applyMatrix4(m.matrix);
+      if (!g.attributes.color) g.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 3).fill(1), 3));
+      if (!byMat.has(m.material)) byMat.set(m.material, []);
+      byMat.get(m.material).push(g);
+      grp.remove(m);
+    });
+    byMat.forEach(function (list, mat) { grp.add(new THREE.Mesh(mergeGeometries(list), mat)); });
   });
   const load = new THREE.Group();
-  load.position.set(0, 0.5, 0.32);
-  g.add(load);
-  g.userData.load = load;
-  g.userData.wheel = wheel;
-  g.traverse(function (o) { o.castShadow = true; o.receiveShadow = true; });
-  return g;
+  load.position.set(0, 0.54, 0.86);
+  body.add(load);
+  pivot.userData = { load, wheel, body };
+  pivot.traverse(function (o) { o.castShadow = true; o.receiveShadow = true; });
+  return pivot;
 }
 
 // ---------- рабочий ----------
@@ -480,6 +659,11 @@ const _q = new THREE.Quaternion(), _e = new THREE.Euler();
 
 export function createWorkerFactory(quality) {
   const bodies = [buildBody({ width: 1.0, belly: 0.1 }, quality.bodyCell), buildBody({ width: 1.08, belly: 0.7 }, quality.bodyCell)];
+  const headCell = Math.max(0.0038, quality.bodyCell * 0.32);
+  const heads = [0, 1, 2].map(function (v) { return buildHead(v, headCell); });
+  const eyes = EYE_COLORS.map(eyeGeometry);
+  const eyeMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.12, metalness: 0 });
+  linkSky(eyeMat);
   function create(seed, mats) {
     const look = workerLook(seed);
     const root = new THREE.Bone();
@@ -494,7 +678,9 @@ export function createWorkerFactory(quality) {
       bones.push(bone);
     });
     root.name = 'root';
-    const mesh = new THREE.SkinnedMesh(bodies[look.build], workerMaterial(look));
+    const bodyMat = workerMaterial(look);
+    linkSky(bodyMat);
+    const mesh = new THREE.SkinnedMesh(bodies[look.build], bodyMat);
     mesh.add(root);
     mesh.updateMatrixWorld(true);
     mesh.bind(new THREE.Skeleton(bones));
@@ -503,8 +689,13 @@ export function createWorkerFactory(quality) {
     mesh.frustumCulled = false;
     const group = new THREE.Group();
     group.add(mesh);
+    const head = new THREE.Mesh(heads[look.face], bodyMat);
+    head.castShadow = true; head.receiveShadow = true;
+    const eye = new THREE.Mesh(eyes[look.eyes], eyeMat);
+    bones[B.head].add(head, eye);
     const S = shared();
     const hm = new THREE.MeshStandardMaterial({ color: look.helmet, roughness: 0.32, metalness: 0.0, side: THREE.DoubleSide });
+    linkSky(hm);
     const helmet = new THREE.Group();
     helmet.add(new THREE.Mesh(S.helmet, hm), new THREE.Mesh(S.ridge, hm));
     helmet.position.set(0, 0.104, -0.008);
@@ -524,20 +715,18 @@ export function createWorkerFactory(quality) {
       carry: null, carryKind: null, carryCount: 0, barrow: null,
       anim: { phase: 0, speed: 0, action: 'idle', t: 0, climb: 0, bend: 0 },
       pose: BONES.map(function () { return new THREE.Quaternion(); }),
+      barrowState: 'off',
       setCarry: function (kind, count) {
-        if (worker.carry) { worker.carry.parent && worker.carry.parent.remove(worker.carry); worker.carry = null; }
+        if (worker.carry) { if (worker.carry.parent) worker.carry.parent.remove(worker.carry); worker.carry = null; }
         worker.carryKind = kind; worker.carryCount = count;
-        if (!kind) { if (worker.barrow && worker.barrow.parent) worker.barrow.parent.remove(worker.barrow); return; }
-        if (kind === 'stones') {
-          if (!worker.barrow) { worker.barrow = wheelbarrow(mats); }
-          group.add(worker.barrow);
+        if (kind === 'stones') { if (worker.barrowState === 'off') worker.pushBarrow(); } else if (kind) worker.barrowOff();
+        if (worker.barrow) {
           const load = worker.barrow.userData.load;
           while (load.children.length) load.remove(load.children[0]);
-          load.add(cachedCarry('stones', count, mats));
-          worker.carry = null;
-          return;
+          if (kind === 'stones' && count > 0) load.add(cachedCarry('stones', count, mats));
         }
-        if (worker.barrow && worker.barrow.parent) worker.barrow.parent.remove(worker.barrow);
+        // без ноши пустая тачка остаётся при рабочем (или на стоянке)
+        if (!kind || kind === 'stones') return;
         const obj = cachedCarry(kind, count, mats);
         if (kind === 'planks' || kind === 'sticks') {
           obj.position.set(-0.17, 0.14, 0.05);
@@ -552,7 +741,26 @@ export function createWorkerFactory(quality) {
         }
         worker.carry = obj;
       },
-      dropBarrow: function () { if (worker.barrow && worker.barrow.parent) worker.barrow.parent.remove(worker.barrow); },
+      // катить тачку перед собой (ручки в руках)
+      pushBarrow: function () {
+        if (!worker.barrow) worker.barrow = wheelbarrow(mats);
+        const b = worker.barrow;
+        if (b.parent !== group) { if (b.parent) b.parent.remove(b); group.add(b); }
+        b.position.set(BARROW.wheel[0], BARROW.wheel[1], BARROW.wheel[2]);
+        b.rotation.set(0, 0, 0, 'YXZ');
+        worker.barrowState = 'push';
+      },
+      // поставить на опоры: (x, y, z) — место у ручек, колесо — впереди по heading
+      parkBarrow: function (parent, x, y, z, heading) {
+        const b = worker.barrow;
+        if (!b || worker.barrowState !== 'push') return;
+        if (b.parent) b.parent.remove(b);
+        parent.add(b);
+        b.position.set(x + Math.sin(heading) * BARROW.wheel[2], y + BARROW.wheel[1], z + Math.cos(heading) * BARROW.wheel[2]);
+        b.rotation.set(BARROW.rest, heading, 0, 'YXZ');
+        worker.barrowState = 'park';
+      },
+      barrowOff: function () { if (worker.barrow && worker.barrow.parent) worker.barrow.parent.remove(worker.barrow); worker.barrowState = 'off'; },
     };
     return worker;
   }
@@ -617,13 +825,13 @@ export function animateWorker(w, dt, time) {
     set(B.foreArmL, -1.0, 0, 0);
     set(B.foreArmR, -1.0, 0, 0);
     TARGET[B.spine].x -= 0.12;
-  } else if (ck === 'stones') {
-    // тачка: руки вниз-вперёд, наклон
-    set(B.upperArmL, -0.35, 0, -0.5);
-    set(B.upperArmR, -0.35, 0, 0.5);
-    set(B.foreArmL, -0.15, 0, 0);
-    set(B.foreArmR, -0.15, 0, 0);
-    TARGET[B.spine].x += 0.18;
+  } else if (w.barrowState === 'push') {
+    // тачка: прямые руки вниз-вперёд к ручкам, лёгкий наклон
+    set(B.upperArmL, -0.3, 0, -0.53);
+    set(B.upperArmR, -0.3, 0, 0.53);
+    set(B.foreArmL, -0.08, 0, 0);
+    set(B.foreArmR, -0.08, 0, 0);
+    TARGET[B.spine].x += 0.06;
   }
   // действие на месте
   if (!moving) {
@@ -663,11 +871,12 @@ export function animateWorker(w, dt, time) {
       set(B.shinL, 1.3 + S(c) * 0.3, 0, 0); set(B.shinR, 1.3 - S(c) * 0.3, 0, 0);
     } else if (a.action === 'work-high') {
       const sw = (S(t * 8.0) * 0.5 + 0.5);
-      set(B.upperArmR, -2.5 - sw * 0.35, 0.1, 0.25);
+      // правая рука с молотком работает над головой, левая упирается в стену на уровне плеча
+      set(B.upperArmR, -2.3 - sw * 0.35, 0.1, 0.25);
       set(B.foreArmR, -0.5 - sw * 0.8, 0, 0);
-      set(B.upperArmL, -2.3, 0, -0.25);
-      set(B.foreArmL, -0.4, 0, 0);
-      TARGET[B.head].x -= 0.35;
+      set(B.upperArmL, -1.45, -0.15, -0.35);
+      set(B.foreArmL, -0.75, 0, 0);
+      TARGET[B.head].x -= 0.3;
     }
   }
   a.t += dt;
@@ -683,8 +892,5 @@ export function animateWorker(w, dt, time) {
   w.tools.hammer.visible = a.action === 'hammer' || a.action === 'work-high';
   w.tools.trowel.visible = a.action === 'lay' && w.carryKind === 'stones';
   w.tools.drill.visible = a.action === 'screw';
-  if (w.barrow && w.barrow.parent) {
-    w.barrow.position.set(0, 0, 0.55);
-    w.barrow.userData.wheel.rotation.x += a.speed * dt / 0.17;
-  }
+  if (w.barrowState === 'push') w.barrow.userData.wheel.rotation.x += (a.speed * dt) / BARROW.wheelR;
 }

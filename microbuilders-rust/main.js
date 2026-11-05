@@ -2,16 +2,17 @@
 // ?scene=showroom — все детали во всех уровнях; иначе — стройка с рабочими.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { createTextures } from './textures.js?v=3ae8fc6';
-import { createMaterials, ROOMS } from './materials.js?v=3ae8fc6';
-import { createSky, createTerrain, splatMap, terrainMaterial, terrainMesh, mountains } from './world.js?v=3ae8fc6';
-import { createPost } from './post.js?v=3ae8fc6';
-import { createGrass, createForest, createRocks } from './nature.js?v=3ae8fc6';
-import { buildPiece, TIERS } from './pieces.js?v=3ae8fc6';
-import { planBuilding } from './blueprints.js?v=3ae8fc6';
-import { createWorkerFactory } from './people.js?v=3ae8fc6';
-import { createSite } from './site.js?v=3ae8fc6';
-import { createUI } from './ui.js?v=3ae8fc6';
+import { createTextures } from './textures.js?v=83604fc';
+import { createMaterials, ROOMS } from './materials.js?v=83604fc';
+import { createSky, createTerrain, splatMap, terrainMaterial, terrainMesh, mountains, linkSkyTree, createWear } from './world.js?v=83604fc';
+import { createPost } from './post.js?v=83604fc';
+import { createGrass, createForest, createRocks } from './nature.js?v=83604fc';
+import { buildPiece, TIERS } from './pieces.js?v=83604fc';
+import { planBuilding } from './blueprints.js?v=83604fc';
+import { createWorkerFactory } from './people.js?v=83604fc';
+import { createSite } from './site.js?v=83604fc';
+import { createUI } from './ui.js?v=83604fc';
+import { createAudio } from './audio.js?v=83604fc';
 
 const params = new URLSearchParams(location.search);
 const loading = document.getElementById('loading');
@@ -25,9 +26,9 @@ function progress(t, text) {
 
 // ---------- качество ----------
 export const QUALITY = {
-  ultra: { name: 'Ультра', tex: 2048, shadow: 4096, ao: 1, bloom: true, msaa: 4, ratio: 2, glass: 'physical', terrainDetail: 1, grass: 1, trees: 1, bodyCell: 0.0125 },
-  high: { name: 'Высокая', tex: 2048, shadow: 2048, ao: 0.5, bloom: true, msaa: 4, ratio: 1.5, glass: 'physical', terrainDetail: 1, grass: 0.45, trees: 0.7, bodyCell: 0.015 },
-  phone: { name: 'Телефон', tex: 1024, shadow: 1024, ao: 0, bloom: false, msaa: 0, ratio: 1.5, glass: 'simple', terrainDetail: 0, grass: 0.12, trees: 0.45, bodyCell: 0.02 },
+  ultra: { name: 'Ультра', tex: 2048, shadow: 4096, spotShadow: 1024, ao: 1, bloom: true, msaa: 4, ratio: 2, glass: 'physical', terrainDetail: 1, grass: 1, trees: 1, bodyCell: 0.0125 },
+  high: { name: 'Высокая', tex: 2048, shadow: 2048, spotShadow: 1024, ao: 0.5, bloom: true, msaa: 4, ratio: 1.5, glass: 'physical', terrainDetail: 1, grass: 0.45, trees: 0.7, bodyCell: 0.015 },
+  phone: { name: 'Телефон', tex: 1024, shadow: 1024, spotShadow: 0, ao: 0, bloom: false, msaa: 0, ratio: 1.5, glass: 'simple', terrainDetail: 0, grass: 0.12, trees: 0.45, bodyCell: 0.02 },
 };
 const ORDER = ['ultra', 'high', 'phone'];
 const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
@@ -93,7 +94,10 @@ const state = {
   fixedHour: params.has('hour'),
 };
 
-let sky, post, textures, mats, terrain, view, grass, site, ui, factory;
+let sky, post, textures, mats, terrain, view, grass, site, ui, factory, wear;
+const audio = createAudio();
+// браузер даёт звук только после касания или нажатия
+['pointerdown', 'keydown'].forEach(function (e) { window.addEventListener(e, function () { audio.start(); }, { passive: true }); });
 // Съёмка: камера за рабочим (follow) или облёт (orbit); задаёт отладка, считается в шаге кадра.
 let follow = null, orbit = null;
 const _cam = new THREE.Vector3(), _tgt = new THREE.Vector3();
@@ -136,12 +140,14 @@ async function boot() {
     ? { site: { x: 0, z: 0, rx: 34, rz: 14 }, yard: { x: 0, z: 14, rx: 30, rz: 6 }, roads: [[[0, 16], [0, 120], 3.2]] }
     : { site: { x: 1.5, z: 1.5, rx: 13, rz: 11 }, yard: { x: 10.5, z: 9.5, rx: 11, rz: 7 }, roads: [[[13, 12], [70, 150], 3.4]] };
   const splat = splatMap(terrain, layout);
-  scene.add(terrainMesh(terrain, terrainMaterial(textures, splat, quality)));
+  wear = createWear(64, 256);
+  scene.add(terrainMesh(terrain, terrainMaterial(textures, splat, quality, wear)));
   scene.add(mountains(7));
   await progress(0.64, 'Трава и лес…');
-  grass = createGrass(terrain, splat, [0, 0], quality.grass);
-  scene.add(grass.group);
+  // лес раньше травы: кроны пишут подстилку в карту луга, трава под ними не растёт
   scene.add(createForest(terrain, splat, mats, quality.trees, quality.msaa).group);
+  grass = createGrass(terrain, splat, [0, 0], quality.grass, 3, wear);
+  scene.add(grass.group);
   scene.add(createRocks(terrain, splat, mats).group);
 
   if (showroom) {
@@ -153,7 +159,7 @@ async function boot() {
     await progress(0.7, 'Рабочие…');
     factory = createWorkerFactory(quality);
     await progress(0.8, 'Стройка…');
-    site = createSite({ scene, mats, terrain, factory, onEvent });
+    site = createSite({ scene, mats, terrain, factory, onEvent, quality, wear });
     restore();
     site.start(savedIndex);
     for (let i = 0; i < 5 + site.S.upgrades.crew; i++) site.addWorker();
@@ -161,6 +167,7 @@ async function boot() {
     ui = createUI(document.getElementById('hud'), {
       buy: function (k) { const ok = site.buy(k); save(); return ok; },
       setTempo: function (t) { state.tempo = t; },
+      toggleSound: function () { return audio.setEnabled(!audio.enabled()); },
       cycleQuality: function () {
         const next = ORDER[(ORDER.indexOf(state.quality) + 1) % ORDER.length];
         try { localStorage.setItem('rust.quality', next); } catch (e) { /* без хранилища — только этот запуск */ }
@@ -169,16 +176,22 @@ async function boot() {
         q.delete('quality');
         location.search = q.toString();
       },
-      next: function () { site.start(site.S.index + 1); ui.setBuilding(site.S.index); frameCamera(true); save(); },
+      next: function () { celebrate = null; site.start(site.S.index + 1); ui.setBuilding(site.S.index); frameCamera(true); save(); },
     });
     ui.setBuilding(site.S.index);
     frameCamera(true);
+    bindPlayerCamera();
+    // подсказка один раз
+    let hinted = true;
+    try { hinted = localStorage.getItem('rust.hint') === '1'; localStorage.setItem('rust.hint', '1'); } catch (e) { hinted = true; }
+    if (!hinted && !params.has('dev')) setTimeout(function () { ui.toast('Щёлкните по рабочему — камера пойдёт за ним. WASD — сдвиг, колесо — ближе, H — к зданию', 0, 7000); }, 1500);
   }
 
   await progress(0.92, 'Свет…');
   post = createPost(renderer, scene, camera, quality);
   sky.update(state.hour, 0, controls.target);
   sky.fitShadow(controls.target, showroom ? 34 : 26);
+  linkSkyTree(scene);
   renderer.compile(scene, camera);
   await progress(1, '');
   if (loading) loading.classList.add('hidden');
@@ -205,10 +218,100 @@ function save() {
 }
 
 function onEvent(type, data) {
+  if (type === 'place') audio.play(data.action, data.kind, data.pos, camera);
+  if (type === 'piece') audio.piece();
+  if (type === 'complete') audio.complete();
   if (!ui) return;
   if (type === 'place' && state.tempo <= 5) ui.pop(data.pos, data.gain);
   if (type === 'piece') ui.toast(data.name + ' — готово', data.gain);
-  if (type === 'complete') { ui.complete(data.name, data.bonus); save(); }
+  if (type === 'complete') { ui.complete(data.name, data.bonus); save(); if (!state.manual) celebrate = { t: 0 }; }
+}
+// сдача объекта: камера медленно облетает готовое здание, пока игрок не нажмёт «Следующий объект» или не возьмёт камеру
+let celebrate = null;
+const _c = new THREE.Vector3();
+function celebrateCamera(dt) {
+  const f = site.S.plan.footprint;
+  const cx = (f.x0 + f.x1) / 2, cz = (f.z0 + f.z1) / 2;
+  const size = Math.max(f.x1 - f.x0, f.z1 - f.z0) + site.S.plan.def.stories * 3;
+  if (celebrate.t === 0) celebrate.angle = Math.atan2(camera.position.x - cx, camera.position.z - cz);
+  celebrate.t += dt;
+  celebrate.angle += dt * 0.14;
+  const R = size * 1.5 + 4, k = 1 - Math.exp(-dt * 1.2);
+  _c.set(cx + Math.sin(celebrate.angle) * R, 2.5 + size * 0.55, cz + Math.cos(celebrate.angle) * R);
+  camera.position.lerp(_c, k);
+  controls.target.lerp(_c.set(cx, 1.2 + site.S.plan.def.stories * 1.4, cz), k);
+}
+
+// ---------- камера игрока ----------
+// Щелчок по рабочему — камера идёт за ним (вращать её можно как обычно), Esc или щелчок мимо — отпустить.
+// WASD / стрелки — сдвиг по земле, H — снова к зданию.
+const keys = new Set();
+let watch = null;
+const DOING = { hammer: 'прибивает доски', lay: 'кладёт камень', screw: 'крепит лист', tie: 'вяжет жерди', 'work-high': 'работает наверху' };
+const CARRYING = { planks: 'доски', sticks: 'жерди', stones: 'камень', sheets: 'профлист', plates: 'бронеплиты', box: 'дверь или окно' };
+function activity(w) {
+  if (w.state === 'walk') return w.barrowState === 'push' && w.carryKind === 'stones' ? 'везёт камень' : w.carryKind ? 'несёт ' + CARRYING[w.carryKind] : w.barrowState === 'push' ? 'везёт пустую тачку' : 'идёт за материалом';
+  if (w.state === 'pickup') return 'берёт материал';
+  if (w.state === 'climb') return 'лезет по лестнице';
+  if (w.state === 'descend') return 'спускается';
+  if (w.state === 'roofwalk') return 'идёт по скату';
+  if (w.state === 'work') return DOING[w.anim.action] || 'работает';
+  return 'отдыхает';
+}
+const _p = new THREE.Vector3();
+function workerAt(x, y) {
+  let best = -1, bestD = 46;
+  site.S.workers.forEach(function (w, i) {
+    _p.copy(w.pos); _p.y += 1.0;
+    _p.project(camera);
+    if (_p.z > 1) return;
+    const d = Math.hypot(((_p.x + 1) / 2) * window.innerWidth - x, ((1 - _p.y) / 2) * window.innerHeight - y);
+    if (d < bestD) { bestD = d; best = i; }
+  });
+  return best;
+}
+let press = null;
+function bindPlayerCamera() {
+  canvas.addEventListener('pointerdown', function (e) { press = { x: e.clientX, y: e.clientY, t: performance.now() }; celebrate = null; });
+  canvas.addEventListener('wheel', function () { celebrate = null; }, { passive: true });
+  canvas.addEventListener('pointerup', function (e) {
+    if (!press || !site) return;
+    const click = Math.hypot(e.clientX - press.x, e.clientY - press.y) < 6 && performance.now() - press.t < 350;
+    press = null;
+    if (!click) return;
+    const i = workerAt(e.clientX, e.clientY);
+    watch = i >= 0 ? { i } : null;
+    if (!watch && ui) ui.watch(null);
+  });
+  window.addEventListener('keydown', function (e) {
+    keys.add(e.code);
+    if (e.code === 'Escape') { watch = null; if (ui) ui.watch(null); }
+    if (e.code === 'KeyH' && site) { watch = null; if (ui) ui.watch(null); frameCamera(true); }
+  });
+  window.addEventListener('keyup', function (e) { keys.delete(e.code); });
+  window.addEventListener('blur', function () { keys.clear(); });
+}
+const _f = new THREE.Vector3(), _r = new THREE.Vector3(), _m = new THREE.Vector3();
+function playerCamera(dt) {
+  if (celebrate && site) { celebrateCamera(dt); return; }
+  // сдвиг клавишами — по земле, быстрее издалека
+  const fw = (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
+  const rt = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0);
+  if (fw || rt) {
+    watch = null; if (ui) ui.watch(null);
+    _f.subVectors(controls.target, camera.position); _f.y = 0; _f.normalize();
+    _r.crossVectors(_f, camera.up).normalize();
+    const sp = camera.position.distanceTo(controls.target) * 0.9 * dt;
+    _m.copy(_f).multiplyScalar(fw * sp).addScaledVector(_r, rt * sp);
+    controls.target.add(_m); camera.position.add(_m);
+  }
+  if (watch && site) {
+    const w = site.S.workers[watch.i];
+    if (!w) { watch = null; return; }
+    _m.set(w.pos.x, w.pos.y + 1.1, w.pos.z).sub(controls.target).multiplyScalar(1 - Math.exp(-dt * 4));
+    controls.target.add(_m); camera.position.add(_m);
+    if (ui) ui.watch('Рабочий ' + (watch.i + 1) + ' · ' + activity(w) + ' · Esc — отпустить');
+  }
 }
 
 function frameCamera(snap) {
@@ -285,14 +388,19 @@ function step(dt) {
   state.time += dt;
   if (!state.fixedHour) state.hour = (state.hour + sim / 40) % 24;
   if (site) { site.step(sim, state.time); site.render(Math.min(0.25, sim), state.time); }
+  // запасной ход: материалы, созданные по ходу игры мимо фабрик, тоже получают тень облаков
+  if ((state.frames & 63) === 0) linkSkyTree(scene);
   directCamera(dt);
+  if (!follow && !orbit && !state.manual) playerCamera(dt);
   controls.update();
   sky.follow(camera);
   sky.update(state.hour, state.time, controls.target);
+  if (site && site.S.yard) site.S.yard.night(sky.state.night);
   grass.update(state.time);
+  audio.update(dt, sky.state.night);
   renderer.toneMappingExposure = sky.state.exposure * exposureGain;
   if (ui) {
-    ui.update({ coins: site.S.coins, hour: state.hour, qualityName: QUALITY[state.quality].name, progress: site.progress(), upgrades: site.S.upgrades, workers: site.S.workers.length });
+    ui.update({ coins: site.S.coins, hour: state.hour, qualityName: QUALITY[state.quality].name, progress: site.progress(), upgrades: site.S.upgrades, workers: site.S.workers.length, sound: audio.enabled() });
     ui.updatePops(dt, camera, window.innerWidth, window.innerHeight);
   }
 }
@@ -334,6 +442,8 @@ if (params.get('dev') === '1' || params.has('capture')) {
     view: function (pos, target) { camera.position.fromArray(pos); controls.target.fromArray(target); controls.update(); return true; },
     manual: function (on) { state.manual = !!on; if (!on) { last = performance.now(); requestAnimationFrame(frame); } return state.manual; },
     frame: function (dt) { step(dt); renderer.info.reset(); post.render(state.time); state.frames++; return state.frames; },
+    // n шагов без отрисовки (проверка стройки до сдачи)
+    simulate: function (n, dt) { for (let i = 0; i < n; i++) step(dt); state.frames += n; return state.frames; },
     jump: function (f) { site.jump(f); return site.progress(); },
     next: function () { site.start(site.S.index + 1); ui.setBuilding(site.S.index); frameCamera(true); return site.S.index; },
     building: function (i) { site.start(i); ui.setBuilding(site.S.index); frameCamera(true); return site.S.index; },
@@ -348,7 +458,12 @@ if (params.get('dev') === '1' || params.has('capture')) {
       });
     },
     camera: function () { return { pos: camera.position.toArray(), target: controls.target.toArray() }; },
+    home: function () { follow = null; orbit = null; frameCamera(true); return { pos: camera.position.toArray(), target: controls.target.toArray() }; },
+    layout: function () { const f = site.S.plan.footprint, y = site.S.yard.center; return { x0: f.x0, z0: f.z0, x1: f.x1, z1: f.z1, yx: y.x, yz: y.z }; },
     renderer: function () { return renderer; },
+    three: function () { return THREE; },
+    sky: function () { return sky; },
+    gpu: function () { const gl = renderer.getContext(); const e = gl.getExtension('WEBGL_debug_renderer_info'); return e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER); },
     scene: function () { return scene; },
     post: function () { return post; },
     hud: function (on) { document.getElementById('hud').style.display = on ? '' : 'none'; return !!on; },
@@ -371,7 +486,7 @@ if (params.get('dev') === '1' || params.has('capture')) {
     record: function (on) { site.S.recordEvents = !!on; site.S.events.length = 0; return !!on; },
     drain: function () {
       const e = site.S.events.splice(0).map(function (x) { return { type: x.type, kind: x.kind, action: x.action, pos: x.pos ? x.pos.toArray().map(function (v) { return Math.round(v * 100) / 100; }) : null }; });
-      return { events: e, cam: camera.position.toArray().map(function (v) { return Math.round(v * 100) / 100; }), hour: state.hour };
+      return { events: e, cam: camera.position.toArray().map(function (v) { return Math.round(v * 100) / 100; }), hour: state.hour, night: sky.state.night };
     },
     completeShown: function () { return !document.getElementById('done').classList.contains('hidden'); },
   };

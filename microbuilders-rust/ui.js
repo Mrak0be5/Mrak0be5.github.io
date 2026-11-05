@@ -1,8 +1,8 @@
 // Интерфейс стройки: карточка объекта с прогрессом, монеты, часы, темп, качество, три прокачки, тосты,
 // всплывающие «+монеты» у уложенного элемента, окно «Объект сдан!».
 import * as THREE from 'three';
-import { UPGRADES, upgradeCost } from './site.js?v=3ae8fc6';
-import { BUILDINGS } from './blueprints.js?v=3ae8fc6';
+import { UPGRADES, upgradeCost } from './site.js?v=83604fc';
+import { BUILDINGS } from './blueprints.js?v=83604fc';
 
 const fmt = function (n) { return Math.round(n).toLocaleString('ru-RU').replace(/,/g, ' '); };
 
@@ -27,8 +27,10 @@ export function createUI(root, api) {
       <div class="pill tempo" id="tempo">
         <button data-t="1" class="on">×1</button><button data-t="5">×5</button><button data-t="20">×20</button>
       </div>
+      <button class="pill btn" id="sound" title="Звук"></button>
       <button class="pill btn" id="quality"></button>
     </div>
+    <div class="watch hidden" id="watch"></div>
     <div class="ups" id="ups"></div>
     <div class="toasts" id="toasts"></div>
     <div class="pops" id="pops"></div>
@@ -57,20 +59,22 @@ export function createUI(root, api) {
     $('tempo').querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === t); });
   });
   $('quality').addEventListener('click', function () { api.cycleQuality(); });
+  $('sound').addEventListener('click', function () { api.toggleSound(); });
   $('done-next').addEventListener('click', function () { $('done').classList.add('hidden'); api.next(); });
 
   function flash(el) { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
   function shake(el) { el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); }
 
   const toasts = $('toasts');
-  function toast(text, gain) {
+  function toast(text, gain, ms) {
     const t = document.createElement('div');
     t.className = 'toast';
     t.innerHTML = text + (gain ? ` <b>+${fmt(gain)}</b>` : '');
     toasts.appendChild(t);
     while (toasts.children.length > 3) toasts.removeChild(toasts.firstChild);
-    setTimeout(function () { t.classList.add('out'); }, 2200);
-    setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 2800);
+    const life = ms || 2200;
+    setTimeout(function () { t.classList.add('out'); }, life);
+    setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, life + 600);
   }
 
   // всплывающие монеты у элемента
@@ -102,6 +106,7 @@ export function createUI(root, api) {
     $('clock').textContent = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
     $('clock-ico').textContent = state.hour > 5.6 && state.hour < 20.4 ? '☀' : '☾';
     $('quality').innerHTML = '<span class="q-ico">⚙</span><span class="q-txt">Качество: ' + state.qualityName + '</span>';
+    $('sound').textContent = state.sound ? '🔊' : '🔇';
     const pr = state.progress;
     $('obj-bar').style.width = (pr.total ? (pr.placed / pr.total) * 100 : 0).toFixed(1) + '%';
     $('obj-count').textContent = 'Деталей ' + pr.pieces + ' из ' + pr.totalPieces + ' · ' + Math.round(pr.total ? (pr.placed / pr.total) * 100 : 0) + '%';
@@ -129,5 +134,12 @@ export function createUI(root, api) {
     $('done').classList.remove('hidden');
   }
 
-  return { update, setBuilding, toast, pop, updatePops, complete, root };
+  // подпись над кадром, пока камера следит за рабочим (null — убрать)
+  function watch(text) {
+    const el = $('watch');
+    el.classList.toggle('hidden', !text);
+    if (text) el.textContent = text;
+  }
+
+  return { update, setBuilding, toast, pop, updatePops, complete, watch, root };
 }

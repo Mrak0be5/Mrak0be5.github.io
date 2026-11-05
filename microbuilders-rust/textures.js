@@ -6,7 +6,7 @@
 // физически верная крутизна), ORM (R — затенение впадин, G — шероховатость, B — металл, как в glTF).
 // tile — сколько метров укладывается в фактуру по u и v: геометрия сама делит на это свои координаты.
 import * as THREE from 'three';
-import { NOISE } from './glsl.js?v=3ae8fc6';
+import { NOISE } from './glsl.js?v=83604fc';
 
 const RECIPES = {};
 
@@ -369,27 +369,38 @@ RECIPES.slate = {
 // Земля стройки: суглинок, комья, камешки, соломинки; влажные пятна темнее.
 RECIPES.dirt = {
   tile: [4.0, 4.0], cav: 300, ao: 1.0, big: true, glsl: `
+  // соломинки и щепки: короткие отрезки в редких ячейках (без контуров ячеек)
+  float straw(vec2 uv, float sc) {
+    vec2 p = uv * sc; vec2 i = floor(p); vec2 f = fract(p); float m = 0.0;
+    for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+      vec2 o = vec2(float(x), float(y));
+      vec3 hs = hash32(mod(i + o, vec2(sc)) + 17.0);
+      if (hs.z > 0.14) continue;
+      vec2 cp = o + hs.xy - f;
+      float ang = hs.z * 45.0; vec2 dir = vec2(cos(ang), sin(ang));
+      float along = dot(cp, dir), across = dot(cp, vec2(-dir.y, dir.x));
+      m = max(m, step(abs(along), 0.45 + 0.4 * hs.x) * (1.0 - smoothstep(0.012, 0.03, abs(across))));
+    }
+    return m;
+  }
   vec4 H(vec2 uv) {
     float big = fbm(uv * 3.0, vec2(3.0), 6);
-    vec4 cl = voronoi(uv * 26.0, vec2(26.0));
-    float clod = sat(1.0 - cl.x * 1.3) * (0.4 + 0.6 * cl.z);
+    float clump = fbm(uv * 16.0 + 3.1, vec2(16.0), 4);
+    float clod = sat(clump * 1.7 + 0.15);
     vec4 pb = voronoi(uv * 55.0, vec2(55.0));
-    float peb = step(0.93, pb.z) * sat(1.0 - pb.x * (1.6 + 2.0 * fract(pb.z * 13.0)));
+    float peb = step(0.9, pb.z) * sat(1.0 - pb.x * (1.6 + 2.0 * fract(pb.z * 13.0)));
     float fine = gnoise(uv * 400.0, vec2(400.0));
-    float h = 0.006 * big + 0.004 * clod + 0.004 * sqrt(peb) + 0.0002 * fine;
+    float h = 0.006 * big + 0.0045 * clod + 0.004 * sqrt(peb) + 0.0003 * fine;
     return vec4(h, peb, clod, big);
   }
   vec3 A(vec2 uv, vec4 h, float cav) {
     vec3 soil = mix(vec3(0.31, 0.25, 0.19), vec3(0.42, 0.35, 0.27), sat(fbm(uv * 5.0 + 2.0, vec2(5.0), 5) + 0.5));
     float damp = sat(fbm(uv * 2.0 + 8.0, vec2(2.0), 5) * 2.0 - 0.1);
     soil = mix(soil, soil * vec3(0.66, 0.62, 0.58), damp * 0.6);
-    soil *= 0.92 + 0.12 * h.z;
+    soil *= 0.9 + 0.14 * h.z;
     vec3 pc = mix(vec3(0.44, 0.42, 0.39), vec3(0.52, 0.46, 0.38), hash12(floor(uv * 55.0)));
     soil = mix(soil, pc, h.y);
-    float straw = 0.0;
-    vec4 st = voronoi(uv * 18.0, vec2(18.0));
-    straw = step(0.9, st.z) * (1.0 - smoothstep(0.0, 0.02, abs(st.w - 0.05)));
-    soil = mix(soil, vec3(0.62, 0.52, 0.32), straw * 0.7);
+    soil = mix(soil, vec3(0.6, 0.5, 0.31), straw(uv, 20.0) * 0.65);
     soil *= 1.0 - 0.35 * sat(cav * 2.0);
     return srgb(soil);
   }
@@ -400,31 +411,40 @@ RECIPES.dirt = {
   `,
 };
 
-// Щебень и гравий: окатыши разных пород с пылью между ними.
+// Щебень: угловатые камни 3–5 см (не в каждой ячейке) и 1,5–2,5 см в промежутках, грани — плато с фаской
+// по расстоянию до границы ячейки; между ними пыль и песок, на камнях — налёт пыли. Породы разного цвета.
 RECIPES.gravel = {
   tile: [2.0, 2.0], cav: 250, ao: 1.0, big: true, glsl: `
   vec4 H(vec2 uv) {
-    vec4 v = voronoi(uv * 46.0, vec2(46.0));
-    float r = 0.42 + 0.2 * v.z;
-    float dome = sqrt(sat(1.0 - (v.x / r) * (v.x / r)));
-    float edge = smoothstep(0.0, 0.06, v.w);
-    vec4 v2 = voronoi(uv * 110.0 + 5.0, vec2(110.0));
-    float small = sqrt(sat(1.0 - v2.x * v2.x / 0.25)) * step(0.4, v2.z);
-    float h = 0.012 * dome * edge + 0.003 * small * (1.0 - edge * dome);
-    return vec4(h, v.z, dome * edge, small);
+    // контуры камней искажены шумом, размер в ячейке разный, камни — выпуклые; заняты не все ячейки
+    vec2 w = uv + 0.011 * vec2(gnoise(uv * 60.0, vec2(60.0)), gnoise(uv * 60.0 + 7.3, vec2(60.0)));
+    vec4 a = voronoi(w * 40.0, vec2(40.0));
+    float ra = 0.26 + 0.3 * fract(a.z * 17.3);
+    float da = step(0.5, a.z) * sqrt(sat(1.0 - (a.x / ra) * (a.x / ra)));
+    vec4 b = voronoi(w * 95.0 + 3.7, vec2(95.0));
+    float rb = 0.3 + 0.25 * fract(b.z * 23.1);
+    float db = step(0.45, b.z) * (1.0 - step(0.01, da)) * sqrt(sat(1.0 - (b.x / rb) * (b.x / rb)));
+    float sand = gnoise(uv * 520.0, vec2(520.0)) * 0.5 + 0.5;
+    float h = 0.014 * da + 0.006 * db + 0.0015 * sand;
+    float id = da > 0.01 ? a.z : (db > 0.01 ? b.z : 0.0);
+    return vec4(h, id, sat(da * 1.3 + db), sand);
   }
   vec3 A(vec2 uv, vec4 h, float cav) {
-    float id = h.y;
-    vec3 c = mix(vec3(0.46, 0.44, 0.41), vec3(0.53, 0.49, 0.43), step(0.5, id));
-    c = mix(c, vec3(0.34, 0.33, 0.31), step(0.82, id));
-    c = mix(c, vec3(0.50, 0.40, 0.32), step(0.94, id));
-    c *= 0.85 + 0.25 * gnoise(uv * 300.0, vec2(300.0)) * 0.5 + 0.1;
-    vec3 dust = vec3(0.33, 0.30, 0.26);
-    c = mix(dust, c, sat(h.z * 1.6 + h.w * 0.5));
-    c *= 1.0 - 0.4 * sat(cav * 2.0);
+    float id = h.y, m = h.z;
+    vec3 c = vec3(0.47, 0.46, 0.44);
+    c = mix(c, vec3(0.56, 0.52, 0.46), step(0.55, fract(id * 7.3)));
+    c = mix(c, vec3(0.33, 0.34, 0.35), step(0.8, fract(id * 13.1)));
+    c = mix(c, vec3(0.62, 0.61, 0.58), step(0.93, fract(id * 29.7)));
+    c = mix(c, vec3(0.5, 0.42, 0.34), step(0.95, fract(id * 41.9)));
+    c *= 0.85 + 0.3 * fract(id * 51.3);
+    c *= 0.9 + 0.15 * gnoise(uv * 700.0, vec2(700.0));
+    vec3 dust = mix(vec3(0.35, 0.32, 0.28), vec3(0.43, 0.4, 0.35), h.w);
+    c = mix(c, dust, 0.28 * (1.0 - smoothstep(0.35, 0.9, m)));
+    c = mix(dust, c, sat(m * 1.8));
+    c *= 1.0 - 0.45 * sat(cav * 2.0);
     return srgb(c);
   }
-  vec2 RM(vec2 uv, vec4 h, float cav) { return vec2(0.82 - 0.1 * h.z, 0.0); }
+  vec2 RM(vec2 uv, vec4 h, float cav) { return vec2(0.8 - 0.12 * h.z, 0.0); }
   `,
 };
 
@@ -471,6 +491,33 @@ RECIPES.grass = {
     return srgb(c);
   }
   vec2 RM(vec2 uv, vec4 h, float cav) { return vec2(0.82, 0.0); }
+  `,
+};
+
+// Кора берёзы: белая с розоватыми отслоениями, чёрные чечевички — короткие поперечные штрихи, чёрные пятна.
+// u — вокруг ствола, v — вдоль.
+RECIPES.birch = {
+  tile: [0.25, 0.5], cav: 600, ao: 0.7, glsl: `
+  vec4 H(vec2 uv) {
+    vec2 p = uv * vec2(6.0, 22.0);
+    vec2 i = floor(p); vec2 f = fract(p);
+    float len = 0.25 + 0.5 * hash12(mod(i, vec2(6.0, 22.0)) * 1.7);
+    float on = step(0.55, hash12(mod(i, vec2(6.0, 22.0)) + 3.1));
+    float dash = on * (1.0 - smoothstep(0.04, 0.12, abs(f.y - 0.5))) * step(abs(f.x - 0.5), len * 0.5);
+    float peel = smoothstep(0.55, 0.8, fbm(uv * vec2(4.0, 10.0), vec2(4.0, 10.0), 4) * 0.5 + 0.5);
+    float h = 0.0006 * (1.0 - dash) + 0.0004 * peel + 0.0002 * gnoise(uv * vec2(60.0, 200.0), vec2(60.0, 200.0));
+    return vec4(h, dash, peel, 0.0);
+  }
+  vec3 A(vec2 uv, vec4 h, float cav) {
+    vec3 c = mix(vec3(0.84, 0.83, 0.78), vec3(0.92, 0.9, 0.86), gnoise(uv * vec2(8.0, 30.0), vec2(8.0, 30.0)) * 0.5 + 0.5);
+    c = mix(c, vec3(0.78, 0.69, 0.61), h.z * 0.35);
+    c = mix(c, vec3(0.08, 0.07, 0.06), h.y * 0.9);
+    float blot = smoothstep(0.62, 0.7, fbm(uv * vec2(2.0, 5.0) + 11.0, vec2(2.0, 5.0), 5) * 0.5 + 0.5);
+    c = mix(c, vec3(0.1, 0.09, 0.08), blot * 0.85);
+    c *= 1.0 - 0.3 * sat(cav * 2.0);
+    return srgb(c);
+  }
+  vec2 RM(vec2 uv, vec4 h, float cav) { return vec2(0.72 + 0.15 * h.y, 0.0); }
   `,
 };
 

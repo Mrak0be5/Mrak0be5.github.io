@@ -26,17 +26,30 @@ class AOPass extends GTAOPass {
   }
 }
 
-// NaN и бесконечность в HDR (редкие пиксели травы) свечение размазывает в чёрные пятна: заменить нулём,
-// выбросы ограничить.
+// NaN и бесконечность в HDR свечение размазало бы в чёрные пятна. Проверка — по битам числа: сравнения с NaN
+// компилятор вправе упростить, и на D3D прежняя проверка срабатывала на целых пикселях травы (чёрные точки).
+// Битый пиксель заменяется средним целых соседей, выбросы ограничены.
 const SANITIZE = {
-  uniforms: { tDiffuse: { value: null } },
+  uniforms: { tDiffuse: { value: null }, uTexel: { value: new THREE.Vector2(1 / 1920, 1 / 1080) } },
   vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: /* glsl */ `
-    uniform sampler2D tDiffuse; varying vec2 vUv;
+    uniform sampler2D tDiffuse; uniform vec2 uTexel; varying vec2 vUv;
+    bool bad(vec3 c) {
+      uvec3 u = floatBitsToUint(c) & uvec3(0x7fffffffu);
+      return any(greaterThanEqual(u, uvec3(0x7f800000u))) || any(lessThan(c, vec3(0.0)));
+    }
     void main() {
-      vec4 c = texture2D(tDiffuse, vUv);
-      if (!(c.r < 1e4) || !(c.g < 1e4) || !(c.b < 1e4) || !(c.r >= 0.0) || !(c.g >= 0.0) || !(c.b >= 0.0)) c = vec4(0.0, 0.0, 0.0, 1.0);
-      gl_FragColor = vec4(min(c.rgb, vec3(300.0)), c.a);
+      vec3 c = texture2D(tDiffuse, vUv).rgb;
+      if (bad(c)) {
+        vec3 s = vec3(0.0); float n = 0.0;
+        for (int i = 0; i < 8; i++) {
+          float a = float(i) * 0.7853982;
+          vec3 q = texture2D(tDiffuse, vUv + vec2(cos(a), sin(a)) * uTexel * 1.5).rgb;
+          if (!bad(q)) { s += q; n += 1.0; }
+        }
+        c = n > 0.0 ? s / n : vec3(0.0);
+      }
+      gl_FragColor = vec4(min(c, vec3(300.0)), 1.0);
     }`,
 };
 
@@ -84,7 +97,8 @@ export function createPost(renderer, scene, camera, quality) {
   const composer = new EffectComposer(renderer, target);
   composer.setPixelRatio(ratio);
   composer.addPass(new RenderPass(scene, camera));
-  composer.addPass(new ShaderPass(SANITIZE));
+  const sanitize = new ShaderPass(SANITIZE);
+  composer.addPass(sanitize);
 
   let ao = null;
   if (quality.ao > 0) {
@@ -112,6 +126,7 @@ export function createPost(renderer, scene, camera, quality) {
     composer.setPixelRatio(r);
     composer.setSize(w, h);
     finish.uniforms.uTexel.value.set(1 / (w * r), 1 / (h * r));
+    sanitize.uniforms.uTexel.value.set(1 / (w * r), 1 / (h * r));
   }
   setSize(size.x, size.y, ratio);
 

@@ -48,15 +48,20 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1d1f21; fon
 .toast.out { opacity: 0; transform: translateX(-12px); }
 .pops { position: absolute; inset: 0; overflow: hidden; }
 .pop { position: absolute; left: 0; top: 0; font-weight: 800; font-size: 15px; color: #ffe19a; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8); opacity: 0; white-space: nowrap; }
-.overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.25); pointer-events: auto; transition: opacity 0.4s; }
+/* окно сдачи — внизу, над прокачками: готовое здание остаётся на виду (камера его облетает) */
+.overlay { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 104px; background: linear-gradient(to top, rgba(0, 0, 0, 0.32), rgba(0, 0, 0, 0) 45%); pointer-events: none; transition: opacity 0.4s; }
+.overlay .dialog { pointer-events: auto; }
 .overlay.hidden { opacity: 0; pointer-events: none; }
-.dialog { border-radius: 18px; padding: 26px 34px; text-align: center; min-width: 300px; }
+.dialog { border-radius: 18px; padding: 18px 30px; text-align: center; min-width: 300px; }
 .dlg-title { font-size: 28px; font-weight: 800; }
 .dlg-name { margin-top: 4px; opacity: 0.8; }
-.dlg-gain { display: flex; gap: 8px; justify-content: center; align-items: center; font-size: 22px; font-weight: 800; color: #f3c66b; margin: 16px 0 20px; }
+.dlg-gain { display: flex; gap: 8px; justify-content: center; align-items: center; font-size: 22px; font-weight: 800; color: #f3c66b; margin: 10px 0 14px; }
 .dlg-gain .ico { width: 26px; height: 26px; }
 .cta { border: 0; border-radius: 12px; padding: 12px 22px; font-weight: 800; font-size: 16px; background: linear-gradient(180deg, #f3c66b, #d9962f); color: #2a1c05 !important; cursor: pointer; }
 .q-ico { font-size: 15px; }
+#sound { font-size: 16px; padding: 0 11px; }
+.watch { position: absolute; left: 50%; top: 16px; transform: translateX(-50%); border-radius: 12px; padding: 7px 14px; font-size: 13.5px; background: rgba(18, 19, 21, 0.58); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.09); white-space: nowrap; transition: opacity 0.3s; }
+.watch.hidden { opacity: 0; }
 @media (max-width: 760px) {
   .top-right { max-width: none; top: auto; bottom: 158px; right: 8px; left: 8px; justify-content: center; flex-wrap: nowrap; gap: 6px; }
   .pill { height: 34px; padding: 0 10px; }
@@ -69,4 +74,6 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #1d1f21; fon
   .up-cost { justify-content: center; }
   .card { left: 8px; top: 8px; width: calc(100vw - 16px); }
   .toasts { top: auto; bottom: 206px; left: 8px; }
+  .watch { top: auto; bottom: 252px; font-size: 12.5px; }
+  .overlay { padding-bottom: 210px; }
 }

@@ -2,7 +2,7 @@
 // Стены — преграды на рёбрах клеток здания (проёмы проходимы), переходы между слоями — готовые лестницы.
 // Сетка выровнена по зданию: линии стен совпадают с границами клеток навигации.
 import * as THREE from 'three';
-import { GRID, STORY, PLINTH, STAIR } from './pieces.js?v=3ae8fc6';
+import { GRID, STORY, PLINTH, STAIR } from './pieces.js?v=83604fc';
 
 const C = 0.5;
 

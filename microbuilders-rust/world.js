@@ -2,8 +2,107 @@
 // окружение для отражений из того же неба (PMREM), дымка цвета горизонта, рельеф с выровненной площадкой,
 // карта покрытия земли (глина, щебень, колеи, трава) и горы на горизонте.
 import * as THREE from 'three';
-import { NOISE } from './glsl.js?v=3ae8fc6';
-import { rng } from './geo.js?v=3ae8fc6';
+import { NOISE } from './glsl.js?v=83604fc';
+import { rng } from './geo.js?v=83604fc';
+
+// ---------- облака и их тень ----------
+// Облака — слой на высоте 1,4 км: небо рисует их с перспективой, а каждый материал сцены (linkSky) получает
+// тень облака на луче к солнцу. Общие значения — одни объекты uniform на все программы.
+export const CLOUD = {
+  time: { value: 0 }, cover: { value: 0.27 }, sun: { value: new THREE.Vector3(0, 1, 0) }, shadow: { value: 1 },
+  fogSun: { value: new THREE.Color(0, 0, 0) },
+};
+const CLOUD_GLSL = /* glsl */ `
+uniform float uCloudTime;
+uniform float uCloudCover;
+uniform vec3 uCloudSun;
+uniform float uCloudShadow;
+float cHash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+float cNoise(vec2 p) {
+  vec2 i = floor(p); vec2 f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(cHash(i), cHash(i + vec2(1.0, 0.0)), u.x), mix(cHash(i + vec2(0.0, 1.0)), cHash(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+vec2 cloudUV(vec2 xz) { return xz * (1.0 / 1100.0) + vec2(uCloudTime * 0.0055, uCloudTime * 0.002); }
+float cloudN(vec2 q, int oct) {
+  float n = 0.0, a = 0.55;
+  for (int i = 0; i < 6; i++) { if (i >= oct) break; n += a * (cNoise(q) * 2.0 - 1.0); q = q * 2.07 + vec2(13.1, 7.3); a *= 0.5; }
+  return n;
+}
+float cloudCover(float n) { return smoothstep(0.62 - uCloudCover, 0.95 - uCloudCover * 0.8, n * 0.5 + 0.5); }
+// доля прямого солнца в точке w: облако на луче к солнцу (мягкая тень — без мелких октав)
+float cloudShadow(vec3 w) {
+  if (uCloudShadow < 0.01 || uCloudSun.y < 0.03) return 1.0;
+  vec2 xz = w.xz + uCloudSun.xz * ((1400.0 - w.y) / uCloudSun.y);
+  // у горизонта луч к облаку уходит за километры, в дымку: тень слабее
+  return 1.0 - 0.8 * cloudCover(cloudN(cloudUV(xz), 4)) * uCloudShadow * smoothstep(0.03, 0.3, uCloudSun.y);
+}
+`;
+
+// Тень облаков меняется на сотнях метров — её хватает считать в вершинах (дешевле, чем в каждом пикселе 4K).
+const LINK_VERTEX = /* glsl */ `
+{
+  vec4 sw = vec4(transformed, 1.0);
+  #ifdef USE_INSTANCING
+  sw = instanceMatrix * sw;
+  #endif
+  vSkyW = (modelMatrix * sw).xyz;
+  vCloud = cloudShadow(vSkyW);
+}
+`;
+// Прямой свет направленных источников — с тенью облаков; у листвы и травы (MB_TRANSLUCENT) ещё и свет насквозь.
+const LIGHTS_BEGIN = (function () {
+  const src = THREE.ShaderChunk.lights_fragment_begin;
+  const k = src.indexOf('#if ( NUM_DIR_LIGHTS > 0 ) && defined( RE_Direct )');
+  const tail = src.slice(k);
+  const j = tail.indexOf('RE_Direct( directLight, geometryPosition');
+  return src.slice(0, k) + tail.slice(0, j) + `directLight.color *= mbCloud;
+		#ifdef MB_TRANSLUCENT
+		reflectedLight.directDiffuse += directLight.color * material.diffuseColor * mbTranslucent( directLight.direction, geometryViewDir, geometryNormal );
+		#endif
+		` + tail.slice(j);
+})();
+// Дымка: к солнцу — светлее и теплее (рассеяние вперёд), как ореол у горизонта на закате.
+const FOG_FRAGMENT = /* glsl */ `
+#ifdef USE_FOG
+  float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
+  float fogSun = pow( max( dot( normalize( vSkyW - cameraPosition ), uCloudSun ), 0.0 ), 6.0 );
+  gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor + uFogSun * fogSun, fogFactor );
+#endif
+`;
+
+// Подключить материал к небу: тень облаков, дымка к солнцу. Свой onBeforeCompile материала сохраняется.
+export function linkSky(material) {
+  if (!material || material.userData.skyLinked) return false;
+  if (!(material.isMeshStandardMaterial || material.isMeshLambertMaterial || material.isMeshPhongMaterial)) return false;
+  material.userData.skyLinked = true;
+  const proto = THREE.Material.prototype;
+  const prev = material.onBeforeCompile !== proto.onBeforeCompile ? material.onBeforeCompile : null;
+  const prevKey = material.customProgramCacheKey !== proto.customProgramCacheKey ? material.customProgramCacheKey : null;
+  const baseKey = prevKey ? prevKey.call(material) : prev ? prev.toString() : '';
+  material.onBeforeCompile = function (shader, renderer) {
+    if (prev) prev.call(this, shader, renderer);
+    Object.assign(shader.uniforms, { uCloudTime: CLOUD.time, uCloudCover: CLOUD.cover, uCloudSun: CLOUD.sun, uCloudShadow: CLOUD.shadow, uFogSun: CLOUD.fogSun });
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vSkyW;\nvarying float vCloud;\n' + CLOUD_GLSL)
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\n' + LINK_VERTEX);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vSkyW;\nvarying float vCloud;\nuniform vec3 uFogSun;\nuniform vec3 uCloudSun;')
+      .replace('#include <lights_fragment_begin>', 'float mbCloud = vCloud;\n' + LIGHTS_BEGIN)
+      .replace('#include <fog_fragment>', FOG_FRAGMENT);
+  };
+  material.customProgramCacheKey = function () { return baseKey + '|sky2'; };
+  material.needsUpdate = true;
+  return true;
+}
+// Все материалы объекта (и потомков).
+export function linkSkyTree(root) {
+  let n = 0;
+  root.traverse(function (o) {
+    if (!o.material) return;
+    (Array.isArray(o.material) ? o.material : [o.material]).forEach(function (m) { if (linkSky(m)) n++; });
+  });
+  return n;
+}
 
 // ---------- небо ----------
 
@@ -53,7 +152,6 @@ varying vec3 vBetaM;
 varying float vSunE;
 uniform float mieDirectionalG;
 uniform float uTime;
-uniform float uCover;
 uniform float uNight;
 uniform vec3 uMoonDir;
 uniform vec3 uSunColor;
@@ -91,30 +189,27 @@ vec3 skyColor(vec3 direction, bool disk) {
   vec3 texColor = (Lin + L0) * 0.04 + vec3(0.0, 0.0003, 0.00075);
   return pow(texColor, vec3(1.0 / (1.2 + (1.2 * vSunfade))));
 }
-float cloudField(vec2 p) {
-  float n = 0.0, a = 0.55;
-  vec2 q = p;
-  for (int i = 0; i < 6; i++) { n += a * (vnoise(q, vec2(1e5)) * 2.0 - 1.0); q = q * 2.07 + vec2(13.1, 7.3); a *= 0.5; }
-  return n;
-}
 void main() {
   vec3 direction = normalize(vWorldPosition - cameraPosition);
   vec3 col = skyColor(direction, true);
-  // облака: плоский слой на высоте, освещённый солнцем; к горизонту тают в дымке
-  if (direction.y > 0.0 && uCover > 0.0) {
-    float t = 1.0 / (direction.y + 0.08);
-    vec2 cp = direction.xz * t * 0.9 + vec2(uTime * 0.006, uTime * 0.0022);
-    float n = cloudField(cp);
-    float cover = smoothstep(0.62 - uCover, 0.95 - uCover * 0.8, n * 0.5 + 0.5);
-    float n2 = cloudField(cp + vSunDirection.xz * 0.12);
+  // облака: слой на высоте 1,4 км с перспективой (вдали мельче), освещённый солнцем: края к солнцу светлее,
+  // плотная середина снизу темнее; к горизонту тают в дымке
+  if (direction.y > 0.0 && uCloudCover > 0.0) {
+    float t = (1400.0 - cameraPosition.y) / max(direction.y, 0.01);
+    vec2 cp = cloudUV(cameraPosition.xz + direction.xz * t);
+    float n = cloudN(cp, 6);
+    float cover = cloudCover(n);
+    float dens = smoothstep(0.62 - uCloudCover, 1.15 - uCloudCover * 0.8, n * 0.5 + 0.5);
+    float n2 = cloudN(cp + vSunDirection.xz * 0.12, 6);
     float lit = clamp(0.55 + (n - n2) * 2.2, 0.0, 1.0);
     vec3 horizon = skyColor(normalize(vec3(direction.x, 0.04, direction.z)), false);
     float lum = dot(horizon, vec3(0.2126, 0.7152, 0.0722));
     vec3 base = mix(horizon, vec3(lum), 0.55) * 1.05;
     float phase = hgPhase(dot(direction, vSunDirection), 0.55) * 3.0;
-    vec3 cloud = base * (0.5 + 0.55 * lit) + uSunColor * (0.08 + 0.25 * lit) * (0.3 + phase) * (1.0 - uNight);
+    // освещённая сторона — в 2–3 раза ярче неба, плотный низ — серый
+    vec3 cloud = base * (0.55 + 0.45 * lit - 0.25 * dens) + uSunColor * (0.3 + 0.85 * lit) * (0.4 + phase) * (1.0 - uNight);
     cloud = mix(cloud, vec3(0.012, 0.015, 0.024), uNight * 0.9);
-    float fade = smoothstep(0.0, 0.18, direction.y);
+    float fade = smoothstep(0.03, 0.3, direction.y) * (1.0 - smoothstep(16000.0, 42000.0, t));
     col = mix(col, cloud, cover * fade * 0.96);
   }
   // ночь: глубокая синь, звёзды и луна
@@ -143,19 +238,19 @@ function skyMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: {
       sunPosition: { value: new THREE.Vector3(0, 1, 0) },
-      rayleigh: { value: 1.9 },
-      turbidity: { value: 2.6 },
+      rayleigh: { value: 2.2 },
+      turbidity: { value: 2.0 },
       mieCoefficient: { value: 0.004 },
       mieDirectionalG: { value: 0.82 },
       uTime: { value: 0 },
-      uCover: { value: 0.2 },
+      uCloudTime: CLOUD.time, uCloudCover: CLOUD.cover, uCloudSun: CLOUD.sun, uCloudShadow: CLOUD.shadow,
       uNight: { value: 0 },
       uMoonDir: { value: new THREE.Vector3(0, -1, 0) },
       uSunColor: { value: new THREE.Color(1, 1, 1) },
       uGain: { value: 1 },
     },
     vertexShader: SKY_VERTEX,
-    fragmentShader: NOISE + SKY_FRAGMENT,
+    fragmentShader: NOISE + CLOUD_GLSL + SKY_FRAGMENT,
     side: THREE.BackSide,
     depthWrite: false,
     fog: false,
@@ -288,25 +383,107 @@ export function splatMap(terrain, layout, size = 512, span = 240) {
       data[k + 3] = Math.round(grass * 255);
     }
   }
-  const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
-  tex.magFilter = THREE.LinearFilter;
-  tex.minFilter = THREE.LinearMipmapLinearFilter;
-  tex.generateMipmaps = true;
-  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
-  tex.needsUpdate = true;
-  function sample(x, z) {
-    const u = x / span + 0.5, v = z / span + 0.5;
-    if (u < 0 || u > 1 || v < 0 || v > 1) return [0, 0, 0, 1];
-    const i = Math.round(u * (size - 1)), j = Math.round(v * (size - 1));
-    const k = (j * size + i) * 4;
-    return [data[k] / 255, data[k + 1] / 255, data[k + 2] / 255, data[k + 3] / 255];
+  // Вторая карта — луг: R сухость травы, G высота травы, B лесная подстилка под кронами (addCanopy),
+  // A сырость (лужи в колеях и низинах площадки). По ней одинаково красятся земля и травинки.
+  const meadow = new Uint8Array(size * size * 4);
+  for (let j = 0; j < size; j++) {
+    for (let i = 0; i < size; i++) {
+      const x = (i / (size - 1) - 0.5) * span, z = (j / (size - 1) - 0.5) * span;
+      const k = (j * size + i) * 4;
+      const grass = data[k + 3] / 255, dirt = data[k] / 255, rut = data[k + 2] / 255;
+      const dryBig = fbm2(n, x / 38 + 40, z / 38 - 12, 4), dryFine = fbm2(n2, x / 7 - 3, z / 7 + 9, 3);
+      const dry = THREE.MathUtils.clamp(0.35 + dryBig * 1.1 + dryFine * 0.35, 0, 1);
+      // у кромки площадки трава вытоптана и низкая, дальше — по пятнам: где по колено, где по щиколотку
+      const edge = THREE.MathUtils.smoothstep(grass, 0.25, 0.95);
+      const patch = THREE.MathUtils.clamp(0.7 + fbm2(n2, x / 13 + 7, z / 13 - 5, 3) * 0.9, 0.25, 1.0);
+      const height = edge * patch;
+      const low = fbm2(n2, x / 3.2 + 21, z / 3.2 + 4, 3);
+      const wet = Math.max(rut * THREE.MathUtils.smoothstep(low, 0.12, 0.3), dirt * THREE.MathUtils.smoothstep(low, 0.2, 0.34) * 0.85);
+      meadow[k] = Math.round(dry * 255);
+      meadow[k + 1] = Math.round(height * 255);
+      meadow[k + 2] = 0;
+      meadow[k + 3] = Math.round(THREE.MathUtils.clamp(wet, 0, 1) * 255);
+    }
   }
-  return { texture: tex, span, sample };
+  function dataTexture(arr) {
+    const tex = new THREE.DataTexture(arr, size, size, THREE.RGBAFormat);
+    tex.magFilter = THREE.LinearFilter;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.generateMipmaps = true;
+    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.needsUpdate = true;
+    return tex;
+  }
+  const tex = dataTexture(data), meadowTex = dataTexture(meadow);
+  function read(arr, x, z, out) {
+    const u = x / span + 0.5, v = z / span + 0.5;
+    if (u < 0 || u > 1 || v < 0 || v > 1) return null;
+    const k = (Math.round(v * (size - 1)) * size + Math.round(u * (size - 1))) * 4;
+    out[0] = arr[k] / 255; out[1] = arr[k + 1] / 255; out[2] = arr[k + 2] / 255; out[3] = arr[k + 3] / 255;
+    return out;
+  }
+  function sample(x, z) { return read(data, x, z, [0, 0, 0, 0]) || [0, 0, 0, 1]; }
+  // вне карты — открытый луг средней сухости
+  function sampleMeadow(x, z) { return read(meadow, x, z, [0, 0, 0, 0]) || [0.45, 1, 0, 0]; }
+  // Подстилка под кронами: круг радиуса r вокруг каждого дерева, мягкий край.
+  function addCanopy(trees) {
+    trees.forEach(function (t) {
+      const r = t[2];
+      const i0 = Math.max(0, Math.floor(((t[0] - r) / span + 0.5) * (size - 1))), i1 = Math.min(size - 1, Math.ceil(((t[0] + r) / span + 0.5) * (size - 1)));
+      const j0 = Math.max(0, Math.floor(((t[1] - r) / span + 0.5) * (size - 1))), j1 = Math.min(size - 1, Math.ceil(((t[1] + r) / span + 0.5) * (size - 1)));
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+        const x = (i / (size - 1) - 0.5) * span, z = (j / (size - 1) - 0.5) * span;
+        const d = Math.hypot(x - t[0], z - t[1]) / r;
+        if (d >= 1) continue;
+        const k = (j * size + i) * 4 + 2;
+        meadow[k] = Math.max(meadow[k], Math.round((1 - THREE.MathUtils.smoothstep(d, 0.45, 1)) * 255));
+      }
+    });
+    meadowTex.needsUpdate = true;
+  }
+  return { texture: tex, meadow: meadowTex, span, sample, sampleMeadow, addCanopy };
+}
+
+// ---------- тропы ----------
+// Карта вытоптанности вокруг стройки (64 × 64 м, 256²): ноги рабочих и колёса тачек её накапливают; земля по ней
+// темнее и глаже, трава ниже. Копится на процессоре, в текстуру уходит не чаще двух раз в секунду.
+export function createWear(span = 64, size = 256) {
+  const data = new Float32Array(size * size);
+  const bytes = new Uint8Array(size * size);
+  const texture = new THREE.DataTexture(bytes, size, size, THREE.RedFormat, THREE.UnsignedByteType);
+  texture.magFilter = THREE.LinearFilter;
+  texture.minFilter = THREE.LinearFilter;
+  texture.generateMipmaps = false;
+  texture.needsUpdate = true;
+  const cell = span / size;
+  let dirty = false, clock = 0;
+  function add(x, z, amount, radius) {
+    const ci = (x / span + 0.5) * size, cj = (z / span + 0.5) * size, rr = radius / cell;
+    const i0 = Math.max(0, Math.floor(ci - rr)), i1 = Math.min(size - 1, Math.ceil(ci + rr));
+    const j0 = Math.max(0, Math.floor(cj - rr)), j1 = Math.min(size - 1, Math.ceil(cj + rr));
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const d = Math.hypot(i + 0.5 - ci, j + 0.5 - cj) / rr;
+      if (d >= 1) continue;
+      const k = j * size + i;
+      data[k] = Math.min(1, data[k] + amount * (1 - d * d));
+    }
+    dirty = true;
+  }
+  function update(dt) {
+    clock += dt;
+    if (!dirty || clock < 0.5) return;
+    clock = 0; dirty = false;
+    for (let k = 0; k < data.length; k++) bytes[k] = data[k] * 255;
+    texture.needsUpdate = true;
+  }
+  function fade(k) { for (let i = 0; i < data.length; i++) data[i] *= k; dirty = true; }
+  return { texture, span, add, update, fade };
 }
 
 const TERRAIN_FRAGMENT_HEAD = /* glsl */ `
 varying vec3 vWPos;
-uniform sampler2D tSplat; uniform float uSplatSpan;
+uniform sampler2D tSplat; uniform sampler2D tMeadow; uniform float uSplatSpan;
+uniform sampler2D tWear; uniform float uWearSpan;
 uniform sampler2D tGrassA, tGrassN, tGrassO, tDirtA, tDirtN, tDirtO, tGravelA, tGravelN, tGravelO;
 uniform float uDetail;
 float tHash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
@@ -328,6 +505,7 @@ vec4 sp = texture2D(tSplat, wxz / uSplatSpan + 0.5);
 vec2 eu = wxz / uSplatSpan + 0.5;
 float inside = step(0.0, eu.x) * step(eu.x, 1.0) * step(0.0, eu.y) * step(eu.y, 1.0);
 sp = mix(vec4(0.0, 0.0, 0.0, 1.0), sp, inside);
+vec4 md = mix(vec4(0.45, 1.0, 0.0, 0.0), texture2D(tMeadow, eu), inside);
 float macro = tNoise(wxz * 0.035) * 0.6 + tNoise(wxz * 0.11) * 0.4;
 float k = smoothstep(0.3, 0.7, tNoise(wxz * 0.07 + 3.0));
 vec4 gA = tri(tGrassA, wxz / 4.0, k), dA = tri(tDirtA, wxz / 4.0, k), vA = tri(tGravelA, wxz / 2.0, k);
@@ -342,12 +520,27 @@ wDirt /= sum; wGravel /= sum; wGrass /= sum;
 vec3 alb = gA.rgb * wGrass + dA.rgb * wDirt + vA.rgb * wGravel;
 // утоптано и колеи: темнее и глаже
 alb *= 1.0 - sp.b * 0.28;
-// крупные пятна: сухая и сочная трава, влажная земля
+// крупные пятна; трава — сочная или сухая по карте луга (тот же оттенок у травинок над ней)
 alb *= 0.86 + 0.28 * macro;
-alb = mix(alb, alb * vec3(1.12, 1.04, 0.8), wGrass * smoothstep(0.55, 0.8, macro) * 0.6);
+alb = mix(alb, alb * mix(vec3(0.84, 1.0, 0.74), vec3(1.42, 1.2, 0.62), md.r), wGrass);
+// под кронами — хвойная подстилка
+vec3 litter = mix(vec3(0.07, 0.048, 0.03), vec3(0.115, 0.078, 0.046), tNoise(wxz * 1.7) * 0.6 + tNoise(wxz * 7.0) * 0.4);
+alb = mix(alb, litter, md.b * 0.88 * (1.0 - wDirt * 0.7));
+// сырая глина темнее, в низинах колей и площадки — лужи (гладкие, в них отражается небо)
+float damp = smoothstep(0.08, 0.6, md.a) * (1.0 - wGrass);
+float puddle = smoothstep(0.66, 0.82, md.a) * clamp(wDirt + sp.b * 0.6, 0.0, 1.0) * (1.0 - wGrass);
+// тропы и колея: утоптанная земля темнее и глаже, на траве — вытертая до земли полоса
+float wear = smoothstep(0.04, 0.75, texture2D(tWear, wxz / uWearSpan + 0.5).r);
+alb = mix(alb, mix(dA.rgb * 0.82, alb, 1.0 - wGrass), wear * 0.85);
+alb *= 1.0 - 0.2 * wear * (1.0 - wGrass);
+alb *= mix(1.0, 0.6, damp);
+alb = mix(alb, alb * 0.32, puddle);
 diffuseColor.rgb = alb;
 float tRough = gO.g * wGrass + dO.g * wDirt + vO.g * wGravel;
 tRough = mix(tRough, tRough * 0.82, sp.b);
+tRough = mix(tRough, 0.42, damp * 0.7);
+tRough = mix(tRough, tRough * 0.8, wear);
+tRough = mix(tRough, 0.03, puddle);
 float tAo = gO.r * wGrass + dO.r * wDirt + vO.r * wGravel;
 `;
 
@@ -356,7 +549,7 @@ const TERRAIN_NORMAL = /* glsl */ `
   vec3 nG = tri(tGrassN, wxz / 4.0, k).xyz * 2.0 - 1.0;
   vec3 nD = tri(tDirtN, wxz / 4.0, k).xyz * 2.0 - 1.0;
   vec3 nV = tri(tGravelN, wxz / 2.0, k).xyz * 2.0 - 1.0;
-  vec3 tn = normalize(nG * wGrass + nD * wDirt + nV * wGravel);
+  vec3 tn = normalize(mix(nG * wGrass + nD * wDirt + nV * wGravel, vec3(0.0, 0.0, 1.0), max(puddle, wear * 0.4)));
   vec3 T = normalize((viewMatrix * vec4(1.0, 0.0, 0.0, 0.0)).xyz);
   T = normalize(T - normal * dot(normal, T));
   vec3 B = cross(T, normal);
@@ -364,16 +557,17 @@ const TERRAIN_NORMAL = /* glsl */ `
 }
 `;
 
-export function terrainMaterial(textures, splat, quality) {
+export function terrainMaterial(textures, splat, quality, wear) {
   const g = textures.get('grass'), d = textures.get('dirt'), v = textures.get('gravel');
   const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, metalness: 0 });
   m.onBeforeCompile = function (shader) {
     Object.assign(shader.uniforms, {
-      tSplat: { value: splat.texture }, uSplatSpan: { value: splat.span },
+      tSplat: { value: splat.texture }, tMeadow: { value: splat.meadow }, uSplatSpan: { value: splat.span },
       tGrassA: { value: g.map }, tGrassN: { value: g.normalMap }, tGrassO: { value: g.ormMap },
       tDirtA: { value: d.map }, tDirtN: { value: d.normalMap }, tDirtO: { value: d.ormMap },
       tGravelA: { value: v.map }, tGravelN: { value: v.normalMap }, tGravelO: { value: v.ormMap },
       uDetail: { value: quality.terrainDetail },
+      tWear: { value: wear.texture }, uWearSpan: { value: wear.span },
     });
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
@@ -385,7 +579,7 @@ export function terrainMaterial(textures, splat, quality) {
       .replace('#include <normal_fragment_maps>', TERRAIN_NORMAL)
       .replace('#include <aomap_fragment>', 'reflectedLight.indirectDiffuse *= tAo; reflectedLight.indirectSpecular *= tAo;');
   };
-  m.customProgramCacheKey = function () { return 'terrain1'; };
+  m.customProgramCacheKey = function () { return 'terrain3'; };
   return m;
 }
 
@@ -470,7 +664,7 @@ export function createSky(renderer, scene, quality) {
   scene.add(moon);
   scene.add(moon.target);
 
-  scene.fog = new THREE.FogExp2(0xb8c4cc, 0.00052);
+  scene.fog = new THREE.FogExp2(0xb8c4cc, 0.00045);
 
   const sunDir = new THREE.Vector3();
   const moonDir = new THREE.Vector3();
@@ -515,10 +709,14 @@ export function createSky(renderer, scene, quality) {
     state.sunColor.setRGB(rgb[0], rgb[1], rgb[2], THREE.LinearSRGBColorSpace);
     u.uSunColor.value.copy(state.sunColor);
     sun.color.copy(state.sunColor);
+    // Источники не прячутся (visible), а гаснут: иначе меняется их число и все шейдеры пересобираются
+    // на рассвете и закате. Ночью карта теней солнца не перерисовывается.
     sun.intensity = SUN * lift;
-    sun.visible = lift > 0.001;
+    sun.shadow.autoUpdate = lift > 0.001;
     moon.intensity = 0.35 * night;
-    moon.visible = night > 0.05;
+    CLOUD.time.value = time;
+    CLOUD.sun.value.copy(sunDir);
+    CLOUD.fogSun.value.copy(state.sunColor).multiplyScalar(0.6 * lift * (1 - night));
 
     const r = 60;
     sun.position.copy(focus).addScaledVector(sunDir, r);

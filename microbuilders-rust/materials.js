@@ -107,6 +107,7 @@ export function createMaterials(textures, quality) {
 
   mats.planks = textured('planks');
   mats.bark = textured('bark', { grime: 0.6 });
+  mats.birch = textured('birch', { grime: 0.3 });
   mats.stone = textured('stone', { normalScale: 1.5 });
   mats.mortar = textured('mortar');
   mats.concrete = textured('concrete');
