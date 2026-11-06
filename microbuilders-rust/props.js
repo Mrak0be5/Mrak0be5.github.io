@@ -2,8 +2,8 @@
 // и окнами, мешки раствора), бытовка из профлиста, биотуалет, козлы, бочка, прожекторы; приставные лестницы
 // рабочих. Всё — из тех же примитивов и материалов, что и детали.
 import * as THREE from 'three';
-import { Batch, plank, roundedBox, boxUV, stick, cylinder, corrugated, stone, quad, rng } from './geo.js?v=83604fc';
-import { TEXTURE_TILES as TILE } from './textures.js?v=83604fc';
+import { Batch, plank, roundedBox, boxUV, stick, cylinder, corrugated, stone, quad, rng } from './geo.js?v=bb4fe98';
+import { TEXTURE_TILES as TILE } from './textures.js?v=bb4fe98';
 
 const W = new THREE.Color(1, 1, 1);
 function M(x, y, z, ry = 0, rx = 0, rz = 0) {

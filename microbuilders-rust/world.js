@@ -2,8 +2,8 @@
 // окружение для отражений из того же неба (PMREM), дымка цвета горизонта, рельеф с выровненной площадкой,
 // карта покрытия земли (глина, щебень, колеи, трава) и горы на горизонте.
 import * as THREE from 'three';
-import { NOISE } from './glsl.js?v=83604fc';
-import { rng } from './geo.js?v=83604fc';
+import { NOISE } from './glsl.js?v=bb4fe98';
+import { rng } from './geo.js?v=bb4fe98';
 
 // ---------- облака и их тень ----------
 // Облака — слой на высоте 1,4 км: небо рисует их с перспективой, а каждый материал сцены (linkSky) получает
@@ -55,7 +55,16 @@ const LIGHTS_BEGIN = (function () {
   const k = src.indexOf('#if ( NUM_DIR_LIGHTS > 0 ) && defined( RE_Direct )');
   const tail = src.slice(k);
   const j = tail.indexOf('RE_Direct( directLight, geometryPosition');
-  return src.slice(0, k) + tail.slice(0, j) + `directLight.color *= mbCloud;
+  return src.slice(0, k) + tail.slice(0, j) + `
+		// дальний каскад (второй теневой свет): за краем ближней карты тень берётся из дальней
+		#if defined( USE_SHADOWMAP ) && ( UNROLLED_LOOP_INDEX == 0 ) && ( NUM_DIR_LIGHT_SHADOWS > 1 )
+		if ( receiveShadow ) {
+			vec3 nsc = vDirectionalShadowCoord[ 0 ].xyz / vDirectionalShadowCoord[ 0 ].w;
+			float farMix = smoothstep( 0.42, 0.49, max( abs( nsc.x - 0.5 ), abs( nsc.y - 0.5 ) ) );
+			if ( farMix > 0.0 ) directLight.color *= mix( 1.0, getShadow( directionalShadowMap[ 1 ], directionalLightShadows[ 1 ].shadowMapSize, directionalLightShadows[ 1 ].shadowBias, directionalLightShadows[ 1 ].shadowRadius, vDirectionalShadowCoord[ 1 ] ), farMix );
+		}
+		#endif
+		directLight.color *= mbCloud;
 		#ifdef MB_TRANSLUCENT
 		reflectedLight.directDiffuse += directLight.color * material.diffuseColor * mbTranslucent( directLight.direction, geometryViewDir, geometryNormal );
 		#endif
@@ -90,7 +99,7 @@ export function linkSky(material) {
       .replace('#include <lights_fragment_begin>', 'float mbCloud = vCloud;\n' + LIGHTS_BEGIN)
       .replace('#include <fog_fragment>', FOG_FRAGMENT);
   };
-  material.customProgramCacheKey = function () { return baseKey + '|sky2'; };
+  material.customProgramCacheKey = function () { return baseKey + '|sky3'; };
   material.needsUpdate = true;
   return true;
 }
@@ -192,6 +201,16 @@ vec3 skyColor(vec3 direction, bool disk) {
 void main() {
   vec3 direction = normalize(vWorldPosition - cameraPosition);
   vec3 col = skyColor(direction, true);
+  // перистые: тонкие вытянутые волокна на 7 км, под кучевыми
+  if (direction.y > 0.0 && uCloudCover > 0.0) {
+    float tc = (7000.0 - cameraPosition.y) / max(direction.y, 0.01);
+    vec2 q = (cameraPosition.xz + direction.xz * tc) * (1.0 / 5200.0) + vec2(uCloudTime * 0.0012, 0.0);
+    q = vec2(q.x * 0.35 + q.y * 0.94, q.y * 0.35 - q.x * 0.94);
+    float ci = cloudN(vec2(q.x * 3.5, q.y * 0.6), 5);
+    float cir = smoothstep(0.12, 0.62, ci * 0.5 + 0.5) * 0.32 * smoothstep(0.03, 0.3, direction.y) * (1.0 - smoothstep(40000.0, 90000.0, tc));
+    float lumC = dot(col, vec3(0.2126, 0.7152, 0.0722));
+    col = mix(col, vec3(lumC) * 1.3 + uSunColor * 0.2 * (0.4 + hgPhase(dot(direction, vSunDirection), 0.6) * 3.0) * (1.0 - uNight), cir * (1.0 - uNight * 0.8));
+  }
   // облака: слой на высоте 1,4 км с перспективой (вдали мельче), освещённый солнцем: края к солнцу светлее,
   // плотная середина снизу темнее; к горизонту тают в дымке
   if (direction.y > 0.0 && uCloudCover > 0.0) {
@@ -591,6 +610,8 @@ export function terrainMesh(terrain, material, size = 1400, seg = 280) {
   g.computeVertexNormals();
   const mesh = new THREE.Mesh(g, material);
   mesh.receiveShadow = true;
+  // холмы отбрасывают тени на низком солнце (в дальнем каскаде)
+  mesh.castShadow = true;
   mesh.name = 'terrain';
   return mesh;
 }
@@ -660,6 +681,24 @@ export function createSky(renderer, scene, quality) {
   scene.add(sun);
   scene.add(sun.target);
 
+  // Дальний каскад: свет без яркости, только карта тени 520 × 520 м вокруг площадки (лес и холмы отбрасывают
+  // тени вдали). Перерисовывается, когда солнце сдвинулось или камера ушла далеко.
+  let farSun = null;
+  const farDir = new THREE.Vector3(9, 9, 9), farFocus = new THREE.Vector3(1e9, 0, 0);
+  if (quality.farShadow) {
+    farSun = new THREE.DirectionalLight(0xffffff, 0);
+    farSun.castShadow = true;
+    farSun.shadow.mapSize.set(quality.farShadow, quality.farShadow);
+    farSun.shadow.bias = -0.0005;
+    farSun.shadow.normalBias = 0.25;
+    const fc = farSun.shadow.camera;
+    fc.left = -260; fc.right = 260; fc.top = 260; fc.bottom = -260; fc.near = 1; fc.far = 1400;
+    fc.updateProjectionMatrix();
+    farSun.shadow.autoUpdate = false;
+    scene.add(farSun);
+    scene.add(farSun.target);
+  }
+
   const moon = new THREE.DirectionalLight(0x9db4ff, 0);
   scene.add(moon);
   scene.add(moon.target);
@@ -723,6 +762,12 @@ export function createSky(renderer, scene, quality) {
     sun.target.position.copy(focus);
     moon.position.copy(focus).addScaledVector(moonDir, r);
     moon.target.position.copy(focus);
+    if (farSun && lift > 0.001 && (farDir.distanceTo(sunDir) > 0.004 || farFocus.distanceTo(focus) > 20)) {
+      farDir.copy(sunDir); farFocus.copy(focus);
+      farSun.position.copy(focus).addScaledVector(sunDir, 600);
+      farSun.target.position.copy(focus);
+      farSun.shadow.needsUpdate = true;
+    }
 
     // дымка: средний цвет неба у горизонта
     const fog = [0, 0, 0];
@@ -760,5 +805,5 @@ export function createSky(renderer, scene, quality) {
     c.updateProjectionMatrix();
   }
 
-  return { sky, sun, moon, material, update, follow, fitShadow, refreshEnv, state, pmrem, sunPosition };
+  return { sky, sun, moon, farSun, material, update, follow, fitShadow, refreshEnv, state, pmrem, sunPosition };
 }

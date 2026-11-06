@@ -2,17 +2,17 @@
 // ?scene=showroom — все детали во всех уровнях; иначе — стройка с рабочими.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { createTextures } from './textures.js?v=83604fc';
-import { createMaterials, ROOMS } from './materials.js?v=83604fc';
-import { createSky, createTerrain, splatMap, terrainMaterial, terrainMesh, mountains, linkSkyTree, createWear } from './world.js?v=83604fc';
-import { createPost } from './post.js?v=83604fc';
-import { createGrass, createForest, createRocks } from './nature.js?v=83604fc';
-import { buildPiece, TIERS } from './pieces.js?v=83604fc';
-import { planBuilding } from './blueprints.js?v=83604fc';
-import { createWorkerFactory } from './people.js?v=83604fc';
-import { createSite } from './site.js?v=83604fc';
-import { createUI } from './ui.js?v=83604fc';
-import { createAudio } from './audio.js?v=83604fc';
+import { createTextures } from './textures.js?v=bb4fe98';
+import { createMaterials, ROOMS } from './materials.js?v=bb4fe98';
+import { createSky, createTerrain, splatMap, terrainMaterial, terrainMesh, mountains, linkSkyTree, createWear } from './world.js?v=bb4fe98';
+import { createPost } from './post.js?v=bb4fe98';
+import { createGrass, createForest, createRocks } from './nature.js?v=bb4fe98';
+import { buildPiece, TIERS } from './pieces.js?v=bb4fe98';
+import { planBuilding } from './blueprints.js?v=bb4fe98';
+import { createWorkerFactory } from './people.js?v=bb4fe98';
+import { createSite } from './site.js?v=bb4fe98';
+import { createUI } from './ui.js?v=bb4fe98';
+import { createAudio } from './audio.js?v=bb4fe98';
 
 const params = new URLSearchParams(location.search);
 const loading = document.getElementById('loading');
@@ -25,19 +25,22 @@ function progress(t, text) {
 }
 
 // ---------- качество ----------
+// «Максимум»: суперсэмплинг ×1,5, тень солнца 8192 и дальний каскад 4096 (лес и холмы отбрасывают тени),
+// объёмный свет (лучи солнца, конусы прожекторов), блик солнца, трава и лес гуще, тела рабочих мельче шагом.
 export const QUALITY = {
-  ultra: { name: 'Ультра', tex: 2048, shadow: 4096, spotShadow: 1024, ao: 1, bloom: true, msaa: 4, ratio: 2, glass: 'physical', terrainDetail: 1, grass: 1, trees: 1, bodyCell: 0.0125 },
+  max: { name: 'Максимум', tex: 2048, shadow: 8192, farShadow: 4096, spotShadow: 2048, ao: 1, aoSamples: 24, bloom: true, msaa: 4, ratio: 2, ss: 1.5, glass: 'physical', terrainDetail: 1, grass: 1.6, trees: 1.35, bodyCell: 0.009, volume: 1, flare: 1 },
+  ultra: { name: 'Ультра', tex: 2048, shadow: 4096, farShadow: 2048, spotShadow: 1024, ao: 1, bloom: true, msaa: 4, ratio: 2, glass: 'physical', terrainDetail: 1, grass: 1, trees: 1, bodyCell: 0.0125 },
   high: { name: 'Высокая', tex: 2048, shadow: 2048, spotShadow: 1024, ao: 0.5, bloom: true, msaa: 4, ratio: 1.5, glass: 'physical', terrainDetail: 1, grass: 0.45, trees: 0.7, bodyCell: 0.015 },
   phone: { name: 'Телефон', tex: 1024, shadow: 1024, spotShadow: 0, ao: 0, bloom: false, msaa: 0, ratio: 1.5, glass: 'simple', terrainDetail: 0, grass: 0.12, trees: 0.45, bodyCell: 0.02 },
 };
-const ORDER = ['ultra', 'high', 'phone'];
+const ORDER = ['max', 'ultra', 'high', 'phone'];
 const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
 let stored = null;
 try { stored = localStorage.getItem('rust.quality'); } catch (e) { stored = null; }
-const qualityKey = QUALITY[params.get('quality')] ? params.get('quality') : QUALITY[stored] ? stored : (coarse ? 'phone' : 'ultra');
+const qualityKey = QUALITY[params.get('quality')] ? params.get('quality') : QUALITY[stored] ? stored : (coarse ? 'phone' : 'max');
 const quality = Object.assign({}, QUALITY[qualityKey]);
 // ?ao=0&bloom=0&grass=0&trees=0&msaa=0 — выключатели для отладки картинки
-['ao', 'bloom', 'grass', 'trees', 'msaa'].forEach(function (k) { if (params.has(k)) quality[k] = k === 'bloom' ? params.get(k) !== '0' : Number(params.get(k)); });
+['ao', 'bloom', 'grass', 'trees', 'msaa', 'volume', 'flare', 'ss'].forEach(function (k) { if (params.has(k)) quality[k] = k === 'bloom' ? params.get(k) !== '0' : Number(params.get(k)); });
 
 // ---------- рендерер ----------
 // Только WebGL2: на занятой видеокарте Chrome иногда не создаёт контекст с первого раза — тогда три сам
@@ -60,7 +63,7 @@ async function createRenderer() {
   }
   if (!gl) throw new Error('видеокарта не дала WebGL2 — перезагрузите страницу');
   renderer = new THREE.WebGLRenderer({ canvas, context: gl, antialias: false, stencil: false });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.ratio));
+  renderer.setPixelRatio(basePR());
   renderer.setSize(window.innerWidth, window.innerHeight, false);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.AgXToneMapping;
@@ -188,7 +191,7 @@ async function boot() {
   }
 
   await progress(0.92, 'Свет…');
-  post = createPost(renderer, scene, camera, quality);
+  post = createPost(renderer, scene, camera, quality, { sky, lights: function () { return site && site.S.yard ? site.S.yard.lights : []; } });
   sky.update(state.hour, 0, controls.target);
   sky.fitShadow(controls.target, showroom ? 34 : 26);
   linkSkyTree(scene);
@@ -367,7 +370,14 @@ function buildShowroom() {
 // Меньше 50 кадров в секунду два окна по 2 с — холст считается в меньшем разрешении (до 0,55 по стороне),
 // больше 85 — возвращается к полному. Картинку дотягивает резкость в последнем проходе.
 const dyn = { scale: 1, t: -4, frames: 0, cool: 0, enabled: !params.has('fixedres') };
-function basePR() { return Math.min(window.devicePixelRatio || 1, quality.ratio); }
+// плотность пикселей холста: на «Максимуме» ×1,5 сверх экрана (суперсэмплинг), но не больше 2 — на экранах
+// с высокой плотностью картинка и так чёткая
+function basePR() {
+  const pr = Math.min(window.devicePixelRatio || 1, quality.ratio);
+  // на больших экранах (от ~4,5 млн пикселей, например 4K) суперсэмплинг не нужен
+  const big = window.innerWidth * window.innerHeight * pr * pr > 4.5e6;
+  return Math.min(pr * (big ? 1 : quality.ss || 1), Math.max(2, pr));
+}
 function applySize() { if (post) post.setSize(window.innerWidth, window.innerHeight, basePR() * dyn.scale); }
 function watchFrame(dt) {
   if (!dyn.enabled || state.manual) return;
@@ -376,8 +386,10 @@ function watchFrame(dt) {
   const fps = dyn.frames / dyn.t;
   dyn.t = 0; dyn.frames = 0;
   let next = dyn.scale;
-  if (fps < 50 && dyn.scale > 0.55) next = Math.max(0.55, dyn.scale * 0.86);
-  else if (fps > 85 && dyn.scale < 1 && dyn.cool <= 0) next = Math.min(1, dyn.scale * 1.1);
+  // «Максимум» держит 60 кадров: суперсэмплинг уступает раньше
+  const low = quality.ss > 1 ? 56 : 50, high = quality.ss > 1 ? 80 : 85;
+  if (fps < low && dyn.scale > 0.55) next = Math.max(0.55, dyn.scale * 0.86);
+  else if (fps > high && dyn.scale < 1 && dyn.cool <= 0) next = Math.min(1, dyn.scale * 1.1);
   if (next !== dyn.scale) { dyn.scale = next; dyn.cool = 6; applySize(); }
 }
 

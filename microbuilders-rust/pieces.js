@@ -4,8 +4,8 @@
 // Каждый этап — набор элементов (жердь, доска, камень, лист, плита) в порядке укладки; элемент кладёт рабочий.
 // Геометрия детали — в её локальной системе (стена: x вдоль, y вверх, z наружу), пачки — по материалам.
 import * as THREE from 'three';
-import { Batch, plank, roundedBox, boxUV, stick, cylinder, torus, corrugated, stone, quad, rng } from './geo.js?v=83604fc';
-import { TEXTURE_TILES as TILE } from './textures.js?v=83604fc';
+import { Batch, plank, roundedBox, boxUV, stick, cylinder, torus, corrugated, stone, quad, rng } from './geo.js?v=bb4fe98';
+import { TEXTURE_TILES as TILE } from './textures.js?v=bb4fe98';
 
 export const GRID = 3;
 export const STORY = 3;

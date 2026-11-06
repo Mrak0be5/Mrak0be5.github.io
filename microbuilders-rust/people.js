@@ -8,9 +8,9 @@
 import * as THREE from 'three';
 import { edgeTable, triTable } from 'three/addons/objects/MarchingCubes.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { rng, plank, stone as stonePrim, corrugated, cylinder } from './geo.js?v=83604fc';
-import { TEXTURE_TILES as TILE } from './textures.js?v=83604fc';
-import { linkSky } from './world.js?v=83604fc';
+import { rng, plank, stone as stonePrim, corrugated, cylinder } from './geo.js?v=bb4fe98';
+import { TEXTURE_TILES as TILE } from './textures.js?v=bb4fe98';
+import { linkSky } from './world.js?v=bb4fe98';
 
 // ---------- скелет ----------
 
@@ -659,7 +659,7 @@ const _q = new THREE.Quaternion(), _e = new THREE.Euler();
 
 export function createWorkerFactory(quality) {
   const bodies = [buildBody({ width: 1.0, belly: 0.1 }, quality.bodyCell), buildBody({ width: 1.08, belly: 0.7 }, quality.bodyCell)];
-  const headCell = Math.max(0.0038, quality.bodyCell * 0.32);
+  const headCell = Math.max(0.003, quality.bodyCell * 0.32);
   const heads = [0, 1, 2].map(function (v) { return buildHead(v, headCell); });
   const eyes = EYE_COLORS.map(eyeGeometry);
   const eyeMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.12, metalness: 0 });
