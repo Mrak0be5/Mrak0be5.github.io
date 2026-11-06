@@ -1,8 +1,8 @@
 // Интерфейс стройки: карточка объекта с прогрессом, монеты, часы, темп, качество, три прокачки, тосты,
 // всплывающие «+монеты» у уложенного элемента, окно «Объект сдан!».
 import * as THREE from 'three';
-import { UPGRADES, upgradeCost } from './site.js?v=bb4fe98';
-import { BUILDINGS } from './blueprints.js?v=bb4fe98';
+import { UPGRADES, upgradeCost } from './site.js?v=9f85320';
+import { BUILDINGS } from './blueprints.js?v=9f85320';
 
 const fmt = function (n) { return Math.round(n).toLocaleString('ru-RU').replace(/,/g, ' '); };
 

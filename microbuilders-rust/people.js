@@ -8,9 +8,11 @@
 import * as THREE from 'three';
 import { edgeTable, triTable } from 'three/addons/objects/MarchingCubes.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { rng, plank, stone as stonePrim, corrugated, cylinder } from './geo.js?v=bb4fe98';
-import { TEXTURE_TILES as TILE } from './textures.js?v=bb4fe98';
-import { linkSky } from './world.js?v=bb4fe98';
+import { rng, plank, stone as stonePrim, corrugated, cylinder } from './geo.js?v=9f85320';
+import { TEXTURE_TILES as TILE } from './textures.js?v=9f85320';
+import { linkSky } from './world.js?v=9f85320';
+import { markDynamic } from './render.js?v=9f85320';
+import { loadHumans, makeHuman } from './humans.js?v=9f85320';
 
 // ---------- скелет ----------
 
@@ -594,10 +596,7 @@ export function wheelbarrow(mats) {
   tg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   tg.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(pos.length / 3 * 2), 2));
   tg.computeVertexNormals();
-  const paint = mats.paint.clone();
-  paint.side = THREE.DoubleSide;
-  paint.metalness = 0.35;
-  paint.roughness = 0.5;
+  const paint = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, side: THREE.DoubleSide, metalness: 0.35, roughness: 0.5 });
   linkSky(paint);
   body.add(new THREE.Mesh(tg, paint));
   const rimMat = new THREE.MeshStandardMaterial({ color: 0x2f5a2c, roughness: 0.45, metalness: 0.4 });
@@ -657,48 +656,74 @@ export function wheelbarrow(mats) {
 
 const _q = new THREE.Quaternion(), _e = new THREE.Euler();
 
+// Рабочие — модели MakeHuman (humans.js), если файлы загрузились; иначе — прежние тела из поля расстояний.
 export function createWorkerFactory(quality) {
-  const bodies = [buildBody({ width: 1.0, belly: 0.1 }, quality.bodyCell), buildBody({ width: 1.08, belly: 0.7 }, quality.bodyCell)];
-  const headCell = Math.max(0.003, quality.bodyCell * 0.32);
-  const heads = [0, 1, 2].map(function (v) { return buildHead(v, headCell); });
-  const eyes = EYE_COLORS.map(eyeGeometry);
-  const eyeMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.12, metalness: 0 });
-  linkSky(eyeMat);
+  let humans = null, legacy = null;
+  const ready = loadHumans(quality.bodyCell >= 0.02).then(function (h) { humans = h; }).catch(function () { humans = null; });
+  function legacyParts() {
+    if (legacy) return legacy;
+    const headCell = Math.max(0.003, quality.bodyCell * 0.32);
+    const eyeMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.12, metalness: 0 });
+    linkSky(eyeMat);
+    legacy = {
+      bodies: [buildBody({ width: 1.0, belly: 0.1 }, quality.bodyCell), buildBody({ width: 1.08, belly: 0.7 }, quality.bodyCell)],
+      heads: [0, 1, 2].map(function (v) { return buildHead(v, headCell); }),
+      eyes: EYE_COLORS.map(eyeGeometry), eyeMat,
+    };
+    return legacy;
+  }
+  const NAMES = BONES.map(function (b) { return b[0]; });
   function create(seed, mats) {
     const look = workerLook(seed);
+    look.iris = EYE_COLORS[look.eyes];
+    // ведущий скелет: суставы — из модели MakeHuman (meta.json) или из таблицы BONES
+    const keys = humans ? Object.keys(humans.variants) : [];
+    const variant = humans ? (look.build === 1 && humans.variants.b ? 'b' : keys[(seed * 7 + 3) % keys.length] === 'b' ? 'a' : keys[(seed * 7 + 3) % keys.length]) : null;
+    const joints = humans && humans.variants[variant] ? humans.variants[variant].meta.joints : null;
+    const at = function (i) { return joints && joints[BONES[i][0]] ? joints[BONES[i][0]] : BONES[i][2]; };
     const root = new THREE.Bone();
     const bones = [root];
     BONES.forEach(function (b, i) {
       if (i === 0) return;
       const bone = new THREE.Bone();
       bone.name = b[0];
-      const p = BONES[b[1]][2];
-      bone.position.set(b[2][0] - p[0], b[2][1] - p[1], b[2][2] - p[2]);
+      const p = at(b[1]), q = at(i);
+      bone.position.set(q[0] - p[0], q[1] - p[1], q[2] - p[2]);
       bones[b[1]].add(bone);
       bones.push(bone);
     });
     root.name = 'root';
-    const bodyMat = workerMaterial(look);
-    linkSky(bodyMat);
-    const mesh = new THREE.SkinnedMesh(bodies[look.build], bodyMat);
-    mesh.add(root);
-    mesh.updateMatrixWorld(true);
-    mesh.bind(new THREE.Skeleton(bones));
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    mesh.frustumCulled = false;
     const group = new THREE.Group();
-    group.add(mesh);
-    const head = new THREE.Mesh(heads[look.face], bodyMat);
-    head.castShadow = true; head.receiveShadow = true;
-    const eye = new THREE.Mesh(eyes[look.eyes], eyeMat);
-    bones[B.head].add(head, eye);
+    markDynamic(group);
+    let mesh = null, human = null;
+    if (humans) {
+      human = makeHuman({ variants: { [variant]: humans.variants[variant] }, map: humans.map }, look, seed, bones, NAMES);
+      group.add(root, human.scene);
+      root.updateMatrixWorld(true);
+    } else {
+      const L = legacyParts();
+      const bodyMat = workerMaterial(look);
+      linkSky(bodyMat);
+      mesh = new THREE.SkinnedMesh(L.bodies[look.build], bodyMat);
+      mesh.add(root);
+      mesh.updateMatrixWorld(true);
+      mesh.bind(new THREE.Skeleton(bones));
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.frustumCulled = false;
+      group.add(mesh);
+      const head = new THREE.Mesh(L.heads[look.face], bodyMat);
+      head.castShadow = true; head.receiveShadow = true;
+      const eye = new THREE.Mesh(L.eyes[look.eyes], L.eyeMat);
+      bones[B.head].add(head, eye);
+    }
     const S = shared();
     const hm = new THREE.MeshStandardMaterial({ color: look.helmet, roughness: 0.32, metalness: 0.0, side: THREE.DoubleSide });
     linkSky(hm);
     const helmet = new THREE.Group();
     helmet.add(new THREE.Mesh(S.helmet, hm), new THREE.Mesh(S.ridge, hm));
-    helmet.position.set(0, 0.104, -0.008);
+    // каска — на макушке модели (верх каски на 2 см выше головы)
+    helmet.position.set(0, human ? human.head + 0.008 - 0.125 - at(B.head)[1] : 0.104, human ? 0.002 : -0.008);
     helmet.rotation.x = -0.08;
     helmet.children.forEach(function (c) { c.castShadow = true; });
     bones[B.head].add(helmet);
@@ -710,8 +735,29 @@ export function createWorkerFactory(quality) {
       t.visible = false;
       bones[B.handR].add(t);
     });
+    if (human) {
+      // каска и инструмент — на костях самой модели: позвоночник MakeHuman гнётся ещё и в spine_01, и при наклоне
+      // голова и кисть уходят от ведущих костей на 2–3 см (лоб проступал сквозь каску). В позе покоя скелеты
+      // совпадают, attach сохраняет положение.
+      const mhBone = function (k) { let found = null; human.scene.traverse(function (o) { if (!found && o.isBone && o.name === humans.map[k]) found = o; }); return found; };
+      const mhHead = mhBone('head'), mhHand = mhBone('handR');
+      group.updateMatrixWorld(true);
+      if (mhHead) mhHead.attach(helmet);
+      if (mhHand) Object.values(tools).forEach(function (t) { mhHand.attach(t); });
+    }
+    // ноша висит на груди: у MakeHuman грудной сустав на 10 см ниже и на 5 см дальше прежнего — сдвиг возвращает
+    // ношу на место относительно тела; руки для ноши на плече — ИК от суставов модели (armIK)
+    const c0 = at(B.chest), c1 = BONES[B.chest][2];
+    const restArm = function (sd) {
+      const v = function (i) { const q = at(B[i + sd]); return new THREE.Vector3(q[0] - c0[0], q[1] - c0[1], q[2] - c0[2]); };
+      const sh = v('upperArm'), el = v('foreArm'), wr = v('hand');
+      const d = el.clone().sub(sh).normalize();
+      const z = new THREE.Vector3(0, 0, 1).addScaledVector(d, -d.z).normalize();
+      return { sh, L1: el.distanceTo(sh), L2: wr.distanceTo(el), d, h: d.clone().cross(z), z };
+    };
     const worker = {
-      group, mesh, bones, look, tools,
+      group, mesh, bones, look, tools, human, hipsRest: at(B.hips)[1],
+      chestShift: new THREE.Vector3(c1[0] - c0[0], c1[1] - c0[1], c1[2] - c0[2]), armRest: { R: restArm('R'), L: restArm('L') },
       carry: null, carryKind: null, carryCount: 0, barrow: null,
       anim: { phase: 0, speed: 0, action: 'idle', t: 0, climb: 0, bend: 0 },
       pose: BONES.map(function () { return new THREE.Quaternion(); }),
@@ -729,13 +775,15 @@ export function createWorkerFactory(quality) {
         if (!kind || kind === 'stones') return;
         const obj = cachedCarry(kind, count, mats);
         if (kind === 'planks' || kind === 'sticks') {
-          obj.position.set(-0.17, 0.14, 0.05);
+          // на правом плече: над плечевым суставом, ближе к шее (жерди — центром нижнего ряда)
+          obj.position.copy(worker.armRest.R.sh).add(SHOULDER_LOAD);
+          if (kind === 'sticks') obj.position.y += 0.03;
           bones[B.chest].add(obj);
         } else if (kind === 'sheets') {
-          obj.position.set(-0.24, 0.0, -0.1);
+          obj.position.set(-0.24, 0.0, -0.1).add(worker.chestShift);
           bones[B.chest].add(obj);
         } else {
-          obj.position.set(0, -0.05, 0.38);
+          obj.position.set(0, -0.05, 0.38).add(worker.chestShift);
           obj.rotation.x = Math.PI / 2 - 0.15;
           bones[B.chest].add(obj);
         }
@@ -743,7 +791,7 @@ export function createWorkerFactory(quality) {
       },
       // катить тачку перед собой (ручки в руках)
       pushBarrow: function () {
-        if (!worker.barrow) worker.barrow = wheelbarrow(mats);
+        if (!worker.barrow) worker.barrow = markDynamic(wheelbarrow(mats));
         const b = worker.barrow;
         if (b.parent !== group) { if (b.parent) b.parent.remove(b); group.add(b); }
         b.position.set(BARROW.wheel[0], BARROW.wheel[1], BARROW.wheel[2]);
@@ -764,13 +812,39 @@ export function createWorkerFactory(quality) {
     };
     return worker;
   }
-  return { create, bodies };
+  return { create, ready };
 }
 
 // ---------- движения ----------
 
 const TARGET = BONES.map(function () { return new THREE.Euler(); });
 function set(i, x, y, z) { TARGET[i].set(x, y, z, 'XYZ'); }
+
+// Ноша на плече (в осях груди): от плечевого сустава; кисть — перед ношей и над ней; куда смотрит локоть.
+const SHOULDER_LOAD = new THREE.Vector3(0.035, 0.045, 0.0);
+const SHOULDER_HAND = new THREE.Vector3(0.0, 0.05, 0.11);
+const SHOULDER_POLE = new THREE.Vector3(-0.4, -0.5, 0.75).normalize();
+const _t = new THREE.Vector3();
+// Двухзвенная ИК руки в осях груди: кисть — в target, локоть — в сторону pole. Плечо поворачивается целиком,
+// предплечье сгибается вокруг оси локтя — поперёк руки (в покое рука отведена на 38°, ось X кости для сгиба
+// не годится: с ней локоть не сгибается больше чем на ~100°).
+const IK = { d: new THREE.Vector3(), p: new THREE.Vector3(), u: new THREE.Vector3(), f: new THREE.Vector3(), z: new THREE.Vector3(), h: new THREE.Vector3(), m0: new THREE.Matrix4(), m1: new THREE.Matrix4(), q: new THREE.Quaternion() };
+function armIK(w, sd, target, pole) {
+  const J = w.armRest[sd], k = IK;
+  const d = k.d.subVectors(target, J.sh);
+  const dist = THREE.MathUtils.clamp(d.length(), Math.abs(J.L1 - J.L2) + 0.01, (J.L1 + J.L2) * 0.999);
+  d.normalize();
+  const ca = (J.L1 * J.L1 + dist * dist - J.L2 * J.L2) / (2 * J.L1 * dist), sa = Math.sqrt(Math.max(0, 1 - ca * ca));
+  const p = k.p.copy(pole).addScaledVector(d, -pole.dot(d)).normalize();
+  const u = k.u.copy(d).multiplyScalar(ca).addScaledVector(p, sa);
+  const f = k.f.copy(d).multiplyScalar(dist).addScaledVector(u, -J.L1).normalize();
+  const cb = THREE.MathUtils.clamp(u.dot(f), -1, 1), beta = Math.acos(cb), sb = Math.sin(beta);
+  const z = sb > 1e-3 ? k.z.copy(f).addScaledVector(u, -cb).divideScalar(sb) : k.z.copy(p);
+  // поворот плеча: базис покоя (рука, ось локтя, вперёд) → новый
+  k.m1.makeBasis(u, k.h.crossVectors(u, z), z).multiply(k.m0.makeBasis(J.d, J.h, J.z).transpose());
+  TARGET[B['upperArm' + sd]].setFromQuaternion(k.q.setFromRotationMatrix(k.m1), 'XYZ');
+  TARGET[B['foreArm' + sd]].setFromQuaternion(k.q.setFromAxisAngle(J.h, beta), 'XYZ');
+}
 
 // a.speed — м/с (идёт), a.action: idle | walk | hammer | lay | screw | climb | pick | push (тачка)
 export function animateWorker(w, dt, time) {
@@ -810,10 +884,9 @@ export function animateWorker(w, dt, time) {
   }
   // ноша
   const ck = w.carryKind;
-  if (ck === 'planks' || ck === 'sticks') {
-    set(B.upperArmR, -2.75, 0.15, 0.25);
-    set(B.foreArmR, -1.9, 0, 0);
-    TARGET[B.chest].y += 0.0;
+  if ((ck === 'planks' || ck === 'sticks') && w.carry) {
+    // правая кисть сверху на ноше перед плечом, локоть вперёд и вниз
+    armIK(w, 'R', _t.copy(w.carry.position).add(SHOULDER_HAND), SHOULDER_POLE);
   } else if (ck === 'sheets') {
     set(B.upperArmR, -0.35, 0, 0.75);
     set(B.foreArmR, -0.9, 0, 0);
@@ -887,10 +960,11 @@ export function animateWorker(w, dt, time) {
     w.pose[i].slerp(_q, k);
     w.bones[i].quaternion.copy(w.pose[i]);
   }
-  w.bones[B.hips].position.y = BONES[B.hips][2][1] + bob;
+  w.bones[B.hips].position.y = (w.hipsRest || BONES[B.hips][2][1]) + bob;
   // инструмент в руке — по действию
   w.tools.hammer.visible = a.action === 'hammer' || a.action === 'work-high';
   w.tools.trowel.visible = a.action === 'lay' && w.carryKind === 'stones';
   w.tools.drill.visible = a.action === 'screw';
   if (w.barrowState === 'push') w.barrow.userData.wheel.rotation.x += (a.speed * dt) / BARROW.wheelR;
+  if (w.human) { w.human.retarget(); w.human.blink(dt); }
 }

@@ -2,36 +2,45 @@
 // ?scene=showroom — все детали во всех уровнях; иначе — стройка с рабочими.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { createTextures } from './textures.js?v=bb4fe98';
-import { createMaterials, ROOMS } from './materials.js?v=bb4fe98';
-import { createSky, createTerrain, splatMap, terrainMaterial, terrainMesh, mountains, linkSkyTree, createWear } from './world.js?v=bb4fe98';
-import { createPost } from './post.js?v=bb4fe98';
-import { createGrass, createForest, createRocks } from './nature.js?v=bb4fe98';
-import { buildPiece, TIERS } from './pieces.js?v=bb4fe98';
-import { planBuilding } from './blueprints.js?v=bb4fe98';
-import { createWorkerFactory } from './people.js?v=bb4fe98';
-import { createSite } from './site.js?v=bb4fe98';
-import { createUI } from './ui.js?v=bb4fe98';
-import { createAudio } from './audio.js?v=bb4fe98';
+import { createTextures } from './textures.js?v=9f85320';
+import { createMaterials, ROOMS } from './materials.js?v=9f85320';
+import { createSky, createTerrain, splatMap, terrainMaterial, terrainMesh, mountains, linkSkyTree, createWear } from './world.js?v=9f85320';
+import { createPost } from './post.js?v=9f85320';
+import { createRender, DYNAMIC } from './render.js?v=9f85320';
+import { createGrass, createForest, createRocks } from './nature.js?v=9f85320';
+import { buildPiece, TIERS } from './pieces.js?v=9f85320';
+import { planBuilding } from './blueprints.js?v=9f85320';
+import { createWorkerFactory } from './people.js?v=9f85320';
+import { createSite } from './site.js?v=9f85320';
+import { createUI } from './ui.js?v=9f85320';
+import { createAudio } from './audio.js?v=9f85320';
+import { createLife } from './life.js?v=9f85320';
 
 const params = new URLSearchParams(location.search);
 const loading = document.getElementById('loading');
 const loadingBar = document.getElementById('loading-bar');
 const loadingText = document.getElementById('loading-text');
+// время этапов загрузки (RustDebug.timings): где тратятся секунды старта
+const TIMINGS = [];
+let lastMark = performance.now();
+function mark(name) { const now = performance.now(); TIMINGS.push([name, Math.round(now - lastMark)]); lastMark = now; }
 function progress(t, text) {
+  mark(text || String(t));
   if (loadingBar) loadingBar.style.width = Math.round(t * 100) + '%';
   if (text && loadingText) loadingText.textContent = text;
   return new Promise(function (r) { requestAnimationFrame(function () { r(); }); });
 }
 
 // ---------- качество ----------
-// «Максимум»: суперсэмплинг ×1,5, тень солнца 8192 и дальний каскад 4096 (лес и холмы отбрасывают тени),
-// объёмный свет (лучи солнца, конусы прожекторов), блик солнца, трава и лес гуще, тела рабочих мельче шагом.
+// «Максимум» и «Ультра» — свой конвейер кадра (render.js): временное сглаживание вместо MSAA и суперсэмплинга,
+// затенение углов по G-буферу. «Максимум»: тень солнца 8192 и дальний каскад 4096 (лес и холмы отбрасывают
+// тени), объёмный свет (лучи солнца, конусы прожекторов), блик солнца, трава и лес гуще, тела рабочих мельче.
+// ss — верхний предел разрешения счёта относительно экрана (динамическое разрешение не поднимает выше).
 export const QUALITY = {
-  max: { name: 'Максимум', tex: 2048, shadow: 8192, farShadow: 4096, spotShadow: 2048, ao: 1, aoSamples: 24, bloom: true, msaa: 4, ratio: 2, ss: 1.5, glass: 'physical', terrainDetail: 1, grass: 1.6, trees: 1.35, bodyCell: 0.009, volume: 1, flare: 1 },
-  ultra: { name: 'Ультра', tex: 2048, shadow: 4096, farShadow: 2048, spotShadow: 1024, ao: 1, bloom: true, msaa: 4, ratio: 2, glass: 'physical', terrainDetail: 1, grass: 1, trees: 1, bodyCell: 0.0125 },
+  max: { name: 'Максимум', tex: 2048, shadow: 8192, farShadow: 4096, spotShadow: 2048, ao: 1, aoSamples: 24, bloom: true, msaa: 0, taa: 1, ratio: 2, ss: 1, glass: 'physical', terrainDetail: 1, grass: 1.6, trees: 1.35, bodyCell: 0.009, volume: 1, flare: 1, clouds: 1, gi: 1, ssr: 1, mblur: 1 },
+  ultra: { name: 'Ультра', tex: 2048, shadow: 4096, farShadow: 2048, spotShadow: 1024, ao: 1, bloom: true, msaa: 0, taa: 1, ratio: 2, ss: 1, glass: 'physical', terrainDetail: 1, grass: 1, trees: 1, bodyCell: 0.0125, clouds: 1, gi: 1, ssr: 1 },
   high: { name: 'Высокая', tex: 2048, shadow: 2048, spotShadow: 1024, ao: 0.5, bloom: true, msaa: 4, ratio: 1.5, glass: 'physical', terrainDetail: 1, grass: 0.45, trees: 0.7, bodyCell: 0.015 },
-  phone: { name: 'Телефон', tex: 1024, shadow: 1024, spotShadow: 0, ao: 0, bloom: false, msaa: 0, ratio: 1.5, glass: 'simple', terrainDetail: 0, grass: 0.12, trees: 0.45, bodyCell: 0.02 },
+  phone: { name: 'Телефон', tex: 1024, shadow: 1024, spotShadow: 0, ao: 0, bloom: false, msaa: 0, ratio: 1.5, glass: 'simple', terrainDetail: 0, grass: 0.12, trees: 0.45, bodyCell: 0.02, farForest: 0 },
 };
 const ORDER = ['max', 'ultra', 'high', 'phone'];
 const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
@@ -40,7 +49,7 @@ try { stored = localStorage.getItem('rust.quality'); } catch (e) { stored = null
 const qualityKey = QUALITY[params.get('quality')] ? params.get('quality') : QUALITY[stored] ? stored : (coarse ? 'phone' : 'max');
 const quality = Object.assign({}, QUALITY[qualityKey]);
 // ?ao=0&bloom=0&grass=0&trees=0&msaa=0 — выключатели для отладки картинки
-['ao', 'bloom', 'grass', 'trees', 'msaa', 'volume', 'flare', 'ss'].forEach(function (k) { if (params.has(k)) quality[k] = k === 'bloom' ? params.get(k) !== '0' : Number(params.get(k)); });
+['ao', 'bloom', 'grass', 'trees', 'msaa', 'volume', 'flare', 'ss', 'taa', 'clouds', 'gi', 'ssr', 'mblur'].forEach(function (k) { if (params.has(k)) quality[k] = k === 'bloom' ? params.get(k) !== '0' : Number(params.get(k)); });
 
 // ---------- рендерер ----------
 // Только WebGL2: на занятой видеокарте Chrome иногда не создаёт контекст с первого раза — тогда три сам
@@ -97,7 +106,7 @@ const state = {
   fixedHour: params.has('hour'),
 };
 
-let sky, post, textures, mats, terrain, view, grass, site, ui, factory, wear;
+let sky, post, textures, mats, terrain, view, grass, site, ui, factory, wear, life;
 const audio = createAudio();
 // браузер даёт звук только после касания или нажатия
 ['pointerdown', 'keydown'].forEach(function (e) { window.addEventListener(e, function () { audio.start(); }, { passive: true }); });
@@ -145,10 +154,10 @@ async function boot() {
   const splat = splatMap(terrain, layout);
   wear = createWear(64, 256);
   scene.add(terrainMesh(terrain, terrainMaterial(textures, splat, quality, wear)));
-  scene.add(mountains(7));
+  scene.add(mountains(7, terrain));
   await progress(0.64, 'Трава и лес…');
   // лес раньше травы: кроны пишут подстилку в карту луга, трава под ними не растёт
-  scene.add(createForest(terrain, splat, mats, quality.trees, quality.msaa).group);
+  scene.add(createForest(terrain, splat, mats, quality.trees, quality.msaa, 11, quality.farForest === 0 ? null : renderer, !!quality.taa).group);
   grass = createGrass(terrain, splat, [0, 0], quality.grass, 3, wear);
   scene.add(grass.group);
   scene.add(createRocks(terrain, splat, mats).group);
@@ -161,6 +170,7 @@ async function boot() {
   } else {
     await progress(0.7, 'Рабочие…');
     factory = createWorkerFactory(quality);
+    await factory.ready;
     await progress(0.8, 'Стройка…');
     site = createSite({ scene, mats, terrain, factory, onEvent, quality, wear });
     restore();
@@ -179,7 +189,7 @@ async function boot() {
         q.delete('quality');
         location.search = q.toString();
       },
-      next: function () { celebrate = null; site.start(site.S.index + 1); ui.setBuilding(site.S.index); frameCamera(true); save(); },
+      next: function () { celebrate = null; site.start(site.S.index + 1); ui.setBuilding(site.S.index); frameCamera(true); focusGI(); save(); },
     });
     ui.setBuilding(site.S.index);
     frameCamera(true);
@@ -190,12 +200,24 @@ async function boot() {
     if (!hinted && !params.has('dev')) setTimeout(function () { ui.toast('Щёлкните по рабочему — камера пойдёт за ним. WASD — сдвиг, колесо — ближе, H — к зданию', 0, 7000); }, 1500);
   }
 
+  // погода и живность: дождь, пыль, дым генераторов, мошкара, птицы
+  life = createLife(scene, quality, { camera, weather: params.get('weather') });
   await progress(0.92, 'Свет…');
-  post = createPost(renderer, scene, camera, quality, { sky, lights: function () { return site && site.S.yard ? site.S.yard.lights : []; } });
+  const postOpts = { sky, lights: function () { return site && site.S.yard ? site.S.yard.lights : []; } };
+  post = quality.taa ? createRender(renderer, scene, camera, quality, postOpts) : createPost(renderer, scene, camera, quality, postOpts);
+  applySize();
+  // отражённый свет: здание, склад и рельеф вокруг стройки (рабочие и тачки — нет)
+  if (post.gi) {
+    post.gi.setGround(terrain, splat);
+    post.gi.bind({ roots: function () { return site && site.S.group ? [site.S.group] : view ? [view.group] : []; }, exclude: DYNAMIC });
+    focusGI();
+  }
   sky.update(state.hour, 0, controls.target);
   sky.fitShadow(controls.target, showroom ? 34 : 26);
   linkSkyTree(scene);
-  renderer.compile(scene, camera);
+  mark('свет и G-буфер');
+  if (post.compile) post.compile(); else renderer.compile(scene, camera);
+  mark('сборка шейдеров');
   await progress(1, '');
   if (loading) loading.classList.add('hidden');
   state.ready = true;
@@ -220,7 +242,16 @@ function save() {
   try { localStorage.setItem('rust.save', JSON.stringify({ index: site.S.index, coins: site.S.coins, upgrades: site.S.upgrades })); } catch (e) { /* без хранилища */ }
 }
 
+// объём отражённого света — над зданием и складом
+function focusGI() {
+  if (!post || !post.gi) return;
+  if (site && site.S.plan) {
+    const f = site.S.plan.footprint, y = site.S.yard.center;
+    post.gi.setCenter(((f.x0 + f.x1) / 2 + y.x) / 2, ((f.z0 + f.z1) / 2 + y.z) / 2);
+  } else post.gi.setCenter(0, 6);
+}
 function onEvent(type, data) {
+  if (post && post.gi && (type === 'place' || type === 'piece' || type === 'complete')) post.gi.markDirty();
   if (type === 'place') audio.play(data.action, data.kind, data.pos, camera);
   if (type === 'piece') audio.piece();
   if (type === 'complete') audio.complete();
@@ -370,15 +401,21 @@ function buildShowroom() {
 // Меньше 50 кадров в секунду два окна по 2 с — холст считается в меньшем разрешении (до 0,55 по стороне),
 // больше 85 — возвращается к полному. Картинку дотягивает резкость в последнем проходе.
 const dyn = { scale: 1, t: -4, frames: 0, cool: 0, enabled: !params.has('fixedres') };
-// плотность пикселей холста: на «Максимуме» ×1,5 сверх экрана (суперсэмплинг), но не больше 2 — на экранах
-// с высокой плотностью картинка и так чёткая
+// плотность пикселей холста — по экрану, не больше quality.ratio. Со своим сглаживанием (TAA) разрешение счёта
+// задаёт render.js; без него ?ss=1.5 включает суперсэмплинг (кроме больших экранов)
 function basePR() {
   const pr = Math.min(window.devicePixelRatio || 1, quality.ratio);
+  // своё сглаживание: холст — по экрану, разрешение счёта задаёт render.js
+  if (quality.taa) return pr;
   // на больших экранах (от ~4,5 млн пикселей, например 4K) суперсэмплинг не нужен
   const big = window.innerWidth * window.innerHeight * pr * pr > 4.5e6;
   return Math.min(pr * (big ? 1 : quality.ss || 1), Math.max(2, pr));
 }
-function applySize() { if (post) post.setSize(window.innerWidth, window.innerHeight, basePR() * dyn.scale); }
+function applySize() {
+  if (!post) return;
+  if (post.taa) post.setSize(window.innerWidth, window.innerHeight, basePR(), dyn.scale * (quality.ss || 1));
+  else post.setSize(window.innerWidth, window.innerHeight, basePR() * dyn.scale);
+}
 function watchFrame(dt) {
   if (!dyn.enabled || state.manual) return;
   dyn.t += dt; dyn.frames++; dyn.cool -= dt;
@@ -387,7 +424,8 @@ function watchFrame(dt) {
   dyn.t = 0; dyn.frames = 0;
   let next = dyn.scale;
   // «Максимум» держит 60 кадров: суперсэмплинг уступает раньше
-  const low = quality.ss > 1 ? 56 : 50, high = quality.ss > 1 ? 80 : 85;
+  const strict = qualityKey === 'max';
+  const low = strict ? 56 : 50, high = strict ? 80 : 85;
   if (fps < low && dyn.scale > 0.55) next = Math.max(0.55, dyn.scale * 0.86);
   else if (fps > high && dyn.scale < 1 && dyn.cool <= 0) next = Math.min(1, dyn.scale * 1.1);
   if (next !== dyn.scale) { dyn.scale = next; dyn.cool = 6; applySize(); }
@@ -409,7 +447,8 @@ function step(dt) {
   sky.update(state.hour, state.time, controls.target);
   if (site && site.S.yard) site.S.yard.night(sky.state.night);
   grass.update(state.time);
-  audio.update(dt, sky.state.night);
+  if (life) life.update(dt, sim, state.time, state.hour, sky, site ? site.S.workers : [], site && site.S.yard ? site.S.yard.lights : []);
+  audio.update(dt, sky.state.night, life ? life.state().rain : 0);
   renderer.toneMappingExposure = sky.state.exposure * exposureGain;
   if (ui) {
     ui.update({ coins: site.S.coins, hour: state.hour, qualityName: QUALITY[state.quality].name, progress: site.progress(), upgrades: site.S.upgrades, workers: site.S.workers.length, sound: audio.enabled() });
@@ -441,6 +480,8 @@ setInterval(save, 5000);
 if (params.get('dev') === '1' || params.has('capture')) {
   window.RustDebug = {
     ready: false,
+    timings: function () { return TIMINGS; },
+    weather: function (mode, instant) { if (life && mode !== undefined) life.force(mode, instant); return life ? life.state() : null; },
     state: function () {
       const p = site ? site.progress() : null;
       return { ready: state.ready, hour: Math.round(state.hour * 100) / 100, quality: state.quality, frames: state.frames, scene: state.scene, tempo: state.tempo, scale: Math.round(dyn.scale * 100) / 100,
@@ -456,9 +497,9 @@ if (params.get('dev') === '1' || params.has('capture')) {
     frame: function (dt) { step(dt); renderer.info.reset(); post.render(state.time); state.frames++; return state.frames; },
     // n шагов без отрисовки (проверка стройки до сдачи)
     simulate: function (n, dt) { for (let i = 0; i < n; i++) step(dt); state.frames += n; return state.frames; },
-    jump: function (f) { site.jump(f); return site.progress(); },
-    next: function () { site.start(site.S.index + 1); ui.setBuilding(site.S.index); frameCamera(true); return site.S.index; },
-    building: function (i) { site.start(i); ui.setBuilding(site.S.index); frameCamera(true); return site.S.index; },
+    jump: function (f) { site.jump(f); if (post.gi) post.gi.markDirty(); return site.progress(); },
+    next: function () { site.start(site.S.index + 1); ui.setBuilding(site.S.index); frameCamera(true); focusGI(); return site.S.index; },
+    building: function (i) { site.start(i); ui.setBuilding(site.S.index); frameCamera(true); focusGI(); return site.S.index; },
     coins: function (n) { site.S.coins = n; return n; },
     buy: function (k) { return site.buy(k); },
     worker: function (i) { const w = site.S.workers[i]; return w ? { pos: w.pos.toArray(), state: w.state, carry: w.carryKind, action: w.anim.action } : null; },

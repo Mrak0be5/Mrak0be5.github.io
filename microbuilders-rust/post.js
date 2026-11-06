@@ -30,7 +30,7 @@ class AOPass extends GTAOPass {
 // NaN и бесконечность в HDR свечение размазало бы в чёрные пятна. Проверка — по битам числа: сравнения с NaN
 // компилятор вправе упростить, и на D3D прежняя проверка срабатывала на целых пикселях травы (чёрные точки).
 // Битый пиксель заменяется средним целых соседей, выбросы ограничены.
-const SANITIZE = {
+export const SANITIZE = {
   uniforms: { tDiffuse: { value: null }, uTexel: { value: new THREE.Vector2(1 / 1920, 1 / 1080) } },
   vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: /* glsl */ `
@@ -54,7 +54,7 @@ const SANITIZE = {
     }`,
 };
 
-const GRADE = {
+export const GRADE = {
   uniforms: { tDiffuse: { value: null }, uTint: { value: new THREE.Vector3(1.02, 1.0, 0.97) }, uSat: { value: 1.04 } },
   vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: /* glsl */ `
@@ -68,7 +68,7 @@ const GRADE = {
     }`,
 };
 
-const FINISH = {
+export const FINISH = {
   uniforms: {
     tDiffuse: { value: null }, uTexel: { value: new THREE.Vector2(1 / 1920, 1 / 1080) }, uTime: { value: 0 },
     uGrain: { value: 0.018 }, uVignette: { value: 0.22 }, uSharpen: { value: 0.18 },
@@ -95,7 +95,7 @@ const FINISH = {
 // затенения углов) 28 шагами в половинном разрешении; солнце — с тенью ближней и дальней карт (лучи сквозь лес
 // и проёмы), ночью — прожекторы с конусом и тенью первой мачты. Затем смешение с кадром и блик солнца в объективе
 // (ореол, слабая звезда, призраки к центру кадра); видимость солнца — по яркости его диска в кадре.
-const SCATTER_FRAG = /* glsl */ `
+export const SCATTER_FRAG = /* glsl */ `
 #include <packing>
 uniform sampler2D tDepth;
 uniform mat4 uProjInv, uViewInv;
@@ -165,50 +165,57 @@ void main() {
   gl_FragColor = vec4(L, 1.0);
 }
 `;
-const COMPOSITE_FRAG = /* glsl */ `
-uniform sampler2D tDiffuse, tVol;
-uniform vec2 uVolTexel, uTexel, uSunUV;
+// Блик солнца: видимость — доля ярких пикселей его диска (за кронами и стенами блик гаснет).
+export const FLARE_GLSL = /* glsl */ `
+uniform vec2 uSunUV;
 uniform float uFlare, uAspect;
 uniform vec3 uSunCol;
-varying vec2 vUv;
-void main() {
-  vec3 c = texture2D(tDiffuse, vUv).rgb;
-  vec3 v = texture2D(tVol, vUv).rgb * 0.36 + (texture2D(tVol, vUv + vec2(uVolTexel.x, 0.0)).rgb + texture2D(tVol, vUv - vec2(uVolTexel.x, 0.0)).rgb
-         + texture2D(tVol, vUv + vec2(0.0, uVolTexel.y)).rgb + texture2D(tVol, vUv - vec2(0.0, uVolTexel.y)).rgb) * 0.16;
-  c += v;
+vec3 lensFlare(sampler2D scene, vec2 uv, vec2 texel) {
+  vec3 fl = vec3(0.0);
   if (uFlare > 0.0) {
-    // видимость солнца — доля ярких пикселей его диска (за кронами и стенами блик гаснет)
     float vis = 0.0;
     for (int i = 0; i < 12; i++) {
       float a = float(i) * 0.5236;
-      vec2 o = vec2(cos(a), sin(a)) * uTexel * (2.0 + float(i - (i / 3) * 3) * 2.0);
-      vec3 s = texture2D(tDiffuse, uSunUV + o).rgb;
+      vec2 o = vec2(cos(a), sin(a)) * texel * (2.0 + float(i - (i / 3) * 3) * 2.0);
+      vec3 s = texture2D(scene, uSunUV + o).rgb;
       vis += step(18.0, max(s.r, max(s.g, s.b)));
     }
     vis /= 12.0;
     if (vis > 0.0) {
       vec2 asp = vec2(uAspect, 1.0);
-      vec2 dv = (vUv - uSunUV) * asp;
+      vec2 dv = (uv - uSunUV) * asp;
       float ds = length(dv);
-      vec3 fl = uSunCol * (0.5 * exp(-ds * ds / 0.003) + 0.06 * exp(-ds / 0.11));
+      fl = uSunCol * (0.5 * exp(-ds * ds / 0.003) + 0.06 * exp(-ds / 0.11));
       fl += uSunCol * 0.045 * pow(abs(cos(atan(dv.y, dv.x) * 3.0)), 48.0) * exp(-ds / 0.16);
       vec2 toC = vec2(0.5) - uSunUV;
       for (int k = 0; k < 4; k++) {
         vec2 gp = uSunUV + toC * (1.1 + float(k) * 0.9);
         float r = 0.022 + 0.018 * float(k);
-        float gd = length((vUv - gp) * asp);
+        float gd = length((uv - gp) * asp);
         vec3 tint = k == 0 ? vec3(0.45, 0.85, 0.55) : k == 1 ? vec3(0.95, 0.62, 0.3) : k == 2 ? vec3(0.45, 0.55, 1.0) : vec3(0.75);
         fl += uSunCol * tint * 0.012 * (1.0 - smoothstep(r * 0.55, r, gd));
       }
-      c += fl * vis * uFlare;
+      fl *= vis * uFlare;
     }
   }
+  return fl;
+}
+`;
+const COMPOSITE_FRAG = FLARE_GLSL + /* glsl */ `
+uniform sampler2D tDiffuse, tVol;
+uniform vec2 uVolTexel, uTexel;
+varying vec2 vUv;
+void main() {
+  vec3 c = texture2D(tDiffuse, vUv).rgb;
+  vec3 v = texture2D(tVol, vUv).rgb * 0.36 + (texture2D(tVol, vUv + vec2(uVolTexel.x, 0.0)).rgb + texture2D(tVol, vUv - vec2(uVolTexel.x, 0.0)).rgb
+         + texture2D(tVol, vUv + vec2(0.0, uVolTexel.y)).rgb + texture2D(tVol, vUv - vec2(0.0, uVolTexel.y)).rgb) * 0.16;
+  c += v + lensFlare(tDiffuse, vUv, uTexel);
   gl_FragColor = vec4(c, 1.0);
 }
 `;
-const QUAD_VERT = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }';
+export const QUAD_VERT = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }';
 
-class VolumePass extends Pass {
+export class VolumePass extends Pass {
   constructor(camera, ao, opts, quality) {
     super();
     this.camera = camera; this.ao = ao; this.opts = opts; this.quality = quality;
@@ -248,10 +255,11 @@ class VolumePass extends Pass {
     this.comp.uniforms.uTexel.value.set(1 / w, 1 / h);
     this.comp.uniforms.uAspect.value = w / h;
   }
-  render(renderer, writeBuffer, readBuffer) {
+  // рассеяние в this.low (половинное разрешение) и параметры блика в this.comp.uniforms
+  prepare(renderer, depthTexture) {
     const u = this.scatter.uniforms, cu = this.comp.uniforms, cam = this.camera, sky = this.opts.sky;
     const sun = sky.sun, st = sky.state;
-    u.tDepth.value = this.ao.depthTexture;
+    u.tDepth.value = depthTexture;
     u.uProjInv.value.copy(cam.projectionMatrixInverse);
     u.uViewInv.value.copy(cam.matrixWorld);
     u.uCam.value.copy(cam.position);
@@ -290,6 +298,10 @@ class VolumePass extends Pass {
     cu.uFlare.value = this.quality.flare && inView && sunOn ? 1 : 0;
     cu.uSunUV.value.set(this.sunNDC.x * 0.5 + 0.5, this.sunNDC.y * 0.5 + 0.5);
     cu.uSunCol.value.set(sun.color.r, sun.color.g, sun.color.b).multiplyScalar(Math.min(1, sun.intensity / 18) * 1.6);
+  }
+  render(renderer, writeBuffer, readBuffer) {
+    this.prepare(renderer, this.ao.depthTexture);
+    const cu = this.comp.uniforms;
     cu.tDiffuse.value = readBuffer.texture;
     cu.tVol.value = this.low.texture;
     renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
@@ -346,7 +358,12 @@ export function createPost(renderer, scene, camera, quality, opts = {}) {
 
   return {
     composer, ao, volume, bloom, grade, finish, setSize,
-    render(time) { finish.uniforms.uTime.value = time; composer.render(); },
+    render(time) {
+      finish.uniforms.uTime.value = time;
+      renderer.shadowMap.autoUpdate = false;
+      renderer.shadowMap.needsUpdate = true;
+      composer.render();
+    },
     dispose() { composer.passes.forEach(function (p) { if (p.dispose) p.dispose(); }); target.dispose(); },
   };
 }

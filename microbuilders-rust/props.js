@@ -2,8 +2,8 @@
 // и окнами, мешки раствора), бытовка из профлиста, биотуалет, козлы, бочка, прожекторы; приставные лестницы
 // рабочих. Всё — из тех же примитивов и материалов, что и детали.
 import * as THREE from 'three';
-import { Batch, plank, roundedBox, boxUV, stick, cylinder, corrugated, stone, quad, rng } from './geo.js?v=bb4fe98';
-import { TEXTURE_TILES as TILE } from './textures.js?v=bb4fe98';
+import { Batch, plank, roundedBox, boxUV, stick, cylinder, corrugated, stone, quad, rng } from './geo.js?v=9f85320';
+import { TEXTURE_TILES as TILE } from './textures.js?v=9f85320';
 
 const W = new THREE.Color(1, 1, 1);
 function M(x, y, z, ry = 0, rx = 0, rz = 0) {
@@ -34,7 +34,7 @@ function lightTower(p, glow, x, z, ax, az) {
   const wp = function (lx, ly, lz) { return new THREE.Vector3(lx, ly, lz).applyMatrix4(base); };
   const yellow = new THREE.Color(0.86, 0.58, 0.07);
   p.put('blacksteel', boxUV(roundedBox(0.9, 0.09, 2.0, 0.01), 1, 1), at(0, 0.4, 0), W);
-  p.put('paint', boxUV(roundedBox(0.86, 0.74, 1.25, 0.05, 4), 1, 1), at(0, 0.82, -0.2), yellow);
+  p.put('paintworn', boxUV(roundedBox(0.86, 0.74, 1.25, 0.05, 4), 1, 1), at(0, 0.82, -0.2), yellow);
   p.put('paint', boxUV(roundedBox(0.7, 0.05, 0.92, 0.02, 3), 1, 1), at(0, 1.21, -0.2), new THREE.Color(0.18, 0.18, 0.18));
   p.put('blacksteel', boxUV(roundedBox(0.5, 0.3, 0.02, 0.005), 1, 1), at(0, 0.86, 0.46), new THREE.Color(0.35, 0.35, 0.36));
   tube(p, 'blacksteel', wp(0, 0.4, 0.95), wp(0, 0.34, 1.75), 0.03, W);
@@ -130,14 +130,14 @@ function mixer(p, x, z, ry) {
   // профиль сверху вниз: грани оболочки смотрят наружу; изнутри — та же оболочка навыворот
   const lathe = new THREE.LatheGeometry(prof.slice().reverse().map(function (q) { return new THREE.Vector2(q[0], q[1]); }), 28);
   const drum = at(0, 1.08, 0.12, 0.7);
-  p.put('paint', prim(lathe), drum, orange);
+  p.put('paintworn', prim(lathe), drum, orange);
   p.put('paint', inward(prim(lathe)), drum.clone().multiply(new THREE.Matrix4().makeScale(0.985, 0.985, 0.985)), orange.clone().multiplyScalar(0.45));
   p.put('blacksteel', prim(new THREE.TorusGeometry(0.385, 0.03, 6, 36).rotateX(Math.PI / 2)), drum.clone().multiply(M(0, -0.04, 0)), W);
 }
 
 // Ведро: конус без крышки, дно, ручка-дуга; внутри раствор.
 function bucket(p, x, z, color, full, ry = 0) {
-  p.put('paint', cylinder(0.13, 0.155, 0.3, 16, false), M(x, 0, z), color);
+  p.put('paintworn', cylinder(0.13, 0.155, 0.3, 16, false), M(x, 0, z), color);
   p.put('paint', inward(cylinder(0.125, 0.15, 0.3, 16, false)), M(x, 0, z), color.clone().multiplyScalar(0.6));
   p.put('paint', prim(new THREE.CircleGeometry(0.13, 16).rotateX(-Math.PI / 2)), M(x, 0.004, z), color);
   if (full) p.put('mortar', prim(new THREE.CircleGeometry(0.145, 16).rotateX(-Math.PI / 2)), M(x, 0.22, z), new THREE.Color(0.75, 0.73, 0.7));
@@ -375,7 +375,8 @@ export function createYard(plan, terrain, mats, seed = 5, opts = {}) {
       sp.shadow.mapSize.set(opts.shadowSize, opts.shadowSize);
       sp.shadow.bias = -0.0004;
       sp.shadow.normalBias = 0.025;
-      sp.shadow.radius = 3;
+      // < 0 — обычное мягкое PCF на 3 текселя (PCSS — только у солнца, world.js)
+      sp.shadow.radius = -3;
       sp.shadow.camera.near = 0.5;
       sp.shadow.camera.far = 45;
       sp.shadow.autoUpdate = false;

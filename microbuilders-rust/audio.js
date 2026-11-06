@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 
 export function createAudio() {
-  let ctx = null, master = null, noise = null, windGain = null, windFilter = null;
+  let ctx = null, master = null, noise = null, windGain = null, windFilter = null, rainGain = null;
   let enabled = true;
   try { enabled = localStorage.getItem('rust.sound') !== '0'; } catch (e) { /* без хранилища — включён */ }
   let birdT = 2, cricketT = 1, budget = 0;
@@ -34,6 +34,14 @@ export function createAudio() {
     windGain = ctx.createGain(); windGain.gain.value = 0;
     src.connect(windFilter); windFilter.connect(windGain); windGain.connect(master);
     src.start();
+    // дождь: тот же шум выше по тону — шуршание капель
+    const rs = ctx.createBufferSource();
+    rs.buffer = noise; rs.loop = true; rs.playbackRate.value = 1.7;
+    const rf = ctx.createBiquadFilter();
+    rf.type = 'highpass'; rf.frequency.value = 1400; rf.Q.value = 0.3;
+    rainGain = ctx.createGain(); rainGain.gain.value = 0;
+    rs.connect(rf); rf.connect(rainGain); rainGain.connect(master);
+    rs.start();
   }
 
   function setEnabled(on) {
@@ -145,15 +153,16 @@ export function createAudio() {
     for (let i = 0; i < 4; i++) tone(t0 + i * 0.045, out, 'sine', f, f, 0.5, 0.004, 0.025);
   }
 
-  function update(dt, night) {
+  function update(dt, night, rain) {
     budget = Math.max(0, budget - dt * 24);
     if (!ctx || !enabled) return;
     const t = ctx.currentTime;
+    rainGain.gain.setTargetAtTime(0.16 * (rain || 0), t, 0.8);
     const gust = 0.5 + 0.3 * Math.sin(t * 0.23) + 0.2 * Math.sin(t * 0.61 + 1.3);
     windGain.gain.setTargetAtTime(0.05 + 0.08 * gust, t, 0.6);
     windFilter.frequency.setTargetAtTime(330 + 420 * gust, t, 0.6);
     birdT -= dt; cricketT -= dt;
-    if (birdT <= 0) { birdT = 1.5 + Math.random() * 5; if (night < 0.3) bird(); }
+    if (birdT <= 0) { birdT = 1.5 + Math.random() * 5; if (night < 0.3 && !(rain > 0.4)) bird(); }
     if (cricketT <= 0) { cricketT = 0.4 + Math.random() * 1.2; if (night > 0.6) crickets(); }
   }
 

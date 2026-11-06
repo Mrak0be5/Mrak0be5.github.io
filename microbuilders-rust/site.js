@@ -3,14 +3,14 @@
 // склад → взять ношу → дойти (по сетке путей, через двери и лестницы) → при надобности приставная лестница →
 // уложить элементы по одному (молоток, мастерок, шуруповёрт) → назад. Монеты — за каждый элемент.
 import * as THREE from 'three';
-import { buildPiece, GRID, STORY, PLINTH, TIERS, TIER_NAMES } from './pieces.js?v=bb4fe98';
-import { BUILDINGS, planBuilding } from './blueprints.js?v=bb4fe98';
-import { createNav } from './nav.js?v=bb4fe98';
-import { createYard, ladder } from './props.js?v=bb4fe98';
-import { animateWorker, BARROW } from './people.js?v=bb4fe98';
-import { ROOMS } from './materials.js?v=bb4fe98';
-import { rng } from './geo.js?v=bb4fe98';
-import { linkSkyTree } from './world.js?v=bb4fe98';
+import { buildPiece, GRID, STORY, PLINTH, TIERS, TIER_NAMES } from './pieces.js?v=9f85320';
+import { BUILDINGS, planBuilding } from './blueprints.js?v=9f85320';
+import { createNav } from './nav.js?v=9f85320';
+import { createYard, ladder } from './props.js?v=9f85320';
+import { animateWorker, BARROW } from './people.js?v=9f85320';
+import { ROOMS } from './materials.js?v=9f85320';
+import { rng } from './geo.js?v=9f85320';
+import { linkSkyTree } from './world.js?v=9f85320';
 
 const VALUE = { sticks: 1, planks: 3, stones: 4, sheets: 9, plates: 14, box: 20 };
 const CAP = { sticks: 6, planks: 6, stones: 6, sheets: 2, plates: 2, box: 1 };

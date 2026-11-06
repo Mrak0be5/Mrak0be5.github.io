@@ -2,8 +2,8 @@
 // Стороны: n — север (z мин.), s — юг (z макс., фасад к камере), w — запад (x мин.), e — восток (x макс.).
 // Список проёмов стороны — по рёбрам слева направо (по росту x для n/s, по росту z для w/e).
 import * as THREE from 'three';
-import { GRID, STORY, PLINTH, THICK } from './pieces.js?v=bb4fe98';
-import { hashStr } from './geo.js?v=bb4fe98';
+import { GRID, STORY, PLINTH, THICK } from './pieces.js?v=9f85320';
+import { hashStr } from './geo.js?v=9f85320';
 
 export const BUILDINGS = [
   {

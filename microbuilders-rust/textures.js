@@ -6,7 +6,7 @@
 // физически верная крутизна), ORM (R — затенение впадин, G — шероховатость, B — металл, как в glTF).
 // tile — сколько метров укладывается в фактуру по u и v: геометрия сама делит на это свои координаты.
 import * as THREE from 'three';
-import { NOISE } from './glsl.js?v=bb4fe98';
+import { NOISE } from './glsl.js?v=9f85320';
 
 const RECIPES = {};
 
@@ -120,10 +120,13 @@ RECIPES.stone = {
     vec3 col = mix(b, a, m);
     col = mix(col, w, sat(fbm(uv * 3.0 + 11.0, vec2(3.0), 5) * 1.5) * 0.45);
     float g1 = gnoise(uv * 520.0, vec2(520.0));
-    col *= 0.9 + 0.2 * smoothstep(-0.6, 0.6, g1);
-    float sp = hash12(floor(uv * 900.0));
-    col = mix(col, col * 0.62, step(0.965, sp));
-    col = mix(col, min(col * 1.35, vec3(1.0)), step(sp, 0.025));
+    col *= 0.92 + 0.14 * smoothstep(-0.6, 0.6, g1);
+    // зерно мягкое: редкие тёмные и светлые крупинки размыты шумом, без «перца»
+    float sp = gnoise(uv * 900.0, vec2(900.0)) * 0.5 + 0.5;
+    col *= 1.0 - 0.12 * smoothstep(0.82, 0.95, sp) + 0.08 * (1.0 - smoothstep(0.05, 0.18, sp));
+    // следы тёски: тонкие параллельные бороздки по слоям
+    float tool = smoothstep(0.55, 0.95, abs(sin((uv.x * 0.6 + uv.y) * 260.0 + 3.0 * gnoise(uv * 20.0, vec2(20.0)))));
+    col *= 1.0 - 0.05 * tool * sat(fbm(uv * 4.0 + 31.0, vec2(4.0), 4) + 0.6);
     float iron = sat(fbm(uv * vec2(5.0, 2.5) + 5.0, vec2(5.0, 2.5), 6) * 1.8 - 0.65);
     col = mix(col, vec3(0.50, 0.38, 0.27), iron * 0.35);
     float dirt = sat(fbm(uv * 9.0 + 2.0, vec2(9.0), 5) * 2.0 - 0.3);
@@ -179,7 +182,11 @@ RECIPES.concrete = {
     float salt = sat(fbm(uv * 4.0 + 17.0, vec2(4.0), 5) * 2.5 - 0.95);
     c = mix(c, vec3(0.70, 0.69, 0.66), salt * 0.4);
     c = mix(c, c * vec3(0.92, 0.88, 0.84), h.z * 0.7);
-    c *= 1.0 - 0.6 * h.y;
+    c *= 1.0 - 0.28 * h.y;
+    // следы опалубки и разводы затирки
+    float board = smoothstep(0.0, 0.02, abs(fract(uv.y * 6.0) - 0.5) - 0.48);
+    c *= 1.0 - 0.04 * board;
+    c *= 0.97 + 0.06 * sat(fbm(vec2(uv.x * 2.0 + uv.y * 7.0, uv.y * 2.0 - uv.x * 5.0) + 41.0, vec2(2.0), 4) + 0.5);
     c *= 1.0 - 0.25 * sat(cav * 2.0);
     return srgb(c);
   }
@@ -368,7 +375,7 @@ RECIPES.slate = {
 
 // Земля стройки: суглинок, комья, камешки, соломинки; влажные пятна темнее.
 RECIPES.dirt = {
-  tile: [4.0, 4.0], cav: 300, ao: 1.0, big: true, glsl: `
+  tile: [4.0, 4.0], cav: 300, ao: 1.0, big: true, hscale: 0.02, glsl: `
   // соломинки и щепки: короткие отрезки в редких ячейках (без контуров ячеек)
   float straw(vec2 uv, float sc) {
     vec2 p = uv * sc; vec2 i = floor(p); vec2 f = fract(p); float m = 0.0;
@@ -414,7 +421,7 @@ RECIPES.dirt = {
 // Щебень: угловатые камни 3–5 см (не в каждой ячейке) и 1,5–2,5 см в промежутках, грани — плато с фаской
 // по расстоянию до границы ячейки; между ними пыль и песок, на камнях — налёт пыли. Породы разного цвета.
 RECIPES.gravel = {
-  tile: [2.0, 2.0], cav: 250, ao: 1.0, big: true, glsl: `
+  tile: [2.0, 2.0], cav: 250, ao: 1.0, big: true, hscale: 0.022, glsl: `
   vec4 H(vec2 uv) {
     // контуры камней искажены шумом, размер в ячейке разный, камни — выпуклые; заняты не все ячейки
     vec2 w = uv + 0.011 * vec2(gnoise(uv * 60.0, vec2(60.0)), gnoise(uv * 60.0 + 7.3, vec2(60.0)));
@@ -451,7 +458,7 @@ RECIPES.gravel = {
 // Трава как фактура земли (под объёмной травой и вдали): три слоя травинок разного наклона, сухие стебли,
 // клевер, просветы земли.
 RECIPES.grass = {
-  tile: [4.0, 4.0], cav: 250, ao: 1.0, big: true, glsl: `
+  tile: [4.0, 4.0], cav: 250, ao: 1.0, big: true, hscale: 0.02, glsl: `
   vec2 blades(vec2 uv, float sc, float seed) {
     vec2 p = uv * sc; vec2 per = vec2(sc); vec2 i = floor(p); vec2 f = fract(p);
     float m = 0.0, kind = 0.0;
@@ -547,6 +554,7 @@ uniform vec2 uTexel;
 uniform vec2 uTileM;
 uniform float uCavK;
 uniform float uAoK;
+uniform float uHScale;
 float cavity(vec2 uv) {
   float h = texture2D(tH, uv).x; float s = 0.0;
   for (int i = 0; i < 8; i++) {
@@ -567,7 +575,8 @@ function passMaterial(recipe, kind, uniforms) {
     float hd = texture2D(tH, vUv - vec2(0.0, uTexel.y)).x, hu = texture2D(tH, vUv + vec2(0.0, uTexel.y)).x;
     vec2 texM = uTileM * uTexel;
     vec3 n = normalize(vec3(-(hr - hl) / (2.0 * texM.x), -(hu - hd) / (2.0 * texM.y), 1.0));
-    gl_FragColor = vec4(n * 0.5 + 0.5, 1.0);
+    // в альфе — высота (0..1 от uHScale метров): рельеф с параллаксом (world.js)
+    gl_FragColor = vec4(n * 0.5 + 0.5, clamp(texture2D(tH, vUv).x / uHScale, 0.0, 1.0));
   }`;
   else main = `void main() {
     vec4 h = texture2D(tH, vUv); float cav = cavity(vUv);
@@ -630,6 +639,7 @@ export function createTextures(renderer, { size = 2048 } = {}) {
       uTileM: { value: new THREE.Vector2(recipe.tile[0], recipe.tile[1]) },
       uCavK: { value: recipe.cav },
       uAoK: { value: recipe.ao },
+      uHScale: { value: recipe.hscale || 0.02 },
     };
     const mats = ['height', 'albedo', 'normal', 'orm'].map(function (kind) { return passMaterial(recipe, kind, uniforms); });
     const prev = renderer.getRenderTarget();

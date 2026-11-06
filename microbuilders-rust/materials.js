@@ -23,6 +23,7 @@ varying vec3 vWPos;
 varying vec3 vWNrm;
 uniform float uGrime;
 uniform float uGround;
+uniform float uWear;
 // Помещения под готовой крышей: рассеянный свет неба туда почти не доходит.
 uniform vec4 uRoomXZ[6];
 uniform vec3 uRoomY[6];
@@ -54,6 +55,22 @@ float mbGrime = 0.0;
   mbGrime = clamp(ground * 0.85 + streak * 0.3, 0.0, 1.0) * uGrime;
   diffuseColor.rgb *= mix(vec3(1.0), vec3(0.6, 0.53, 0.45), mbGrime);
 }
+// Износ краски (бетономешалка, мачты, тачки, трубы): сколы до тёмного металла и брызги раствора с грязью
+// снизу. Шум — в плоскости, ближе всего к грани (без растяжений на боках).
+float mbChip = 0.0, mbCrust = 0.0;
+if (uWear > 0.0) {
+  vec3 an = abs(vWNrm);
+  vec2 wq = an.y > max(an.x, an.z) ? vWPos.xz : (an.x > an.z ? vWPos.zy : vWPos.xy);
+  float cn = gNoise(wq * 31.0) * 0.55 + gNoise(wq * 97.0) * 0.3 + gNoise(wq * 7.0) * 0.15;
+  // сколы — мелкие и редкие, вытянутые царапины по крупному шуму
+  float scr = gNoise(vec2(dot(wq, vec2(0.8, 0.6)) * 140.0, dot(wq, vec2(-0.6, 0.8)) * 9.0));
+  mbChip = max(smoothstep(0.76, 0.79, cn), smoothstep(0.86, 0.9, scr) * 0.7) * uWear;
+  float sn = gNoise(wq * 13.0 + 5.0) * 0.6 + gNoise(wq * 53.0 + 2.0) * 0.4;
+  float low = 1.0 - smoothstep(0.05, 1.1, vWPos.y - uGround);
+  mbCrust = smoothstep(0.6, 0.67, sn) * low * uWear;
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.17, 0.16, 0.15), mbChip);
+  diffuseColor.rgb = mix(diffuseColor.rgb, mix(vec3(0.48, 0.46, 0.42), vec3(0.3, 0.25, 0.19), step(0.5, gNoise(wq * 4.0 + 9.0))), mbCrust);
+}
 `;
 
 // Общие для всех материалов коробки помещений: x0, z0, x1, z1 и (y низа, y верха, сила 0..1).
@@ -62,12 +79,14 @@ export const ROOMS = {
   y: Array.from({ length: 6 }, function () { return new THREE.Vector3(0, 0, 0); }),
 };
 
-function withGrime(material, strength) {
+function withGrime(material, strength, wear) {
   material.userData.grime = { value: strength };
   material.userData.ground = { value: 0.0 };
+  material.userData.wear = { value: wear || 0 };
   material.onBeforeCompile = function (shader) {
     shader.uniforms.uGrime = material.userData.grime;
     shader.uniforms.uGround = material.userData.ground;
+    shader.uniforms.uWear = material.userData.wear;
     shader.uniforms.uRoomXZ = { value: ROOMS.xz };
     shader.uniforms.uRoomY = { value: ROOMS.y };
     shader.vertexShader = shader.vertexShader
@@ -76,10 +95,11 @@ function withGrime(material, strength) {
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', '#include <common>\n' + GRIME_FRAGMENT_HEAD)
       .replace('#include <map_fragment>', '#include <map_fragment>\n' + GRIME_FRAGMENT)
-      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 1.0, mbGrime * 0.35);')
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 1.0, mbGrime * 0.35);\nroughnessFactor = mix(mix(roughnessFactor, 0.42, mbChip), 0.95, mbCrust);')
+      .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nmetalnessFactor = mix(metalnessFactor, 0.75, mbChip) * (1.0 - mbCrust);')
       .replace('#include <aomap_fragment>', '#include <aomap_fragment>\n{ float rs = 1.0 - 0.82 * roomShade(); reflectedLight.indirectDiffuse *= rs; reflectedLight.indirectSpecular *= rs; }');
   };
-  material.customProgramCacheKey = function () { return 'grime2'; };
+  material.customProgramCacheKey = function () { return 'grime3'; };
   return material;
 }
 
@@ -120,10 +140,12 @@ export function createMaterials(textures, quality) {
   mats.rope = textured('rope', { grime: 0.3 });
   // гвозди, болты, петли, сварка — без фактур
   mats.steel = withGrime(new THREE.MeshStandardMaterial({ color: 0x55585c, metalness: 0.9, roughness: 0.42, vertexColors: true }), 0.4);
-  mats.blacksteel = withGrime(new THREE.MeshStandardMaterial({ color: 0x232323, metalness: 0.75, roughness: 0.55, vertexColors: true }), 0.4);
-  mats.tube = withGrime(new THREE.MeshStandardMaterial({ color: 0x5d6268, metalness: 0.55, roughness: 0.5, vertexColors: true }), 0.6);
+  mats.blacksteel = withGrime(new THREE.MeshStandardMaterial({ color: 0x232323, metalness: 0.75, roughness: 0.55, vertexColors: true }), 0.4, 0.5);
+  mats.tube = withGrime(new THREE.MeshStandardMaterial({ color: 0x5d6268, metalness: 0.55, roughness: 0.5, vertexColors: true }), 0.6, 0.7);
   mats.string = new THREE.MeshStandardMaterial({ color: 0xe8e2d2, roughness: 0.8, vertexColors: true });
   mats.paint = withGrime(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.55, metalness: 0.0, vertexColors: true }), 0.5);
+  // крашеный металл техники: сколы и брызги раствора
+  mats.paintworn = withGrime(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5, metalness: 0.0, vertexColors: true }), 0.5, 1);
   mats.rubber = new THREE.MeshStandardMaterial({ color: 0x1b1b1b, roughness: 0.85, metalness: 0.0, vertexColors: true });
 
   if (quality.glass === 'physical') {
@@ -137,6 +159,8 @@ export function createMaterials(textures, quality) {
     });
   }
 
+  // стекло под дождём не темнеет (WET_FRAGMENT, world.js)
+  mats.glass.defines = Object.assign(mats.glass.defines || {}, { MB_DRY: '' });
   mats.tile = function (name) { return textures.get(name).tile; };
   return mats;
 }

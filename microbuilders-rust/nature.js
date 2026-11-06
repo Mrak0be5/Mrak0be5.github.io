@@ -2,28 +2,29 @@
 // ели из ветвей-карточек (хвоя рисуется кодом на canvas) и валуны. Трава и хвоя не попадают в затенение углов
 // (userData.noAO): у карточек нет объёма, GTAO затемнил бы их прямоугольниками.
 import * as THREE from 'three';
-import { rng, stone, cylinder, Batch } from './geo.js?v=bb4fe98';
-import { TEXTURE_TILES as TILE } from './textures.js?v=bb4fe98';
+import { rng, stone, cylinder, Batch } from './geo.js?v=9f85320';
+import { TEXTURE_TILES as TILE } from './textures.js?v=9f85320';
 
 // ---------- трава ----------
 
-// Кустик из 9 травинок; flowers — у трёх травинок на макушке цветок (жёлтый, белый или лиловый).
-function clumpGeometry(r, flowers) {
+// Кустик из травинок (вблизи 9 по 4 сегмента); flowers — у трёх травинок на макушке цветок (жёлтый, белый
+// или лиловый). Вдали травинок и сегментов меньше, а сами они шире (widen), чтобы кустик не редел.
+// Травинка односторонняя: изнанку рисует DoubleSide, нормаль там отражается относительно вертикали (createGrass).
+function clumpGeometry(r, flowers, blades = 9, segs = 4, widen = 1) {
   const pos = [], nrm = [], col = [], tt = [], idx = [];
-  const blades = 9;
   for (let b = 0; b < blades; b++) {
     const a = r() * Math.PI * 2, d = r() * 0.09;
     const bx = Math.cos(a) * d, bz = Math.sin(a) * d;
     const h = 0.22 + r() * 0.38;
-    const w = 0.012 + r() * 0.01;
+    const w = (0.012 + r() * 0.01) * widen;
     const face = r() * Math.PI * 2;
     const lean = 0.08 + r() * 0.22;
     const lx = Math.cos(a) * lean, lz = Math.sin(a) * lean;
     const dry = r() < 0.07;
     const base = pos.length / 3;
     const fx = Math.cos(face), fz = Math.sin(face);
-    for (let s = 0; s <= 4; s++) {
-      const t = s / 4;
+    for (let s = 0; s <= segs; s++) {
+      const t = s / segs;
       const ww = w * (1 - t * 0.92);
       const cx = bx + lx * t * t, cz = bz + lz * t * t, cy = h * t * (1 - 0.15 * t * lean * 3);
       for (let k = -1; k <= 1; k += 2) {
@@ -41,20 +42,9 @@ function clumpGeometry(r, flowers) {
         tt.push(t);
       }
     }
-    // тыльная сторона — свои вершины с отражённой нормалью (иначе со спины травинка чёрная)
-    const back = pos.length / 3;
-    const nb = (pos.length - base * 3) / 3;
-    for (let k = 0; k < nb; k++) {
-      const q = (base + k) * 3;
-      pos.push(pos[q], pos[q + 1], pos[q + 2]);
-      nrm.push(-nrm[q], nrm[q + 1], -nrm[q + 2]);
-      col.push(col[q] * 0.9, col[q + 1] * 0.9, col[q + 2] * 0.9);
-      tt.push(tt[base + k]);
-    }
-    for (let s = 0; s < 4; s++) {
-      const a0 = base + s * 2, b0 = back + s * 2;
+    for (let s = 0; s < segs; s++) {
+      const a0 = base + s * 2;
       idx.push(a0, a0 + 1, a0 + 2, a0 + 1, a0 + 3, a0 + 2);
-      idx.push(b0, b0 + 2, b0 + 1, b0 + 1, b0 + 2, b0 + 3);
     }
     if (flowers && b < 3) {
       // цветок: звёздочка из пяти лепестков на макушке, смотрит вверх
@@ -99,8 +89,9 @@ export function createGrass(terrain, splat, center, density, seed = 3, wear = nu
   const r = rng(seed);
   const time = { value: 0 };
   const wind = { value: new THREE.Vector2(0.8, 0.45) };
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0 });
-  mat.defines = { MB_TRANSLUCENT: '' };
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0, side: THREE.DoubleSide });
+  // мокрая трава темнеет, но не блестит плёнкой (как ткань): у травинок на просвет иначе серебрится вся поляна
+  mat.defines = { MB_TRANSLUCENT: '', MB_CLOTH: '' };
   mat.onBeforeCompile = function (shader) {
     shader.uniforms.uTime = time;
     shader.uniforms.uWind = wind;
@@ -126,10 +117,20 @@ export function createGrass(terrain, splat, center, density, seed = 3, wear = nu
         mvPosition.y -= tip * 0.025 * (0.6 + gust);
         mvPosition = modelViewMatrix * mvPosition;
         gl_Position = projectionMatrix * mvPosition;`);
-    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\n' + TRANSLUCENT_FRAG);
+    // изнанка: three.js перевернул нормаль целиком, а травинке нужна та же «вверх» с обратной стороны
+    // (отражение относительно вертикали), иначе со спины она чёрная; изнанка чуть темнее
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\n' + TRANSLUCENT_FRAG)
+      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= gl_FrontFacing ? 1.0 : 0.9;')
+      .replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>
+        if (!gl_FrontFacing) { vec3 upV = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz); normal -= 2.0 * dot(normal, upV) * upV; }`);
   };
-  mat.customProgramCacheKey = function () { return 'grass3'; };
-  const geos = [clumpGeometry(rng(seed + 1)), clumpGeometry(rng(seed + 2)), clumpGeometry(rng(seed + 3)), clumpGeometry(rng(seed + 4), true)];
+  mat.customProgramCacheKey = function () { return 'grass4'; };
+  // кольца: вблизи 9 травинок по 4 сегмента, дальше по 2 сегмента, у края 6 травинок пошире
+  const LOD = [[9, 4, 1], [9, 2, 1], [6, 2, 1.25]];
+  const geos = LOD.map(function (l, ri) {
+    const sd = seed + ri * 10;
+    return [rng(sd + 1), rng(sd + 2), rng(sd + 3), rng(sd + 4)].map(function (rr, gi) { return clumpGeometry(rr, gi === 3, l[0], l[1], l[2]); });
+  });
   // плотность по радиусу — доля от ближней: до RF — вся, дальше (RF/r)^1.7, у края кольца — к нулю
   const R0 = 6, RF = 16, R1 = 96;
   const dens = function (rr) { return (rr < RF ? 1 : Math.pow(RF / rr, 1.7)) * (1 - THREE.MathUtils.smoothstep(rr, R1 - 18, R1)); };
@@ -175,7 +176,7 @@ export function createGrass(terrain, splat, center, density, seed = 3, wear = nu
       }
       lists.forEach(function (list, gi) {
         if (!list.length) return;
-        const mesh = new THREE.InstancedMesh(geos[gi], mat, list.length);
+        const mesh = new THREE.InstancedMesh(geos[ri][gi], mat, list.length);
         list.forEach(function (it, i) { mesh.setMatrixAt(i, it[0]); mesh.setColorAt(i, it[1]); });
         mesh.instanceMatrix.needsUpdate = true;
         mesh.instanceColor.needsUpdate = true;
@@ -456,7 +457,137 @@ function spruceGeometry(r, height) {
   return { cards: g, trunk };
 }
 
-export function createForest(terrain, splat, mats, quality, msaa, seed = 11) {
+// ---------- дальний лес: снимки деревьев ----------
+// Каждая ель и берёза снимается сбоку с четырёх сторон в атлас (цвет с прозрачностью и нормаль кроны).
+// Деревья дальше ближнего пояса — карточки, повёрнутые к камере вокруг вертикали (к солнцу — в карте тени);
+// у каждого экземпляра свой вид из четырёх, свет — по нормали из атласа, как у кроны «шаром».
+const BAKE_VERT = /* glsl */ `
+varying vec2 vUv; varying vec3 vCol; varying vec3 vN;
+void main() {
+  vUv = uv; vCol = color; vN = normalize(normalMatrix * normal);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}`;
+const BAKE_FRAG = /* glsl */ `
+uniform sampler2D map; uniform float uMode, uTex, uAlphaTest; uniform vec3 uColor;
+varying vec2 vUv; varying vec3 vCol; varying vec3 vN;
+void main() {
+  vec4 t = uTex > 0.5 ? texture2D(map, vUv) : vec4(1.0);
+  if (t.a < uAlphaTest) discard;
+  vec3 n = normalize(vN) * (gl_FrontFacing ? 1.0 : -1.0);
+  gl_FragColor = uMode < 0.5 ? vec4(t.rgb * vCol * uColor, 1.0) : vec4(n * 0.5 + 0.5, 1.0);
+}`;
+const VIEWS = 4, CW = 128, CH = 256;
+function bakeImpostors(renderer, items) {
+  const W = VIEWS * CW, H = items.length * CH;
+  const opts = { type: THREE.UnsignedByteType, depthBuffer: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: true };
+  const colorRT = new THREE.WebGLRenderTarget(W, H, opts), normalRT = new THREE.WebGLRenderTarget(W, H, opts);
+  colorRT.texture.colorSpace = THREE.NoColorSpace;
+  const scene = new THREE.Scene();
+  const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
+  const mk = function (map, color, alphaTest) {
+    return new THREE.ShaderMaterial({
+      uniforms: { map: { value: map }, uMode: { value: 0 }, uTex: { value: map ? 1 : 0 }, uColor: { value: new THREE.Color(color) }, uAlphaTest: { value: alphaTest } },
+      vertexShader: BAKE_VERT, fragmentShader: BAKE_FRAG, vertexColors: true, side: THREE.DoubleSide,
+    });
+  };
+  const prevTarget = renderer.getRenderTarget(), prevClear = renderer.getClearColor(new THREE.Color()), prevAlpha = renderer.getClearAlpha();
+  const prevAuto = renderer.autoClear;
+  renderer.autoClear = false;
+  const sizes = [];
+  [[colorRT, 0], [normalRT, 1]].forEach(function (pass) {
+    const rt = pass[0];
+    renderer.setRenderTarget(rt);
+    renderer.setClearColor(pass[1] ? 0x8080ff : 0x000000, 0);
+    renderer.clear();
+    items.forEach(function (it, row) {
+      const mats = [mk(it.map, it.color, it.alphaTest), mk(null, it.trunkColor, 0)];
+      mats.forEach(function (m) { m.uniforms.uMode.value = pass[1]; });
+      const crown = new THREE.Mesh(it.cards, mats[0]), trunk = new THREE.Mesh(it.trunk, mats[1]);
+      scene.add(crown, trunk);
+      const box = new THREE.Box3().setFromObject(crown).union(new THREE.Box3().setFromObject(trunk));
+      const half = Math.max(Math.abs(box.min.x), Math.abs(box.max.x), Math.abs(box.min.z), Math.abs(box.max.z)) * 1.02;
+      const top = box.max.y * 1.01;
+      sizes[row] = [half * 2, top];
+      for (let v = 0; v < VIEWS; v++) {
+        const a = (v / VIEWS) * Math.PI * 2;
+        cam.left = -half; cam.right = half; cam.top = top; cam.bottom = 0;
+        cam.position.set(Math.sin(a) * 40, 0, Math.cos(a) * 40);
+        cam.lookAt(0, 0, 0);
+        cam.updateProjectionMatrix();
+        rt.viewport.set(v * CW, row * CH, CW, CH);
+        rt.scissor.set(v * CW, row * CH, CW, CH);
+        rt.scissorTest = true;
+        renderer.setRenderTarget(rt);
+        renderer.clearDepth();
+        renderer.render(scene, cam);
+      }
+      scene.remove(crown, trunk);
+      mats.forEach(function (m) { m.dispose(); });
+    });
+    rt.viewport.set(0, 0, W, H); rt.scissor.set(0, 0, W, H); rt.scissorTest = false;
+  });
+  renderer.setRenderTarget(prevTarget);
+  renderer.setClearColor(prevClear, prevAlpha);
+  renderer.autoClear = prevAuto;
+  return { color: colorRT.texture, normal: normalRT.texture, sizes, rows: items.length };
+}
+
+const IMP_VERT_HEAD = /* glsl */ `
+attribute vec2 aCell;
+attribute vec2 aSize;
+uniform vec2 uCellSize;
+varying vec3 vImpR;
+varying vec3 vImpF;
+`;
+// карточка: вокруг вертикали к камере (в карте тени камера — у солнца); матрица экземпляра — без поворота
+const IMP_VERT = /* glsl */ `
+vec3 impO = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+vec3 impF = cameraPosition - impO; impF.y = 0.0;
+impF = length(impF) > 1e-3 ? normalize(impF) : vec3(0.0, 0.0, 1.0);
+vec3 impR = vec3(impF.z, 0.0, -impF.x);
+vImpR = impR; vImpF = impF;
+transformed = impR * (position.x * aSize.x) + vec3(0.0, position.y * aSize.y, 0.0);
+`;
+const IMP_FRAG_HEAD = /* glsl */ `
+uniform sampler2D tImpN;
+varying vec3 vImpR;
+varying vec3 vImpF;
+vec3 mbTranslucent(vec3 L, vec3 V, vec3 N) { return vec3(pow(max(dot(-V, L), 0.0), 4.0) * 0.7 * RECIPROCAL_PI); }
+`;
+const IMP_NORMAL = /* glsl */ `
+{
+  vec3 tn = texture2D(tImpN, vMapUv).xyz * 2.0 - 1.0;
+  vec3 wn = normalize(vImpR * tn.x + vec3(0.0, 1.0, 0.0) * tn.y + vImpF * tn.z);
+  normal = normalize((viewMatrix * vec4(wn, 0.0)).xyz);
+}
+`;
+function impostorMaterials(atlas, taa) {
+  const cell = new THREE.Vector2(1 / VIEWS, 1 / atlas.rows);
+  const patchV = function (shader) {
+    shader.uniforms.uCellSize = { value: cell };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\n' + IMP_VERT_HEAD)
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + IMP_VERT)
+      .replace('#include <uv_vertex>', '#include <uv_vertex>\n#ifdef USE_MAP\nvMapUv = (aCell + uv) * uCellSize;\n#endif');
+  };
+  const m = new THREE.MeshStandardMaterial({ map: atlas.color, roughness: 0.9, metalness: 0, alphaTest: 0.36, side: THREE.DoubleSide });
+  // затенение углов по перекрытым карточкам дало бы чёрный лес — у снимков его нет
+  m.defines = { MB_TRANSLUCENT: '', MB_NOAO: '' };
+  m.onBeforeCompile = function (shader) {
+    patchV(shader);
+    shader.uniforms.tImpN = { value: atlas.normal };
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\n' + IMP_FRAG_HEAD)
+      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + IMP_NORMAL);
+  };
+  m.customProgramCacheKey = function () { return 'impostor1'; };
+  const d = new THREE.MeshDepthMaterial({ map: atlas.color, alphaTest: 0.45, depthPacking: THREE.RGBADepthPacking, side: THREE.DoubleSide });
+  d.onBeforeCompile = patchV;
+  d.customProgramCacheKey = function () { return 'impostor1d'; };
+  return { m, d };
+}
+
+export function createForest(terrain, splat, mats, quality, msaa, seed = 11, renderer = null, taa = false) {
   const group = new THREE.Group();
   group.name = 'forest';
   const r = rng(seed);
@@ -486,7 +617,9 @@ export function createForest(terrain, splat, mats, quality, msaa, seed = 11) {
   const leafDepth = new THREE.MeshDepthMaterial({ map: leafTex, alphaTest: 0.45, depthPacking: THREE.RGBADepthPacking, side: THREE.DoubleSide });
   const birches = [12, 14.5, 17].map(function (h, i) { return birchGeometry(rng(seed + 40 + i), h); });
   const birchLists = birches.map(function () { return []; });
-  const count = Math.round(720 * quality);
+  // ближний пояс (48–125 м от центра) — настоящие деревья, гуще; дальше — снимки
+  const NEAR = renderer ? 125 : 308;
+  const count = Math.round((renderer ? 900 : 720) * quality);
   const lists = variants.map(function () { return []; });
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   let placed = 0, tries = 0;
@@ -494,7 +627,7 @@ export function createForest(terrain, splat, mats, quality, msaa, seed = 11) {
   while (placed < count && tries < count * 20) {
     tries++;
     const a = r() * Math.PI * 2;
-    const rr = 48 + Math.pow(r(), 0.7) * 260;
+    const rr = 48 + Math.pow(r(), 0.7) * (NEAR - 48);
     const x = Math.cos(a) * rr, z = Math.sin(a) * rr;
     const cluster = terrain.noise(x / 60, z / 60) * 0.5 + 0.5;
     if (r() > cluster * 1.3 - 0.1) continue;
@@ -549,7 +682,56 @@ export function createForest(terrain, splat, mats, quality, msaa, seed = 11) {
   });
   group.add(bushes(terrain, splat, leaves, leafDepth, quality, seed + 60));
   group.add(clearing(terrain, splat, mats, seed + 70));
+  if (renderer) group.add(farForest(renderer, terrain, splat, variants, birches, tex, leafTex, quality, seed + 90, NEAR, taa));
   return { group };
+}
+
+// Дальний лес: тысячи деревьев-снимков от ближнего пояса до 680 м — густо, с полянами и опушками.
+function farForest(renderer, terrain, splat, variants, birches, needleTex, leafTex, quality, seed, near, taa) {
+  const items = variants.map(function (v) { return { cards: v.cards, trunk: v.trunk, map: needleTex, color: 0xffffff, trunkColor: 0x3a3029, alphaTest: 0.42 }; })
+    .concat(birches.map(function (v) { return { cards: v.cards, trunk: v.trunk, map: leafTex, color: 0xffffff, trunkColor: 0xd8d6d0, alphaTest: 0.45 }; }));
+  const atlas = bakeImpostors(renderer, items);
+  const M = impostorMaterials(atlas, taa);
+  const r = rng(seed);
+  const count = Math.round(26000 * quality);
+  const cells = [], sizes = [], cols = [], mats4 = [];
+  const m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
+  let tries = 0;
+  while (cells.length < count && tries < count * 6) {
+    tries++;
+    const a = r() * Math.PI * 2;
+    const rr = near + Math.sqrt(r()) * (680 - near);
+    const x = Math.cos(a) * rr, z = Math.sin(a) * rr;
+    // лес сплошной, кроме полян и болотин (крупный шум) и редкого края у ближнего пояса
+    const cluster = terrain.noise(x / 140, z / 140) * 0.5 + 0.5;
+    const edge = THREE.MathUtils.smoothstep(rr, near, near + 60);
+    if (r() > (cluster * 1.6 - 0.25) * (0.5 + 0.5 * edge)) continue;
+    const sp = splat.sample(x, z);
+    if (sp[0] > 0.2 || sp[1] > 0.2) continue;
+    const y = terrain.heightAt(x, z);
+    const birch = rr < 330 && terrain.noise2(x / 60 + 3, z / 60 - 7) > 0.18 && r() < 0.6;
+    const row = birch ? variants.length + Math.floor(r() * birches.length) : Math.floor(r() * variants.length);
+    const s = 0.65 + r() * 0.6;
+    m.compose(p.set(x, y - 0.15, z), q, sc.set(s, s, s));
+    mats4.push(m.clone());
+    cells.push(Math.floor(r() * VIEWS), row);
+    sizes.push(atlas.sizes[row][0], atlas.sizes[row][1]);
+    const hue = r();
+    cols.push(birch ? new THREE.Color(0.95 + r() * 0.2, 1.0, 0.82) : new THREE.Color(0.86 + hue * 0.2, 0.9 + r() * 0.16, 0.8 + (1 - hue) * 0.28).multiplyScalar(0.8 + r() * 0.3));
+  }
+  const g = new THREE.PlaneGeometry(1, 1);
+  g.translate(0, 0.5, 0);
+  const n = mats4.length;
+  g.setAttribute('aCell', new THREE.InstancedBufferAttribute(new Float32Array(cells), 2));
+  g.setAttribute('aSize', new THREE.InstancedBufferAttribute(new Float32Array(sizes), 2));
+  const mesh = new THREE.InstancedMesh(g, M.m, n);
+  mats4.forEach(function (mm, i) { mesh.setMatrixAt(i, mm); mesh.setColorAt(i, cols[i]); });
+  mesh.customDepthMaterial = M.d;
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  mesh.frustumCulled = false;
+  mesh.name = 'far-forest';
+  return mesh;
 }
 
 // Кусты: по опушке гуще, на лугу — редкими островками; не на площадке и не на дороге.
