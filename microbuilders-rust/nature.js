@@ -2,8 +2,9 @@
 // ели из ветвей-карточек (хвоя рисуется кодом на canvas) и валуны. Трава и хвоя не попадают в затенение углов
 // (userData.noAO): у карточек нет объёма, GTAO затемнил бы их прямоугольниками.
 import * as THREE from 'three';
-import { rng, stone, cylinder, Batch } from './geo.js?v=9f85320';
-import { TEXTURE_TILES as TILE } from './textures.js?v=9f85320';
+import { rng, stone, cylinder, Batch } from './geo.js?v=360d748';
+import { TEXTURE_TILES as TILE } from './textures.js?v=360d748';
+import { WEATHER } from './world.js?v=360d748';
 
 // ---------- трава ----------
 
@@ -82,7 +83,8 @@ vec3 mbTranslucent(vec3 L, vec3 V, vec3 N) {
 // Трава кустиками-инстансами по секторам (отсекаются вне кадра). Плотность плавно падает от площадки,
 // кустики вдали шире — граница не читается; высота и сухость — по карте луга, как у земли под ними:
 // у кромки площадки трава вытоптана, под кронами её почти нет. Изредка — цветы.
-export function createGrass(terrain, splat, center, density, seed = 3, wear = null) {
+// clear — радиус поляны (м): трава до clear + 62 м, вблизи гуще так же, как на поляне 34 м.
+export function createGrass(terrain, splat, center, density, seed = 3, wear = null, clear = 34) {
   const group = new THREE.Group();
   group.name = 'grass';
   if (density <= 0) return { group, update() {} };
@@ -97,14 +99,18 @@ export function createGrass(terrain, splat, center, density, seed = 3, wear = nu
     shader.uniforms.uWind = wind;
     shader.uniforms.uTranslucent = { value: 1.5 };
     shader.uniforms.tWear = { value: wear ? wear.texture : null };
+    shader.uniforms.uSnow = WEATHER.snow;
+    shader.uniforms.uSnowF = WEATHER.snow;
     shader.uniforms.uWearSpan = { value: wear ? wear.span : 1 };
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute float aT;\nuniform float uTime;\nuniform vec2 uWind;\nvarying float vTip;\nuniform sampler2D tWear;\nuniform float uWearSpan;')
+      .replace('#include <common>', '#include <common>\nattribute float aT;\nuniform float uTime;\nuniform vec2 uWind;\nvarying float vTip;\nuniform sampler2D tWear;\nuniform float uWearSpan;\nuniform float uSnow;')
       .replace('#include <project_vertex>', `
         vTip = aT;
         #ifdef USE_INSTANCING
         // на тропе трава примята
         transformed.y *= 1.0 - 0.75 * texture2D(tWear, instanceMatrix[3].xz / uWearSpan + 0.5).r;
+        // под снегом трава примята и видна только верхушками
+        transformed.y *= 1.0 - 0.55 * uSnow;
         #endif
         vec4 mvPosition = vec4(transformed, 1.0);
         #ifdef USE_INSTANCING
@@ -120,11 +126,12 @@ export function createGrass(terrain, splat, center, density, seed = 3, wear = nu
     // изнанка: three.js перевернул нормаль целиком, а травинке нужна та же «вверх» с обратной стороны
     // (отражение относительно вертикали), иначе со спины она чёрная; изнанка чуть темнее
     shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\n' + TRANSLUCENT_FRAG)
-      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= gl_FrontFacing ? 1.0 : 0.9;')
+      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= gl_FrontFacing ? 1.0 : 0.9;\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.78, 0.8, 0.84), uSnowF * 0.5 * (1.0 - vTip));')
+      .replace('varying float vTip;', 'varying float vTip;\nuniform float uSnowF;')
       .replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>
         if (!gl_FrontFacing) { vec3 upV = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz); normal -= 2.0 * dot(normal, upV) * upV; }`);
   };
-  mat.customProgramCacheKey = function () { return 'grass4'; };
+  mat.customProgramCacheKey = function () { return 'grass5'; };
   // кольца: вблизи 9 травинок по 4 сегмента, дальше по 2 сегмента, у края 6 травинок пошире
   const LOD = [[9, 4, 1], [9, 2, 1], [6, 2, 1.25]];
   const geos = LOD.map(function (l, ri) {
@@ -132,17 +139,25 @@ export function createGrass(terrain, splat, center, density, seed = 3, wear = nu
     return [rng(sd + 1), rng(sd + 2), rng(sd + 3), rng(sd + 4)].map(function (rr, gi) { return clumpGeometry(rr, gi === 3, l[0], l[1], l[2]); });
   });
   // плотность по радиусу — доля от ближней: до RF — вся, дальше (RF/r)^1.7, у края кольца — к нулю
-  const R0 = 6, RF = 16, R1 = 96;
-  const dens = function (rr) { return (rr < RF ? 1 : Math.pow(RF / rr, 1.7)) * (1 - THREE.MathUtils.smoothstep(rr, R1 - 18, R1)); };
-  const rings = [[R0, 20], [20, 44], [44, R1]];
-  const weight = rings.map(function (ring) {
-    let s = 0;
-    for (let rr = ring[0]; rr < ring[1]; rr += 0.5) s += dens(rr + 0.25) * 2 * Math.PI * (rr + 0.25) * 0.5;
-    return s;
-  });
-  const total = weight.reduce(function (a, b) { return a + b; }, 0);
+  const R0 = 6, RF = 16, R1 = clear + 62;
+  const densOf = function (r1) { return function (rr) { return (rr < RF ? 1 : Math.pow(RF / rr, 1.7)) * (1 - THREE.MathUtils.smoothstep(rr, r1 - 18, r1)); }; };
+  const dens = densOf(R1);
+  const ringsOf = function (r1) { return [[R0, 20], [20, 44], [44, r1]]; };
+  const weightsOf = function (r1) {
+    const d = densOf(r1);
+    return ringsOf(r1).map(function (ring) {
+      let s = 0;
+      for (let rr = ring[0]; rr < ring[1]; rr += 0.5) s += d(rr + 0.25) * 2 * Math.PI * (rr + 0.25) * 0.5;
+      return s;
+    });
+  };
+  const sum = function (w) { return w.reduce(function (a, b) { return a + b; }, 0); };
+  const rings = ringsOf(R1);
+  const weight = weightsOf(R1);
+  const total = sum(weight);
   const sectors = 18;
-  const target = Math.round(70000 * density);
+  // 70 000 пучков — на поляне 34 м (до 96 м); на большой — больше, ближние кольца не редеют
+  const target = Math.round(70000 * density * total / sum(weightsOf(96)));
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   const tint = new THREE.Color(), lush = new THREE.Color(0.84, 1.0, 0.74), dryT = new THREE.Color(1.42, 1.2, 0.62);
   rings.forEach(function (ring, ri) {
@@ -587,7 +602,8 @@ function impostorMaterials(atlas, taa) {
   return { m, d };
 }
 
-export function createForest(terrain, splat, mats, quality, msaa, seed = 11, renderer = null, taa = false) {
+// clear — радиус поляны (м): лес начинается в 14 м за её краем.
+export function createForest(terrain, splat, mats, quality, msaa, seed = 11, renderer = null, taa = false, clear = 34) {
   const group = new THREE.Group();
   group.name = 'forest';
   const r = rng(seed);
@@ -617,8 +633,9 @@ export function createForest(terrain, splat, mats, quality, msaa, seed = 11, ren
   const leafDepth = new THREE.MeshDepthMaterial({ map: leafTex, alphaTest: 0.45, depthPacking: THREE.RGBADepthPacking, side: THREE.DoubleSide });
   const birches = [12, 14.5, 17].map(function (h, i) { return birchGeometry(rng(seed + 40 + i), h); });
   const birchLists = birches.map(function () { return []; });
-  // ближний пояс (48–125 м от центра) — настоящие деревья, гуще; дальше — снимки
-  const NEAR = renderer ? 125 : 308;
+  // ближний пояс (от края поляны + 14 м, 77 м шириной) — настоящие деревья, гуще; дальше — снимки
+  const inner = clear + 14;
+  const NEAR = renderer ? inner + 77 : Math.max(308, inner + 160);
   const count = Math.round((renderer ? 900 : 720) * quality);
   const lists = variants.map(function () { return []; });
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
@@ -627,7 +644,7 @@ export function createForest(terrain, splat, mats, quality, msaa, seed = 11, ren
   while (placed < count && tries < count * 20) {
     tries++;
     const a = r() * Math.PI * 2;
-    const rr = 48 + Math.pow(r(), 0.7) * (NEAR - 48);
+    const rr = inner + Math.pow(r(), 0.7) * (NEAR - inner);
     const x = Math.cos(a) * rr, z = Math.sin(a) * rr;
     const cluster = terrain.noise(x / 60, z / 60) * 0.5 + 0.5;
     if (r() > cluster * 1.3 - 0.1) continue;
@@ -639,7 +656,7 @@ export function createForest(terrain, splat, mats, quality, msaa, seed = 11, ren
     s.set(sc * (0.9 + r() * 0.2), sc, sc * (0.9 + r() * 0.2));
     m.compose(p.set(x, y - 0.1, z), q, s);
     // берёзы — рощами в ближнем поясе леса
-    if (rr < 170 && terrain.noise2(x / 45 + 3, z / 45 - 7) > 0.12 && r() < 0.75) {
+    if (rr < inner + 122 && terrain.noise2(x / 45 + 3, z / 45 - 7) > 0.12 && r() < 0.75) {
       const c = new THREE.Color(0.95 + r() * 0.2, 1.0 + r() * 0.15, 0.78 + r() * 0.15);
       birchLists[Math.floor(r() * birches.length)].push([m.clone(), c]);
       canopy.push([x, z, 2.2 * sc]);
@@ -680,8 +697,8 @@ export function createForest(terrain, splat, mats, quality, msaa, seed = 11, ren
     crowns.computeBoundingSphere(); trunks.computeBoundingSphere();
     group.add(crowns, trunks);
   });
-  group.add(bushes(terrain, splat, leaves, leafDepth, quality, seed + 60));
-  group.add(clearing(terrain, splat, mats, seed + 70));
+  group.add(bushes(terrain, splat, leaves, leafDepth, quality, seed + 60, clear));
+  group.add(clearing(terrain, splat, mats, seed + 70, clear));
   if (renderer) group.add(farForest(renderer, terrain, splat, variants, birches, tex, leafTex, quality, seed + 90, NEAR, taa));
   return { group };
 }
@@ -735,14 +752,14 @@ function farForest(renderer, terrain, splat, variants, birches, needleTex, leafT
 }
 
 // Кусты: по опушке гуще, на лугу — редкими островками; не на площадке и не на дороге.
-function bushes(terrain, splat, leaves, leafDepth, quality, seed) {
+function bushes(terrain, splat, leaves, leafDepth, quality, seed, clear) {
   const r = rng(seed);
   const geos = [leafCrown(rng(seed + 1), 30, 0.7, 1.0, 0.72, 0.72, new THREE.Vector3()), leafCrown(rng(seed + 2), 22, 0.55, 0.8, 0.6, 0.6, new THREE.Vector3())];
   const lists = [[], []];
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   const count = Math.round(260 * quality);
   for (let k = 0, n = 0; k < count * 12 && n < count; k++) {
-    const a = r() * Math.PI * 2, rr = 22 + Math.pow(r(), 0.8) * 110;
+    const a = r() * Math.PI * 2, rr = clear - 12 + Math.pow(r(), 0.8) * 110;
     const x = Math.cos(a) * rr, z = Math.sin(a) * rr;
     const sp = splat.sample(x, z);
     if (sp[3] < 0.8 || sp[0] + sp[1] > 0.05) continue;
@@ -771,7 +788,7 @@ function bushes(terrain, splat, leaves, leafDepth, quality, seed) {
 }
 
 // Следы вырубки у поляны: пни (кора по бокам, светлый спил сверху) и брёвна на траве.
-function clearing(terrain, splat, mats, seed) {
+function clearing(terrain, splat, mats, seed, clear) {
   const r = rng(seed);
   const bark = new Batch(), wood = new Batch();
   const W = new THREE.Color(1, 1, 1), cut = new THREE.Color(0.95, 0.82, 0.62);
@@ -785,7 +802,7 @@ function clearing(terrain, splat, mats, seed) {
     return null;
   };
   for (let i = 0; i < 8; i++) {
-    const at = spot(17, 30);
+    const at = spot(clear - 17, clear - 4);
     if (!at) continue;
     const rad = 0.17 + r() * 0.16, h = 0.28 + r() * 0.25, y = terrain.heightAt(at[0], at[1]) - 0.05;
     const m = new THREE.Matrix4().makeRotationY(r() * 6.3).setPosition(at[0], y, at[1]);
@@ -794,7 +811,7 @@ function clearing(terrain, splat, mats, seed) {
     wood.add({ pos: top.attributes.position.array, nrm: top.attributes.normal.array, uv: top.attributes.uv.array, index: top.index.array }, m.clone().multiply(new THREE.Matrix4().makeTranslation(0, h - 0.005, 0)), cut, 0);
   }
   for (let i = 0; i < 4; i++) {
-    const at = spot(20, 34);
+    const at = spot(clear - 14, clear);
     if (!at) continue;
     const rad = 0.16 + r() * 0.14, len = 2.5 + r() * 3.5, y = terrain.heightAt(at[0], at[1]) + rad * 0.8;
     const m = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(0, r() * 6.3, Math.PI / 2, 'YXZ')).setPosition(at[0], y, at[1]);
@@ -817,13 +834,13 @@ function clearing(terrain, splat, mats, seed) {
 
 // ---------- валуны ----------
 
-export function createRocks(terrain, splat, mats, seed = 21) {
+export function createRocks(terrain, splat, mats, seed = 21, clear = 34) {
   const group = new THREE.Group();
   const r = rng(seed);
   const mesh = new THREE.Group();
   for (let i = 0; i < 46; i++) {
     const a = r() * Math.PI * 2;
-    const rr = 26 + Math.pow(r(), 0.8) * 110;
+    const rr = clear - 8 + Math.pow(r(), 0.8) * 110;
     const x = Math.cos(a) * rr, z = Math.sin(a) * rr;
     const sp = splat.sample(x, z);
     if (sp[1] > 0.3) continue;

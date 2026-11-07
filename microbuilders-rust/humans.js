@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
-import { linkSky } from './world.js?v=9f85320';
+import { linkSky } from './world.js?v=360d748';
 
 const VARIANTS = ['a', 'b', 'c', 'd'];
 

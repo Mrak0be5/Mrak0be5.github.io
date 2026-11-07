@@ -6,7 +6,7 @@
 // физически верная крутизна), ORM (R — затенение впадин, G — шероховатость, B — металл, как в glTF).
 // tile — сколько метров укладывается в фактуру по u и v: геометрия сама делит на это свои координаты.
 import * as THREE from 'three';
-import { NOISE } from './glsl.js?v=9f85320';
+import { NOISE } from './glsl.js?v=360d748';
 
 const RECIPES = {};
 
@@ -542,6 +542,230 @@ RECIPES.rope = {
   `,
 };
 
+// ---------- кладка кубов: семейства материалов оригинала ----------
+// Тон нейтральный (около 0,6): цвет даёт материал оригинала через цвет вершин. Швы (альфа альбедо = 0, J)
+// остаются своего цвета — раствор, джут, затирка. Ряды кратны высоте куба 2 м.
+
+// Кирпич, ложковая перевязка: 4 кирпича × 8 рядов на плитку, кирпич 250 × 64 мм, шов 10 мм (27 рядов на куб).
+RECIPES.brick = {
+  tile: [1.04, 0.592593], cav: 160, ao: 0.8, mask: true, glsl: `
+  const vec2 BRICK_M = vec2(0.26, 0.0740741);
+  vec2 brickId(vec2 uv, out vec2 f) {
+    vec2 p = uv * vec2(4.0, 8.0);
+    float row = floor(p.y);
+    p.x += 0.5 * mod(row, 2.0);
+    f = fract(p);
+    return vec2(mod(floor(p.x), 4.0), mod(row, 8.0));
+  }
+  vec4 H(vec2 uv) {
+    vec2 f; vec2 id = brickId(uv, f);
+    float r = hash12(id + 0.37);
+    vec2 m = f * BRICK_M;
+    vec2 e2 = min(m, BRICK_M - m) - 0.005;
+    float e = min(e2.x, e2.y);
+    float brick = step(0.0, e);
+    float bev = sqrt(sat(e / 0.004));
+    float chip = step(0.86, hash12(id + 5.1)) * (1.0 - smoothstep(0.0, 0.03, length(min(m, BRICK_M - m))));
+    float face = 0.0007 * fbm(uv * vec2(40.0, 64.0) + r * 17.0, vec2(40.0, 64.0), 4) + 0.0005 * (r - 0.5);
+    float mortar = -0.006 + 0.0007 * fbm(uv * vec2(80.0, 128.0), vec2(80.0, 128.0), 3);
+    float h = mix(mortar, face - 0.0015 * (1.0 - bev) - 0.004 * chip, brick);
+    return vec4(h, brick * (1.0 - chip * 0.6), r, e);
+  }
+  vec3 A(vec2 uv, vec4 h, float cav) {
+    float r = h.z;
+    vec3 brick = vec3(0.62) * (0.84 + 0.3 * r) * vec3(1.0 + 0.05 * (hash11(r * 91.0) - 0.5), 1.0, 1.0 - 0.06 * (hash11(r * 37.0) - 0.5));
+    brick *= 1.0 - 0.32 * step(0.93, hash11(r * 53.0 + 2.0));
+    brick *= 0.9 + 0.16 * sat(fbm(uv * vec2(24.0, 40.0) + r * 9.0, vec2(24.0, 40.0), 5) + 0.5);
+    float sp = gnoise(uv * vec2(400.0, 640.0), vec2(400.0, 640.0)) * 0.5 + 0.5;
+    brick *= 1.0 - 0.1 * smoothstep(0.8, 0.95, sp);
+    vec3 mortar = vec3(0.60, 0.58, 0.54) * (0.88 + 0.16 * sat(fbm(uv * vec2(60.0, 100.0), vec2(60.0, 100.0), 4) + 0.5));
+    vec3 col = mix(mortar, brick, h.y);
+    float dirt = sat(fbm(uv * vec2(2.0, 3.0) + 5.0, vec2(2.0, 3.0), 5) * 1.6 - 0.2);
+    col *= 1.0 - 0.15 * dirt;
+    col *= 1.0 - 0.25 * sat(cav * 2.0);
+    return srgb(col);
+  }
+  float J(vec2 uv, vec4 h) { return h.y; }
+  vec2 RM(vec2 uv, vec4 h, float cav) { return vec2(mix(0.95, 0.86 + 0.06 * h.z, h.y), 0.0); }
+  `,
+};
+
+// Тёсаный камень: ряды по 1/3 м (6 на куб), в ряду 3–5 камней разной длины, шов 7 мм; лицо чуть выпуклое,
+// кромки со сколами, следы тёски, железистые пятна.
+RECIPES.ashlar = {
+  tile: [2.0, 2.0], cav: 160, ao: 0.9, big: true, mask: true, glsl: `
+  float ashJit(float row, float k, float n) { return (hash12(vec2(row, mod(k + n, n))) - 0.5) * 0.4; }
+  vec4 ashlar(vec2 uv) {
+    float row = floor(uv.y * 6.0);
+    float fy = fract(uv.y * 6.0);
+    float n = 3.0 + floor(hash11(row * 7.13 + 1.7) * 3.0);
+    float x = fract(uv.x + hash11(row * 3.71 + 0.3));
+    float k = floor(x * n);
+    float b0 = (k + ashJit(row, k, n)) / n;
+    float b1 = (k + 1.0 + ashJit(row, k + 1.0, n)) / n;
+    if (x < b0) { k -= 1.0; b1 = b0; b0 = (k + ashJit(row, k, n)) / n; }
+    else if (x >= b1) { k += 1.0; b0 = b1; b1 = (k + 1.0 + ashJit(row, k + 1.0, n)) / n; }
+    float ex = min(x - b0, b1 - x) * 2.0, ey = min(fy, 1.0 - fy) * (2.0 / 6.0);
+    float id = hash12(vec2(row, mod(k + n, n)) + 0.73);
+    return vec4(min(ex, ey) - 0.0035, id, (x - b0) / (b1 - b0), fy);
+  }
+  vec4 H(vec2 uv) {
+    vec4 a = ashlar(uv);
+    float stone = step(0.0, a.x);
+    float bev = sqrt(sat(a.x / 0.012));
+    float bulge = 0.004 * sin(PI * sat(a.z)) * sin(PI * a.w);
+    float rough = 0.0025 * fbm(uv * 8.0 + a.y * 31.0, vec2(8.0), 6) + 0.0006 * gnoise(uv * 200.0, vec2(200.0));
+    float h = mix(-0.012 + 0.001 * fbm(uv * 60.0, vec2(60.0), 3), bulge + rough - 0.006 * (1.0 - bev), stone);
+    return vec4(h, stone, a.y, fbm(uv * 3.0 + 4.0, vec2(3.0), 5));
+  }
+  vec3 A(vec2 uv, vec4 h, float cav) {
+    vec3 st = vec3(0.6) * (0.86 + 0.26 * h.z) * vec3(1.0 + 0.05 * (h.z - 0.5), 1.0, 1.0 - 0.06 * (h.z - 0.5));
+    st *= 0.9 + 0.16 * sat(fbm(uv * 10.0 + h.z * 7.0, vec2(10.0), 5) + 0.5);
+    st *= 0.94 + 0.1 * (gnoise(uv * 600.0, vec2(600.0)) * 0.5 + 0.5);
+    float iron = sat(fbm(uv * vec2(5.0, 3.0) + 5.0, vec2(5.0, 3.0), 6) * 1.8 - 0.7);
+    st = mix(st, st * vec3(1.08, 0.94, 0.8), iron * 0.5);
+    vec3 mortar = vec3(0.62, 0.6, 0.56) * (0.86 + 0.18 * sat(fbm(uv * 40.0, vec2(40.0), 4) + 0.5));
+    vec3 col = mix(mortar, st, h.y);
+    col *= 1.0 - 0.14 * sat(h.w * 1.6 - 0.1);
+    col *= 1.0 - 0.45 * sat(cav * 2.0);
+    return srgb(col);
+  }
+  float J(vec2 uv, vec4 h) { return h.y; }
+  vec2 RM(vec2 uv, vec4 h, float cav) { return vec2(mix(0.95, 0.88, h.y), 0.0); }
+  `,
+};
+
+// Брус 200 мм (10 рядов на куб): фаска, между рядами джут, стыки брусьев вразбежку; годичные слои вдоль
+// бруса, сучки, усушечные трещины.
+RECIPES.logs = {
+  tile: [2.0, 2.0], cav: 220, ao: 0.8, big: true, mask: true, glsl: `
+  vec4 H(vec2 uv) {
+    float row = floor(uv.y * 10.0);
+    float fy = fract(uv.y * 10.0);
+    float ey = min(fy, 1.0 - fy) * 0.2;
+    float jx = fract(uv.x - hash11(row * 5.3 + 0.7));
+    float ex = min(jx, 1.0 - jx) * 2.0;
+    float e = min(ey, ex);
+    float wood = step(0.004, ey) * step(0.002, ex);
+    float bev = sat(e / 0.012);
+    float grain = fbm(vec2(uv.x * 3.0, uv.y * 160.0) + row * 3.3, vec2(3.0, 160.0), 5);
+    float h = mix(-0.01, -0.012 * (1.0 - sqrt(bev)) + 0.0004 * grain, wood);
+    return vec4(h, wood, hash11(row * 9.1 + 0.2), grain);
+  }
+  vec3 A(vec2 uv, vec4 h, float cav) {
+    float row = floor(uv.y * 10.0);
+    float rings = sin((uv.y * 10.0 + 0.4 * fbm(vec2(uv.x * 2.0, uv.y * 20.0) + row, vec2(2.0, 20.0), 4)) * 60.0);
+    vec3 w = vec3(0.6) * (0.86 + 0.25 * h.z);
+    w *= 0.9 + 0.08 * rings + 0.06 * h.w;
+    vec4 kn = voronoi(vec2(uv.x * 6.0, uv.y * 10.0), vec2(6.0, 10.0));
+    float knot = (1.0 - smoothstep(0.0, 0.12, kn.x)) * step(0.82, kn.z);
+    w *= 1.0 - 0.45 * knot;
+    float crack = smoothstep(0.92, 0.99, abs(gnoise(vec2(uv.x * 4.0, uv.y * 300.0), vec2(4.0, 300.0)))) * step(0.6, hash11(row * 2.7));
+    w *= 1.0 - 0.4 * crack;
+    vec3 jute = vec3(0.46, 0.38, 0.27) * (0.8 + 0.3 * sat(fbm(uv * vec2(40.0, 400.0), vec2(40.0, 400.0), 4) + 0.5));
+    vec3 col = mix(jute, w, h.y);
+    col *= 1.0 - 0.35 * sat(cav * 2.0);
+    return srgb(col);
+  }
+  float J(vec2 uv, vec4 h) { return h.y; }
+  vec2 RM(vec2 uv, vec4 h, float cav) { return vec2(mix(0.95, 0.72 + 0.1 * h.w, h.y), 0.0); }
+  `,
+};
+
+// Стальные листы 1 × 0,5 м вразбежку на заклёпках (18 мм через 10 см, в 3 см от кромки), шов 4 мм; окалина,
+// ржавые потёки из-под заклёпок.
+RECIPES.riveted = {
+  tile: [2.0, 2.0], cav: 400, ao: 0.7, glsl: `
+  vec4 H(vec2 uv) {
+    vec2 p = uv * vec2(2.0, 4.0);
+    float row = floor(p.y);
+    p.x += 0.5 * mod(row, 2.0);
+    vec2 f = fract(p);
+    vec2 m = f * vec2(1.0, 0.5);
+    vec2 e2 = min(m, vec2(1.0, 0.5) - m);
+    float plate = step(0.002, min(e2.x, e2.y));
+    float dh = length(vec2(fract(m.x / 0.1) * 0.1 - 0.05, min(m.y, 0.5 - m.y) - 0.03));
+    float dv = length(vec2(min(m.x, 1.0 - m.x) - 0.03, fract(m.y / 0.1) * 0.1 - 0.05));
+    float rd = min(dh, dv);
+    float rivet = sqrt(sat(1.0 - (rd / 0.009) * (rd / 0.009))) * 0.005;
+    float id = hash12(vec2(mod(floor(p.x), 2.0), row));
+    float oil = 0.0015 * sin(PI * f.x) * sin(PI * f.y) * (id - 0.3);
+    float h = mix(-0.003, oil + rivet + 0.00015 * fbm(uv * 50.0, vec2(50.0), 3), plate);
+    return vec4(h, plate, id, step(rd, 0.009));
+  }
+  float rustOf(vec2 uv, vec4 h) {
+    float streak = sat(fbm(vec2(uv.x * 30.0, uv.y * 3.0) + 7.0, vec2(30.0, 3.0), 4) * 2.2 - 0.9);
+    return sat(streak * 0.6 + h.w * 0.5) * 0.45;
+  }
+  vec3 A(vec2 uv, vec4 h, float cav) {
+    vec3 c = vec3(0.6) * (0.9 + 0.16 * h.z);
+    c *= 0.92 + 0.12 * sat(fbm(uv * 6.0 + h.z * 5.0, vec2(6.0), 5) + 0.5);
+    c *= 1.0 - 0.12 * sat(fbm(uv * 14.0 + 3.0, vec2(14.0), 4) * 2.0 - 0.3);
+    c = mix(c, vec3(0.42, 0.22, 0.1), rustOf(uv, h));
+    c = mix(vec3(0.12), c, h.y);
+    c *= 1.0 - 0.3 * sat(cav * 2.0);
+    return srgb(c);
+  }
+  vec2 RM(vec2 uv, vec4 h, float cav) {
+    float r = rustOf(uv, h);
+    return vec2(mix(0.5 + 0.15 * h.z, 0.85, r), (1.0 - r) * h.y);
+  }
+  `,
+};
+
+// Монолит в щитовой опалубке: щиты 1 × 0,5 м (заливка ярусами по полметра), рёбра стыков, конусы стяжек,
+// раковины, разводы фанеры.
+RECIPES.formwork = {
+  tile: [2.0, 2.0], cav: 500, ao: 0.9, glsl: `
+  vec4 H(vec2 uv) {
+    vec2 p = uv * vec2(2.0, 4.0);
+    vec2 m = fract(p) * vec2(1.0, 0.5);
+    vec2 e2 = min(m, vec2(1.0, 0.5) - m);
+    float seam = 1.0 - smoothstep(0.0, 0.002, min(e2.x, e2.y));
+    float tie = 1.0 - smoothstep(0.008, 0.014, min(length(m - vec2(0.25, 0.25)), length(m - vec2(0.75, 0.25))));
+    vec4 por = voronoi(uv * 180.0, vec2(180.0));
+    float pores = (1.0 - smoothstep(0.0, 0.18, por.x)) * step(0.82, por.z);
+    float lift = hash12(floor(p) + 0.3);
+    float h = 0.0006 * fbm(uv * 4.0, vec2(4.0), 5) + 0.0006 * seam - 0.012 * tie - 0.0015 * pores;
+    return vec4(h, pores, lift, tie);
+  }
+  vec3 A(vec2 uv, vec4 h, float cav) {
+    vec3 c = vec3(0.6) * (0.9 + 0.12 * h.z);
+    c *= 0.94 + 0.1 * sat(fbm(vec2(uv.x * 6.0, uv.y * 24.0) + h.z * 3.0, vec2(6.0, 24.0), 4) + 0.5);
+    c *= 1.0 - 0.15 * sat(fbm(uv * vec2(2.0, 1.0) + 9.0, vec2(2.0, 1.0), 6) * 1.6 - 0.3);
+    c *= 1.0 - 0.35 * h.y - 0.4 * h.w;
+    c *= 1.0 - 0.25 * sat(cav * 2.0);
+    return srgb(c);
+  }
+  vec2 RM(vec2 uv, vec4 h, float cav) { return vec2(0.88 + 0.06 * h.y, 0.0); }
+  `,
+};
+
+// Мрамор: полированные плиты 1 × 1 м, шов 2 мм, прожилки.
+RECIPES.marble = {
+  tile: [2.0, 2.0], cav: 200, ao: 0.6, mask: true, glsl: `
+  vec4 H(vec2 uv) {
+    vec2 p = uv * 2.0;
+    vec2 m = fract(p);
+    vec2 e2 = min(m, 1.0 - m);
+    float slab = step(0.001, min(e2.x, e2.y));
+    return vec4(mix(-0.002, 0.0, slab), slab, hash12(floor(p) + 0.2), 0.0);
+  }
+  vec3 A(vec2 uv, vec4 h, float cav) {
+    vec2 q = uv * 2.0 + h.z * 7.0;
+    float w = fbm(q * 1.5, vec2(3.0), 6);
+    float vein = 1.0 - smoothstep(0.0, 0.06, abs(sin((q.x + q.y * 0.6 + w * 2.5) * PI)));
+    float fine = 1.0 - smoothstep(0.0, 0.03, abs(sin((q.x * 1.7 - q.y + fbm(q * 3.0 + 5.0, vec2(6.0), 5) * 3.0) * 2.0 * PI)));
+    vec3 c = vec3(0.7) * (0.92 + 0.1 * sat(fbm(q * 4.0, vec2(8.0), 5) + 0.5));
+    c *= 1.0 - 0.35 * vein - 0.15 * fine;
+    c = mix(vec3(0.55, 0.54, 0.52), c, h.y);
+    return srgb(c);
+  }
+  float J(vec2 uv, vec4 h) { return h.y; }
+  vec2 RM(vec2 uv, vec4 h, float cav) { return vec2(mix(0.7, 0.14, h.y), 0.0); }
+  `,
+};
+
 const PASS_VERTEX = /* glsl */ `
 varying vec2 vUv;
 void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }
@@ -569,7 +793,8 @@ float cavity(vec2 uv) {
 function passMaterial(recipe, kind, uniforms) {
   let main;
   if (kind === 'height') main = 'void main() { gl_FragColor = H(vUv); }';
-  else if (kind === 'albedo') main = 'void main() { vec4 h = texture2D(tH, vUv); gl_FragColor = vec4(A(vUv, h, cavity(vUv)), 1.0); }';
+  // в альфе альбедо — где красит цвет вершин (1) и где шов своего цвета (0): рецепты кладки с J()
+  else if (kind === 'albedo') main = 'void main() { vec4 h = texture2D(tH, vUv); gl_FragColor = vec4(A(vUv, h, cavity(vUv)), ' + (recipe.mask ? 'J(vUv, h)' : '1.0') + '); }';
   else if (kind === 'normal') main = `void main() {
     float hl = texture2D(tH, vUv - vec2(uTexel.x, 0.0)).x, hr = texture2D(tH, vUv + vec2(uTexel.x, 0.0)).x;
     float hd = texture2D(tH, vUv - vec2(0.0, uTexel.y)).x, hu = texture2D(tH, vUv + vec2(0.0, uTexel.y)).x;

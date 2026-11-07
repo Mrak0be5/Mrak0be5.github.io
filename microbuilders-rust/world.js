@@ -2,15 +2,16 @@
 // окружение для отражений из того же неба (PMREM), дымка цвета горизонта, рельеф с выровненной площадкой,
 // карта покрытия земли (глина, щебень, колеи, трава) и горы на горизонте.
 import * as THREE from 'three';
-import { NOISE } from './glsl.js?v=9f85320';
-import { rng } from './geo.js?v=9f85320';
-import { ATMO, ATMO_GLSL, AP_GLSL, uniforms as atmoUniforms, apUniforms, createAtmosphere } from './atmosphere.js?v=9f85320';
+import { NOISE } from './glsl.js?v=360d748';
+import { rng } from './geo.js?v=360d748';
+import { ATMO, ATMO_GLSL, AP_GLSL, uniforms as atmoUniforms, apUniforms, createAtmosphere } from './atmosphere.js?v=360d748';
 
 // ---------- облака и их тень ----------
 // Облака — слой на высоте 1,5–3,2 км (середина 2,3 км): небо рисует их с перспективой (render.js — объёмными), а каждый материал сцены (linkSky) получает
 // тень облака на луче к солнцу. Общие значения — одни объекты uniform на все программы.
 // Погода для шейдеров (life.js задаёт): сырость поверхностей, сила дождя, время (рябь в лужах).
-export const WEATHER = { wet: { value: 0 }, rain: { value: 0 }, time: { value: 0 } };
+// wet — мокрые поверхности, rain — сила дождя, snow — снег на земле и верхних гранях, snowfall — снегопад
+export const WEATHER = { wet: { value: 0 }, rain: { value: 0 }, time: { value: 0 }, snow: { value: 0 }, snowfall: { value: 0 } };
 export const CLOUD = {
   time: { value: 0 }, cover: { value: 0.27 }, sun: { value: new THREE.Vector3(0, 1, 0) }, shadow: { value: 1 },
   fogSun: { value: new THREE.Color(0, 0, 0) },
@@ -200,6 +201,17 @@ const WET_FRAGMENT = /* glsl */ `
   #endif
 }
 #endif
+// снег: ложится на то, что смотрит вверх (на крутом — редкой крупкой по шуму); ткань, кожа и трава — нет
+#if defined( STANDARD ) && !defined( MB_DRY ) && !defined( MB_CLOTH )
+if (uSnow > 0.001) {
+  float mbUpS = clamp((vec4(normal, 0.0) * viewMatrix).y, 0.0, 1.0);
+  float mbN = fract(sin(dot(floor(vSkyW.xz * 11.0) + floor(vSkyW.y * 11.0), vec2(12.9898, 78.233))) * 43758.5453);
+  float mbS = uSnow * smoothstep(0.5, 0.85, mbUpS + 0.3 * (mbN - 0.5));
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.82, 0.85, 0.9), mbS);
+  roughnessFactor = mix(roughnessFactor, 0.72, mbS);
+  metalnessFactor = mix(metalnessFactor, 0.0, mbS);
+}
+#endif
 #if defined( STANDARD )
 {
   vec3 mbDx = dFdx(normal), mbDy = dFdy(normal);
@@ -221,21 +233,28 @@ export function linkSky(material) {
   const baseKey = prevKey ? prevKey.call(material) : prev ? prev.toString() : '';
   material.onBeforeCompile = function (shader, renderer) {
     if (prev) prev.call(this, shader, renderer);
-    Object.assign(shader.uniforms, { uCloudTime: CLOUD.time, uCloudCover: CLOUD.cover, uCloudSun: CLOUD.sun, uCloudShadow: CLOUD.shadow, uWet: WEATHER.wet, uRainK: WEATHER.rain, uWTime: WEATHER.time }, apUniforms());
+    Object.assign(shader.uniforms, { uCloudTime: CLOUD.time, uCloudCover: CLOUD.cover, uCloudSun: CLOUD.sun, uCloudShadow: CLOUD.shadow, uWet: WEATHER.wet, uRainK: WEATHER.rain, uWTime: WEATHER.time, uSnow: WEATHER.snow }, apUniforms());
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vSkyW;\nvarying float vCloud;\nvarying vec3 vApT;\nvarying vec3 vApS;\n' + CLOUD_GLSL + AP_GLSL)
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\n' + LINK_VERTEX);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vSkyW;\nvarying float vCloud;\nvarying vec3 vApT;\nvarying vec3 vApS;\nuniform vec3 uCloudSun;\nuniform float uWet, uRainK, uWTime;\n' + GBUFFER_HEAD)
+      .replace('#include <common>', '#include <common>\nvarying vec3 vSkyW;\nvarying float vCloud;\nvarying vec3 vApT;\nvarying vec3 vApS;\nuniform vec3 uCloudSun;\nuniform float uWet, uRainK, uWTime, uSnow;\n' + GBUFFER_HEAD)
       .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + WET_FRAGMENT)
       .replace('#include <shadowmap_pars_fragment>', 'uniform float uCloudTime;\n' + SHADOW_PARS)
       .replace('#include <lights_fragment_begin>', 'float mbCloud = vCloud;\n#ifdef MB_POM\nmbCloud *= mbPom;\n#endif\n' + LIGHTS_BEGIN)
       .replace('#include <fog_fragment>', FOG_FRAGMENT)
       .replace('#include <dithering_fragment>', '#include <dithering_fragment>\n' + GBUFFER_OUT);
   };
-  material.customProgramCacheKey = function () { return baseKey + '|sky10'; };
+  material.customProgramCacheKey = function () { return baseKey + '|sky11'; };
   material.needsUpdate = true;
   return true;
+}
+// Клон подключённого материала с теми же правками шейдера: подключён уже (иначе linkSkyTree подключит дважды).
+export function adoptSky(clone, src) {
+  clone.onBeforeCompile = src.onBeforeCompile;
+  clone.customProgramCacheKey = src.customProgramCacheKey;
+  if (LINKED.has(src)) LINKED.add(clone);
+  return clone;
 }
 // Все материалы объекта (и потомков).
 export function linkSkyTree(root) {
@@ -418,9 +437,14 @@ export function createTerrain(seed, flatRadius) {
 }
 
 // Карта покрытия земли вокруг стройки: R — глина, G — щебень, B — колеи и утоптанная земля, A — трава.
+// layout: site — овал площадки, yard — овал двора, spots — пятна щебня [x, z, r] (карьеры, столы), roads.
+// relayout(layout) перекрашивает карты под новую площадку (подстилка под кронами остаётся).
 export function splatMap(terrain, layout, size = 512, span = 240) {
   const data = new Uint8Array(size * size * 4);
+  const meadow = new Uint8Array(size * size * 4);
+  const litter = new Uint8Array(size * size);
   const n = terrain.noise, n2 = terrain.noise2;
+  function paint(layout) {
   for (let j = 0; j < size; j++) {
     for (let i = 0; i < size; i++) {
       const x = (i / (size - 1) - 0.5) * span, z = (j / (size - 1) - 0.5) * span;
@@ -431,7 +455,10 @@ export function splatMap(terrain, layout, size = 512, span = 240) {
       const site = 1 - THREE.MathUtils.smoothstep(Math.hypot(dx, dz) + nn * 0.18 + nf * 0.05, 0.85, 1.05);
       // двор со щебнем
       const yx = (x - layout.yard.x) / layout.yard.rx, yz = (z - layout.yard.z) / layout.yard.rz;
-      const yard = 1 - THREE.MathUtils.smoothstep(Math.hypot(yx, yz) + nn * 0.2 + nf * 0.06, 0.7, 1.0);
+      let yard = 1 - THREE.MathUtils.smoothstep(Math.hypot(yx, yz) + nn * 0.2 + nf * 0.06, 0.7, 1.0);
+      (layout.spots || []).forEach(function (sp) {
+        yard = Math.max(yard, 1 - THREE.MathUtils.smoothstep(Math.hypot(x - sp[0], z - sp[1]) / sp[2] + nn * 0.2 + nf * 0.06, 0.7, 1.0));
+      });
       // дорога от края к двору
       let road = 0;
       layout.roads.forEach(function (rd) {
@@ -465,7 +492,6 @@ export function splatMap(terrain, layout, size = 512, span = 240) {
   }
   // Вторая карта — луг: R сухость травы, G высота травы, B лесная подстилка под кронами (addCanopy),
   // A сырость (лужи в колеях и низинах площадки). По ней одинаково красятся земля и травинки.
-  const meadow = new Uint8Array(size * size * 4);
   for (let j = 0; j < size; j++) {
     for (let i = 0; i < size; i++) {
       const x = (i / (size - 1) - 0.5) * span, z = (j / (size - 1) - 0.5) * span;
@@ -481,10 +507,12 @@ export function splatMap(terrain, layout, size = 512, span = 240) {
       const wet = Math.max(rut * THREE.MathUtils.smoothstep(low, 0.12, 0.3), dirt * THREE.MathUtils.smoothstep(low, 0.2, 0.34) * 0.85);
       meadow[k] = Math.round(dry * 255);
       meadow[k + 1] = Math.round(height * 255);
-      meadow[k + 2] = 0;
+      meadow[k + 2] = litter[j * size + i];
       meadow[k + 3] = Math.round(THREE.MathUtils.clamp(wet, 0, 1) * 255);
     }
   }
+  }
+  paint(layout);
   function dataTexture(arr) {
     const tex = new THREE.DataTexture(arr, size, size, THREE.RGBAFormat);
     tex.magFilter = THREE.LinearFilter;
@@ -515,13 +543,19 @@ export function splatMap(terrain, layout, size = 512, span = 240) {
         const x = (i / (size - 1) - 0.5) * span, z = (j / (size - 1) - 0.5) * span;
         const d = Math.hypot(x - t[0], z - t[1]) / r;
         if (d >= 1) continue;
-        const k = (j * size + i) * 4 + 2;
-        meadow[k] = Math.max(meadow[k], Math.round((1 - THREE.MathUtils.smoothstep(d, 0.45, 1)) * 255));
+        const v = Math.round((1 - THREE.MathUtils.smoothstep(d, 0.45, 1)) * 255);
+        litter[j * size + i] = Math.max(litter[j * size + i], v);
+        meadow[(j * size + i) * 4 + 2] = litter[j * size + i];
       }
     });
     meadowTex.needsUpdate = true;
   }
-  return { texture: tex, meadow: meadowTex, span, sample, sampleMeadow, addCanopy };
+  function relayout(next) {
+    paint(next);
+    tex.needsUpdate = true;
+    meadowTex.needsUpdate = true;
+  }
+  return { texture: tex, meadow: meadowTex, span, sample, sampleMeadow, addCanopy, relayout };
 }
 
 // ---------- тропы ----------
@@ -663,12 +697,16 @@ alb = mix(alb, mix(dA.rgb * 0.82, alb, 1.0 - wGrass), wear * 0.85);
 alb *= 1.0 - 0.2 * wear * (1.0 - wGrass);
 alb *= mix(1.0, 0.6, damp);
 alb = mix(alb, alb * 0.32, puddle);
+// снег (WEATHER.snow): ровный покров, на тропах и в колеях тоньше, по краю — пятнами
+float snowK = clamp(uSnow * (1.0 - 0.55 * wear - 0.3 * sp.b) + 0.15 * uSnow * (fract(sin(dot(floor(wxz * 2.0), vec2(12.9898, 78.233))) * 43758.5453) - 0.5), 0.0, 1.0);
+alb = mix(alb, vec3(0.8, 0.83, 0.88), snowK);
 diffuseColor.rgb = alb;
 float tRough = gO.g * wGrass + dO.g * wDirt + vO.g * wGravel;
 tRough = mix(tRough, tRough * 0.82, sp.b);
 tRough = mix(tRough, 0.42, damp * 0.7);
 tRough = mix(tRough, tRough * 0.8, wear);
 tRough = mix(tRough, 0.03, puddle);
+tRough = mix(tRough, 0.75, snowK);
 float tAo = gO.r * wGrass + dO.r * wDirt + vO.r * wGravel;
 `;
 
@@ -725,7 +763,7 @@ export function terrainMaterial(textures, splat, quality, wear) {
       .replace('#include <normal_fragment_maps>', TERRAIN_NORMAL)
       .replace('#include <aomap_fragment>', 'reflectedLight.indirectDiffuse *= tAo; reflectedLight.indirectSpecular *= tAo;');
   };
-  m.customProgramCacheKey = function () { return 'terrain4' + (quality.terrainDetail ? 'p' : ''); };
+  m.customProgramCacheKey = function () { return 'terrain5' + (quality.terrainDetail ? 'p' : ''); };
   return m;
 }
 

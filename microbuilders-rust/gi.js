@@ -1,5 +1,6 @@
 // Отражённый свет (GI) вокруг стройки — трассировка конусов по вокселям (Crassin 2011), для render.js.
-// Объём 40 × 15 × 40 м над площадкой, воксель 0,31 м. Каждый воксель хранит шесть граней (±X, ±Y, ±Z):
+// Объём 128 × 48 × 128 вокселей над зданием (от 40 × 15 × 40 м при вокселе 0,31 м — по размеру здания, setExtent).
+// Каждый воксель хранит шесть граней (±X, ±Y, ±Z):
 // стена тоньше вокселя освещена снаружи и тёмная внутри — свет не просачивается в комнаты.
 // 1) Процессор раскладывает треугольники здания, склада и рельефа по вокселям (точки на треугольнике):
 //    грань — по нормали, цвет — среднее альбедо материала × цвет вершин, плотность — по площади.
@@ -9,11 +10,12 @@
 //    поверхностей вокруг (тёплый подсвет от земли, цвет от стен) и доля открытого неба.
 import * as THREE from 'three';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
-import { ATMO } from './atmosphere.js?v=9f85320';
+import { ATMO } from './atmosphere.js?v=360d748';
 
 const NX = 128, NY = 48, NZ = 128;
+// размер объёма меняет setExtent (воксель кубический, сетка та же)
 const SIZE = new THREE.Vector3(40, 15, 40);
-const VOX = SIZE.x / NX;
+let VOX = SIZE.x / NX;
 const VERT = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
 
 const INJECT_FRAG = /* glsl */ `
@@ -307,6 +309,15 @@ export function createGI(renderer) {
   let roots = function () { return []; }, exclude = null;
   function bind(o) { roots = o.roots || roots; exclude = o.exclude || null; dirty = true; }
   function setCenter(x, z) { min.set(x - SIZE.x / 2, -1.5, z - SIZE.z / 2); dirty = true; }
+  // Объём под здание: воксель v метров, объём NX·v × NY·v × NZ·v (центр — setCenter после).
+  function setExtent(v) {
+    VOX = v;
+    SIZE.set(NX * v, NY * v, NZ * v);
+    im.uniforms.uVox.value = v;
+    tm.uniforms.uVox.value = v;
+    tm.uniforms.uSize.value.copy(SIZE);
+    dirty = true;
+  }
 
   let dirty = true, lastBuild = -1e9, injected = false;
   function build() {
@@ -422,5 +433,5 @@ export function createGI(renderer) {
   function setSize(w, h) { out.setSize(Math.max(1, w >> 1), Math.max(1, h >> 1)); }
   function markDirty() { dirty = true; }
   function dispose() { [rad, out, avgRT].forEach(function (t) { t.dispose(); }); alb.dispose(); [im, tm, avgM].forEach(function (m) { m.dispose(); }); [iq, tq, avgQ].forEach(function (q) { q.dispose(); }); }
-  return { update, trace, setSize, bind, setGround, setCenter, markDirty, dispose, texture: out.texture, min, size: SIZE, build };
+  return { update, trace, setSize, bind, setGround, setCenter, setExtent, markDirty, dispose, texture: out.texture, min, size: SIZE, build };
 }

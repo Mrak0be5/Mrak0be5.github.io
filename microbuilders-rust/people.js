@@ -8,11 +8,10 @@
 import * as THREE from 'three';
 import { edgeTable, triTable } from 'three/addons/objects/MarchingCubes.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { rng, plank, stone as stonePrim, corrugated, cylinder } from './geo.js?v=9f85320';
-import { TEXTURE_TILES as TILE } from './textures.js?v=9f85320';
-import { linkSky } from './world.js?v=9f85320';
-import { markDynamic } from './render.js?v=9f85320';
-import { loadHumans, makeHuman } from './humans.js?v=9f85320';
+import { rng } from './geo.js?v=360d748';
+import { linkSky } from './world.js?v=360d748';
+import { markDynamic } from './render.js?v=360d748';
+import { loadHumans, makeHuman } from './humans.js?v=360d748';
 
 // ---------- скелет ----------
 
@@ -515,141 +514,39 @@ function tool(kind) {
   return g;
 }
 
-// Ноша на плече или в руках: доски, жерди, листы, плиты (материалы деталей).
-export function carryObject(kind, count, mats) {
+// Заплечная рама для ноши: две стойки из трубы, полка и лямки; на полке — до 6 блоков 0,2 м (2 × 3).
+function stackRig(mats) {
   const g = new THREE.Group();
-  const add = function (prim, mat, m) {
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(prim.pos, 3));
-    geo.setAttribute('normal', new THREE.BufferAttribute(prim.nrm, 3));
-    geo.setAttribute('uv', new THREE.BufferAttribute(prim.uv, 2));
-    geo.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(prim.pos.length).fill(1), 3));
-    geo.setIndex(new THREE.BufferAttribute(prim.index instanceof Uint32Array || prim.index instanceof Uint16Array ? prim.index : new Uint32Array(prim.index), 1));
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.applyMatrix4(m);
-    mesh.castShadow = true;
-    g.add(mesh);
-  };
-  const r = rng(count * 31 + kind.length);
-  if (kind === 'planks') {
-    for (let i = 0; i < Math.max(1, Math.min(4, count)); i++) add(plank(2.6, 0.18, 0.025, Math.floor(r() * 8), r() * 0.1), mats.planks, new THREE.Matrix4().makeRotationY(Math.PI / 2).setPosition(0, i * 0.027, 0));
-  } else if (kind === 'sticks') {
-    for (let i = 0; i < Math.max(2, Math.min(5, count + 1)); i++) {
-      const p = cylinder(0.032, 0.026, 2.4, 7, true, TILE.bark);
-      add(p, mats.bark, new THREE.Matrix4().makeRotationX(Math.PI / 2).setPosition((i % 3 - 1) * 0.05, Math.floor(i / 3) * 0.05, -1.2));
-    }
-  } else if (kind === 'sheets') {
-    const p = corrugated(0.8, 2.2, TILE.zinc, 0.076, 0.009, 0);
-    add(p, mats.zinc, new THREE.Matrix4().makeRotationY(Math.PI / 2).setPosition(0, -1.1, 0.4));
-  } else if (kind === 'plates') {
-    const p = plank(0.9, 0.9, 0.03, 0, 0);
-    add(p, mats.steelplate, new THREE.Matrix4());
-  } else if (kind === 'stones') {
-    for (let i = 0; i < Math.max(1, Math.min(6, count)); i++) {
-      const s = stonePrim(0.24 + r() * 0.08, 0.13, 0.17, Math.floor(r() * 24), TILE.stone, r(), r());
-      add(s, mats.stone, new THREE.Matrix4().makeRotationY((r() - 0.5) * 0.6).setPosition((i % 2 - 0.5) * 0.2, Math.floor(i / 4) * 0.13, ((Math.floor(i / 2) % 2) - 0.5) * 0.24));
-    }
-  } else if (kind === 'box') {
-    add(plank(0.9, 1.2, 0.06, 2, 0), mats.planks, new THREE.Matrix4());
+  // цвет вершин белый: материалы трубы и резины красят цветом вершин
+  const white = function (geo) { geo.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(geo.attributes.position.count * 3).fill(1), 3)); return geo; };
+  const tube = white(new THREE.CylinderGeometry(0.012, 0.012, 0.62, 6));
+  [-0.13, 0.13].forEach(function (x) {
+    const rail = new THREE.Mesh(tube, mats.tube);
+    rail.position.set(x, 0.12, 0);
+    g.add(rail);
+  });
+  const shelf = new THREE.Mesh(white(new THREE.BoxGeometry(0.3, 0.02, 0.24)), mats.tube);
+  shelf.position.set(0, -0.18, -0.1);
+  g.add(shelf);
+  const strapGeo = white(new THREE.BoxGeometry(0.035, 0.42, 0.012));
+  [-0.09, 0.09].forEach(function (x) {
+    const strap = new THREE.Mesh(strapGeo, mats.rubber);
+    strap.position.set(x, 0.12, 0.05);
+    g.add(strap);
+  });
+  const box = new THREE.BoxGeometry(0.19, 0.19, 0.19);
+  const blocks = [];
+  for (let i = 0; i < 6; i++) {
+    const m = new THREE.Mesh(box, new THREE.MeshStandardMaterial({ color: 0x999999, roughness: 0.85 }));
+    m.position.set(i % 2 ? 0.07 : -0.07, -0.07 + Math.floor(i / 2) * 0.195, -0.11);
+    m.rotation.y = (i % 3 - 1) * 0.06;
+    m.castShadow = true;
+    blocks.push(m);
+    g.add(m);
   }
+  g.userData.blocks = blocks;
+  g.traverse(function (o) { if (o.isMesh) o.castShadow = true; });
   return g;
-}
-
-// Ноша одного вида и числа — общая на всех рабочих: геометрия создаётся один раз.
-const CARRY_CACHE = new Map();
-function cachedCarry(kind, count, mats) {
-  const key = kind + ':' + Math.min(6, count);
-  let proto = CARRY_CACHE.get(key);
-  if (!proto) { proto = carryObject(kind, count, mats); CARRY_CACHE.set(key, proto); }
-  return proto.clone();
-}
-
-// Тачка в координатах рабочего (он смотрит по +z): ручки — в руках (x ±0,27, y 0,84, z 0,2), колесо — на земле
-// в 1,45 м впереди. Группа-шарнир стоит на оси колеса: на стоянке тачка наклоняется вперёд на опоры (ручки
-// опускаются до 0,44 м). Корыто — гнутый лист с закатанным краем, рама из трубы до оси, шина со ступицей.
-export const BARROW = { wheel: [0, 0.19, 1.45], rest: -0.3, wheelR: 0.195 };
-function tubeBetween(a, b, r, mat, seg = 10) {
-  const d = new THREE.Vector3().subVectors(b, a);
-  const len = d.length();
-  const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, seg, 1, false), mat);
-  m.position.copy(a).addScaledVector(d, 0.5);
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.divideScalar(len));
-  return m;
-}
-export function wheelbarrow(mats) {
-  const S = shared();
-  const pivot = new THREE.Group();
-  const body = new THREE.Group();
-  body.position.set(-BARROW.wheel[0], -BARROW.wheel[1], -BARROW.wheel[2]);
-  pivot.add(body);
-  // корыто: дно, задний и передний (пологий) борта, бока — плоские грани
-  const B = [[-0.2, 0.47, 0.66], [0.2, 0.47, 0.66], [0.2, 0.47, 1.06], [-0.2, 0.47, 1.06]];
-  const T = [[-0.31, 0.77, 0.44], [0.31, 0.77, 0.44], [0.31, 0.77, 1.3], [-0.31, 0.77, 1.3]];
-  const quads = [[B[0], B[1], B[2], B[3]], [B[1], B[0], T[0], T[1]], [B[3], B[2], T[2], T[3]], [B[0], B[3], T[3], T[0]], [B[2], B[1], T[1], T[2]]];
-  const pos = [], col = [];
-  const green = new THREE.Color(0.2, 0.42, 0.19);
-  quads.forEach(function (q) {
-    [0, 1, 2, 0, 2, 3].forEach(function (k) { pos.push(q[k][0], q[k][1], q[k][2]); col.push(green.r, green.g, green.b); });
-  });
-  const tg = new THREE.BufferGeometry();
-  tg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  tg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  tg.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(pos.length / 3 * 2), 2));
-  tg.computeVertexNormals();
-  const paint = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, side: THREE.DoubleSide, metalness: 0.35, roughness: 0.5 });
-  linkSky(paint);
-  body.add(new THREE.Mesh(tg, paint));
-  const rimMat = new THREE.MeshStandardMaterial({ color: 0x2f5a2c, roughness: 0.45, metalness: 0.4 });
-  linkSky(rimMat);
-  for (let k = 0; k < 4; k++) body.add(tubeBetween(new THREE.Vector3(...T[k]), new THREE.Vector3(...T[(k + 1) % 4]), 0.012, rimMat, 6));
-  // рама: ручки от рук до оси колеса, поперечины, опоры, кронштейны оси
-  [-1, 1].forEach(function (sd) {
-    const grip = new THREE.Vector3(sd * 0.27, 0.84, 0.2), axle = new THREE.Vector3(sd * 0.07, 0.21, 1.4);
-    body.add(tubeBetween(grip, axle, 0.016, S.steel));
-    const back = grip.clone().addScaledVector(axle.clone().sub(grip).normalize(), -0.15);
-    body.add(tubeBetween(back, grip.clone().addScaledVector(axle.clone().sub(grip).normalize(), 0.02), 0.021, S.black));
-    const onRail = grip.clone().lerp(axle, 0.36);
-    body.add(tubeBetween(onRail, new THREE.Vector3(sd * 0.24, 0.25, 0.64), 0.013, S.steel, 6));
-    body.add(tubeBetween(axle, new THREE.Vector3(sd * 0.05, BARROW.wheel[1], BARROW.wheel[2]), 0.012, S.steel, 6));
-  });
-  [0.62, 1.12].forEach(function (z) {
-    const t = (z - 0.2) / 1.2;
-    const y = 0.84 + (0.21 - 0.84) * t, x = 0.27 + (0.07 - 0.27) * t;
-    body.add(tubeBetween(new THREE.Vector3(-x, y, z), new THREE.Vector3(x, y, z), 0.012, S.steel, 6));
-  });
-  body.add(tubeBetween(new THREE.Vector3(-0.25, 0.25, 0.64), new THREE.Vector3(0.25, 0.25, 0.64), 0.012, S.steel, 6));
-  // колесо: шина, обод, ступица
-  const wheel = new THREE.Group();
-  wheel.position.set(BARROW.wheel[0], BARROW.wheel[1], BARROW.wheel[2]);
-  const tire = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.045, 12, 28), S.black);
-  tire.rotation.y = Math.PI / 2;
-  const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.115, 0.115, 0.05, 20), S.steel);
-  rim.rotation.z = Math.PI / 2;
-  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.1, 10), S.steel);
-  hub.rotation.z = Math.PI / 2;
-  wheel.add(tire, rim, hub);
-  body.add(wheel);
-  // детали одного материала — одной сеткой (тачка у каждого рабочего: меньше вызовов отрисовки)
-  [body, wheel].forEach(function (grp) {
-    const byMat = new Map();
-    grp.children.slice().forEach(function (m) {
-      if (!m.isMesh) return;
-      m.updateMatrix();
-      const g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
-      g.applyMatrix4(m.matrix);
-      if (!g.attributes.color) g.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 3).fill(1), 3));
-      if (!byMat.has(m.material)) byMat.set(m.material, []);
-      byMat.get(m.material).push(g);
-      grp.remove(m);
-    });
-    byMat.forEach(function (list, mat) { grp.add(new THREE.Mesh(mergeGeometries(list), mat)); });
-  });
-  const load = new THREE.Group();
-  load.position.set(0, 0.54, 0.86);
-  body.add(load);
-  pivot.userData = { load, wheel, body };
-  pivot.traverse(function (o) { o.castShadow = true; o.receiveShadow = true; });
-  return pivot;
 }
 
 // ---------- рабочий ----------
@@ -758,57 +655,27 @@ export function createWorkerFactory(quality) {
     const worker = {
       group, mesh, bones, look, tools, human, hipsRest: at(B.hips)[1],
       chestShift: new THREE.Vector3(c1[0] - c0[0], c1[1] - c0[1], c1[2] - c0[2]), armRest: { R: restArm('R'), L: restArm('L') },
-      carry: null, carryKind: null, carryCount: 0, barrow: null,
-      anim: { phase: 0, speed: 0, action: 'idle', t: 0, climb: 0, bend: 0 },
+      anim: { phase: 0, speed: 0, action: 'idle', t: 0, climb: 0, bend: 0, stage: 0 },
       pose: BONES.map(function () { return new THREE.Quaternion(); }),
-      barrowState: 'off',
-      setCarry: function (kind, count) {
-        if (worker.carry) { if (worker.carry.parent) worker.carry.parent.remove(worker.carry); worker.carry = null; }
-        worker.carryKind = kind; worker.carryCount = count;
-        if (kind === 'stones') { if (worker.barrowState === 'off') worker.pushBarrow(); } else if (kind) worker.barrowOff();
-        if (worker.barrow) {
-          const load = worker.barrow.userData.load;
-          while (load.children.length) load.remove(load.children[0]);
-          if (kind === 'stones' && count > 0) load.add(cachedCarry('stones', count, mats));
+      // Ноша оригинала: стопка блоков материала на заплечной раме (до 6 штук по долям ноши, game.js →
+      // paintCarryStack). looks — блоки снизу вверх: { geometry, material } (crew.js), key — их состав;
+      // пустой список — рама без ноши.
+      setStack: function (looks, key) {
+        if (worker.stackKey === key) return;
+        worker.stackKey = key;
+        if (!worker.stack) {
+          worker.stack = stackRig(mats);
+          // за спиной: от грудного сустава назад и чуть ниже
+          worker.stack.position.set(0, -0.08, -0.2).add(worker.chestShift);
+          bones[B.chest].add(worker.stack);
         }
-        // без ноши пустая тачка остаётся при рабочем (или на стоянке)
-        if (!kind || kind === 'stones') return;
-        const obj = cachedCarry(kind, count, mats);
-        if (kind === 'planks' || kind === 'sticks') {
-          // на правом плече: над плечевым суставом, ближе к шее (жерди — центром нижнего ряда)
-          obj.position.copy(worker.armRest.R.sh).add(SHOULDER_LOAD);
-          if (kind === 'sticks') obj.position.y += 0.03;
-          bones[B.chest].add(obj);
-        } else if (kind === 'sheets') {
-          obj.position.set(-0.24, 0.0, -0.1).add(worker.chestShift);
-          bones[B.chest].add(obj);
-        } else {
-          obj.position.set(0, -0.05, 0.38).add(worker.chestShift);
-          obj.rotation.x = Math.PI / 2 - 0.15;
-          bones[B.chest].add(obj);
+        const blocks = worker.stack.userData.blocks;
+        for (let i = 0; i < blocks.length; i++) {
+          blocks[i].visible = i < looks.length;
+          if (i < looks.length) { blocks[i].geometry = looks[i].geometry; blocks[i].material = looks[i].material; }
         }
-        worker.carry = obj;
+        worker.stack.visible = true;
       },
-      // катить тачку перед собой (ручки в руках)
-      pushBarrow: function () {
-        if (!worker.barrow) worker.barrow = markDynamic(wheelbarrow(mats));
-        const b = worker.barrow;
-        if (b.parent !== group) { if (b.parent) b.parent.remove(b); group.add(b); }
-        b.position.set(BARROW.wheel[0], BARROW.wheel[1], BARROW.wheel[2]);
-        b.rotation.set(0, 0, 0, 'YXZ');
-        worker.barrowState = 'push';
-      },
-      // поставить на опоры: (x, y, z) — место у ручек, колесо — впереди по heading
-      parkBarrow: function (parent, x, y, z, heading) {
-        const b = worker.barrow;
-        if (!b || worker.barrowState !== 'push') return;
-        if (b.parent) b.parent.remove(b);
-        parent.add(b);
-        b.position.set(x + Math.sin(heading) * BARROW.wheel[2], y + BARROW.wheel[1], z + Math.cos(heading) * BARROW.wheel[2]);
-        b.rotation.set(BARROW.rest, heading, 0, 'YXZ');
-        worker.barrowState = 'park';
-      },
-      barrowOff: function () { if (worker.barrow && worker.barrow.parent) worker.barrow.parent.remove(worker.barrow); worker.barrowState = 'off'; },
     };
     return worker;
   }
@@ -820,11 +687,6 @@ export function createWorkerFactory(quality) {
 const TARGET = BONES.map(function () { return new THREE.Euler(); });
 function set(i, x, y, z) { TARGET[i].set(x, y, z, 'XYZ'); }
 
-// Ноша на плече (в осях груди): от плечевого сустава; кисть — перед ношей и над ней; куда смотрит локоть.
-const SHOULDER_LOAD = new THREE.Vector3(0.035, 0.045, 0.0);
-const SHOULDER_HAND = new THREE.Vector3(0.0, 0.05, 0.11);
-const SHOULDER_POLE = new THREE.Vector3(-0.4, -0.5, 0.75).normalize();
-const _t = new THREE.Vector3();
 // Двухзвенная ИК руки в осях груди: кисть — в target, локоть — в сторону pole. Плечо поворачивается целиком,
 // предплечье сгибается вокруг оси локтя — поперёк руки (в покое рука отведена на 38°, ось X кости для сгиба
 // не годится: с ней локоть не сгибается больше чем на ~100°).
@@ -846,7 +708,8 @@ function armIK(w, sd, target, pole) {
   TARGET[B['foreArm' + sd]].setFromQuaternion(k.q.setFromAxisAngle(J.h, beta), 'XYZ');
 }
 
-// a.speed — м/с (идёт), a.action: idle | walk | hammer | lay | screw | climb | pick | push (тачка)
+// a.speed — м/с (идёт или бежит), a.action: idle | hammer | lay | screw | climb | pick | work-high | mantle | jump
+// (a.stage 0..1 — ход залезания на куб или прыжка)
 export function animateWorker(w, dt, time) {
   const a = w.anim;
   TARGET.forEach(function (e) { e.set(0, 0, 0); });
@@ -860,51 +723,33 @@ export function animateWorker(w, dt, time) {
   let bob = 0;
   const moving = a.speed > 0.05;
   if (moving) {
+    // шаг до ~2,4 м/с, дальше — бег (рабочие оригинала ходят 4–8 м/с на клетке 2 м): частота шагов
+    // растёт медленно, длина шага — быстро; наклон вперёд, колено выше, руки согнуты, фаза полёта
+    const run = THREE.MathUtils.smoothstep(a.speed, 2.4, 4.8);
     const stride = 1.35 + a.speed * 0.25;
-    a.phase += (a.speed / stride) * Math.PI * 2 * dt;
+    const rate = THREE.MathUtils.lerp(a.speed / stride, 1.45 + 0.035 * a.speed, run);
+    a.phase += rate * Math.PI * 2 * dt;
     const p = a.phase;
     const amp = Math.min(1, a.speed / 1.3);
-    set(B.thighL, -S(p) * 0.42 * amp, 0, 0);
-    set(B.thighR, S(p) * 0.42 * amp, 0, 0);
-    set(B.shinL, Math.max(0, S(p - 1.6)) * 0.85 * amp + 0.05, 0, 0);
-    set(B.shinR, Math.max(0, S(p + Math.PI - 1.6)) * 0.85 * amp + 0.05, 0, 0);
-    set(B.footL, Math.max(0, -S(p)) * 0.25 * amp, 0, 0);
-    set(B.footR, Math.max(0, S(p)) * 0.25 * amp, 0, 0);
-    set(B.upperArmL, S(p) * 0.32 * amp, 0, -armDown);
-    set(B.upperArmR, -S(p) * 0.32 * amp, 0, armDown);
-    set(B.foreArmL, -0.25 - Math.max(0, S(p)) * 0.3 * amp, 0, 0);
-    set(B.foreArmR, -0.25 - Math.max(0, -S(p)) * 0.3 * amp, 0, 0);
-    set(B.hips, 0, S(p) * 0.06 * amp, 0);
-    set(B.chest, 0.04, -S(p) * 0.08 * amp, 0);
-    bob = (Math.abs(C(p)) - 0.6) * 0.03 * amp;
+    const L = THREE.MathUtils.lerp;
+    set(B.thighL, L(-S(p) * 0.42 * amp, -S(p) * 0.72 - 0.18, run), 0, 0);
+    set(B.thighR, L(S(p) * 0.42 * amp, S(p) * 0.72 - 0.18, run), 0, 0);
+    set(B.shinL, L(Math.max(0, S(p - 1.6)) * 0.85 * amp + 0.05, Math.max(0, S(p - 1.2)) * 1.7 + 0.3, run), 0, 0);
+    set(B.shinR, L(Math.max(0, S(p + Math.PI - 1.6)) * 0.85 * amp + 0.05, Math.max(0, S(p + Math.PI - 1.2)) * 1.7 + 0.3, run), 0, 0);
+    set(B.footL, L(Math.max(0, -S(p)) * 0.25 * amp, Math.max(0, -S(p)) * 0.35 - 0.1, run), 0, 0);
+    set(B.footR, L(Math.max(0, S(p)) * 0.25 * amp, Math.max(0, S(p)) * 0.35 - 0.1, run), 0, 0);
+    set(B.upperArmL, L(S(p) * 0.32 * amp, S(p) * 0.75 - 0.15, run), 0, -armDown * (1 - 0.45 * run));
+    set(B.upperArmR, L(-S(p) * 0.32 * amp, -S(p) * 0.75 - 0.15, run), 0, armDown * (1 - 0.45 * run));
+    set(B.foreArmL, L(-0.25 - Math.max(0, S(p)) * 0.3 * amp, -1.45 - Math.max(0, S(p)) * 0.2, run), 0, 0);
+    set(B.foreArmR, L(-0.25 - Math.max(0, -S(p)) * 0.3 * amp, -1.45 - Math.max(0, -S(p)) * 0.2, run), 0, 0);
+    set(B.hips, 0, S(p) * L(0.06 * amp, 0.12, run), 0);
+    set(B.chest, L(0.04, 0.1, run), -S(p) * L(0.08 * amp, 0.16, run), 0);
+    TARGET[B.spine].x += 0.16 * run;
+    bob = L((Math.abs(C(p)) - 0.6) * 0.03 * amp, (Math.abs(C(p)) - 0.45) * 0.08, run);
   } else {
     const br = S(time * 1.6 + w.look.build) * 0.02;
     set(B.chest, br, 0, 0);
     set(B.head, 0, S(time * 0.37 + w.look.helmet) * 0.25, 0);
-  }
-  // ноша
-  const ck = w.carryKind;
-  if ((ck === 'planks' || ck === 'sticks') && w.carry) {
-    // правая кисть сверху на ноше перед плечом, локоть вперёд и вниз
-    armIK(w, 'R', _t.copy(w.carry.position).add(SHOULDER_HAND), SHOULDER_POLE);
-  } else if (ck === 'sheets') {
-    set(B.upperArmR, -0.35, 0, 0.75);
-    set(B.foreArmR, -0.9, 0, 0);
-    set(B.upperArmL, -0.95, 0.0, 0.1);
-    set(B.foreArmL, -0.6, 0, 0);
-  } else if (ck === 'plates' || ck === 'box') {
-    set(B.upperArmL, -0.9, 0, -0.25);
-    set(B.upperArmR, -0.9, 0, 0.25);
-    set(B.foreArmL, -1.0, 0, 0);
-    set(B.foreArmR, -1.0, 0, 0);
-    TARGET[B.spine].x -= 0.12;
-  } else if (w.barrowState === 'push') {
-    // тачка: прямые руки вниз-вперёд к ручкам, лёгкий наклон
-    set(B.upperArmL, -0.3, 0, -0.53);
-    set(B.upperArmR, -0.3, 0, 0.53);
-    set(B.foreArmL, -0.08, 0, 0);
-    set(B.foreArmR, -0.08, 0, 0);
-    TARGET[B.spine].x += 0.06;
   }
   // действие на месте
   if (!moving) {
@@ -942,6 +787,30 @@ export function animateWorker(w, dt, time) {
       set(B.foreArmL, -0.5, 0, 0); set(B.foreArmR, -0.5, 0, 0);
       set(B.thighL, -0.9 - S(c) * 0.45, 0, 0); set(B.thighR, -0.9 + S(c) * 0.45, 0, 0);
       set(B.shinL, 1.3 + S(c) * 0.3, 0, 0); set(B.shinR, 1.3 - S(c) * 0.3, 0, 0);
+    } else if (a.action === 'mantle') {
+      // залезание на куб 2 м (a.stage 0..1, как climbLift в game.js): руки на край, подтягивание с коленом
+      // на ребро, шаг через край
+      const st = a.stage;
+      const reach = THREE.MathUtils.smoothstep(st, 0, 0.2), pull = THREE.MathUtils.smoothstep(st, 0.2, 0.78), over = THREE.MathUtils.smoothstep(st, 0.78, 1);
+      const up = reach * (1 - pull);
+      set(B.upperArmL, -2.75 * up - 0.5 * pull * (1 - over), 0, -0.25 - 0.2 * pull); set(B.upperArmR, -2.75 * up - 0.5 * pull * (1 - over), 0, 0.25 + 0.2 * pull);
+      set(B.foreArmL, -0.2 * up - 0.9 * pull * (1 - over), 0, 0); set(B.foreArmR, -0.2 * up - 0.9 * pull * (1 - over), 0, 0);
+      const knee = THREE.MathUtils.smoothstep(st, 0.45, 0.7) * (1 - over);
+      set(B.thighL, -0.3 * reach * (1 - pull) - 1.5 * knee, 0, 0); set(B.thighR, -0.3 * reach * (1 - pull) + 0.25 * knee, 0, 0);
+      set(B.shinL, 0.5 * reach * (1 - pull) + 1.8 * knee, 0, 0); set(B.shinR, 0.5 * reach * (1 - pull) + 0.4 * pull * (1 - over), 0, 0);
+      TARGET[B.spine].x += 0.35 * pull * (1 - over);
+      TARGET[B.head].x -= 0.25 * up;
+    } else if (a.action === 'jump') {
+      // спрыгивание (jumpHeight/jumpDip game.js): присед на краю, полёт с руками в стороны, мягкое приземление
+      const st = a.stage;
+      const crouch = Math.max(1 - Math.abs(st - 0.12) / 0.14, 0) + Math.max(1 - Math.abs(st - 0.92) / 0.1, 0);
+      const air = THREE.MathUtils.smoothstep(st, 0.25, 0.32) * (1 - THREE.MathUtils.smoothstep(st, 0.8, 0.86));
+      set(B.thighL, -0.9 * crouch - 0.35 * air, 0, 0); set(B.thighR, -0.9 * crouch - 0.15 * air, 0, 0);
+      set(B.shinL, 1.4 * crouch + 0.5 * air, 0, 0); set(B.shinR, 1.4 * crouch + 0.3 * air, 0, 0);
+      set(B.footL, -0.5 * crouch, 0, 0); set(B.footR, -0.5 * crouch, 0, 0);
+      set(B.upperArmL, -0.6 * crouch - 0.3 * air, 0, -0.6 - 0.7 * air); set(B.upperArmR, -0.6 * crouch - 0.3 * air, 0, 0.6 + 0.7 * air);
+      set(B.foreArmL, -0.4, 0, 0); set(B.foreArmR, -0.4, 0, 0);
+      TARGET[B.spine].x += 0.4 * crouch;
     } else if (a.action === 'work-high') {
       const sw = (S(t * 8.0) * 0.5 + 0.5);
       // правая рука с молотком работает над головой, левая упирается в стену на уровне плеча
@@ -963,8 +832,7 @@ export function animateWorker(w, dt, time) {
   w.bones[B.hips].position.y = (w.hipsRest || BONES[B.hips][2][1]) + bob;
   // инструмент в руке — по действию
   w.tools.hammer.visible = a.action === 'hammer' || a.action === 'work-high';
-  w.tools.trowel.visible = a.action === 'lay' && w.carryKind === 'stones';
+  w.tools.trowel.visible = a.action === 'lay';
   w.tools.drill.visible = a.action === 'screw';
-  if (w.barrowState === 'push') w.barrow.userData.wheel.rotation.x += (a.speed * dt) / BARROW.wheelR;
   if (w.human) { w.human.retarget(); w.human.blink(dt); }
 }

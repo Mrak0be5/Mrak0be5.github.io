@@ -138,6 +138,13 @@ export function createMaterials(textures, quality) {
   mats.shingles = textured('shingles', { grime: 0 });
   mats.slate = textured('slate', { grime: 0 });
   mats.rope = textured('rope', { grime: 0.3 });
+  // кладка кубов (cubes.js): цвет — материал оригинала через цвет вершин
+  mats.brick = textured('brick', { normalScale: 1.2 });
+  mats.ashlar = textured('ashlar', { normalScale: 1.3 });
+  mats.logs = textured('logs', { grime: 0.6 });
+  mats.riveted = textured('riveted', { metal: true, grime: 0.6 });
+  mats.formwork = textured('formwork');
+  mats.marble = textured('marble', { grime: 0.2 });
   // гвозди, болты, петли, сварка — без фактур
   mats.steel = withGrime(new THREE.MeshStandardMaterial({ color: 0x55585c, metalness: 0.9, roughness: 0.42, vertexColors: true }), 0.4);
   mats.blacksteel = withGrime(new THREE.MeshStandardMaterial({ color: 0x232323, metalness: 0.75, roughness: 0.55, vertexColors: true }), 0.4, 0.5);

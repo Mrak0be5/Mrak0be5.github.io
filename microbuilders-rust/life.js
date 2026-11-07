@@ -1,8 +1,8 @@
 // Жизнь вокруг стройки: погода (ясно → облачно → дождь → сохнет), капли дождя, пыль из-под тачек и ног,
 // дым генераторов мачт ночью, мошкара у прожекторов, птицы. Всё кодом, без текстур.
 import * as THREE from 'three';
-import { CLOUD, WEATHER } from './world.js?v=9f85320';
-import { ATMO } from './atmosphere.js?v=9f85320';
+import { CLOUD, WEATHER } from './world.js?v=360d748';
+import { ATMO } from './atmosphere.js?v=360d748';
 
 // выходы G-буфера у собственных шейдеров: прозрачное не трогает буферы под собой
 const GB_OUT = /* glsl */ `
@@ -81,6 +81,83 @@ function rain(count) {
       uSpotDir: { value: [new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, -1, 0)] }, uSpotCos: { value: [new THREE.Vector2(1, 1), new THREE.Vector2(1, 1)] },
     },
     vertexShader: RAIN_VERT, fragmentShader: RAIN_FRAG,
+    transparent: true, depthWrite: false, blending: THREE.CustomBlending,
+    blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor, blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor,
+  });
+  const mesh = new THREE.Mesh(g, m);
+  mesh.frustumCulled = false;
+  mesh.renderOrder = 5;
+  mesh.userData.noGI = true;
+  return mesh;
+}
+
+// ---------- снег ----------
+// 9 000 хлопьев в коробке 40 × 22 × 40 м вокруг камеры: падают 0,8–1,5 м/с и кружат; мягкие диски 2,5–4 см
+// (мельче на экране не видно). Свет — небо и солнце (рассеянный), ночью — прожекторы.
+const SNOW_VERT = /* glsl */ `
+attribute vec4 aSeed;
+uniform float uTime, uSnowK;
+uniform vec3 uCam, uWindR;
+varying float vA;
+varying vec2 vQ;
+varying vec3 vW;
+void main() {
+  vec3 box = vec3(40.0, 22.0, 40.0);
+  float fall = 0.8 + aSeed.w * 0.7;
+  vec3 swirl = vec3(sin(uTime * (0.6 + aSeed.x) + aSeed.y * 40.0), 0.0, cos(uTime * (0.5 + aSeed.z) + aSeed.x * 40.0)) * 0.35;
+  vec3 p = aSeed.xyz * box + vec3(uWindR.x * 0.4, -fall, uWindR.z * 0.4) * uTime + swirl;
+  p = mod(p - uCam + box * 0.5, box) - box * 0.5 + uCam;
+  vec3 toCam = normalize(cameraPosition - p);
+  vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), toCam));
+  vec3 up = cross(toCam, right);
+  float size = 0.025 + aSeed.w * 0.015;
+  vec3 w = p + (right * position.x + up * position.y) * size;
+  vW = w;
+  vQ = position.xy;
+  float d = length(p - cameraPosition);
+  vA = uSnowK * smoothstep(1.8, 4.5, d) * (1.0 - smoothstep(14.0, 20.0, d)) * step(aSeed.w, uSnowK * 1.05);
+  gl_Position = projectionMatrix * viewMatrix * vec4(w, 1.0);
+}
+`;
+const SNOW_FRAG = GB_OUT + /* glsl */ `
+uniform vec3 uSky, uSun, uSpotPos[2], uSpotCol[2], uSpotDir[2];
+uniform vec2 uSpotCos[2];
+varying float vA;
+varying vec2 vQ;
+varying vec3 vW;
+layout(location = 0) out highp vec4 outColor;
+void main() {
+  float a = vA * (1.0 - smoothstep(0.15, 0.5, length(vQ)));
+  if (a <= 0.002) discard;
+  vec3 c = uSky * 2.6 + uSun;
+  for (int k = 0; k < 2; k++) {
+    vec3 lv = uSpotPos[k] - vW; float dl = length(lv); vec3 l = lv / max(dl, 1e-3);
+    float cone = smoothstep(uSpotCos[k].x, uSpotCos[k].y, dot(-l, uSpotDir[k]));
+    c += uSpotCol[k] * cone / max(dl * dl, 1.0) * 0.9;
+  }
+  outColor = vec4(c * a * 0.9, a * 0.8);
+  gbZero();
+}
+`;
+
+function snow(count) {
+  const g = new THREE.InstancedBufferGeometry();
+  const quad = new THREE.PlaneGeometry(1, 1);
+  g.index = quad.index;
+  g.setAttribute('position', quad.attributes.position);
+  const seeds = new Float32Array(count * 4);
+  for (let i = 0; i < seeds.length; i++) seeds[i] = Math.random();
+  g.setAttribute('aSeed', new THREE.InstancedBufferAttribute(seeds, 4));
+  g.instanceCount = count;
+  const m = new THREE.ShaderMaterial({
+    glslVersion: THREE.GLSL3,
+    uniforms: {
+      uTime: WEATHER.time, uSnowK: WEATHER.snowfall, uCam: { value: new THREE.Vector3() }, uWindR: { value: new THREE.Vector3(1.3, 0, 0.6) },
+      uSky: { value: new THREE.Vector3(0.3, 0.32, 0.35) }, uSun: { value: new THREE.Vector3() },
+      uSpotPos: { value: [new THREE.Vector3(), new THREE.Vector3()] }, uSpotCol: { value: [new THREE.Vector3(), new THREE.Vector3()] },
+      uSpotDir: { value: [new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, -1, 0)] }, uSpotCos: { value: [new THREE.Vector2(1, 1), new THREE.Vector2(1, 1)] },
+    },
+    vertexShader: SNOW_VERT, fragmentShader: SNOW_FRAG,
     transparent: true, depthWrite: false, blending: THREE.CustomBlending,
     blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor, blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor,
   });
@@ -234,17 +311,20 @@ export function createLife(scene, quality, opts) {
   const group = new THREE.Group();
   group.name = 'life';
   const R = quality.rain === 0 ? null : rain(quality.taa ? 14000 : 5000);
+  const SN = snow(quality.taa ? 9000 : 3500);
+  group.add(SN);
   const P = particles(quality.taa ? 900 : 300);
   const B = birds();
   if (R) group.add(R);
   group.add(P.mesh, B.mesh);
   scene.add(group);
   let forced = opts.weather || null;
-  let day = 0, lastHour = null, cover = 0.27, wet = 0, rainK = 0;
+  let day = 0, lastHour = null, cover = 0.27, wet = 0, rainK = 0, snowK = 0, snowCover = 0;
   const tmp = new THREE.Vector3();
   let dustClock = 0, smokeClock = 0, mothClock = 0;
   function plan(hour) {
     if (forced === 'rain') return { cover: 0.82, rain: 1 };
+    if (forced === 'snow') return { cover: 0.78, rain: 0, snow: 1 };
     if (forced === 'clear') return { cover: 0.18, rain: 0 };
     if (day % 2 === 1) {
       const build = THREE.MathUtils.smoothstep(hour, 13.0, 15.3) * (1 - THREE.MathUtils.smoothstep(hour, 17.2, 19.0));
@@ -261,6 +341,11 @@ export function createLife(scene, quality, opts) {
     const k = 1 - Math.exp(-sim * 0.5);
     cover += (p.cover - cover) * k;
     rainK += (p.rain - rainK) * (1 - Math.exp(-sim * 0.8));
+    snowK += ((p.snow || 0) - snowK) * (1 - Math.exp(-sim * 0.25));
+    // снег ложится за ~2 мин снегопада, тает ~10 мин
+    snowCover = Math.max(0, Math.min(1, snowCover + (snowK > 0.2 ? sim / 120 * snowK : -sim / 600)));
+    WEATHER.snow.value = snowCover * 0.9;
+    WEATHER.snowfall.value = snowK;
     // под дождём мокнет за ~15 мин игры, сохнет ~3 ч (игровой час — 40 с при ×1)
     wet = Math.max(0, Math.min(1, wet + (rainK > 0.2 ? sim / 40 * 4 * rainK : -sim / 40 / 3)));
     if (forced === 'rain') wet = Math.max(wet, 0.85);
@@ -288,6 +373,23 @@ export function createLife(scene, quality, opts) {
         u.uSpotCos.value[i].set(Math.cos(sp.angle), Math.cos(sp.angle * (1 - sp.penumbra)));
       }
       R.visible = rainK > 0.01;
+    }
+    {
+      const u = SN.material.uniforms;
+      u.uCam.value.copy(opts.camera.position);
+      u.uSky.value.set(0.35, 0.37, 0.4).multiplyScalar((1 - st.night * 0.95) * 0.6 + 0.01);
+      u.uSun.value.set(sky.sun.color.r, sky.sun.color.g, sky.sun.color.b).multiplyScalar(sky.sun.intensity * 0.03);
+      const spots = (lights || []).filter(function (l) { return l.isSpotLight; });
+      for (let i = 0; i < 2; i++) {
+        const sp = spots[i];
+        if (!sp || sp.intensity < 0.01) { u.uSpotCol.value[i].set(0, 0, 0); continue; }
+        sp.getWorldPosition(u.uSpotPos.value[i]);
+        sp.target.getWorldPosition(tmp);
+        u.uSpotDir.value[i].copy(tmp).sub(u.uSpotPos.value[i]).normalize();
+        u.uSpotCol.value[i].set(sp.color.r, sp.color.g, sp.color.b).multiplyScalar(sp.intensity);
+        u.uSpotCos.value[i].set(Math.cos(sp.angle), Math.cos(sp.angle * (1 - sp.penumbra)));
+      }
+      SN.visible = snowK > 0.01;
     }
     // пыль: из-под колёс тачек и ног на сухой земле, днём; дым генераторов и мошкара — ночью
     const pu = P.mesh.material.uniforms;
@@ -334,11 +436,11 @@ export function createLife(scene, quality, opts) {
   }
   return {
     group, update,
-    state: function () { return { day, cover, wet, rain: rainK, forced }; },
-    // принудительная погода (съёмка ролика, проверки): 'rain' | 'clear' | null — по расписанию
+    state: function () { return { day, cover, wet, rain: rainK, snow: snowK, snowCover, forced }; },
+    // погода логики или принудительная (съёмка, проверки): 'rain' | 'snow' | 'clear' | null — по расписанию
     force: function (mode, instant) {
       forced = mode || null;
-      if (instant) { const p = plan(lastHour || 12); cover = p.cover; rainK = p.rain; if (mode === 'rain') wet = 0.9; if (mode === 'clear') wet = 0; }
+      if (instant) { const p = plan(lastHour || 12); cover = p.cover; rainK = p.rain; snowK = p.snow || 0; if (mode === 'rain') wet = 0.9; if (mode === 'clear') wet = 0; if (mode === 'snow') snowCover = 0.85; }
     },
   };
 }

@@ -5,14 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#1d1f21">
 <title>MicroBuilders: Rust</title>
-<link rel="stylesheet" href="ui.css?v=9f85320">
+<link rel="stylesheet" href="engine/ui.css?v=360d748">
+<link rel="stylesheet" href="hud.css?v=360d748">
+<link rel="stylesheet" href="app.css?v=360d748">
+<script>window.MB_ENGINE_BASE = 'engine/'; window.MB_ENGINE_VERSION = '360d748';</script>
 <script type="importmap">
 { "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/jsm/" } }
 </script>
 </head>
 <body>
 <canvas id="view"></canvas>
-<div id="hud"></div>
 <div id="loading">
   <div class="loading-box">
     <div class="loading-title">MicroBuilders: Rust</div>
@@ -20,6 +22,6 @@
     <div id="loading-text">Запуск…</div>
   </div>
 </div>
-<script type="module" src="main.js?v=9f85320"></script>
+<script type="module" src="main.js?v=360d748"></script>
 </body>
 </html>
