@@ -3,9 +3,9 @@
 // клеток. Камень, песчаник, гранит, мрамор — каменоломня из колотых блоков; кирпич, брус, сталь, бетон —
 // поддоны с пачками той же кладки, что у кубов; стекло — стеклоблоки. Клетка — 2 м.
 import * as THREE from 'three';
-import { rng, stone, roundedBox, boxUV, Batch } from './geo.js?v=360d748';
-import { TEXTURE_TILES as TILE } from './textures.js?v=360d748';
-import { CELL, familyOf, familyMaterial, familyTile, tintOf } from './cubes.js?v=360d748';
+import { rng, stone, roundedBox, boxUV, Batch } from './geo.js?v=0c1cc5f';
+import { TEXTURE_TILES as TILE } from './textures.js?v=0c1cc5f';
+import { CELL, familyOf, familyMaterial, familyTile, tintOf } from './families.js?v=0c1cc5f';
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _p = new THREE.Vector3(), _e = new THREE.Euler();
 const _col = new THREE.Color();

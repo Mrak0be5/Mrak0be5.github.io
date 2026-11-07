@@ -138,7 +138,7 @@ export function createMaterials(textures, quality) {
   mats.shingles = textured('shingles', { grime: 0 });
   mats.slate = textured('slate', { grime: 0 });
   mats.rope = textured('rope', { grime: 0.3 });
-  // кладка кубов (cubes.js): цвет — материал оригинала через цвет вершин
+  // кладка деталей здания (building.js): цвет — материал оригинала через цвет вершин
   mats.brick = textured('brick', { normalScale: 1.2 });
   mats.ashlar = textured('ashlar', { normalScale: 1.3 });
   mats.logs = textured('logs', { grime: 0.6 });

@@ -2,9 +2,9 @@
 // ели из ветвей-карточек (хвоя рисуется кодом на canvas) и валуны. Трава и хвоя не попадают в затенение углов
 // (userData.noAO): у карточек нет объёма, GTAO затемнил бы их прямоугольниками.
 import * as THREE from 'three';
-import { rng, stone, cylinder, Batch } from './geo.js?v=360d748';
-import { TEXTURE_TILES as TILE } from './textures.js?v=360d748';
-import { WEATHER } from './world.js?v=360d748';
+import { rng, stone, cylinder, Batch } from './geo.js?v=0c1cc5f';
+import { TEXTURE_TILES as TILE } from './textures.js?v=0c1cc5f';
+import { WEATHER } from './world.js?v=0c1cc5f';
 
 // ---------- трава ----------
 

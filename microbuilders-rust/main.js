@@ -1,25 +1,27 @@
 // Прототип «MicroBuilders: Rust» на движке оригинала: запуск, качество, сцена, цикл кадра, отладка
 // (?debug=1 → window.RustDebug). Игра — мир logic.js оригинала с его балансом и обвязкой из game.js
-// (engine.js); здесь — его вид: здание из кубов (cubes.js), карьеры и столы (yard.js), леса (scaffold.js),
+// (engine.js); здесь — его вид: здание деталями, как в Rust (building.js: фундамент, стены, окна, двери, колонны,
+// перекрытия), карьеры и столы (yard.js), леса (scaffold.js),
 // бригада (crew.js) и интерфейс оригинала (hud.js). Клетка логики — 2 м. ?level=N — начать уровень N.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { createTextures } from './textures.js?v=360d748';
-import { createMaterials } from './materials.js?v=360d748';
-import { createSky, createTerrain, splatMap, terrainMaterial, terrainMesh, mountains, linkSkyTree, createWear } from './world.js?v=360d748';
-import { createPost } from './post.js?v=360d748';
-import { createRender, DYNAMIC } from './render.js?v=360d748';
-import { createGrass, createForest, createRocks } from './nature.js?v=360d748';
-import { createWorkerFactory } from './people.js?v=360d748';
-import { createAudio } from './audio.js?v=360d748';
-import { createLife } from './life.js?v=360d748';
-import { loadEngine, createEngine } from './engine.js?v=360d748';
-import { createCubes, CELL, familyOf } from './cubes.js?v=360d748';
-import { createYard } from './yard.js?v=360d748';
-import { createScaffold } from './scaffold.js?v=360d748';
-import { createCrew } from './crew.js?v=360d748';
-import { createHud } from './hud.js?v=360d748';
-import { createLights } from './props.js?v=360d748';
+import { createTextures } from './textures.js?v=0c1cc5f';
+import { createMaterials } from './materials.js?v=0c1cc5f';
+import { createSky, createTerrain, splatMap, terrainMaterial, terrainMesh, mountains, linkSkyTree, createWear } from './world.js?v=0c1cc5f';
+import { createPost } from './post.js?v=0c1cc5f';
+import { createRender, DYNAMIC } from './render.js?v=0c1cc5f';
+import { createGrass, createForest, createRocks } from './nature.js?v=0c1cc5f';
+import { createWorkerFactory } from './people.js?v=0c1cc5f';
+import { createAudio } from './audio.js?v=0c1cc5f';
+import { createLife } from './life.js?v=0c1cc5f';
+import { loadEngine, createEngine } from './engine.js?v=0c1cc5f';
+import { createBuilding } from './building.js?v=0c1cc5f';
+import { CELL, familyOf } from './families.js?v=0c1cc5f';
+import { createYard } from './yard.js?v=0c1cc5f';
+import { createScaffold } from './scaffold.js?v=0c1cc5f';
+import { createCrew } from './crew.js?v=0c1cc5f';
+import { createHud } from './hud.js?v=0c1cc5f';
+import { createLights } from './props.js?v=0c1cc5f';
 
 const params = new URLSearchParams(location.search);
 const DEBUG = params.get('debug') === '1' || params.has('capture');
@@ -124,13 +126,14 @@ const state = {
 
 let E = null, hud = null;
 let sky, post, textures, mats, terrain, splat, grass, factory, wear, life;
-let cubes, yard, scaffold, crew, lights = null, viewGroups = [];
+let house, yard, scaffold, crew, lights = null, viewGroups = [];
 const audio = createAudio();
 // браузер даёт звук только после касания или нажатия
 ['pointerdown', 'keydown'].forEach(function (e) { window.addEventListener(e, function () { audio.start(); }, { passive: true }); });
 // Съёмка: камера за рабочим (follow) или облёт (orbit); задаёт отладка, считается в шаге кадра.
 let follow = null, orbit = null;
-const _cam = new THREE.Vector3(), _tgt = new THREE.Vector3();
+const _cam = new THREE.Vector3(), _tgt = new THREE.Vector3(), _ray = new THREE.Vector3();
+const camRay = new THREE.Raycaster();
 function directCamera(dt) {
   if (follow && crew) {
     const w = crew.figure(follow.i);
@@ -139,6 +142,15 @@ function directCamera(dt) {
     const a = w.heading + follow.angle;
     _cam.set(w.pos.x + Math.sin(a) * follow.dist, w.pos.y + follow.height, w.pos.z + Math.cos(a) * follow.dist);
     _tgt.set(w.pos.x, w.pos.y + follow.look, w.pos.z);
+    // камера не уходит за стену и под перекрытие: луч от рабочего к камере, у первой детали — ближе
+    _ray.subVectors(_cam, _tgt);
+    const len = _ray.length();
+    if (len > 1e-3 && house) {
+      camRay.set(_tgt, _ray.divideScalar(len));
+      camRay.far = len;
+      const hit = camRay.intersectObject(house.group, true).find(function (h) { return h.object.isMesh; });
+      if (hit) _cam.copy(_tgt).addScaledVector(_ray, Math.max(0.45, hit.distance - 0.3));
+    }
     const k = follow.snap ? 1 : 1 - Math.exp(-dt * (follow.smooth || 2.5));
     follow.snap = false;
     camera.position.lerp(_cam, k);
@@ -216,7 +228,7 @@ function buildLevel(start) {
     linkSkyTree(lights.group);
     scene.add(lights.group);
   }
-  cubes.build(world);
+  house.build(world);
   yard.build(world);
   scaffold.build(world);
   crew.build(world);
@@ -317,12 +329,12 @@ async function boot() {
   factory = createWorkerFactory(quality);
   await factory.ready;
   await progress(0.8, 'Стройка…');
-  cubes = createCubes({ E, mats, onChange: function () { if (post && post.gi) post.gi.markDirty(); } });
+  house = createBuilding({ E, mats, onChange: function () { if (post && post.gi) post.gi.markDirty(); } });
   yard = createYard({ E, mats });
   scaffold = createScaffold({ E, mats });
   crew = createCrew({ E, factory, mats, wear });
-  scene.add(cubes.group, yard.group, scaffold.group, crew.group);
-  viewGroups = [cubes.group, yard.group, scaffold.group, crew.group];
+  scene.add(house.group, yard.group, scaffold.group, crew.group);
+  viewGroups = [house.group, yard.group, scaffold.group, crew.group];
   hud = createHud(E, {
     getTempo: function () { return state.tempo; },
     setTempo: function (t) { state.tempo = t; },
@@ -356,7 +368,7 @@ async function boot() {
   // отражённый свет: здание, леса, двор и рельеф (рабочие — нет)
   if (post.gi) {
     post.gi.setGround(terrain, splat);
-    post.gi.bind({ roots: function () { return [cubes.group, yard.group, scaffold.group]; }, exclude: DYNAMIC });
+    post.gi.bind({ roots: function () { return [house.group, yard.group, scaffold.group]; }, exclude: DYNAMIC });
     focusGI();
   }
   state.hour = viewHour();
@@ -528,7 +540,7 @@ function advance(dt) {
   if (state.greedy) E.greedy();
   E.step(dt, state.tempo, true);
   asView(function () {
-    cubes.update();
+    house.update();
     yard.update();
     scaffoldClock += dt;
     if (scaffoldClock > 0.1) { scaffoldClock = 0; if (scaffold.update() && post && post.gi) post.gi.markDirty(); }
@@ -553,7 +565,7 @@ function view(dt) {
   sky.follow(camera);
   sky.update(state.hour, state.time, controls.target);
   if (lights) lights.night(sky.state.night);
-  cubes.ghostLight(sky.state.night);
+  house.ghostLight(sky.state.night);
   grass.update(state.time);
   wear.update(dt);
   const sim = Math.min(0.25, dt * state.tempo);
@@ -610,7 +622,7 @@ if (DEBUG) {
     // стройка до доли готовых кубов по ходу логики (жадный покупатель, ×20, без отрисовки)
     jump: function (f) {
       for (let guard = 0; guard < 20000 && E.campaign.status === 'play' && 1 - E.world.remaining / E.world.blocks.length < f; guard++) { E.greedy(); E.step(0.05, 20, true); }
-      asView(function () { cubes.update(); yard.update(); scaffold.update(); crew.update(0, state.time, 20); });
+      asView(function () { house.update(); yard.update(); scaffold.update(); crew.update(0, state.time, 20); });
       if (post && post.gi) post.gi.markDirty();
       return Math.round((1 - E.world.remaining / E.world.blocks.length) * 1000) / 1000;
     },
@@ -669,7 +681,7 @@ if (DEBUG) {
     gpu: function () { const gl = renderer.getContext(); const e = gl.getExtension('WEBGL_debug_renderer_info'); return e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER); },
     scene: function () { return scene; },
     post: function () { return post; },
-    cubes: function () { return cubes; },
+    house: function () { return house; },
     hud: function (on) { document.body.classList.toggle('rust-shot', !on); return !!on; },
     follow: function (opts) { follow = opts ? Object.assign({ angle: 0.9, dist: 3.4, height: 1.6, look: 1.1, snap: true }, opts) : null; orbit = null; return !!follow; },
     orbit: function (opts) { orbit = opts || null; follow = null; return !!orbit; },

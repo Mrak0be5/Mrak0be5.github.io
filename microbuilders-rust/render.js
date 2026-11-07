@@ -10,9 +10,9 @@
 import * as THREE from 'three';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
-import { VolumePass, QUAD_VERT, FLARE_GLSL, FINISH } from './post.js?v=360d748';
-import { createClouds } from './clouds.js?v=360d748';
-import { createGI } from './gi.js?v=360d748';
+import { VolumePass, QUAD_VERT, FLARE_GLSL, FINISH } from './post.js?v=0c1cc5f';
+import { createClouds } from './clouds.js?v=0c1cc5f';
+import { createGI } from './gi.js?v=0c1cc5f';
 
 // Корни движущихся объектов: их меши дорисовывают скорость (слой 2).
 export const DYNAMIC = new Set();

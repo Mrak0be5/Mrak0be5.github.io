@@ -3,9 +3,9 @@
 // настил — стальной щит на уровне пола клетки с перилами, толщина уходит вниз от опорной плоскости.
 // Износ: трещина — погнутые, в ленте; поломка — щита нет; снятые (removed) не рисуются.
 import * as THREE from 'three';
-import { roundedBox, boxUV, cylinder, Batch } from './geo.js?v=360d748';
-import { CELL } from './cubes.js?v=360d748';
-import { TEXTURE_TILES as TILE } from './textures.js?v=360d748';
+import { roundedBox, boxUV, cylinder, Batch } from './geo.js?v=0c1cc5f';
+import { CELL } from './families.js?v=0c1cc5f';
+import { TEXTURE_TILES as TILE } from './textures.js?v=0c1cc5f';
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _p = new THREE.Vector3(), _e = new THREE.Euler();
 const WHITE = new THREE.Color(1, 1, 1), CRACK = new THREE.Color(1.25, 0.72, 0.3);

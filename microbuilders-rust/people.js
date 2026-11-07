@@ -8,10 +8,10 @@
 import * as THREE from 'three';
 import { edgeTable, triTable } from 'three/addons/objects/MarchingCubes.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { rng } from './geo.js?v=360d748';
-import { linkSky } from './world.js?v=360d748';
-import { markDynamic } from './render.js?v=360d748';
-import { loadHumans, makeHuman } from './humans.js?v=360d748';
+import { rng } from './geo.js?v=0c1cc5f';
+import { linkSky } from './world.js?v=0c1cc5f';
+import { markDynamic } from './render.js?v=0c1cc5f';
+import { loadHumans, makeHuman } from './humans.js?v=0c1cc5f';
 
 // ---------- скелет ----------
 

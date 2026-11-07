@@ -4,9 +4,9 @@
 // делает — по фазе логики: ходьба, лестница, набор в карьере, укладка, леса, план у стола, отдых.
 // Ноша — стопка блоков на раме за спиной (MB.carryLoad, цвета материалов в руках). Клетка — 2 м.
 import * as THREE from 'three';
-import { animateWorker } from './people.js?v=360d748';
-import { CELL, familyOf, familyMaterial, familyTile, tintOf } from './cubes.js?v=360d748';
-import { roundedBox, boxUV, Batch, hashStr } from './geo.js?v=360d748';
+import { animateWorker } from './people.js?v=0c1cc5f';
+import { CELL, familyOf, familyMaterial, familyTile, tintOf } from './families.js?v=0c1cc5f';
+import { roundedBox, boxUV, Batch, hashStr } from './geo.js?v=0c1cc5f';
 
 const TURN_SPEED = 9;       // рад/с (game.js)
 const LADDER_STAND = -0.1;  // доля клетки: стоит чуть перед лестницей

@@ -1,8 +1,8 @@
 // Жизнь вокруг стройки: погода (ясно → облачно → дождь → сохнет), капли дождя, пыль из-под тачек и ног,
 // дым генераторов мачт ночью, мошкара у прожекторов, птицы. Всё кодом, без текстур.
 import * as THREE from 'three';
-import { CLOUD, WEATHER } from './world.js?v=360d748';
-import { ATMO } from './atmosphere.js?v=360d748';
+import { CLOUD, WEATHER } from './world.js?v=0c1cc5f';
+import { ATMO } from './atmosphere.js?v=0c1cc5f';
 
 // выходы G-буфера у собственных шейдеров: прозрачное не трогает буферы под собой
 const GB_OUT = /* glsl */ `
