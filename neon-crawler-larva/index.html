@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>NEON CRAWLER — неоновый хищник</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="description" content="NEON CRAWLER: неоновое членистоногое охотится в лабиринте, растёт, отращивает лапы и эволюционирует через 10 форм. Unity, прямо в браузере.">
+  <meta name="theme-color" content="#05030d">
+  <meta name="color-scheme" content="dark">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2305030d'/%3E%3Cg fill='none' stroke='%237fdccf' stroke-width='3'%3E%3Cpath d='M24 26 12 14 6 22M24 34 10 34 4 42M40 26 52 14 58 22M40 34 54 34 60 42'/%3E%3C/g%3E%3Crect x='22' y='20' width='20' height='22' rx='2' fill='%23123f3c' stroke='%238ff0e0' stroke-width='3'/%3E%3Ccircle cx='28' cy='26' r='2.5' fill='%23fff'/%3E%3Ccircle cx='36' cy='26' r='2.5' fill='%23fff'/%3E%3C/svg%3E">
+  <style>
+    :root { --sat: env(safe-area-inset-top, 0px); --sar: env(safe-area-inset-right, 0px); --sab: env(safe-area-inset-bottom, 0px); --sal: env(safe-area-inset-left, 0px); }
+    html, body { margin: 0; height: 100%; background: #05030d; overflow: hidden; color: #e8e4ff; font: 600 15px/1.35 system-ui, "Segoe UI", Roboto, Arial, sans-serif; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; touch-action: none; }
+    body::before { content: ""; position: fixed; inset: 0; background:
+      radial-gradient(ellipse at 50% 30%, rgba(120,70,255,.16), transparent 60%),
+      repeating-linear-gradient(0deg, rgba(110,90,255,.07) 0 1px, transparent 1px 32px),
+      repeating-linear-gradient(90deg, rgba(110,90,255,.07) 0 1px, transparent 1px 32px); pointer-events: none; }
+    #nc-box { position: fixed; overflow: hidden; background: #000; box-shadow: 0 0 0 1px rgba(143,107,255,.35), 0 0 60px rgba(143,107,255,.25); }
+    body.fill #nc-box { box-shadow: none; }
+    #unity-canvas { width: 100%; height: 100%; display: block; background: #000; outline: none; touch-action: none; }
+    #nc-loader { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(ellipse at 50% 40%, #150a33 0%, #05030d 70%); transition: opacity .6s; }
+    #nc-loader.done { opacity: 0; pointer-events: none; }
+    .nc-logo { font: 900 40px/1 system-ui, "Segoe UI", Roboto, Arial, sans-serif; letter-spacing: 3px; color: #fff; text-shadow: 0 0 8px #ff4f9a, 0 0 22px #b06bff, 0 0 44px #b06bff; margin-top: 18px; }
+    .nc-sub { color: #9fe8ff; letter-spacing: 6px; font-size: 12px; margin-top: 8px; text-shadow: 0 0 10px #38d8ff; }
+    .nc-bar { width: 62%; max-width: 260px; height: 10px; border-radius: 6px; background: #0b0a28; box-shadow: inset 0 0 0 1.5px #4a42b8; margin-top: 28px; overflow: hidden; }
+    .nc-fill { height: 100%; width: 0; background: linear-gradient(90deg, #7fdccf, #b06bff, #ff4f9a); box-shadow: 0 0 12px #b06bff; transition: width .2s; }
+    .nc-pct { margin-top: 10px; font-size: 13px; color: #b8b5ff; }
+    .nc-tip { margin: 22px 26px 0; text-align: center; font-size: 14px; color: #e6e4ff; min-height: 40px; transition: opacity .35s; }
+    .nc-tip b { color: #7dffb0; }
+    .nc-tip.out { opacity: 0; }
+    svg.nc-crawler { width: 190px; height: 120px; filter: drop-shadow(0 0 6px #4fd8c8) drop-shadow(0 0 16px #4fd8c8); }
+    svg.nc-crawler .lg { animation: step .5s ease-in-out infinite alternate; transform-origin: 50% 50%; }
+    svg.nc-crawler .lg.b { animation-delay: -.25s; }
+    @keyframes step { from { transform: translateY(-2px) rotate(-3deg); } to { transform: translateY(2px) rotate(3deg); } }
+    #nc-error { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; background: #05030d; }
+    #nc-error.on { display: flex; }
+    #nc-error h2 { color: #ff5a6e; margin: 0 0 8px; }
+    .nc-btn { margin-top: 18px; padding: 12px 22px; border: 0; border-radius: 10px; background: linear-gradient(#7fe08a, #4fd860); color: #fff; font: 900 15px system-ui, sans-serif; cursor: pointer; box-shadow: 0 3px 0 #2c7a38; }
+    .nc-detail { margin-top: 10px; font-size: 11px; color: #7a76b8; max-width: 320px; word-break: break-word; }
+    #nc-side { position: fixed; display: none; width: 220px; padding: 18px; border-radius: 14px; background: rgba(20,14,52,.78); box-shadow: 0 0 0 1.5px rgba(110,100,255,.5), 0 0 30px rgba(110,100,255,.2); }
+    #nc-side.on { display: block; }
+    #nc-side .t { font: 900 22px system-ui, sans-serif; color: #fff; text-shadow: 0 0 10px #b06bff; letter-spacing: 1px; }
+    #nc-side ul { padding-left: 18px; margin: 12px 0; } #nc-side li { margin: 6px 0; color: #d8d4ff; }
+    #nc-side kbd { display: inline-block; padding: 1px 6px; border-radius: 5px; background: #272b70; box-shadow: inset 0 0 0 1px #5a5ed8; color: #fff; font: 800 12px system-ui, sans-serif; }
+    #nc-rot { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 14px; background: #05030d; color: #ffd23d; font-weight: 800; z-index: 9; }
+    #nc-rot.on { display: flex; }
+  </style>
+</head>
+<body>
+  <div id="nc-box">
+    <canvas id="unity-canvas" tabindex="-1"></canvas>
+    <div id="nc-loader" role="status" aria-live="polite">
+      <svg class="nc-crawler" viewBox="0 0 190 120" aria-hidden="true">
+        <g fill="none" stroke="#7fdccf" stroke-width="3" stroke-linecap="round">
+          <path class="lg" d="M78 52 50 26 30 38"/><path class="lg b" d="M78 62 44 60 24 78"/><path class="lg" d="M80 72 54 94 40 112"/>
+          <path class="lg b" d="M112 52 140 26 160 38"/><path class="lg" d="M112 62 146 60 166 78"/><path class="lg b" d="M110 72 136 94 150 112"/>
+        </g>
+        <g fill="#fff"><circle cx="50" cy="26" r="3"/><circle cx="44" cy="60" r="3"/><circle cx="54" cy="94" r="3"/><circle cx="140" cy="26" r="3"/><circle cx="146" cy="60" r="3"/><circle cx="136" cy="94" r="3"/></g>
+        <rect x="76" y="40" width="38" height="44" rx="3" fill="#123f3c" stroke="#8ff0e0" stroke-width="3"/>
+        <rect x="84" y="64" width="22" height="10" fill="#5fd4a0"/><rect x="84" y="46" width="22" height="8" fill="#1d6d66"/>
+        <circle cx="88" cy="49" r="3.5" fill="#fff"/><circle cx="102" cy="49" r="3.5" fill="#fff"/>
+      </svg>
+      <div class="nc-logo">NEON CRAWLER</div>
+      <div class="nc-sub" id="nc-sub">НЕОНОВЫЙ ХИЩНИК · UNITY</div>
+      <div class="nc-bar"><div class="nc-fill" id="nc-fill"></div></div>
+      <div class="nc-pct" id="nc-pct">Загрузка…</div>
+      <div class="nc-tip" id="nc-tip"></div>
+    </div>
+    <div id="nc-error" role="alert">
+      <h2 id="nc-err-title">Не удалось загрузить игру</h2>
+      <div id="nc-err-text">Проверьте подключение к интернету и попробуйте ещё раз.</div>
+      <div class="nc-detail" id="nc-err-detail"></div>
+      <button class="nc-btn" id="nc-retry" type="button">Попробовать снова</button>
+    </div>
+  </div>
+  <aside id="nc-side">
+    <div class="t">NEON CRAWLER</div>
+    <ul id="nc-side-list"></ul>
+    <button class="nc-btn" id="nc-fs" type="button">Во весь экран</button>
+  </aside>
+  <div id="nc-rot"><svg viewBox="0 0 64 64" width="64" height="64" fill="none" stroke="#ffd23d" stroke-width="4" stroke-linejoin="round"><rect x="18" y="6" width="28" height="52" rx="6"/><path d="M28 50h8" stroke-linecap="round"/></svg><span id="nc-rot-t">Поверни телефон вертикально</span></div>
+  <script>
+  (function () {
+    'use strict';
+    var T = window.__nc = { t0: performance.now(), progress: 0, ready: 0, errors: [], build: '202611082110' };
+    var V = '?v=202611082110';
+    var $ = function (id) { return document.getElementById(id); };
+    var box = $('nc-box'), canvas = $('unity-canvas'), loader = $('nc-loader'), side = $('nc-side'), rot = $('nc-rot');
+    var q = new URLSearchParams(location.search), lang = q.get('lang') || (/^(ru|uk|be|kk)/i.test(navigator.language || '') ? 'ru' : 'en');
+    var L = lang === 'ru' ? {
+      sub: 'НЕОНОВЫЙ ХИЩНИК · UNITY', load: 'Загрузка… ', run: 'Запускаем…', rot: 'Поверни телефон вертикально', fs: 'Во весь экран', fsx: 'Выйти из полноэкранного',
+      side: ['<kbd>WASD</kbd> / стрелки или тяни мышью — ползти', 'Лапы сами ловят добычу в круге захвата', 'Полный желудок — неси в гнездо', '<kbd>U</kbd> — улучшения, <kbd>F</kbd> — весь экран'],
+      tips: ['Каждое улучшение — новые <b>лапы и сегменты</b>', '<b>10 стадий эволюции</b>: от паучка до короля', 'Полный желудок неси в <b>гнездо</b> — там добыча станет мясом', 'Каждый шаг звучит: у лап своя <b>нота</b>', 'Жвалы дают <b>крит-укус ×3</b>']
+    } : {
+      sub: 'NEON PREDATOR · UNITY', load: 'Loading… ', run: 'Starting…', rot: 'Turn the phone upright', fs: 'Full screen', fsx: 'Exit full screen',
+      side: ['<kbd>WASD</kbd> / arrows or drag — crawl', 'Legs grab prey in the catch circle', 'Full stomach? Bring it to the nest', '<kbd>U</kbd> — upgrades, <kbd>F</kbd> — full screen'],
+      tips: ['Every upgrade grows new <b>legs and segments</b>', '<b>10 evolution stages</b>: from spiderling to king', 'Bring a full stomach to the <b>nest</b>', 'Every step plays a <b>note</b>', 'Mandibles bite for <b>×3 crits</b>']
+    };
+    document.documentElement.lang = lang;
+    $('nc-sub').textContent = L.sub; $('nc-rot-t').textContent = L.rot; $('nc-side-list').innerHTML = L.side.map(function (s) { return '<li>' + s + '</li>'; }).join('');
+    var inst = null, failed = false, MAX_W = 1440, MAX_H = 2560;
+    var probe = document.createElement('div');
+    probe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;top:0;left:0;padding:var(--sat) var(--sar) var(--sab) var(--sal)';
+    document.body.appendChild(probe);
+    var coarse = window.matchMedia ? window.matchMedia('(pointer: coarse)') : { matches: false };
+    function isFs() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+    function layout() {
+      var cs = getComputedStyle(probe), s = { t: parseFloat(cs.paddingTop) || 0, r: parseFloat(cs.paddingRight) || 0, b: parseFloat(cs.paddingBottom) || 0, l: parseFloat(cs.paddingLeft) || 0 };
+      var vw = window.innerWidth, vh = window.innerHeight, aw = Math.max(1, vw - s.l - s.r), ah = Math.max(1, vh - s.t - s.b);
+      var touch = coarse.matches || ('ontouchstart' in window && navigator.maxTouchPoints > 0);
+      var fill = (touch || vw < 700) && ah / aw >= 1.45, w, h;
+      if (fill) { w = aw; h = Math.min(ah, Math.round(aw * 2.34)); }
+      else { h = ah; w = Math.round(h * 9 / 16); if (w > aw) { w = aw; h = Math.round(w * 16 / 9); } }
+      var x = Math.round(s.l + (aw - w) / 2), y = Math.round(s.t + (ah - h) / 2);
+      box.style.left = x + 'px'; box.style.top = y + 'px'; box.style.width = w + 'px'; box.style.height = h + 'px';
+      document.body.classList.toggle('fill', fill);
+      rot.classList.toggle('on', touch && vw > vh && vh < 560);
+      var room = (vw - w) / 2, showSide = !fill && !touch && room >= 260 && vh >= 420;
+      side.classList.toggle('on', showSide);
+      if (showSide) { side.style.left = Math.round(x + w + Math.min(48, (room - 220) / 2)) + 'px'; side.style.top = Math.round(Math.max(16, (vh - side.offsetHeight) / 2)) + 'px'; }
+      $('nc-fs').textContent = isFs() ? L.fsx : L.fs;
+      var d = Math.max(0.5, Math.min(Math.min(window.devicePixelRatio || 1, 2), MAX_W / Math.max(1, w), MAX_H / Math.max(1, h)));
+      if (inst && inst.Module) inst.Module.devicePixelRatio = d;
+      return d;
+    }
+    window.addEventListener('resize', layout);
+    window.addEventListener('orientationchange', function () { setTimeout(layout, 120); });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', layout);
+    document.addEventListener('fullscreenchange', layout);
+    $('nc-fs').addEventListener('click', function () {
+      var el = document.documentElement;
+      if (isFs()) (document.exitFullscreen || document.webkitExitFullscreen).call(document); else (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+      canvas.focus({ preventScroll: true });
+    });
+    var stop = function (e) { if (e.cancelable) e.preventDefault(); };
+    ['contextmenu', 'dblclick', 'gesturestart', 'gesturechange', 'selectstart'].forEach(function (k) { document.addEventListener(k, stop); });
+    document.addEventListener('touchmove', stop, { passive: false });
+    window.addEventListener('wheel', function (e) { if (e.ctrlKey) stop(e); }, { passive: false });
+    canvas.addEventListener('pointerdown', function () { canvas.focus({ preventScroll: true }); });
+    var tipEl = $('nc-tip'), tipI = 1;
+    tipEl.innerHTML = L.tips[0];
+    var tipTimer = setInterval(function () { tipEl.classList.add('out'); setTimeout(function () { tipEl.innerHTML = L.tips[tipI++ % L.tips.length]; tipEl.classList.remove('out'); }, 350); }, 3400);
+    function progress(p) { T.progress = p; $('nc-fill').style.width = Math.round(Math.min(1, p) * 100) + '%'; $('nc-pct').textContent = p >= 0.999 ? L.run : L.load + Math.floor(p * 100) + '%'; }
+    function fail(title, text, detail) {
+      T.errors.push(String(detail || title)); if (failed) return; failed = true; clearInterval(tipTimer);
+      $('nc-err-title').textContent = title; $('nc-err-text').textContent = text; $('nc-err-detail').textContent = detail ? String(detail).slice(0, 300) : '';
+      $('nc-error').classList.add('on'); loader.classList.add('done');
+    }
+    $('nc-retry').addEventListener('click', function () { location.reload(); });
+    function hasWebGL2() { try { var c = document.createElement('canvas'); return !!(window.WebGL2RenderingContext && c.getContext('webgl2')); } catch (e) { return false; } }
+    var dpr0 = layout();
+    if (!hasWebGL2()) { fail(lang === 'ru' ? 'Нужен WebGL 2' : 'WebGL 2 required', lang === 'ru' ? 'Обновите браузер или включите аппаратное ускорение.' : 'Update the browser or enable hardware acceleration.', 'WebGL2 unavailable'); return; }
+    var buildUrl = 'Build';
+    var config = {
+      arguments: [],
+      dataUrl: buildUrl + '/WebOut.data.unityweb' + V,
+      frameworkUrl: buildUrl + '/WebOut.framework.js.unityweb' + V,
+      codeUrl: buildUrl + '/WebOut.wasm.unityweb' + V,
+      streamingAssetsUrl: 'StreamingAssets',
+      companyName: "Multicast",
+      productName: "Neon Crawler",
+      productVersion: "0.1.11082108",
+      showBanner: function (msg, type) { if (type === 'error') fail(lang === 'ru' ? 'Игра остановилась' : 'The game stopped', lang === 'ru' ? 'Перезагрузите страницу.' : 'Reload the page.', msg); },
+      devicePixelRatio: dpr0,
+      matchWebGLToCanvasSize: true,
+      webglContextAttributes: { preserveDrawingBuffer: q.has('pdb'), powerPreference: 'high-performance' }
+    };
+    var script = document.createElement('script');
+    script.src = buildUrl + '/WebOut.loader.js' + V;
+    script.onerror = function () { fail('Не удалось загрузить игру', 'Проверьте подключение к интернету.', 'loader failed'); };
+    script.onload = function () {
+      createUnityInstance(canvas, config, progress).then(function (instance) {
+        inst = window.unityInstance = instance; T.ready = performance.now(); layout(); clearInterval(tipTimer); progress(1);
+        requestAnimationFrame(function () { requestAnimationFrame(function () { loader.classList.add('done'); setTimeout(function () { loader.style.display = 'none'; }, 700); }); });
+      }).catch(function (msg) { fail('Не удалось запустить игру', 'Попробуйте другой браузер.', msg); });
+    };
+    document.body.appendChild(script);
+  })();
+  </script>
+</body>
+</html>
