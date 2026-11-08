@@ -10,9 +10,9 @@
 import * as THREE from 'three';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
-import { VolumePass, QUAD_VERT, FLARE_GLSL, FINISH } from './post.js?v=0c1cc5f';
-import { createClouds } from './clouds.js?v=0c1cc5f';
-import { createGI } from './gi.js?v=0c1cc5f';
+import { VolumePass, QUAD_VERT, FLARE_GLSL, FINISH } from './post.js?v=f4726a0';
+import { createClouds } from './clouds.js?v=f4726a0';
+import { createGI } from './gi.js?v=f4726a0';
 
 // Корни движущихся объектов: их меши дорисовывают скорость (слой 2).
 export const DYNAMIC = new Set();
@@ -203,6 +203,37 @@ void main() {
     // ближе и почти неподвижно — не размазывать
     float w = d < d0 - 0.0005 ? clamp(length(motion(uv + uJitter, d) * uShutter / uOTexel) / max(px, 1.0), 0.0, 1.0) : 1.0;
     sum += textureLod(tColor, uv, 0.0).rgb * w; ws += w;
+  }
+  gl_FragColor = vec4(sum / ws, 1.0);
+}
+`;
+
+// ---------- глубина резкости ----------
+// Только у камеры за рабочим (съёмка, ролик): фокус — на нём (opts.focus), кружок рассеяния растёт с отходом от
+// плоскости фокуса (до ~16 пикселей при 1080p, как объектив 50 мм при f/2,8). Сбор по золотой спирали, 32
+// выборки; выборка дальше центра размывает не больше, чем сам центр, — резкий передний план не тонет в размытом
+// фоне, а размытый передний план ложится на резкий фон.
+const DOF_FRAG = /* glsl */ `
+uniform sampler2D tColor, tDepth;
+uniform vec2 uTexel, uJitter;
+uniform float uFocus, uAperture, uNear, uFar, uMaxR;
+varying vec2 vUv;
+float lin(float d) { float z = d * 2.0 - 1.0; return 2.0 * uNear * uFar / (uFar + uNear - z * (uFar - uNear)); }
+float coc(float z) { return min(uAperture * abs(1.0 - uFocus / z), uMaxR); }
+void main() {
+  float z0 = lin(textureLod(tDepth, vUv + uJitter, 0.0).x);
+  float c0 = coc(z0);
+  vec3 sum = textureLod(tColor, vUv, 0.0).rgb;
+  float ws = 1.0;
+  for (int i = 0; i < 32; i++) {
+    float r = sqrt((float(i) + 0.5) / 32.0) * uMaxR;
+    float a = float(i) * 2.399963;
+    vec2 off = vec2(cos(a), sin(a)) * r * uTexel;
+    float zs = lin(textureLod(tDepth, vUv + uJitter + off, 0.0).x);
+    float reach = zs > z0 ? min(coc(zs), c0) : coc(zs);
+    float w = clamp(reach - r + 1.0, 0.0, 1.0);
+    sum += textureLod(tColor, vUv + off, 0.0).rgb * w;
+    ws += w;
   }
   gl_FragColor = vec4(sum / ws, 1.0);
 }
@@ -470,7 +501,7 @@ export function createRender(renderer, scene, camera, quality, opts = {}) {
   const gi = quality.gi && opts.sky ? createGI(renderer) : null;
 
   const comp = target(1, 1);
-  const ssrRT = target(1, 1), mbRT = target(1, 1);
+  const ssrRT = target(1, 1), mbRT = target(1, 1), dofRT = target(1, 1);
   const hist = [target(1, 1), target(1, 1)];
   const ldr = target(1, 1, { type: THREE.UnsignedByteType });
   const LEVELS = 6;
@@ -506,6 +537,10 @@ export function createRender(renderer, scene, camera, quality, opts = {}) {
     uRTexel: { value: new THREE.Vector2() }, uOTexel: { value: new THREE.Vector2() }, uJitter: { value: new THREE.Vector2() },
     uShutter: { value: 0.5 }, uMaxPx: { value: 36 },
   }) : null;
+  const DOF = quad(DOF_FRAG, {
+    tColor: { value: null }, tDepth: { value: gbuf.depthTexture }, uTexel: { value: new THREE.Vector2() }, uJitter: { value: new THREE.Vector2() },
+    uFocus: { value: 3 }, uAperture: { value: 10 }, uNear: { value: 0.1 }, uFar: { value: 1000 }, uMaxR: { value: 16 },
+  });
   const D = quad(DOWN_FRAG, { tSrc: { value: null }, uTexel: { value: new THREE.Vector2() }, uKaris: { value: 0 } });
   const U = quad(UP_FRAG, { tLow: { value: null }, tHigh: { value: null }, uTexel: { value: new THREE.Vector2() } });
   const L = quad(LUM_FRAG, { tSrc: { value: null }, uTexel: { value: new THREE.Vector2(1 / 64, 1 / 64) } });
@@ -591,7 +626,11 @@ export function createRender(renderer, scene, camera, quality, opts = {}) {
     ldr.setSize(S.ow, S.oh);
     ssrRT.setSize(Math.max(1, S.rw >> 1), Math.max(1, S.rh >> 1));
     mbRT.setSize(S.ow, S.oh);
+    dofRT.setSize(S.ow, S.oh);
     if (MB) { MB.u.uRTexel.value.set(1 / S.rw, 1 / S.rh); MB.u.uOTexel.value.set(1 / S.ow, 1 / S.oh); }
+    DOF.u.uTexel.value.set(1 / S.ow, 1 / S.oh);
+    DOF.u.uAperture.value = 10 * S.oh / 1080;
+    DOF.u.uMaxR.value = Math.max(4, 16 * S.oh / 1080);
     let bw = S.ow, bh = S.oh;
     for (let i = 0; i < LEVELS; i++) {
       bw = Math.max(1, bw >> 1); bh = Math.max(1, bh >> 1);
@@ -683,6 +722,16 @@ export function createRender(renderer, scene, camera, quality, opts = {}) {
       draw(MB, mbRT);
       frameTex = mbRT.texture;
     }
+    // глубина резкости у камеры за рабочим
+    const focus = opts.focus ? opts.focus() : 0;
+    if (focus > 0.3) {
+      DOF.u.tColor.value = frameTex;
+      DOF.u.uJitter.value.set(jx * 0.5, jy * 0.5);
+      DOF.u.uFocus.value = focus;
+      DOF.u.uNear.value = camera.near; DOF.u.uFar.value = camera.far;
+      draw(DOF, dofRT);
+      frameTex = dofRT.texture;
+    }
 
     // свечение
     let src = frameTex;
@@ -746,8 +795,8 @@ export function createRender(renderer, scene, camera, quality, opts = {}) {
     output: O.u, finish: F.u, taaUniforms: T.u, size: S,
     resetHistory: function () { reset = true; },
     dispose: function () {
-      [gbuf, comp, ldr, lum, ssrRT, mbRT].concat(hist, down, up, adapt).forEach(function (t) { t.dispose(); });
-      [C, T, D, U, L, A, O, F, R, MB].forEach(function (p) { if (p) { p.m.dispose(); p.q.dispose(); } });
+      [gbuf, comp, ldr, lum, ssrRT, mbRT, dofRT].concat(hist, down, up, adapt).forEach(function (t) { t.dispose(); });
+      [C, T, D, U, L, A, O, F, R, MB, DOF].forEach(function (p) { if (p) { p.m.dispose(); p.q.dispose(); } });
       if (ao) ao.dispose();
       if (volume) volume.dispose();
       if (clouds) clouds.dispose();

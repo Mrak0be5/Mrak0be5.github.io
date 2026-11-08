@@ -2,11 +2,12 @@
 // брови, ресницы, короткие волосы; одежда — оболочки, построенные скриптом Blender из тела. Цвета, кожа, ткань,
 // грязь, жилет с лентами — кодом (шейдеры ниже). Анимация — прежняя процедурная (people.js): она вращает
 // «ведущий» скелет из 20 костей, кости MakeHuman (53) получают те же повороты в мировом смысле (перенос позы):
-// T_mh = W_ведущей × R_покоя_mh, локальный — относительно уже посчитанного родителя.
+// T_mh = W_ведущей × R_покоя_mh, локальный — относительно уже посчитанного родителя. Пальцы (15 на кисть) сгибаются
+// к ладони по хвату (grip): кулак — инструмент, щепоть — сигарета, ладонь — опора на стол.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
-import { linkSky } from './world.js?v=0c1cc5f';
+import { linkSky } from './world.js?v=f4726a0';
 
 const VARIANTS = ['a', 'b', 'c', 'd'];
 
@@ -32,7 +33,7 @@ export async function loadHumans(lod1) {
     }).catch(function () { return null; });
   }));
   if (!Object.keys(out).length) return null;
-  return { variants: out, map: meta.bone_map };
+  return { variants: out, map: meta.bone_map, fingers: meta.fingers };
 }
 
 // ---------- материалы ----------
@@ -213,7 +214,7 @@ export function makeHuman(humans, look, seed, driver, boneNames) {
   scene.traverse(function (o) { if (o.isBone) bones[o.name] = o; });
   scene.updateMatrixWorld(true);
   const order = [];
-  const restW = {}, restL = {};
+  const restW = {}, restL = {}, restP = {};
   const inv = new THREE.Matrix4().copy(scene.matrixWorld).invert();
   const tmpM = new THREE.Matrix4();
   (function walk(o) {
@@ -221,15 +222,64 @@ export function makeHuman(humans, look, seed, driver, boneNames) {
       order.push(o);
       tmpM.multiplyMatrices(inv, o.matrixWorld);
       restW[o.name] = new THREE.Quaternion().setFromRotationMatrix(tmpM);
+      restP[o.name] = new THREE.Vector3().setFromMatrixPosition(tmpM);
       restL[o.name] = o.quaternion.clone();
     }
     o.children.forEach(walk);
   })(scene);
+  // Сгиб пальцев: ось каждой фаланги — поперёк пальца и нормали ладони, в осях покоя кости. Нормаль ладони —
+  // куда пальцы уже чуть согнуты в покое (иначе — к телу). curl[кость] — { axis, max, finger, side }.
+  const curl = {};
+  const MAX = { thumb: [0.35, 0.55, 0.5], index: [1.25, 1.45, 0.9], middle: [1.3, 1.5, 0.95], ring: [1.3, 1.5, 0.95], pinky: [1.25, 1.45, 0.9] };
+  const F = humans.fingers || {};
+  ['l', 'r'].forEach(function (side) {
+    const hand = F[side] && bones[side === 'l' ? humans.map.handL : humans.map.handR];
+    if (!hand || !restP[hand.name]) return;
+    const H = restP[hand.name], n = new THREE.Vector3();
+    ['index', 'middle', 'ring'].forEach(function (f) {
+      const c = F[side][f];
+      if (!c || !restP[c[0]] || !restP[c[2]]) return;
+      const d0 = restP[c[1]].clone().sub(restP[c[0]]).normalize(), d1 = restP[c[2]].clone().sub(restP[c[1]]).normalize();
+      n.add(d1.sub(d0.clone().multiplyScalar(d1.dot(d0))));
+    });
+    if (n.lengthSq() < 1e-6 || n.x * Math.sign(H.x) > 0.5 * n.length()) n.set(-Math.sign(H.x), 0, 0);
+    n.normalize();
+    Object.keys(F[side]).forEach(function (f) {
+      const chain = F[side][f];
+      chain.forEach(function (name, k) {
+        if (!restP[name] || !restW[name]) return;
+        const next = chain[k + 1] && restP[chain[k + 1]] ? restP[chain[k + 1]] : null;
+        const prev = k > 0 && restP[chain[k - 1]] ? restP[chain[k - 1]] : H;
+        const dir = (next ? next.clone().sub(restP[name]) : restP[name].clone().sub(prev)).normalize();
+        const axis = dir.clone().cross(n);
+        if (axis.lengthSq() < 1e-6) return;
+        axis.normalize().applyQuaternion(restW[name].clone().invert());
+        curl[name] = { axis, max: (MAX[f] || MAX.index)[k], finger: f, side };
+      });
+    });
+  });
+  // хват: amount 0..1 (0,25 — расслабленная кисть), style — fist (кулак), pinch (щепоть: указательный и большой
+  // мягче), flat (ладонь), point (указательный прямой)
+  const STYLE = {
+    fist: { thumb: 1, index: 1, middle: 1, ring: 1, pinky: 1 },
+    pinch: { thumb: 0.8, index: 0.55, middle: 0.95, ring: 1, pinky: 1 },
+    flat: { thumb: 0.15, index: 0.08, middle: 0.08, ring: 0.1, pinky: 0.12 },
+    point: { thumb: 0.7, index: 0.05, middle: 1, ring: 1, pinky: 1 },
+  };
+  const hold = { l: { amount: 0.25, style: 'fist' }, r: { amount: 0.25, style: 'fist' } };
+  const _c = new THREE.Quaternion();
+  function grip(l, styleL, r, styleR) {
+    hold.l.amount = l; hold.l.style = styleL || 'fist';
+    hold.r.amount = r; hold.r.style = styleR || 'fist';
+  }
   // соответствие: кость MakeHuman → индекс ведущей
   const map = humans.map, toDriver = {};
   Object.keys(map).forEach(function (k) { const i = boneNames.indexOf(k); if (i >= 0) toDriver[map[k]] = i; });
   const pelvis = bones[map.hips];
   const pelvisRest = pelvis ? pelvis.position.clone() : null;
+  // сдвиг таза ведущего скелета — в осях родителя таза MakeHuman (Root повёрнут на −90° по X: Z-вверх Blender),
+  // иначе присед и сон уводили тело вперёд вместо вниз
+  const pelvisBasis = pelvis && pelvis.parent && restW[pelvis.parent.name] ? restW[pelvis.parent.name].clone().invert() : new THREE.Quaternion();
   const hipsRest = driver[boneNames.indexOf('hips')].position.clone();
   const W = boneNames.map(function () { return new THREE.Quaternion(); });
   const T = {};
@@ -255,12 +305,18 @@ export function makeHuman(humans, look, seed, driver, boneNames) {
         _q.multiplyQuaternions(T[parent.name], restL[b.name]);
         _p.multiplyQuaternions(W[spineI], restW[b.name]);
         t.copy(_q).slerp(_p, 0.5);
-      } else if (parent) t.multiplyQuaternions(T[parent.name], restL[b.name]);
-      else t.copy(restW[b.name]);
+      } else if (parent) {
+        t.multiplyQuaternions(T[parent.name], restL[b.name]);
+        const cu = curl[b.name];
+        if (cu) {
+          const h = hold[cu.side], st = STYLE[h.style] || STYLE.fist;
+          t.multiply(_c.setFromAxisAngle(cu.axis, cu.max * h.amount * st[cu.finger]));
+        }
+      } else t.copy(restW[b.name]);
       if (parent) b.quaternion.copy(_q.copy(T[parent.name]).invert().multiply(t));
       else b.quaternion.copy(restL[b.name]);
     }
-    if (pelvis) pelvis.position.copy(pelvisRest).add(_v.copy(driver[hipsI].position).sub(hipsRest));
+    if (pelvis) pelvis.position.copy(pelvisRest).add(_v.copy(driver[hipsI].position).sub(hipsRest).applyQuaternion(pelvisBasis));
   }
   const _v = new THREE.Vector3();
   // моргание: морф «blink» (если есть) — раз в 3–6 с на 0,15 с
@@ -275,5 +331,5 @@ export function makeHuman(humans, look, seed, driver, boneNames) {
       if (m.morphTargetInfluences && m.morphTargetInfluences.length) m.morphTargetInfluences[0] = w;
     }
   }
-  return { scene, meshes, retarget, blink, meta, variant: v, head: meta.height_head_top };
+  return { scene, meshes, retarget, blink, grip, meta, variant: v, head: meta.height_head_top };
 }

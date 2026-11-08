@@ -166,8 +166,30 @@ export function createAudio() {
     if (cricketT <= 0) { cricketT = 0.4 + Math.random() * 1.2; if (night > 0.6) crickets(); }
   }
 
+  // Звуки движений (people.js → w.fx): удар кирки — звонкий щелчок по камню, глухой удар и осыпь крошки;
+  // постукивание мастерком — короткий стук, по стали — звон; приземление — глухой шлепок.
+  function fx(type, metal, pos, camera) {
+    if (!ctx || !enabled || budget > 6) return;
+    if (type !== 'impact' && type !== 'tap' && type !== 'land') return;
+    budget++;
+    const t = ctx.currentTime + 0.005;
+    const out = spot(pos, camera, type === 'impact' ? 1 : 0.6);
+    const v = 0.9 + Math.random() * 0.2;
+    if (type === 'impact') {
+      burst(t, out, 'bandpass', 3400 * v, 4, 0.5, 0.001, 0.04);
+      tone(t, out, 'sine', 150 * v, 85, 0.4, 0.002, 0.13);
+      for (let k = 0; k < 3; k++) burst(t + 0.05 + k * 0.045 + Math.random() * 0.03, out, 'bandpass', 2600 + Math.random() * 1800, 3, 0.07, 0.001, 0.02);
+    } else if (type === 'tap') {
+      burst(t, out, 'bandpass', 1900 * v, 2, 0.2, 0.001, 0.03);
+      if (metal) [2450, 3720, 5100].forEach(function (fr, i) { tone(t, out, 'sine', fr * v, fr * v * 0.995, 0.06 / (i + 1), 0.001, 0.3); });
+    } else {
+      tone(t, out, 'sine', 85 * v, 55, 0.3, 0.003, 0.1);
+      burst(t, out, 'lowpass', 500, 0.7, 0.15, 0.003, 0.08);
+    }
+  }
+
   return {
-    start, update, play, setEnabled,
+    start, update, play, fx, setEnabled,
     enabled: function () { return enabled; },
     piece: function () { chime([660, 990], 0.25); },
     complete: function () { chime([523, 659, 784, 1047], 0.4); },

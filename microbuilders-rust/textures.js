@@ -6,7 +6,7 @@
 // физически верная крутизна), ORM (R — затенение впадин, G — шероховатость, B — металл, как в glTF).
 // tile — сколько метров укладывается в фактуру по u и v: геометрия сама делит на это свои координаты.
 import * as THREE from 'three';
-import { NOISE } from './glsl.js?v=0c1cc5f';
+import { NOISE } from './glsl.js?v=f4726a0';
 
 const RECIPES = {};
 
@@ -548,7 +548,7 @@ RECIPES.rope = {
 
 // Кирпич, ложковая перевязка: 4 кирпича × 8 рядов на плитку, кирпич 250 × 64 мм, шов 10 мм (27 рядов на куб).
 RECIPES.brick = {
-  tile: [1.04, 0.592593], cav: 160, ao: 0.8, mask: true, glsl: `
+  tile: [1.04, 0.592593], cav: 160, ao: 0.8, pom: 0.008, mask: true, glsl: `
   const vec2 BRICK_M = vec2(0.26, 0.0740741);
   vec2 brickId(vec2 uv, out vec2 f) {
     vec2 p = uv * vec2(4.0, 8.0);
@@ -593,7 +593,7 @@ RECIPES.brick = {
 // Тёсаный камень: ряды по 1/3 м (6 на куб), в ряду 3–5 камней разной длины, шов 7 мм; лицо чуть выпуклое,
 // кромки со сколами, следы тёски, железистые пятна.
 RECIPES.ashlar = {
-  tile: [2.0, 2.0], cav: 160, ao: 0.9, big: true, mask: true, glsl: `
+  tile: [2.0, 2.0], cav: 160, ao: 0.9, pom: 0.013, big: true, mask: true, glsl: `
   float ashJit(float row, float k, float n) { return (hash12(vec2(row, mod(k + n, n))) - 0.5) * 0.4; }
   vec4 ashlar(vec2 uv) {
     float row = floor(uv.y * 6.0);
@@ -638,7 +638,7 @@ RECIPES.ashlar = {
 // Брус 200 мм (10 рядов на куб): фаска, между рядами джут, стыки брусьев вразбежку; годичные слои вдоль
 // бруса, сучки, усушечные трещины.
 RECIPES.logs = {
-  tile: [2.0, 2.0], cav: 220, ao: 0.8, big: true, mask: true, glsl: `
+  tile: [2.0, 2.0], cav: 220, ao: 0.8, pom: 0.013, big: true, mask: true, glsl: `
   vec4 H(vec2 uv) {
     float row = floor(uv.y * 10.0);
     float fy = fract(uv.y * 10.0);
@@ -675,7 +675,7 @@ RECIPES.logs = {
 // Стальные листы 1 × 0,5 м вразбежку на заклёпках (18 мм через 10 см, в 3 см от кромки), шов 4 мм; окалина,
 // ржавые потёки из-под заклёпок.
 RECIPES.riveted = {
-  tile: [2.0, 2.0], cav: 400, ao: 0.7, glsl: `
+  tile: [2.0, 2.0], cav: 400, ao: 0.7, pom: 0.006, glsl: `
   vec4 H(vec2 uv) {
     vec2 p = uv * vec2(2.0, 4.0);
     float row = floor(p.y);
@@ -716,7 +716,7 @@ RECIPES.riveted = {
 // Монолит в щитовой опалубке: щиты 1 × 0,5 м (заливка ярусами по полметра), рёбра стыков, конусы стяжек,
 // раковины, разводы фанеры.
 RECIPES.formwork = {
-  tile: [2.0, 2.0], cav: 500, ao: 0.9, glsl: `
+  tile: [2.0, 2.0], cav: 500, ao: 0.9, pom: 0.013, glsl: `
   vec4 H(vec2 uv) {
     vec2 p = uv * vec2(2.0, 4.0);
     vec2 m = fract(p) * vec2(1.0, 0.5);
@@ -766,6 +766,77 @@ RECIPES.marble = {
   `,
 };
 
+// Тёсаный камень обрамлений (рамки панелей, стойки, пояса фундамента, сливы, подоконники): известняк мелкой
+// тёски — бороздки зубатки под 30° (целые частоты — плитка без шва), пологая волна, поры, пятна сырости.
+// Тон нейтральный (около 0,6): цвет даёт рамка детали (building.js → trimHex).
+RECIPES.dressed = {
+  tile: [1.0, 1.0], cav: 260, ao: 0.8, glsl: `
+  vec4 H(vec2 uv) {
+    float g = sin(2.0 * PI * (40.0 * uv.x + 23.0 * uv.y) + 1.6 * fbm(uv * 6.0, vec2(6.0), 3)) * 0.5 + 0.5;
+    g *= 0.55 + 0.45 * fbm(uv * 3.0 + 2.0, vec2(3.0), 4);
+    vec4 pit = voronoi(uv * 90.0, vec2(90.0));
+    float pits = (1.0 - smoothstep(0.0, 0.3, pit.x)) * step(0.86, pit.z);
+    float wave = fbm(uv * 4.0, vec2(4.0), 5);
+    float grain = gnoise(uv * 400.0, vec2(400.0));
+    float h = 0.0007 * wave + 0.00014 * g + 0.00005 * grain - 0.0007 * pits;
+    return vec4(h, g, pits, wave);
+  }
+  vec3 A(vec2 uv, vec4 h, float cav) {
+    vec3 c = vec3(0.6) * (0.92 + 0.12 * sat(fbm(uv * 5.0 + 3.0, vec2(5.0), 5) + 0.5));
+    c *= 0.97 + 0.05 * h.y;
+    c *= 1.0 - 0.28 * h.z;
+    float stain = sat(fbm(uv * vec2(2.0, 4.0) + 7.0, vec2(2.0, 4.0), 5) * 1.6 - 0.4);
+    c *= 1.0 - 0.1 * stain;
+    c *= 1.0 - 0.3 * sat(cav * 2.0);
+    return srgb(c);
+  }
+  vec2 RM(vec2 uv, vec4 h, float cav) { return vec2(0.84 + 0.08 * h.z, 0.0); }
+  `,
+};
+
+// Чертёж на столе планирования: синька — сетка, план этажа белыми линиями (стены, проёмы, размерные линии),
+// штамп в углу. Координаты — свои у листа (0..1), не мировые.
+RECIPES.blueprint = {
+  tile: [1.0, 1.0], cav: 0, ao: 0, glsl: `
+  float rline(vec2 p, vec4 r, float w) {
+    vec2 a = step(r.xy - w, p) * step(p, r.zw + w);
+    vec2 b = step(r.xy + w, p) * step(p, r.zw - w);
+    return a.x * a.y * (1.0 - b.x * b.y);
+  }
+  float seg(vec2 p, vec2 a, vec2 b, float w) {
+    vec2 pa = p - a, ba = b - a;
+    float t = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+    return 1.0 - smoothstep(w * 0.6, w, length(pa - ba * t));
+  }
+  vec4 H(vec2 uv) { return vec4(0.00008 * gnoise(uv * 60.0, vec2(60.0)), 0.0, 0.0, 0.0); }
+  vec3 A(vec2 uv, vec4 h, float cav) {
+    vec3 paper = vec3(0.13, 0.29, 0.58) * (0.9 + 0.12 * fbm(uv * 5.0, vec2(5.0), 4));
+    vec2 g = abs(fract(uv * vec2(30.0, 20.0)) - 0.5);
+    float grid = 1.0 - smoothstep(0.44, 0.5, max(g.x, g.y));
+    float ink = 0.18 * (1.0 - grid);
+    ink = max(ink, rline(uv, vec4(0.1, 0.18, 0.62, 0.84), 0.008));
+    ink = max(ink, rline(uv, vec4(0.1, 0.18, 0.36, 0.5), 0.005));
+    ink = max(ink, seg(uv, vec2(0.36, 0.5), vec2(0.62, 0.5), 0.006));
+    // проёмы: разрывы и дуги дверей
+    ink *= 1.0 - step(0.3, uv.x) * step(uv.x, 0.38) * step(0.83, uv.y) * step(uv.y, 0.85) * 0.9;
+    ink = max(ink, 1.0 - smoothstep(0.003, 0.006, abs(length(uv - vec2(0.3, 0.84)) - 0.08)) * step(uv.y, 0.84) * step(0.3, uv.x));
+    // размерные линии с засечками
+    ink = max(ink, seg(uv, vec2(0.1, 0.09), vec2(0.62, 0.09), 0.003));
+    ink = max(ink, seg(uv, vec2(0.1, 0.06), vec2(0.1, 0.12), 0.003));
+    ink = max(ink, seg(uv, vec2(0.62, 0.06), vec2(0.62, 0.12), 0.003));
+    ink = max(ink, seg(uv, vec2(0.7, 0.18), vec2(0.7, 0.84), 0.003));
+    // штамп и «надписи»
+    ink = max(ink, rline(uv, vec4(0.74, 0.06, 0.95, 0.3), 0.004));
+    vec2 tq = (uv - vec2(0.76, 0.1)) * vec2(1.0, 1.0);
+    float rows = step(0.0, tq.y) * step(tq.y, 0.17) * step(0.0, tq.x) * step(tq.x, 0.17);
+    ink = max(ink, rows * step(0.55, fract(tq.y * 32.0)) * step(0.4, hash12(floor(tq * vec2(40.0, 32.0)))) * 0.8);
+    vec3 c = mix(paper, vec3(0.86, 0.92, 0.98), sat(ink));
+    return srgb(c);
+  }
+  vec2 RM(vec2 uv, vec4 h, float cav) { return vec2(0.82, 0.0); }
+  `,
+};
+
 const PASS_VERTEX = /* glsl */ `
 varying vec2 vUv;
 void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }
@@ -800,8 +871,9 @@ function passMaterial(recipe, kind, uniforms) {
     float hd = texture2D(tH, vUv - vec2(0.0, uTexel.y)).x, hu = texture2D(tH, vUv + vec2(0.0, uTexel.y)).x;
     vec2 texM = uTileM * uTexel;
     vec3 n = normalize(vec3(-(hr - hl) / (2.0 * texM.x), -(hu - hd) / (2.0 * texM.y), 1.0));
-    // в альфе — высота (0..1 от uHScale метров): рельеф с параллаксом (world.js)
-    gl_FragColor = vec4(n * 0.5 + 0.5, clamp(texture2D(tH, vUv).x / uHScale, 0.0, 1.0));
+    // в альфе — высота: 0..1 от uHScale метров (рельеф с параллаксом земли, world.js), у кладки (pom) — со
+    // знаком, ±uHScale (параллакс деталей, families.js)
+    gl_FragColor = vec4(n * 0.5 + 0.5, clamp(texture2D(tH, vUv).x / uHScale` + (recipe.pom ? ' * 0.5 + 0.5' : '') + `, 0.0, 1.0));
   }`;
   else main = `void main() {
     vec4 h = texture2D(tH, vUv); float cav = cavity(vUv);
@@ -864,7 +936,7 @@ export function createTextures(renderer, { size = 2048 } = {}) {
       uTileM: { value: new THREE.Vector2(recipe.tile[0], recipe.tile[1]) },
       uCavK: { value: recipe.cav },
       uAoK: { value: recipe.ao },
-      uHScale: { value: recipe.hscale || 0.02 },
+      uHScale: { value: recipe.pom || recipe.hscale || 0.02 },
     };
     const mats = ['height', 'albedo', 'normal', 'orm'].map(function (kind) { return passMaterial(recipe, kind, uniforms); });
     const prev = renderer.getRenderTarget();
@@ -903,3 +975,5 @@ export function createTextures(renderer, { size = 2048 } = {}) {
 }
 
 export const TEXTURE_TILES = Object.fromEntries(Object.entries(RECIPES).map(function ([k, r]) { return [k, r.tile]; }));
+// глубина рельефа для параллакса (± м; высота в альфе нормали со знаком) — у рецептов кладки
+export const TEXTURE_POM = Object.fromEntries(Object.entries(RECIPES).filter(function ([k, r]) { return r.pom; }).map(function ([k, r]) { return [k, r.pom]; }));

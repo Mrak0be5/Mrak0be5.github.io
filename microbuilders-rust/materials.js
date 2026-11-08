@@ -145,6 +145,9 @@ export function createMaterials(textures, quality) {
   mats.riveted = textured('riveted', { metal: true, grime: 0.6 });
   mats.formwork = textured('formwork');
   mats.marble = textured('marble', { grime: 0.2 });
+  // рамки деталей и чертёж на столе
+  mats.dressed = textured('dressed', { grime: 0.7 });
+  mats.blueprint = textured('blueprint', { grime: 0 });
   // гвозди, болты, петли, сварка — без фактур
   mats.steel = withGrime(new THREE.MeshStandardMaterial({ color: 0x55585c, metalness: 0.9, roughness: 0.42, vertexColors: true }), 0.4);
   mats.blacksteel = withGrime(new THREE.MeshStandardMaterial({ color: 0x232323, metalness: 0.75, roughness: 0.55, vertexColors: true }), 0.4, 0.5);

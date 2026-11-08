@@ -2,9 +2,9 @@
 // ели из ветвей-карточек (хвоя рисуется кодом на canvas) и валуны. Трава и хвоя не попадают в затенение углов
 // (userData.noAO): у карточек нет объёма, GTAO затемнил бы их прямоугольниками.
 import * as THREE from 'three';
-import { rng, stone, cylinder, Batch } from './geo.js?v=0c1cc5f';
-import { TEXTURE_TILES as TILE } from './textures.js?v=0c1cc5f';
-import { WEATHER } from './world.js?v=0c1cc5f';
+import { rng, stone, cylinder, Batch } from './geo.js?v=f4726a0';
+import { TEXTURE_TILES as TILE } from './textures.js?v=f4726a0';
+import { WEATHER } from './world.js?v=f4726a0';
 
 // ---------- трава ----------
 
@@ -87,10 +87,12 @@ vec3 mbTranslucent(vec3 L, vec3 V, vec3 N) {
 export function createGrass(terrain, splat, center, density, seed = 3, wear = null, clear = 34) {
   const group = new THREE.Group();
   group.name = 'grass';
-  if (density <= 0) return { group, update() {} };
+  if (density <= 0) return { group, update() {}, push() {} };
   const r = rng(seed);
   const time = { value: 0 };
   const wind = { value: new THREE.Vector2(0.8, 0.45) };
+  // ноги рабочих: x, y, z, радиус — трава вокруг приминается
+  const pushes = { value: Array.from({ length: 8 }, function () { return new THREE.Vector4(0, -100, 0, 0); }) };
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0, side: THREE.DoubleSide });
   // мокрая трава темнеет, но не блестит плёнкой (как ткань): у травинок на просвет иначе серебрится вся поляна
   mat.defines = { MB_TRANSLUCENT: '', MB_CLOTH: '' };
@@ -102,8 +104,9 @@ export function createGrass(terrain, splat, center, density, seed = 3, wear = nu
     shader.uniforms.uSnow = WEATHER.snow;
     shader.uniforms.uSnowF = WEATHER.snow;
     shader.uniforms.uWearSpan = { value: wear ? wear.span : 1 };
+    shader.uniforms.uPush = pushes;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute float aT;\nuniform float uTime;\nuniform vec2 uWind;\nvarying float vTip;\nuniform sampler2D tWear;\nuniform float uWearSpan;\nuniform float uSnow;')
+      .replace('#include <common>', '#include <common>\nattribute float aT;\nuniform float uTime;\nuniform vec2 uWind;\nvarying float vTip;\nuniform sampler2D tWear;\nuniform float uWearSpan;\nuniform float uSnow;\nuniform vec4 uPush[8];')
       .replace('#include <project_vertex>', `
         vTip = aT;
         #ifdef USE_INSTANCING
@@ -121,6 +124,16 @@ export function createGrass(terrain, splat, center, density, seed = 3, wear = nu
         float gust = sin(uTime * 1.7 + dot(wp, vec2(0.32, 0.21))) * 0.55 + sin(uTime * 3.3 + dot(wp, vec2(-0.9, 1.3))) * 0.22 + sin(uTime * 0.6 + wp.x * 0.05) * 0.4;
         mvPosition.xz += uWind * (0.5 + gust) * tip * 0.14;
         mvPosition.y -= tip * 0.025 * (0.6 + gust);
+        // ноги рабочих приминают траву: верх травинки отклоняется от ступни и ложится
+        for (int i = 0; i < 8; i++) {
+          vec4 pp = uPush[i];
+          if (pp.w <= 0.0) continue;
+          vec2 dv = wp - pp.xz;
+          float dd = length(dv);
+          float pk = (1.0 - smoothstep(pp.w * 0.35, pp.w, dd)) * (1.0 - step(0.7, abs(mvPosition.y - pp.y)));
+          mvPosition.xz += dv / max(dd, 0.05) * pk * tip * 0.24;
+          mvPosition.y -= pk * tip * 0.14;
+        }
         mvPosition = modelViewMatrix * mvPosition;
         gl_Position = projectionMatrix * mvPosition;`);
     // изнанка: three.js перевернул нормаль целиком, а травинке нужна та же «вверх» с обратной стороны
@@ -131,7 +144,7 @@ export function createGrass(terrain, splat, center, density, seed = 3, wear = nu
       .replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>
         if (!gl_FrontFacing) { vec3 upV = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz); normal -= 2.0 * dot(normal, upV) * upV; }`);
   };
-  mat.customProgramCacheKey = function () { return 'grass5'; };
+  mat.customProgramCacheKey = function () { return 'grass6'; };
   // кольца: вблизи 9 травинок по 4 сегмента, дальше по 2 сегмента, у края 6 травинок пошире
   const LOD = [[9, 4, 1], [9, 2, 1], [6, 2, 1.25]];
   const geos = LOD.map(function (l, ri) {
@@ -203,7 +216,17 @@ export function createGrass(terrain, splat, center, density, seed = 3, wear = nu
       });
     }
   });
-  return { group, material: mat, update(t) { time.value = t; } };
+  return {
+    group, material: mat,
+    update(t) { time.value = t; },
+    // points — ноги (мир), до 8 ближайших к камере
+    push(points) {
+      for (let i = 0; i < 8; i++) {
+        const p = points[i], u = pushes.value[i];
+        if (p) u.set(p.x, p.y, p.z, 0.45); else u.set(0, -100, 0, 0);
+      }
+    },
+  };
 }
 
 // ---------- ели ----------

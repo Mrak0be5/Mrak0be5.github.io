@@ -5,23 +5,23 @@
 // бригада (crew.js) и интерфейс оригинала (hud.js). Клетка логики — 2 м. ?level=N — начать уровень N.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { createTextures } from './textures.js?v=0c1cc5f';
-import { createMaterials } from './materials.js?v=0c1cc5f';
-import { createSky, createTerrain, splatMap, terrainMaterial, terrainMesh, mountains, linkSkyTree, createWear } from './world.js?v=0c1cc5f';
-import { createPost } from './post.js?v=0c1cc5f';
-import { createRender, DYNAMIC } from './render.js?v=0c1cc5f';
-import { createGrass, createForest, createRocks } from './nature.js?v=0c1cc5f';
-import { createWorkerFactory } from './people.js?v=0c1cc5f';
-import { createAudio } from './audio.js?v=0c1cc5f';
-import { createLife } from './life.js?v=0c1cc5f';
-import { loadEngine, createEngine } from './engine.js?v=0c1cc5f';
-import { createBuilding } from './building.js?v=0c1cc5f';
-import { CELL, familyOf } from './families.js?v=0c1cc5f';
-import { createYard } from './yard.js?v=0c1cc5f';
-import { createScaffold } from './scaffold.js?v=0c1cc5f';
-import { createCrew } from './crew.js?v=0c1cc5f';
-import { createHud } from './hud.js?v=0c1cc5f';
-import { createLights } from './props.js?v=0c1cc5f';
+import { createTextures } from './textures.js?v=f4726a0';
+import { createMaterials } from './materials.js?v=f4726a0';
+import { createSky, createTerrain, splatMap, terrainMaterial, terrainMesh, meshHeight, mountains, linkSkyTree, createWear } from './world.js?v=f4726a0';
+import { createPost } from './post.js?v=f4726a0';
+import { createRender, DYNAMIC } from './render.js?v=f4726a0';
+import { createGrass, createForest, createRocks } from './nature.js?v=f4726a0';
+import { createWorkerFactory } from './people.js?v=f4726a0';
+import { createAudio } from './audio.js?v=f4726a0';
+import { createLife } from './life.js?v=f4726a0';
+import { loadEngine, createEngine } from './engine.js?v=f4726a0';
+import { createBuilding } from './building.js?v=f4726a0';
+import { CELL, familyOf } from './families.js?v=f4726a0';
+import { createYard } from './yard.js?v=f4726a0';
+import { createScaffold } from './scaffold.js?v=f4726a0';
+import { createCrew } from './crew.js?v=f4726a0';
+import { createHud } from './hud.js?v=f4726a0';
+import { createLights } from './props.js?v=f4726a0';
 
 const params = new URLSearchParams(location.search);
 const DEBUG = params.get('debug') === '1' || params.has('capture');
@@ -53,9 +53,9 @@ function progress(t, text) {
 // тени), объёмный свет (лучи солнца, конусы прожекторов), блик солнца, трава и лес гуще, тела рабочих мельче.
 // ss — верхний предел разрешения счёта относительно экрана (динамическое разрешение не поднимает выше).
 export const QUALITY = {
-  max: { name: 'Максимум', tex: 2048, shadow: 8192, farShadow: 4096, spotShadow: 2048, ao: 1, aoSamples: 24, bloom: true, msaa: 0, taa: 1, ratio: 2, ss: 1, glass: 'physical', terrainDetail: 1, grass: 1.6, trees: 1.35, bodyCell: 0.009, volume: 1, flare: 1, clouds: 1, gi: 1, ssr: 1, mblur: 1 },
-  ultra: { name: 'Ультра', tex: 2048, shadow: 4096, farShadow: 2048, spotShadow: 1024, ao: 1, bloom: true, msaa: 0, taa: 1, ratio: 2, ss: 1, glass: 'physical', terrainDetail: 1, grass: 1, trees: 1, bodyCell: 0.0125, clouds: 1, gi: 1, ssr: 1 },
-  high: { name: 'Высокая', tex: 2048, shadow: 2048, spotShadow: 1024, ao: 0.5, bloom: true, msaa: 4, ratio: 1.5, glass: 'physical', terrainDetail: 1, grass: 0.45, trees: 0.7, bodyCell: 0.015 },
+  max: { name: 'Максимум', bevel: 1, tex: 2048, shadow: 8192, farShadow: 4096, spotShadow: 2048, ao: 1, aoSamples: 24, bloom: true, msaa: 0, taa: 1, ratio: 2, ss: 1, glass: 'physical', terrainDetail: 1, grass: 1.6, trees: 1.35, bodyCell: 0.009, volume: 1, flare: 1, clouds: 1, gi: 1, ssr: 1, mblur: 1 },
+  ultra: { name: 'Ультра', bevel: 1, tex: 2048, shadow: 4096, farShadow: 2048, spotShadow: 1024, ao: 1, bloom: true, msaa: 0, taa: 1, ratio: 2, ss: 1, glass: 'physical', terrainDetail: 1, grass: 1, trees: 1, bodyCell: 0.0125, clouds: 1, gi: 1, ssr: 1 },
+  high: { name: 'Высокая', bevel: 1, tex: 2048, shadow: 2048, spotShadow: 1024, ao: 0.5, bloom: true, msaa: 4, ratio: 1.5, glass: 'physical', terrainDetail: 1, grass: 0.45, trees: 0.7, bodyCell: 0.015 },
   phone: { name: 'Телефон', tex: 1024, shadow: 1024, spotShadow: 0, ao: 0, bloom: false, msaa: 0, ratio: 1.5, glass: 'simple', terrainDetail: 0, grass: 0.12, trees: 0.45, bodyCell: 0.02, farForest: 0 },
 };
 const ORDER = ['max', 'ultra', 'high', 'phone'];
@@ -119,6 +119,7 @@ const state = {
   ready: false,
   manual: false,
   frames: 0,
+  cpuMs: 0,
   quality: qualityKey,
   // жадный покупатель на каждом кадре (проверки до сдачи)
   greedy: false,
@@ -132,26 +133,43 @@ const audio = createAudio();
 ['pointerdown', 'keydown'].forEach(function (e) { window.addEventListener(e, function () { audio.start(); }, { passive: true }); });
 // Съёмка: камера за рабочим (follow) или облёт (orbit); задаёт отладка, считается в шаге кадра.
 let follow = null, orbit = null;
-const _cam = new THREE.Vector3(), _tgt = new THREE.Vector3(), _ray = new THREE.Vector3();
-const camRay = new THREE.Raycaster();
+const _cam = new THREE.Vector3(), _tgt = new THREE.Vector3();
+// облёт закрытого вида: сдвиг угла вокруг рабочего (рад) и доля высоты (под потолком — ниже); по порядку предпочтения
+const DODGE = [[0, 1], [0, 0.6], [0.6, 1], [-0.6, 1], [0.6, 0.6], [-0.6, 0.6], [1.2, 1], [-1.2, 1], [1.8, 1], [-1.8, 1], [Math.PI, 1], [Math.PI, 0.6]];
 function directCamera(dt) {
   if (follow && crew) {
     const w = crew.figure(follow.i);
     if (!w) return;
     follow.angle += (follow.spin || 0) * dt;
-    const a = w.heading + follow.angle;
-    _cam.set(w.pos.x + Math.sin(a) * follow.dist, w.pos.y + follow.height, w.pos.z + Math.cos(a) * follow.dist);
     _tgt.set(w.pos.x, w.pos.y + follow.look, w.pos.z);
-    // камера не уходит за стену и под перекрытие: луч от рабочего к камере, у первой детали — ближе
-    _ray.subVectors(_cam, _tgt);
-    const len = _ray.length();
-    if (len > 1e-3 && house) {
-      camRay.set(_tgt, _ray.divideScalar(len));
-      camRay.far = len;
-      const hit = camRay.intersectObject(house.group, true).find(function (h) { return h.object.isMesh; });
-      if (hit) _cam.copy(_tgt).addScaledVector(_ray, Math.max(0.45, hit.distance - 0.3));
-    }
-    const k = follow.snap ? 1 : 1 - Math.exp(-dt * (follow.smooth || 2.5));
+    // Камера ходит по кругу вокруг рабочего: угол сглажен (разворот рабочего — плавный облёт, а не пролёт сквозь
+    // него), расстояние держится, рабочий в центре кадра. За стену и под перекрытие не уходит: отрезок от рабочего
+    // к камере по брускам готовых деталей; закрыто — ближний свободный угол или ниже (под потолком), не нашлось —
+    // ближе к рабочему у первой детали.
+    const clear = function (ang, lift) {
+      _cam.set(w.pos.x + Math.sin(ang) * follow.dist, w.pos.y + follow.height * lift, w.pos.z + Math.cos(ang) * follow.dist);
+      return house ? house.blocked(_tgt, _cam) : 1;
+    };
+    const base = w.heading + follow.angle;
+    if (follow.yaw === undefined || follow.snap) { follow.dodge = 0; follow.lift = 1; follow.dodgeTo = 0; follow.liftTo = 1; }
+    if (follow.snap || clear(base + follow.dodge, follow.lift) < 0.7) {
+      let bestK = -1;
+      DODGE.forEach(function (c) {
+        const k = clear(base + c[0], c[1]);
+        if (k > bestK + 0.05) { bestK = k; follow.dodgeTo = c[0]; follow.liftTo = c[1]; }
+      });
+    } else if ((follow.dodgeTo !== 0 || follow.liftTo !== 1) && clear(base, 1) > 0.95) { follow.dodgeTo = 0; follow.liftTo = 1; }
+    const kd = follow.snap ? 1 : 1 - Math.exp(-dt * 2.5);
+    follow.dodge += (follow.dodgeTo - follow.dodge) * kd;
+    follow.lift += (follow.liftTo - follow.lift) * kd;
+    // угол вокруг рабочего — к нужному по кратчайшей дуге
+    const want = base + follow.dodge;
+    if (follow.yaw === undefined || follow.snap) follow.yaw = want;
+    else follow.yaw += Math.atan2(Math.sin(want - follow.yaw), Math.cos(want - follow.yaw)) * (1 - Math.exp(-dt * (follow.smooth || 2.5)));
+    const kk = clear(follow.yaw, follow.lift);
+    if (kk < 1) _cam.lerp(_tgt, 1 - Math.max(0.15, kk - 0.08));
+    // положение — с малой задержкой: гасит дрожь шага, рабочий не уходит из центра кадра
+    const k = follow.snap ? 1 : 1 - Math.exp(-dt * 10);
     follow.snap = false;
     camera.position.lerp(_cam, k);
     controls.target.lerp(_tgt, k);
@@ -286,6 +304,7 @@ function react(event) {
   }
   if (event.type === 'complete') {
     audio.complete();
+    if (crew) crew.cheer(3.5);
     if (!state.manual) celebrate = { t: 0 };
     if (post && post.gi) post.gi.markDirty();
   }
@@ -329,10 +348,13 @@ async function boot() {
   factory = createWorkerFactory(quality);
   await factory.ready;
   await progress(0.8, 'Стройка…');
-  house = createBuilding({ E, mats, onChange: function () { if (post && post.gi) post.gi.markDirty(); } });
+  house = createBuilding({ E, mats, bevel: !!quality.bevel, pom: !!quality.taa, onChange: function () { if (post && post.gi) post.gi.markDirty(); },
+    onPiece: function (x, y, z, kind) { if (life) life.puff(x, y, z, kind); } });
   yard = createYard({ E, mats });
   scaffold = createScaffold({ E, mats });
-  crew = createCrew({ E, factory, mats, wear });
+  crew = createCrew({ E, factory, mats, wear,
+    layPoint: function (b, from, out) { return house.layPoint(b, from, out); },
+    kindAt: function (x, y, z) { return house.kindAt(x, y, z); } });
   scene.add(house.group, yard.group, scaffold.group, crew.group);
   viewGroups = [house.group, yard.group, scaffold.group, crew.group];
   hud = createHud(E, {
@@ -360,9 +382,23 @@ async function boot() {
   bindPlayerCamera();
 
   // погода и живность: дождь, пыль, мошкара, птицы
-  life = createLife(scene, quality, { camera, weather: params.get('weather') });
+  life = createLife(scene, quality, { camera, weather: params.get('weather'), chimneys: function () { return house ? house.chimneyTops() : []; },
+    // высота земли на экране (следы на снегу лежат по ней)
+    ground: function (x, z) { return meshHeight(terrain, x, z); },
+    // звук движений рабочих — вживую и в событиях ролика
+    onFx: function (e) {
+      _p.set(e.x, e.y, e.z);
+      audio.fx(e.type, e.metal, _p, camera);
+      if (recorded.on && (e.type === 'impact' || e.type === 'tap' || e.type === 'land')) recorded.list.push({ type: 'fx', kind: e.type, metal: !!e.metal, pos: [e.x, e.y, e.z].map(function (v) { return Math.round(v * 100) / 100; }) });
+    } });
   await progress(0.92, 'Свет…');
-  const postOpts = { sky, lights: function () { return lights ? lights.lights : []; } };
+  // глубина резкости — только у камеры за рабочим (съёмка, ролик): фокус на нём
+  const postOpts = { sky, lights: function () { return lights ? lights.lights : []; },
+    focus: function () {
+      if (!follow || !crew) return 0;
+      const w = crew.figure(follow.i);
+      return w ? camera.position.distanceTo(_tgt) : 0;
+    } };
   post = quality.taa ? createRender(renderer, scene, camera, quality, postOpts) : createPost(renderer, scene, camera, quality, postOpts);
   applySize();
   // отражённый свет: здание, леса, двор и рельеф (рабочие — нет)
@@ -567,6 +603,13 @@ function view(dt) {
   if (lights) lights.night(sky.state.night);
   house.ghostLight(sky.state.night);
   grass.update(state.time);
+  // трава под ногами ближайших к камере рабочих на земле
+  if (grass.push && crew) {
+    const near = crew.views().filter(function (v) { return v && v.w.group.visible && v.w.pos.y < 0.4; })
+      .map(function (v) { return v.w.pos; })
+      .sort(function (a, b) { return a.distanceToSquared(camera.position) - b.distanceToSquared(camera.position); });
+    grass.push(near.slice(0, 8));
+  }
   wear.update(dt);
   const sim = Math.min(0.25, dt * state.tempo);
   if (life) life.update(dt, sim, state.time, state.hour, sky, crew.views().filter(Boolean).map(function (v) { return v.w; }), lights ? lights.lights : []);
@@ -581,9 +624,12 @@ function frame(now) {
   if (state.manual) return;
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
+  const t0 = performance.now();
   step(dt);
   renderer.info.reset();
   asView(function () { post.render(state.time); });
+  // время кадра на процессоре (логика, вид, команды видеокарте) — сглаженное, для замеров
+  state.cpuMs += (performance.now() - t0 - state.cpuMs) * 0.05;
   state.frames++;
   watchFrame(dt);
   requestAnimationFrame(frame);
@@ -607,13 +653,13 @@ if (DEBUG) {
     weather: function (mode, instant) { if (life && mode !== undefined) { life.force(mode, instant); weatherShown = mode; } return life ? life.state() : null; },
     state: function () {
       const w = E.world, c = E.campaign;
-      return { ready: state.ready, hour: Math.round(state.hour * 100) / 100, quality: state.quality, frames: state.frames, tempo: state.tempo, scale: Math.round(dyn.scale * 100) / 100,
+      return { ready: state.ready, hour: Math.round(state.hour * 100) / 100, quality: state.quality, frames: state.frames, tempo: state.tempo, scale: Math.round(dyn.scale * 100) / 100, cpuMs: Math.round(state.cpuMs * 10) / 10,
         calls: renderer.info.render.calls, tris: renderer.info.render.triangles, textures: renderer.info.memory.textures, geometries: renderer.info.memory.geometries,
         level: c.levelIndex + 1, name: w.level.name, status: c.status, elapsed: Math.round(c.levelElapsed),
         progress: Math.round((1 - w.remaining / w.blocks.length) * 1000) / 1000, blocks: w.blocks.length,
         coins: Math.round(c.coins), capital: Math.round(E.meta.capital), done: c.status === 'complete', chests: E.chestsReady.slice(),
         weather: E.environment ? E.environment.weather || '' : '', night: !!(E.environment && E.environment.night),
-        workers: w.builders.map(function (b) { return b.phase + (b.walkPurpose && b.phase === 'walk' ? ':' + b.walkPurpose : ''); }) };
+        workers: w.builders.map(function (b) { return b.phase + (b.walkPurpose && b.phase === 'walk' ? ':' + b.walkPurpose : ''); }), life: life ? life.state() : null };
     },
     // час неба вручную; null — снова часы логики
     time: function (h) { state.fixedHour = h === null || h === undefined ? null : h; state.hour = viewHour(); sky.update(state.hour, state.time, controls.target); return state.hour; },
@@ -685,8 +731,11 @@ if (DEBUG) {
     hud: function (on) { document.body.classList.toggle('rust-shot', !on); return !!on; },
     follow: function (opts) { follow = opts ? Object.assign({ angle: 0.9, dist: 3.4, height: 1.6, look: 1.1, snap: true }, opts) : null; orbit = null; return !!follow; },
     orbit: function (opts) { orbit = opts || null; follow = null; return !!orbit; },
-    // рабочий за делом: фаза логики (или 'walk:назначение'), с ношей, на лестнице, без соседей ближе clear м
-    pickWorker: function (phase, carry, ladder, clear) {
+    // проверка движений: рабочий i играет действие на месте (null — снова по логике)
+    pose: function (i, action, opts) { return crew.pose(i, action || null, opts); },
+    // рабочий за делом: фаза логики (или 'walk:назначение'), с ношей, на лестнице, без соседей ближе clear м,
+    // до конца дела (таймер логики) не меньше left с игры
+    pickWorker: function (phase, carry, ladder, clear, left) {
       const list = crew.views();
       for (let i = 0; i < list.length; i++) {
         const v = list[i];
@@ -697,6 +746,7 @@ if (DEBUG) {
         if (carry && !b.carry.length) continue;
         if (ladder !== undefined && ladder !== null && (v.w.anim.action === 'climb') !== ladder) continue;
         if (clear && list.some(function (o) { return o && o !== v && o.w.pos.distanceTo(v.w.pos) < clear; })) continue;
+        if (left && !(b.timer > left)) continue;
         return i;
       }
       return -1;

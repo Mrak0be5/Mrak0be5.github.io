@@ -1,8 +1,10 @@
-// Жизнь вокруг стройки: погода (ясно → облачно → дождь → сохнет), капли дождя, пыль из-под тачек и ног,
-// дым генераторов мачт ночью, мошкара у прожекторов, птицы. Всё кодом, без текстур.
+// Жизнь вокруг стройки: погода (ясно → облачно → дождь → сохнет), капли дождя, пыль из-под ног, крошка
+// и пыль от ударов кирки, пыль кладки, искры по стали, дым сигарет, дым генераторов мачт ночью, мошкара
+// у прожекторов, птицы, пар дыхания и следы на снегу. События движений — очередь фигуры w.fx (people.js).
+// Всё кодом, без файлов текстур.
 import * as THREE from 'three';
-import { CLOUD, WEATHER } from './world.js?v=0c1cc5f';
-import { ATMO } from './atmosphere.js?v=0c1cc5f';
+import { CLOUD, WEATHER, linkSky } from './world.js?v=f4726a0';
+import { ATMO } from './atmosphere.js?v=f4726a0';
 
 // выходы G-буфера у собственных шейдеров: прозрачное не трогает буферы под собой
 const GB_OUT = /* glsl */ `
@@ -168,11 +170,11 @@ function snow(count) {
   return mesh;
 }
 
-// ---------- частицы: пыль, дым, мошкара ----------
+// ---------- частицы: пыль, дым, мошкара, крошка, искры ----------
 const PART_VERT = /* glsl */ `
 attribute vec4 aPos;   // xyz, размер
 attribute vec4 aCol;   // rgb (альбедо или свечение), прозрачность
-attribute float aKind; // 0 пыль, 1 дым, 2 мошка (светится)
+attribute float aKind; // 0 пыль, 1 дым, 2 мошка (светится), 3 крошка (твёрдая, падает), 4 искра
 varying vec2 vQ;
 varying vec4 vCol;
 varying float vKind;
@@ -199,7 +201,19 @@ void main() {
   if (r > 1.0) discard;
   float a;
   vec3 c;
-  if (vKind > 1.5) {
+  if (vKind > 3.5) {
+    // искра: горячее ядро и ореол
+    a = (1.0 - smoothstep(0.0, 1.0, r)) * vCol.a;
+    c = vCol.rgb * (18.0 * (1.0 - smoothstep(0.0, 0.35, r)) + 4.0);
+  } else if (vKind > 2.5) {
+    // крошка: угловатый осколок, освещён как земля
+    float ang = atan(vQ.y, vQ.x);
+    float edge = 0.62 + 0.3 * h(vec2(floor(ang * 1.2 + 3.0), floor(vW.x * 50.0 + vW.z * 31.0)));
+    if (r > edge) discard;
+    a = vCol.a;
+    vec3 V = normalize(vW - cameraPosition);
+    c = vCol.rgb * (uSunCol * (0.55 + 0.6 * (0.5 + 0.5 * vQ.y)) + uSky * 1.6);
+  } else if (vKind > 1.5) {
     a = (1.0 - smoothstep(0.0, 1.0, r)) * vCol.a;
     c = vCol.rgb * 6.0;
   } else {
@@ -214,6 +228,12 @@ void main() {
 }
 `;
 
+function ss(x, a, b) { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
+// Math.random — через вызов: вид подменяет его своим генератором на время кадра (main.js → asView)
+function RND() { return Math.random(); }
+
+// ветер для шлейфа из труб, м/с (по направлению ветра травы и дождя)
+const PLUME = [0.9, 0.75, 0.4];
 function particles(max) {
   const g = new THREE.InstancedBufferGeometry();
   const quad = new THREE.PlaneGeometry(1, 1);
@@ -235,11 +255,13 @@ function particles(max) {
   mesh.frustumCulled = false;
   mesh.renderOrder = 4;
   mesh.userData.noGI = true;
-  // частица: x y z, скорость, возраст, жизнь, размер, рост, цвет, прозрачность, вид
+  // частица: x y z, скорость, возраст, жизнь, размер, рост, цвет, прозрачность, вид; floor — пол для крошки и искр
   const list = [];
-  function emit(kind, x, y, z, vx, vy, vz, life, size, grow, r, gg, b, a) {
+  function emit(kind, x, y, z, vx, vy, vz, life, size, grow, r, gg, b, a, floor) {
     if (list.length >= max) list.shift();
-    list.push({ kind, x, y, z, vx, vy, vz, age: 0, life, size, grow, r, g: gg, b, a });
+    const p = { kind, x, y, z, vx, vy, vz, age: 0, life, size, grow, r, g: gg, b, a, floor: floor === undefined ? -1e9 : floor, plume: false };
+    list.push(p);
+    return p;
   }
   function update(dt) {
     let n = 0;
@@ -250,11 +272,24 @@ function particles(max) {
     }
     for (let i = 0; i < list.length; i++) {
       const p = list[i];
-      const drag = p.kind === 2 ? 0 : Math.exp(-dt * 1.6);
-      p.vx *= drag; p.vz *= drag; if (p.kind !== 2) p.vy = p.vy * drag + (p.kind === 1 ? 0.35 : 0.05) * dt;
-      p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+      if (p.kind >= 3) {
+        // крошка и искры летят по баллистике, отскакивают от пола и гаснут
+        p.vy -= 9.8 * dt;
+        p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+        if (p.y < p.floor) { p.y = p.floor; p.vy = Math.abs(p.vy) * (p.kind === 4 ? 0.35 : 0.22); p.vx *= 0.45; p.vz *= 0.45; }
+      } else if (p.plume) {
+        // дым трубы: поднимается и уходит по ветру длинным шлейфом
+        const k = 1 - Math.exp(-dt * 0.5);
+        p.vx += (PLUME[0] - p.vx) * k; p.vy += (PLUME[1] - p.vy) * k; p.vz += (PLUME[2] - p.vz) * k;
+        p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+      } else {
+        const drag = p.kind === 2 ? 0 : Math.exp(-dt * 1.6);
+        p.vx *= drag; p.vz *= drag; if (p.kind !== 2) p.vy = p.vy * drag + (p.kind === 1 ? 0.35 : 0.05) * dt;
+        p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+      }
       const t = p.age / p.life;
-      const fade = p.kind === 2 ? 1 : Math.sin(Math.min(1, t * 1.2) * Math.PI) ;
+      // дым трубы гуще всего у самого верха трубы и редеет к концу шлейфа
+      const fade = p.kind === 2 ? 1 : p.kind === 3 ? 1 - ss(t, 0.75, 1) : p.kind === 4 ? (1 - t) * (1 - t) : p.plume ? ss(t, 0, 0.03) * (1 - t) * 1.2 : Math.sin(Math.min(1, t * 1.2) * Math.PI);
       P[n * 4] = p.x; P[n * 4 + 1] = p.y; P[n * 4 + 2] = p.z; P[n * 4 + 3] = p.size + p.grow * p.age;
       Cc[n * 4] = p.r; Cc[n * 4 + 1] = p.g; Cc[n * 4 + 2] = p.b; Cc[n * 4 + 3] = p.a * fade;
       K[n] = p.kind;
@@ -269,6 +304,82 @@ function particles(max) {
 
 // ---------- птицы ----------
 // Несколько стай ходят кругами над лесом; крылья машут в вершинном шейдере (V из двух треугольников).
+// ---------- следы на снегу ----------
+// Отпечатки ботинок, где рабочие идут по заснеженной земле: кольцо из n штук (один InstancedMesh), левый —
+// в середине опоры левой ноги, правый — правой (фаза шага people.js). Подошва 29 × 11 см: пятка, свод уже,
+// широкая подушечка, носок; в ямке темнее, к краю светлее, поперёк — грунтозацепы. Снегопад заметает след
+// за ~2 игровых часа (светлеет до цвета снега), без снега следов нет.
+function footprints(n) {
+  const W = 32, H = 64, px = new Uint8Array(W * H * 4);
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+    const u = Math.abs((i + 0.5) / W * 2 - 1), v = (j + 0.5) / H;  // v: 0 — пятка, 1 — носок
+    let hw;
+    if (v < 0.14) hw = 0.78 * Math.sqrt(Math.max(0, 1 - Math.pow((0.14 - v) / 0.14, 2)));
+    else if (v < 0.34) hw = 0.78;
+    else if (v < 0.5) hw = 0.78 - 0.16 * Math.sin(Math.PI * (v - 0.34) / 0.16);
+    else if (v < 0.8) hw = 0.78 + 0.2 * ss(v, 0.5, 0.72);
+    else hw = 0.98 * Math.sqrt(Math.max(0, 1 - Math.pow((v - 0.8) / 0.2, 2)));
+    const k = (i + j * W) * 4;
+    if (u >= hw) { px[k] = px[k + 1] = px[k + 2] = 255; px[k + 3] = 0; continue; }
+    const deep = Math.min(1, (hw - u) / 0.3) * (v > 0.34 && v < 0.5 ? 0.55 : 1);
+    const lug = (v < 0.34 || v > 0.5) && Math.sin(v * 80) > 0.25 ? 1 : 0;
+    const c = 1 - 0.28 * deep - 0.07 * lug * deep;
+    px[k] = px[k + 1] = px[k + 2] = Math.round(c * 255);
+    px[k + 3] = 255;
+  }
+  const tex = new THREE.DataTexture(px, W, H, THREE.RGBAFormat);
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  tex.needsUpdate = true;
+  const geo = new THREE.PlaneGeometry(1, 1);
+  geo.rotateX(-Math.PI / 2);
+  const uv = geo.attributes.uv;
+  for (let i = 0; i < uv.count; i++) uv.setY(i, 1 - uv.getY(i));  // носок — вперёд (+z)
+  const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(0.32, 0.37, 0.48), map: tex, alphaTest: 0.5, roughness: 0.88, metalness: 0,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  mat.defines = { MB_DRY: '' };
+  linkSky(mat);
+  const mesh = new THREE.InstancedMesh(geo, mat, n);
+  mesh.name = 'footprints';
+  mesh.count = 0;
+  mesh.visible = false;
+  mesh.frustumCulled = false;
+  mesh.castShadow = false;
+  mesh.receiveShadow = true;
+  const col = new THREE.Color(1, 1, 1), born = new Float32Array(n);
+  for (let i = 0; i < n; i++) mesh.setColorAt(i, col);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), qt = new THREE.Quaternion(), p = new THREE.Vector3(), nrm = new THREE.Vector3();
+  const sc = new THREE.Vector3(0.13, 1, 0.32), Y = new THREE.Vector3(0, 1, 0);
+  let head = 0, clock = 0;
+  // ground(x, z) — высота земли: след лежит на ней и наклонён по склону бугра
+  function add(x, z, yaw, t, ground) {
+    const e = 0.15, h = ground ? ground(x, z) : 0;
+    if (ground) nrm.set(ground(x - e, z) - ground(x + e, z), 2 * e, ground(x, z - e) - ground(x, z + e)).normalize(); else nrm.copy(Y);
+    q.setFromAxisAngle(Y, yaw).premultiply(qt.setFromUnitVectors(Y, nrm));
+    m4.compose(p.set(x, h + 0.015, z), q, sc);
+    mesh.setMatrixAt(head, m4);
+    mesh.setColorAt(head, col.setRGB(1, 1, 1));
+    born[head] = t;
+    head = (head + 1) % n;
+    mesh.count = Math.min(n, mesh.count + 1);
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.instanceColor.needsUpdate = true;
+  }
+  // t — снегопад в игровых секундах (полный снег); след светлеет к цвету снега
+  function update(t, dt) {
+    clock += dt;
+    if (clock < 0.3 || !mesh.count) return;
+    clock = 0;
+    for (let i = 0; i < mesh.count; i++) {
+      const f = 1 + 1.1 * Math.min(1, Math.max(0, (t - born[i]) / 240));
+      mesh.setColorAt(i, col.setRGB(f, f, f));
+    }
+    mesh.instanceColor.needsUpdate = true;
+  }
+  return { mesh, add, update };
+}
+
 function birds() {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0.12, -0.36, 0, -0.04, 0, 0, -0.1, 0, 0, 0.12, 0, 0, -0.1, 0.36, 0, -0.04], 3));
@@ -315,13 +426,15 @@ export function createLife(scene, quality, opts) {
   group.add(SN);
   const P = particles(quality.taa ? 900 : 300);
   const B = birds();
+  const FP = quality.taa ? footprints(640) : null;
   if (R) group.add(R);
   group.add(P.mesh, B.mesh);
+  if (FP) group.add(FP.mesh);
   scene.add(group);
   let forced = opts.weather || null;
   let day = 0, lastHour = null, cover = 0.27, wet = 0, rainK = 0, snowK = 0, snowCover = 0;
   const tmp = new THREE.Vector3();
-  let dustClock = 0, smokeClock = 0, mothClock = 0;
+  let dustClock = 0, smokeClock = 0, mothClock = 0, chimneyClock = 0, breathClock = 0, snowClock = 0;
   function plan(hour) {
     if (forced === 'rain') return { cover: 0.82, rain: 1 };
     if (forced === 'snow') return { cover: 0.78, rain: 0, snow: 1 };
@@ -397,6 +510,8 @@ export function createLife(scene, quality, opts) {
     pu.uSunCol.value.set(sky.sun.color.r, sky.sun.color.g, sky.sun.color.b).multiplyScalar(sky.sun.intensity * 0.06);
     pu.uSky.value.set(0.08, 0.09, 0.1).multiplyScalar(1 - st.night * 0.9);
     dustClock += dt; smokeClock += dt; mothClock += dt;
+    // на снегу из-под ног — снежная пыль, не земляная
+    const snowy = snowCover > 0.3;
     if (dustClock > 0.12 && wet < 0.3) {
       dustClock = 0;
       (workers || []).forEach(function (w) {
@@ -405,7 +520,9 @@ export function createLife(scene, quality, opts) {
         if (Math.random() > (barrow ? 0.7 : 0.25)) return;
         const hx = Math.sin(w.heading || 0), hz = Math.cos(w.heading || 0);
         const ox = barrow ? hx * 1.45 : (Math.random() - 0.5) * 0.3, oz = barrow ? hz * 1.45 : (Math.random() - 0.5) * 0.3;
-        P.emit(0, w.pos.x + ox, w.pos.y + 0.06, w.pos.z + oz, (Math.random() - 0.5) * 0.4, 0.12 + Math.random() * 0.1, (Math.random() - 0.5) * 0.4,
+        if (snowy) P.emit(0, w.pos.x + ox, w.pos.y + 0.04, w.pos.z + oz, (Math.random() - 0.5) * 0.3, 0.1 + Math.random() * 0.08, (Math.random() - 0.5) * 0.3,
+          0.9 + Math.random() * 0.5, 0.05, 0.18, 0.86, 0.88, 0.92, 0.12);
+        else P.emit(0, w.pos.x + ox, w.pos.y + 0.06, w.pos.z + oz, (Math.random() - 0.5) * 0.4, 0.12 + Math.random() * 0.1, (Math.random() - 0.5) * 0.4,
           1.6 + Math.random(), 0.12, 0.35, 0.55, 0.47, 0.38, 0.16 * (1 - wet * 3));
       });
     }
@@ -430,13 +547,108 @@ export function createLife(scene, quality, opts) {
         });
       }
     }
+    // дым из готовых труб: клубы растут и сносятся ветром; у большого цеха — гуще и темнее
+    chimneyClock += dt;
+    if (chimneyClock > 0.12 && opts.chimneys) {
+      chimneyClock = 0;
+      opts.chimneys().forEach(function (c) {
+        const g = c.big ? 0.17 : 0.27;
+        P.emit(1, c.x + (RND() - 0.5) * 0.25, c.y + 0.05, c.z + (RND() - 0.5) * 0.25, 0.2 + RND() * 0.2, 0.9 + RND() * 0.4, 0.1 + RND() * 0.1,
+          c.big ? 9 : 6, c.big ? 0.45 : 0.3, c.big ? 0.7 : 0.45, g, g, g + 0.015, (c.big ? 0.6 : 0.45) * (1 - 0.6 * rainK)).plume = true;
+      });
+    }
+    // в снег на морозе виден пар дыхания: облачко у рта раз в 2,5–3,5 с у ближних к камере рабочих
+    breathClock += dt;
+    if (snowK > 0.3 && breathClock > 0.25) {
+      breathClock = 0;
+      (workers || []).forEach(function (w) {
+        if (!w.group || !w.group.visible || !w.pos) return;
+        if (w.pos.distanceToSquared(opts.camera.position) > 600) return;
+        w.breath = (w.breath === undefined ? RND() * 3 : w.breath) - 0.25;
+        if (w.breath > 0) return;
+        w.breath = 2.5 + RND();
+        const hx = Math.sin(w.heading || 0), hz = Math.cos(w.heading || 0);
+        const lying = w.anim && w.anim.action === 'sleep', low = w.anim && (w.anim.action === 'eat' || w.anim.action === 'rest');
+        const y = w.pos.y + (lying ? 0.3 : low ? 1.1 : 1.58);
+        for (let i = 0; i < 2; i++) P.emit(1, w.pos.x + hx * 0.16, y, w.pos.z + hz * 0.16, hx * (0.25 + RND() * 0.1), 0.03, hz * (0.25 + RND() * 0.1),
+          1.2 + RND() * 0.5, 0.03, 0.16, 0.82, 0.85, 0.9, 0.12);
+      });
+    }
+    // следы: середина опоры левой ноги — фаза шага 2πk, правой — 2πk + π (people.js); у ближних к камере
+    if (FP) {
+      snowClock += sim * snowK;
+      FP.mesh.visible = FP.mesh.count > 0 && WEATHER.snow.value > 0.3;
+      (workers || []).forEach(function (w) {
+        if (!w.anim || !w.pos) return;
+        const half = Math.floor((w.anim.phase || 0) / Math.PI);
+        const was = w.stepHalf;
+        w.stepHalf = half;
+        if (was === undefined || half === was || snowCover < 0.35 || !w.group || !w.group.visible) return;
+        if (w.pos.y > 0.25 || w.anim.speed < 0.05 || w.anim.action === 'climb' || w.pos.distanceToSquared(opts.camera.position) > 2500) return;
+        const h = w.heading || 0, left = half % 2 === 0 ? 1 : -1;
+        FP.add(w.pos.x + Math.cos(h) * 0.1 * left, w.pos.z - Math.sin(h) * 0.1 * left, h + 0.07 * left, snowClock, opts.ground);
+      });
+      FP.update(snowClock, dt);
+    }
+    (workers || []).forEach(function (w) {
+      if (!w.fx || !w.fx.length) return;
+      for (let i = 0; i < w.fx.length; i++) { burst(w.fx[i], w); if (opts.onFx) opts.onFx(w.fx[i]); }
+      w.fx.length = 0;
+    });
     P.update(dt);
     B.update(time);
     B.mesh.visible = st.night < 0.5 && rainK < 0.5;
   }
+  // Эффект события движения: удар кирки — осколки цвета породы и облачко пыли; блок лёг — пыль раствора;
+  // постукивание — пыль, по стали — искры; выдох — дым сигареты; приземление — пыль из-под ног.
+  function burst(e, w) {
+    const col = e.color || [0.55, 0.5, 0.44];
+    const dry = 1 - Math.min(1, wet * 2);
+    if (e.type === 'impact') {
+      for (let i = 0; i < 9; i++) {
+        const a = RND() * 6.283, s = 1.2 + RND() * 2.2;
+        const k = 0.75 + RND() * 0.4;
+        P.emit(3, e.x, e.y + 0.04, e.z, Math.cos(a) * s * 0.6, 1.4 + RND() * 2.4, Math.sin(a) * s * 0.6, 0.9 + RND() * 0.8,
+          0.008 + RND() * 0.014, 0, col[0] * k, col[1] * k, col[2] * k, 1, e.y - 0.02);
+      }
+      for (let i = 0; i < 3; i++) P.emit(0, e.x + (RND() - 0.5) * 0.15, e.y + 0.05, e.z + (RND() - 0.5) * 0.15, (RND() - 0.5) * 0.5, 0.25 + RND() * 0.2, (RND() - 0.5) * 0.5,
+        1.3 + RND(), 0.09, 0.45, col[0] * 0.9 + 0.08, col[1] * 0.9 + 0.07, col[2] * 0.9 + 0.06, 0.22 * dry);
+    } else if (e.type === 'place') {
+      for (let i = 0; i < 2; i++) P.emit(0, e.x + (RND() - 0.5) * 0.2, e.y + 0.02, e.z + (RND() - 0.5) * 0.2, (RND() - 0.5) * 0.25, 0.12, (RND() - 0.5) * 0.25,
+        1.1 + RND() * 0.6, 0.06, 0.3, 0.62, 0.6, 0.56, 0.16 * dry);
+      if (RND() < 0.6) P.emit(3, e.x, e.y + 0.02, e.z, (RND() - 0.5) * 0.8, 0.6 + RND() * 0.8, (RND() - 0.5) * 0.8, 0.8, 0.007, 0, 0.6, 0.58, 0.54, 1, e.y - 0.5);
+    } else if (e.type === 'tap') {
+      if (e.metal) {
+        for (let i = 0; i < 10; i++) {
+          const a = RND() * 6.283, s = 0.8 + RND() * 2.4;
+          P.emit(4, e.x, e.y, e.z, Math.cos(a) * s, 0.6 + RND() * 2.2, Math.sin(a) * s, 0.25 + RND() * 0.4, 0.006 + RND() * 0.006, 0, 1.0, 0.55 + RND() * 0.2, 0.16, 1, e.y - 1.2);
+        }
+      } else if (RND() < 0.7) {
+        P.emit(0, e.x, e.y + 0.02, e.z, (RND() - 0.5) * 0.2, 0.1, (RND() - 0.5) * 0.2, 0.9 + RND() * 0.5, 0.045, 0.22, 0.62, 0.6, 0.56, 0.12 * dry);
+      }
+    } else if (e.type === 'exhale') {
+      for (let i = 0; i < 4; i++) P.emit(1, e.x, e.y, e.z, (e.dx || 0) * (0.22 + RND() * 0.15) + (RND() - 0.5) * 0.06, 0.04 + RND() * 0.04, (e.dz || 0) * (0.22 + RND() * 0.15) + (RND() - 0.5) * 0.06,
+        2.2 + RND() * 1.2, 0.025, 0.2 + RND() * 0.08, 0.72, 0.74, 0.78, 0.2);
+    } else if (e.type === 'land') {
+      for (let i = 0; i < 4; i++) {
+        const a = RND() * 6.283;
+        P.emit(0, e.x + Math.cos(a) * 0.15, e.y, e.z + Math.sin(a) * 0.15, Math.cos(a) * 0.5, 0.08, Math.sin(a) * 0.5, 1.2 + RND() * 0.5, 0.08, 0.35, 0.55, 0.47, 0.38, 0.15 * dry);
+      }
+    }
+  }
+  // деталь встала: пыль раствора поползла с её верха (стена — вдоль оси, плита и массив — по клетке)
+  function puff(x, y, z, kind) {
+    const dry = 1 - Math.min(1, wet * 2);
+    if (dry <= 0.05) return;
+    const n = kind === 'wall' || kind === 'pillar' ? 3 : 5;
+    for (let i = 0; i < n; i++) {
+      const ox = (RND() - 0.5) * (kind === 'wall' ? 1.6 : 1.8), oz = (RND() - 0.5) * (kind === 'wall' ? 1.6 : 1.8);
+      P.emit(0, x + ox, y + 0.03, z + oz, ox * 0.25, 0.1 + RND() * 0.1, oz * 0.25, 1.6 + RND(), 0.12, 0.42, 0.6, 0.57, 0.52, 0.12 * dry);
+    }
+  }
   return {
-    group, update,
-    state: function () { return { day, cover, wet, rain: rainK, snow: snowK, snowCover, forced }; },
+    group, update, puff,
+    state: function () { return { day, cover, wet, rain: rainK, snow: snowK, snowCover, forced, prints: FP ? FP.mesh.count : -1 }; },
     // погода логики или принудительная (съёмка, проверки): 'rain' | 'snow' | 'clear' | null — по расписанию
     force: function (mode, instant) {
       forced = mode || null;

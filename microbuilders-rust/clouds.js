@@ -7,8 +7,8 @@
 // неба, начало луча дрожит каждый кадр — шум убирает временное сглаживание.
 import * as THREE from 'three';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
-import { ATMO_GLSL, uniforms as atmoUniforms } from './atmosphere.js?v=0c1cc5f';
-import { CLOUD, CLOUD_GLSL } from './world.js?v=0c1cc5f';
+import { ATMO_GLSL, uniforms as atmoUniforms } from './atmosphere.js?v=f4726a0';
+import { CLOUD, CLOUD_GLSL } from './world.js?v=f4726a0';
 
 const VERT = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
 

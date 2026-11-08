@@ -2,9 +2,9 @@
 // окружение для отражений из того же неба (PMREM), дымка цвета горизонта, рельеф с выровненной площадкой,
 // карта покрытия земли (глина, щебень, колеи, трава) и горы на горизонте.
 import * as THREE from 'three';
-import { NOISE } from './glsl.js?v=0c1cc5f';
-import { rng } from './geo.js?v=0c1cc5f';
-import { ATMO, ATMO_GLSL, AP_GLSL, uniforms as atmoUniforms, apUniforms, createAtmosphere } from './atmosphere.js?v=0c1cc5f';
+import { NOISE } from './glsl.js?v=f4726a0';
+import { rng } from './geo.js?v=f4726a0';
+import { ATMO, ATMO_GLSL, AP_GLSL, uniforms as atmoUniforms, apUniforms, createAtmosphere } from './atmosphere.js?v=f4726a0';
 
 // ---------- облака и их тень ----------
 // Облака — слой на высоте 1,5–3,2 км (середина 2,3 км): небо рисует их с перспективой (render.js — объёмными), а каждый материал сцены (linkSky) получает
@@ -765,6 +765,18 @@ export function terrainMaterial(textures, splat, quality, wear) {
   };
   m.customProgramCacheKey = function () { return 'terrain5' + (quality.terrainDetail ? 'p' : ''); };
   return m;
+}
+
+// Высота поверхности terrainMesh в точке (x, z): сетка через size / seg м (5 м), в клетке два треугольника с
+// диагональю как у PlaneGeometry — мелкие бугры heightAt между узлами на экране сглажены, по ней лежат следы.
+export function meshHeight(terrain, x, z, size = 1400, seg = 280) {
+  const s = size / seg, gx = (x + size / 2) / s, gz = (z + size / 2) / s;
+  const i = Math.floor(gx), j = Math.floor(gz), fx = gx - i, fz = gz - j;
+  const x0 = -size / 2 + i * s, z0 = -size / 2 + j * s;
+  const hb = terrain.heightAt(x0, z0 + s), hd = terrain.heightAt(x0 + s, z0);
+  if (fx + fz <= 1) { const ha = terrain.heightAt(x0, z0); return ha + (hd - ha) * fx + (hb - ha) * fz; }
+  const hc = terrain.heightAt(x0 + s, z0 + s);
+  return hc + (hb - hc) * (1 - fx) + (hd - hc) * (1 - fz);
 }
 
 export function terrainMesh(terrain, material, size = 1400, seg = 280) {
