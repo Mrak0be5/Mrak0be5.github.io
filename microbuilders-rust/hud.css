@@ -1,4 +1,0 @@
-/* Только дополнения к ui.css оригинала. */
-body.rust-hud [hidden] { display: none !important; }
-body.rust-hud #rust-hud-fx { position: absolute; inset: 0; pointer-events: none; }
-body.rust-hud .dev-only { display: none !important; }
