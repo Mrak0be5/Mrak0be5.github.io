@@ -2,9 +2,9 @@
 // ели из ветвей-карточек (хвоя рисуется кодом на canvas) и валуны. Трава и хвоя не попадают в затенение углов
 // (userData.noAO): у карточек нет объёма, GTAO затемнил бы их прямоугольниками.
 import * as THREE from 'three';
-import { rng, stone, cylinder, Batch } from './geo.js?v=9f2863b';
-import { TEXTURE_TILES as TILE } from './textures.js?v=9f2863b';
-import { WEATHER, SEASON, SEASON_LOOKS, onSeason } from './world.js?v=9f2863b';
+import { rng, stone, cylinder, Batch } from './geo.js?v=45127fe';
+import { TEXTURE_TILES as TILE } from './textures.js?v=45127fe';
+import { WEATHER, SEASON, SEASON_LOOKS, onSeason } from './world.js?v=45127fe';
 
 // ---------- трава ----------
 
@@ -495,8 +495,10 @@ function leafCrown(r, n, cy, rx, ry, size, lean, bare = 0) {
 }
 
 // Берёза: тонкий слегка изогнутый белый ствол, узкая крона в верхних двух третях; bare — см. leafCrown.
-function birchGeometry(r, height, bare = 0) {
-  const trunk = new THREE.CylinderGeometry(0.045, 0.15 * (height / 15), height * 0.96, 10, 10, false);
+// lite («Телефон»): ствол — 6 граней одним ярусом (наклон ствола линейный, ярусы ему не нужны), 24 треугольника
+// вместо 220 у берёзы и 126 у ели
+function birchGeometry(r, height, bare = 0, lite = false) {
+  const trunk = new THREE.CylinderGeometry(0.045, 0.15 * (height / 15), height * 0.96, lite ? 6 : 10, lite ? 1 : 10, false);
   trunk.translate(0, height * 0.48, 0);
   const bend = (r() - 0.5) * 0.5, phase = r() * 6.28;
   const lean = new THREE.Vector3(Math.sin(phase) * bend / height, 0, Math.cos(phase) * bend * 0.6 / height);
@@ -512,9 +514,9 @@ function birchGeometry(r, height, bare = 0) {
 
 const CARD_UV = [[0, 0], [0, 1], [1, 1], [1, 0]];
 
-function spruceGeometry(r, height) {
+function spruceGeometry(r, height, lite = false) {
   const cards = { pos: [], nrm: [], uv: [], col: [], idx: [] };
-  const trunk = new THREE.CylinderGeometry(0.02, 0.24 * (height / 16), height * 0.97, 9, 6, false);
+  const trunk = new THREE.CylinderGeometry(0.02, 0.24 * (height / 16), height * 0.97, lite ? 6 : 9, lite ? 1 : 6, false);
   trunk.translate(0, height / 2, 0);
   trunk.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(trunk.attributes.position.count * 3).fill(1), 3));
   const tuv = trunk.attributes.uv.array;
@@ -588,16 +590,19 @@ void main() {
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }`;
 const BAKE_FRAG = /* glsl */ `
-uniform sampler2D map; uniform float uMode, uTex, uAlphaTest; uniform vec3 uColor;
+uniform sampler2D map; uniform float uMode, uTex, uAlphaTest, uFlip; uniform vec3 uColor;
 varying vec2 vUv; varying vec3 vCol; varying vec3 vN;
 void main() {
   vec4 t = uTex > 0.5 ? texture2D(map, vUv) : vec4(1.0);
   if (t.a < uAlphaTest) discard;
-  vec3 n = normalize(vN) * (gl_FrontFacing ? 1.0 : -1.0);
+  vec3 n = normalize(vN) * (gl_FrontFacing || uFlip < 0.5 ? 1.0 : -1.0);
   gl_FragColor = uMode < 0.5 ? vec4(t.rgb * vCol * uColor, 1.0) : vec4(n * 0.5 + 0.5, 1.0);
 }`;
 const VIEWS = 4, CW = 128, CH = 256;
-function bakeImpostors(renderer, items) {
+// flip — нормаль изнанки разворачивать (дальний лес как был). У карточек крон обе стороны — свои треугольники с той
+// же нормалью «шаром», и изнанка, нарисованная поверх, разворачивала её внутрь: снимок вблизи темнел пятнами.
+// Снимки «Телефона» (edgeImpostors) — без разворота, свет как у настоящей кроны.
+function bakeImpostors(renderer, items, flip = true) {
   const W = VIEWS * CW, H = items.length * CH;
   const opts = { type: THREE.UnsignedByteType, depthBuffer: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: true };
   const colorRT = new THREE.WebGLRenderTarget(W, H, opts), normalRT = new THREE.WebGLRenderTarget(W, H, opts);
@@ -606,7 +611,7 @@ function bakeImpostors(renderer, items) {
   const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
   const mk = function (map, color, alphaTest) {
     return new THREE.ShaderMaterial({
-      uniforms: { map: { value: map }, uMode: { value: 0 }, uTex: { value: map ? 1 : 0 }, uColor: { value: new THREE.Color(color) }, uAlphaTest: { value: alphaTest } },
+      uniforms: { map: { value: map }, uMode: { value: 0 }, uTex: { value: map ? 1 : 0 }, uColor: { value: new THREE.Color(color) }, uAlphaTest: { value: alphaTest }, uFlip: { value: flip ? 1 : 0 } },
       vertexShader: BAKE_VERT, fragmentShader: BAKE_FRAG, vertexColors: true, side: THREE.DoubleSide,
     });
   };
@@ -681,8 +686,27 @@ const IMP_NORMAL = /* glsl */ `
   normal = normalize((viewMatrix * vec4(wn, 0.0)).xyz);
 }
 `;
+// Снимки «Телефона» (near). Фон атласа (нормаль (0, 0, 1), альфа 0) мипы подмешивают к кроне по прозрачности —
+// он вычитается, как у цвета (иначе вдали нормаль кроны клонится к камере). Снег и мокрость неба (linkSky →
+// WET_FRAGMENT после normal_fragment_maps) — по нормали снимка (по плоской карточке зимой ели у опушки стояли
+// зелёными), причём резкой — мип на 2 ступени мельче: снег — порог по нормали, у настоящей ели он крапом на
+// верхних сторонах ветвей, а усреднённая мипом нормаль кроны порога почти нигде не переходит. Свет — по обычной
+// нормали снимка, она ставится после снега (мокрость клонит нормаль к нормали карточки; у хвои наклона нет).
+// Шероховатость — не ниже сухой: у настоящей хвои блеск мокрости гасит шероховатость геометрии (разброс нормалей
+// карточек), у снимка её нет — в дождь он блестел небом светлее настоящих елей.
+const IMP_NEAR_HEAD = /* glsl */ `
+vec3 mbImpNormal(vec4 t) {
+  vec3 tn = (t.xyz * 2.0 - 1.0 - vec3(0.0, 0.0, 1.0 - t.a)) / max(t.a, 0.05);
+  vec3 wn = normalize(vImpR * tn.x + vec3(0.0, 1.0, 0.0) * tn.y + vImpF * tn.z);
+  return normalize((viewMatrix * vec4(wn, 0.0)).xyz);
+}
+`;
+const IMP_NORMAL_PRE = 'normal = mbImpNormal(texture2D(tImpN, vMapUv, -2.0));\n';
+const IMP_NORMAL_POST = 'normal = mbImpNormal(texture2D(tImpN, vMapUv));\nroughnessFactor = max(roughnessFactor, roughness);\n';
 // atlas — снимки (bakeImpostors); setAtlas(atlas) — новые снимки тем же материалам (смена сезона).
-function impostorMaterials(atlas, taa) {
+// near — снимки ближе к камере («Телефон», edgeImpostors): цвет атласа делится на его альфу (мипы смешивают крону с
+// прозрачным чёрным фоном — вдали снимок темнел до бурого пятна) и порог альфы выше (силуэт не толстеет).
+function impostorMaterials(atlas, taa, near = false) {
   const cell = new THREE.Vector2(1 / VIEWS, 1 / atlas.rows);
   const normalU = { value: atlas.normal };
   const patchV = function (shader) {
@@ -692,17 +716,19 @@ function impostorMaterials(atlas, taa) {
       .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + IMP_VERT)
       .replace('#include <uv_vertex>', '#include <uv_vertex>\n#ifdef USE_MAP\nvMapUv = (aCell + uv) * uCellSize;\n#endif');
   };
-  const m = new THREE.MeshStandardMaterial({ map: atlas.color, roughness: 0.9, metalness: 0, alphaTest: 0.36, side: THREE.DoubleSide });
+  const m = new THREE.MeshStandardMaterial({ map: atlas.color, roughness: 0.9, metalness: 0, alphaTest: near ? 0.55 : 0.36, side: THREE.DoubleSide });
   // затенение углов по перекрытым карточкам дало бы чёрный лес — у снимков его нет
   m.defines = { MB_TRANSLUCENT: '', MB_NOAO: '' };
   m.onBeforeCompile = function (shader) {
     patchV(shader);
     shader.uniforms.tImpN = normalU;
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\n' + IMP_FRAG_HEAD)
-      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + IMP_NORMAL);
+      .replace('#include <common>', '#include <common>\n' + IMP_FRAG_HEAD + (near ? IMP_NEAR_HEAD : ''))
+      .replace('#include <normal_fragment_maps>', near ? IMP_NORMAL_PRE + '#include <normal_fragment_maps>\n' + IMP_NORMAL_POST : '#include <normal_fragment_maps>\n' + IMP_NORMAL);
+    if (near) shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>',
+      '#ifdef USE_MAP\nvec4 sampledDiffuseColor = texture2D( map, vMapUv );\nsampledDiffuseColor.rgb /= max( sampledDiffuseColor.a, 0.05 );\ndiffuseColor *= sampledDiffuseColor;\n#endif');
   };
-  m.customProgramCacheKey = function () { return 'impostor1'; };
+  m.customProgramCacheKey = function () { return near ? 'impostor5n' : 'impostor1'; };
   const d = new THREE.MeshDepthMaterial({ map: atlas.color, alphaTest: 0.45, depthPacking: THREE.RGBADepthPacking, side: THREE.DoubleSide });
   d.onBeforeCompile = patchV;
   d.customProgramCacheKey = function () { return 'impostor1d'; };
@@ -769,7 +795,9 @@ function placeGrid() {
 // умолчанию текущий); при смене сезона (setSeason) атлас листвы, цвета лиственных и снимки дальнего леса
 // меняются сами. По опушке лиственные — куртинами (крупный шум): к кромке ниже и моложе, часть молодняка вышла
 // на луг перед лесом; край леса ступенями — подрост и кусты, берёзы и осины, стена ельника.
-export function createForest(terrain, splat, mats, quality, msaa, seed = 11, renderer = null, taa = false, clear = 34, season = SEASON.name) {
+// edge — рендерер снимков у «Телефона» (без дальнего леса, renderer = null): ели глубже EDGE_FULL м от кромки —
+// снимками (edgeImpostors), полные — у кромки; берёзы и осины — все полные (снимок редкой кроны — сплошное пятно).
+export function createForest(terrain, splat, mats, quality, msaa, seed = 11, renderer = null, taa = false, clear = 34, season = SEASON.name, edge = null) {
   const group = new THREE.Group();
   group.name = 'forest';
   const r = rng(seed);
@@ -786,7 +814,7 @@ export function createForest(terrain, splat, mats, quality, msaa, seed = 11, ren
   };
   needles.customProgramCacheKey = function () { return 'needles1'; };
   const depth = new THREE.MeshDepthMaterial({ map: tex, alphaTest: 0.42, depthPacking: THREE.RGBADepthPacking, side: THREE.DoubleSide });
-  const variants = [12.5, 14.5, 17, 19.5, 22.5].map(function (h, i) { return spruceGeometry(rng(seed + 10 + i), h); });
+  const variants = [12.5, 14.5, 17, 19.5, 22.5].map(function (h, i) { return spruceGeometry(rng(seed + 10 + i), h, !!edge); });
   // листва берёз и кустов: против солнца просвечивает сильнее хвои; атлас — по сезону (кэш на смену сезона).
   // Блеск и свет насквозь — по сезону (SEASON.uniforms: uSeLeafSpec, uSeLeafGlow): сухой осенний лист матовый,
   // иначе блики неба разбеливают крону в лососевый, а на просвет светится сильнее.
@@ -806,7 +834,7 @@ export function createForest(terrain, splat, mats, quality, msaa, seed = 11, ren
   leaves.customProgramCacheKey = function () { return 'leaves2'; };
   const leafDepth = new THREE.MeshDepthMaterial({ map: leafTex, alphaTest: 0.45, depthPacking: THREE.RGBADepthPacking, side: THREE.DoubleSide });
   // у трёх берёз своя доля полуголых веток (осенью — от почти полной кроны до наполовину облетевшей)
-  const birches = [12, 14.5, 17].map(function (h, i) { return birchGeometry(rng(seed + 40 + i), h, [0.3, 0.48, 0.66][i]); });
+  const birches = [12, 14.5, 17].map(function (h, i) { return birchGeometry(rng(seed + 40 + i), h, [0.3, 0.48, 0.66][i], !!edge); });
   const birchLists = birches.map(function () { return []; });
   // ближний пояс (от края поляны + 14 м, 77 м шириной) — настоящие деревья, гуще; дальше — снимки
   const inner = clear + 14;
@@ -891,6 +919,16 @@ export function createForest(terrain, splat, mats, quality, msaa, seed = 11, ren
     placed++;
   }
   if (splat.addCanopy) splat.addCanopy(canopy);
+  // «Телефон»: те же ели глубже EDGE_FULL м от кромки — снимками (место, высота, вариант и цвет — те же)
+  const deep = [];
+  if (edge) lists.forEach(function (list, i) {
+    lists[i] = list.filter(function (it) {
+      const e = it[0].elements, x = e[12], z = e[14];
+      if (Math.hypot(x, z) < rimAt(x, z) + EDGE_FULL) return true;
+      deep.push({ m: it[0], row: i, view: Math.floor(placeHash(x, z, 12) * VIEWS), color: it[1] });
+      return false;
+    });
+  });
   variants.forEach(function (v, i) {
     const list = lists[i];
     if (!list.length) return;
@@ -927,6 +965,8 @@ export function createForest(terrain, splat, mats, quality, msaa, seed = 11, ren
   group.add(clearing(terrain, splat, mats, seed + 70, clear, occ));
   const far = renderer ? farForest(renderer, terrain, splat, variants, birches, tex, leafTex, quality, seed + 90, NEAR, taa) : null;
   if (far) group.add(far.mesh);
+  const shots = deep.length ? edgeImpostors(edge, deep, variants, tex) : null;
+  if (shots) group.add(shots.mesh);
   // Сезон листвы: атлас (в кэше), цвета крон и стволов, кусты, снимки дальнего леса.
   function paint(name) {
     season = name;
@@ -1022,6 +1062,38 @@ function farForest(renderer, terrain, splat, variants, birches, needleTex, leafT
     prev.dispose();
   }
   return { mesh, paint, rebake };
+}
+
+// Снимки елей «Телефона» глубже кромки: те же экземпляры, что были бы полными (место, высота, вариант, цвет),
+// карточкой к камере из атласа (bakeImpostors), один вызов на все.
+const EDGE_FULL = 20;
+function edgeImpostors(renderer, items, variants, needleTex) {
+  const atlas = bakeImpostors(renderer, variants.map(function (v) { return { cards: v.cards, trunk: v.trunk, map: needleTex, color: 0xffffff, trunkColor: 0x3a3029, alphaTest: 0.42 }; }), false);
+  const M = impostorMaterials(atlas, false, true);
+  const n = items.length;
+  const cells = new Float32Array(n * 2), sizes = new Float32Array(n * 2);
+  const g = new THREE.PlaneGeometry(1, 1);
+  g.translate(0, 0.5, 0);
+  const mesh = new THREE.InstancedMesh(g, M.m, n);
+  const m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+  items.forEach(function (it, i) {
+    // карточка поворачивается к камере сама: у экземпляра без поворота, масштаб — по высоте дерева
+    it.m.decompose(p, q, s);
+    mesh.setMatrixAt(i, m.compose(p, q.identity(), s.set(s.y, s.y, s.y)));
+    mesh.setColorAt(i, it.color);
+    cells[i * 2] = it.view; cells[i * 2 + 1] = it.row;
+    sizes[i * 2] = atlas.sizes[it.row][0]; sizes[i * 2 + 1] = atlas.sizes[it.row][1];
+  });
+  g.setAttribute('aCell', new THREE.InstancedBufferAttribute(cells, 2));
+  g.setAttribute('aSize', new THREE.InstancedBufferAttribute(sizes, 2));
+  mesh.customDepthMaterial = M.d;
+  mesh.castShadow = true;
+  // своя тень на карточке легла бы пополам (в карте тени карточка смотрит на солнце, в кадре — на камеру)
+  mesh.receiveShadow = false;
+  mesh.frustumCulled = false;
+  mesh.userData.noAO = true;
+  mesh.name = 'edge-impostors';
+  return { mesh };
 }
 
 // Кусты: по опушке гуще, на лугу — редкими островками; не на площадке и не на дороге. Осенью — красные,

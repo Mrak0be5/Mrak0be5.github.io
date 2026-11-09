@@ -164,6 +164,8 @@ function install(r) {
   // Интерфейс оригинала поверх кадра: его камерой, без общей глубины (почти всё и так рисуется без проверки
   // глубины), в тон-маппинге оригинала.
   function overlay(scene, camera) {
+    // кадр без интерфейса (RustDebug.hud(false) — снимки, ролик): и без его 3D-значков и колец
+    if (document.body.classList.contains('rust-shot')) return;
     const list = overlays(scene);
     if (!list.length) return;
     const autoClear = r.autoClear;

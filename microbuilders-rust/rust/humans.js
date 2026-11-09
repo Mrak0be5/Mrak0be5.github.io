@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
-import { linkSky } from './world.js?v=9f2863b';
+import { linkSky } from './world.js?v=45127fe';
 
 // бригада — мужские модели (как фигурки оригинала); женская (d) в сборке есть, но не грузится
 const VARIANTS = ['a', 'b', 'c'];

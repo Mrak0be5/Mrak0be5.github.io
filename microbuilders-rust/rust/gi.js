@@ -9,9 +9,9 @@
 // 3) Для каждого пикселя (половина разрешения): пять конусов по полусфере нормали — свет от освещённых
 //    поверхностей вокруг (тёплый подсвет от земли, цвет от стен) и доля открытого неба.
 import * as THREE from 'three';
-import { seasonGrass } from './world.js?v=9f2863b';
+import { seasonGrass } from './world.js?v=45127fe';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
-import { ATMO } from './atmosphere.js?v=9f2863b';
+import { ATMO } from './atmosphere.js?v=45127fe';
 
 const NX = 128, NY = 48, NZ = 128;
 // размер объёма меняет setExtent (воксель кубический, сетка та же)

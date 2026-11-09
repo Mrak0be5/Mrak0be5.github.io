@@ -3,8 +3,8 @@
 // прототип живут на одном домене). game.js получает рендерер-перехватчик (realview.js) через свой THREE.
 // Ссылки страницы — от корня репозитория (<base href="../">): game.js и ui.js берут значки как в оригинале.
 import * as THREE from 'three';
-import { RVRenderer, createRenderer, createBridge, hook, asViewAsync } from './realview.js?v=9f2863b';
-import { createScene, pickTier, QUALITY } from './scene.js?v=9f2863b';
+import { RVRenderer, createRenderer, createBridge, hook, asViewAsync } from './realview.js?v=45127fe';
+import { createScene, pickTier, QUALITY } from './scene.js?v=45127fe';
 
 const params = new URLSearchParams(location.search);
 const DEBUG = params.get('debug') === '1' || params.has('capture');

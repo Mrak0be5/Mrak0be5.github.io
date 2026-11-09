@@ -6,7 +6,7 @@
 // физически верная крутизна), ORM (R — затенение впадин, G — шероховатость, B — металл, как в glTF).
 // tile — сколько метров укладывается в фактуру по u и v: геометрия сама делит на это свои координаты.
 import * as THREE from 'three';
-import { NOISE } from './glsl.js?v=9f2863b';
+import { NOISE } from './glsl.js?v=45127fe';
 
 const RECIPES = {};
 

@@ -2,9 +2,9 @@
 // окружение для отражений из того же неба (PMREM), дымка цвета горизонта, рельеф с выровненной площадкой,
 // карта покрытия земли (глина, щебень, колеи, трава) и горы на горизонте.
 import * as THREE from 'three';
-import { NOISE } from './glsl.js?v=9f2863b';
-import { rng } from './geo.js?v=9f2863b';
-import { ATMO, ATMO_GLSL, AP_GLSL, uniforms as atmoUniforms, apUniforms, createAtmosphere } from './atmosphere.js?v=9f2863b';
+import { NOISE } from './glsl.js?v=45127fe';
+import { rng } from './geo.js?v=45127fe';
+import { ATMO, ATMO_GLSL, AP_GLSL, uniforms as atmoUniforms, apUniforms, createAtmosphere } from './atmosphere.js?v=45127fe';
 
 // ---------- облака и их тень ----------
 // Облака — слой на высоте 1,5–3,2 км (середина 2,3 км): небо рисует их с перспективой (render.js — объёмными), а каждый материал сцены (linkSky) получает
@@ -1081,18 +1081,63 @@ export function meshHeight(terrain, x, z, size = 1400, seg = 280) {
   return hc + (hb - hc) * (1 - fx) + (hd - hc) * (1 - fz);
 }
 
-export function terrainMesh(terrain, material, size = 1400, seg = 280) {
-  const g = new THREE.PlaneGeometry(size, size, seg, seg);
-  g.rotateX(-Math.PI / 2);
+export function terrainMesh(terrain, material, size = 1400, seg = 280, lite = false) {
+  const g = lite ? liteTerrainGeometry(size, size / seg) : new THREE.PlaneGeometry(size, size, seg, seg);
+  if (!lite) g.rotateX(-Math.PI / 2);
   const p = g.attributes.position.array;
   for (let i = 0; i < p.length; i += 3) p[i + 1] = terrain.heightAt(p[i], p[i + 2]);
   g.computeVertexNormals();
   const mesh = new THREE.Mesh(g, material);
   mesh.receiveShadow = true;
-  // холмы отбрасывают тени на низком солнце (в дальнем каскаде)
-  mesh.castShadow = true;
+  // холмы отбрасывают тени на низком солнце (в дальнем каскаде); на «Телефоне» каскада нет, а поляна под
+  // квадратом тени плоская (createTerrain: бугры ±8 см) — тени рельефа не видно, его нет и в проходе тени
+  mesh.castShadow = !lite;
   mesh.name = 'terrain';
   return mesh;
+}
+
+// Сетка рельефа «Телефона»: те же линии через step (5 м) до ±185 м — под площадкой и травой (до 182 м)
+// поверхность та же, что у полной сетки (meshHeight верна), до ±265 м — через 10 м (опушка и ближний лес), дальше
+// шаг растёт ×1,2 до края. Диагональ клетки — как у PlaneGeometry (из (x0, z0 + s) в (x0 + s, z0)); ~26 тыс.
+// треугольников вместо 157 тыс.
+function liteAxis(size, step) {
+  const half = size / 2, side = [];
+  let x = 0;
+  while (x + step <= 185 + 1e-6) { x += step; side.push(x); }
+  while (x + step * 2 <= 265 + 1e-6) { x += step * 2; side.push(x); }
+  for (let s = 12; x < half - 1e-6; s *= 1.2) { x = Math.min(half, x + s); side.push(x); }
+  return side.map(function (v) { return -v; }).reverse().concat([0], side);
+}
+// Высота поверхности сетки «Телефона» в точке (x, z) — как meshHeight у полной; вне сетки — heightAt.
+function liteMeshHeight(terrain, line, x, z) {
+  const n = line.length;
+  if (x <= line[0] || x >= line[n - 1] || z <= line[0] || z >= line[n - 1]) return terrain.heightAt(x, z);
+  const cell = function (v) { let lo = 0, hi = n - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (line[m] <= v) lo = m; else hi = m; } return lo; };
+  const i = cell(x), j = cell(z), x0 = line[i], x1 = line[i + 1], z0 = line[j], z1 = line[j + 1];
+  const fx = (x - x0) / (x1 - x0), fz = (z - z0) / (z1 - z0);
+  const hb = terrain.heightAt(x0, z1), hd = terrain.heightAt(x1, z0);
+  if (fx + fz <= 1) { const ha = terrain.heightAt(x0, z0); return ha + (hd - ha) * fx + (hb - ha) * fz; }
+  const hc = terrain.heightAt(x1, z1);
+  return hc + (hb - hc) * (1 - fx) + (hd - hc) * (1 - fz);
+}
+function liteTerrainGeometry(size, step) {
+  const half = size / 2, line = liteAxis(size, step);
+  const n = line.length;
+  const pos = new Float32Array(n * n * 3), uv = new Float32Array(n * n * 2), idx = [];
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+    const k = j * n + i;
+    pos[k * 3] = line[i]; pos[k * 3 + 2] = line[j];
+    uv[k * 2] = (line[i] + half) / size; uv[k * 2 + 1] = 1 - (line[j] + half) / size;
+  }
+  for (let j = 0; j < n - 1; j++) for (let i = 0; i < n - 1; i++) {
+    const a = j * n + i, b = a + n, c = b + 1, d = a + 1;
+    idx.push(a, b, d, b, c, d);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  return g;
 }
 
 // Горы: кольцо 0,6–3,6 км (внутренний край уходит под рельеф). Высота — гребневой шум с искривлением
@@ -1161,9 +1206,15 @@ float mRough = mix(mix(0.95, 0.86, rock), 0.55, snow);
 float mbPom = vHor;
 `;
 
-export function mountains(seed, terrain) {
+// lite («Телефон»): индексы — столбцами по углу, в кадре только окно столбцов, которые видит камера (aim)
+export function mountains(seed, terrain, lite = false) {
   const n = noise2Factory(seed + 9), n2 = noise2Factory(seed + 19);
-  const segA = 1200, segR = 120;
+  // «Телефон»: по радиусу 90 рядов вместо 120 (силуэт хребтов ведут 1200 столбцов по кругу)
+  const segA = 1200, segR = lite ? 90 : 120;
+  // внутренний край уходит под рельеф: у «Телефона» — под его редкую сетку (иначе склон гор проступает пятнами
+  // сквозь холмы, где сетка ниже шума высот)
+  const liteLine = lite ? liteAxis(1400, 5) : null;
+  const ground = lite ? function (x, z) { return liteMeshHeight(terrain, liteLine, x, z); } : terrain.heightAt;
   const R0 = 640, R1 = 3800;
   const cols = segA + 1, rows = segR + 1;
   const H = new Float32Array(cols * rows), RR = new Float32Array(rows);
@@ -1193,7 +1244,7 @@ export function mountains(seed, terrain) {
       let h = ridged(x, z) * maxH * 1.25 - 30;
       // за дальним краем — вниз за горизонт
       if (t > 0.92) h -= (t - 0.92) * 9000;
-      if (r < 820) h = THREE.MathUtils.lerp(terrain.heightAt(x, z) - 3, h, THREE.MathUtils.smoothstep(r, 680, 820));
+      if (r < 820) h = THREE.MathUtils.lerp(ground(x, z) - 3, h, THREE.MathUtils.smoothstep(r, 680, 820));
       H[j * cols + i] = h;
     }
   }
@@ -1246,7 +1297,15 @@ export function mountains(seed, terrain) {
     }
   }
   const idx = [];
-  for (let j = 0; j < segR; j++) for (let i = 0; i < segA; i++) {
+  // «Телефон»: столбец за столбцом по кругу (от внутреннего края к внешнему) и ещё EXTRA столбцов с начала круга —
+  // окно до EXTRA столбцов с любого начала — один диапазон индексов (drawRange), без шва на нулевом угле
+  const EXTRA = Math.round(segA / 3);
+  if (lite) {
+    for (let ii = 0; ii < segA + EXTRA; ii++) for (let j = 0; j < segR; j++) {
+      const a = j * cols + (ii % segA), b = a + cols;
+      idx.push(a, a + 1, b, b, a + 1, b + 1);
+    }
+  } else for (let j = 0; j < segR; j++) for (let i = 0; i < segA; i++) {
     const a = j * cols + i, b = a + cols;
     idx.push(a, a + 1, b, b, a + 1, b + 1);
   }
@@ -1274,7 +1333,44 @@ export function mountains(seed, terrain) {
   m.name = 'mountains';
   m.userData.noAO = true;
   m.receiveShadow = false;
+  if (lite) m.userData.aim = aimMountains(m, segA, segR, R0, R1, EXTRA);
   return m;
+}
+
+// Окно гор «Телефона» по камере (каждый кадр, до отрисовки): лучи сетки 7 × 7 по кадру, которые могут дойти до
+// кольца (не уходят под −60 м раньше внутреннего края), — углы по кругу, где луч пересекает внутренний и внешний
+// край кольца; рисуются столбцы между крайними углами с запасом ~2°. В портретном кадре — ~8 % кольца
+// (~20 тыс. треугольников из 216), камера смотрит в землю — горы не рисуются.
+function aimMountains(m, segA, segR, R0, R1, extra) {
+  const v = new THREE.Vector3(), d = new THREE.Vector3(), f = new THREE.Vector3();
+  const TAU = Math.PI * 2, perCol = segR * 6;
+  const wrap = function (a) { return a - TAU * Math.floor((a + Math.PI) / TAU); };
+  return function (camera) {
+    const c = camera.position, cr = Math.hypot(c.x, c.z);
+    camera.getWorldDirection(f);
+    const fwd = Math.atan2(f.z, f.x);
+    const minTan = -(c.y + 60) / Math.max(1, R0 - cr);
+    let lo = Infinity, hi = -Infinity;
+    for (let iy = -3; iy <= 3; iy++) for (let ix = -3; ix <= 3; ix++) {
+      d.copy(v.set(ix / 3, iy / 3, 0.5).unproject(camera)).sub(c);
+      const hl = Math.hypot(d.x, d.z);
+      if (hl < 1e-6 || d.y / hl < minTan) continue;
+      const dx = d.x / hl, dz = d.z / hl, b = c.x * dx + c.z * dz;
+      for (let k = 0; k < 2; k++) {
+        const R = k ? R1 : R0, t = -b + Math.sqrt(Math.max(0, b * b - cr * cr + R * R));
+        const a = wrap(Math.atan2(c.z + dz * t, c.x + dx * t) - fwd);
+        if (a < lo) lo = a;
+        if (a > hi) hi = a;
+      }
+    }
+    m.visible = lo <= hi;
+    if (!m.visible) return;
+    lo -= 0.03; hi += 0.03;
+    const n = Math.ceil(((hi - lo) / TAU) * segA) + 2;
+    if (n >= extra) { m.geometry.setDrawRange(0, segA * perCol); return; }
+    const s = ((Math.floor(((fwd + lo) / TAU) * segA) % segA) + segA) % segA;
+    m.geometry.setDrawRange(s * perCol, n * perCol);
+  };
 }
 
 // ---------- небо, свет, сутки ----------

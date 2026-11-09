@@ -2,7 +2,7 @@
 // материала, куда детали дописываются по порядку укладки. Показ готовой части — drawRange по границам
 // элементов, без своих шейдеров: тени, затенение углов и нормали рисуются обычными материалами.
 import * as THREE from 'three';
-import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeVertices, mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 export function rng(seed) {
   let s = (seed >>> 0) || 1;
@@ -38,11 +38,20 @@ function boxTemplate(s) {
   return boxTemplates[s];
 }
 
-// Брус с фаской радиуса r (s — нечётное число сегментов на грань: 3 — фаска одним рядом).
+// Брус с фаской радиуса r (s — нечётное число сегментов на грань: 3 — фаска одним рядом; 1 — без фаски, 12
+// треугольников: «Телефон», где сантиметровой фаски не видно).
+const FACE_N = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
 export function roundedBox(w, h, d, r, s = 3) {
   const t = boxTemplate(s);
   const count = t.face.length;
   const pos = new Float32Array(count * 3), nrm = new Float32Array(count * 3);
+  if (s === 1) {
+    for (let i = 0; i < count; i++) {
+      pos[i * 3] = t.pos[i * 3] * w; pos[i * 3 + 1] = t.pos[i * 3 + 1] * h; pos[i * 3 + 2] = t.pos[i * 3 + 2] * d;
+      nrm.set(FACE_N[t.face[i]], i * 3);
+    }
+    return { pos, nrm, uv: new Float32Array(count * 2), index: t.index, face: t.face };
+  }
   r = Math.min(r, w / 2 - 1e-4, h / 2 - 1e-4, d / 2 - 1e-4);
   const hx = w / 2 - r, hy = h / 2 - r, hz = d / 2 - r;
   const half = 0.5 / s;
@@ -216,12 +225,24 @@ function vnoise3(x, y, z, seed) {
   return e + (f - e) * sz;
 }
 
-const stoneCache = [];
-export function stoneTemplates(count = 24) {
+// Сегментов на грань у заготовок (stoneDetail): 7 — три ряда фаски на сколах; «Телефон» — 3 (один ряд, 108
+// треугольников вместо 588: глыбы карьеров и валуны той же формы), а крошка до 25 см — восемь вершин (12
+// треугольников, угловатый скол). Задаётся до первых камней сцены; у каждой детальности — свои заготовки.
+let stoneSegs = 7;
+const stoneCaches = {};
+export function stoneDetail(segs) { stoneSegs = segs; }
+// куб без фаски с «нормалями» из центра: совпавшие вершины граней сдвигаются шумом одинаково и сливаются
+function chipBox() {
+  const p = roundedBox(1, 1, 1, 0, 1);
+  for (let i = 0; i < p.pos.length; i += 3) { const l = Math.hypot(p.pos[i], p.pos[i + 1], p.pos[i + 2]); p.nrm[i] = p.pos[i] / l; p.nrm[i + 1] = p.pos[i + 1] / l; p.nrm[i + 2] = p.pos[i + 2] / l; }
+  return p;
+}
+export function stoneTemplates(count = 24, segs = stoneSegs) {
+  const stoneCache = stoneCaches[segs] || (stoneCaches[segs] = []);
   if (stoneCache.length >= count) return stoneCache;
   for (let k = stoneCache.length; k < count; k++) {
     const seed = 1013 + k * 7919;
-    const p = roundedBox(1, 1, 1, 0.035, 7);
+    const p = segs > 1 ? roundedBox(1, 1, 1, 0.035, segs) : chipBox();
     const pos0 = p.pos, nrm0 = p.nrm;
     for (let i = 0; i < pos0.length; i += 3) {
       const x = pos0[i], y = pos0[i + 1], z = pos0[i + 2];
@@ -247,7 +268,8 @@ export function stoneTemplates(count = 24) {
 
 // Камень w × h × d из заготовки: растянуть, нормали пересчитать для растяжения, развёртка коробкой.
 export function stone(w, h, d, variant, tile, ou, ov) {
-  const t = stoneTemplates()[variant % stoneTemplates().length];
+  const list = stoneTemplates(24, stoneSegs < 7 && Math.max(w, h, d) < 0.25 ? 1 : stoneSegs);
+  const t = list[variant % list.length];
   const n = t.pos.length / 3;
   const pos = new Float32Array(n * 3), nrm = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) {
@@ -310,4 +332,116 @@ export class Batch {
     for (let i = 0; i < this.ends.length; i++) { if (this.ends[i][0] < n) c = this.ends[i][1]; else break; }
     return c;
   }
+}
+
+// ---------- слияние по материалу («Телефон») ----------
+// Меньше вызовов отрисовки: меши meshes — по одному на материал (те же castShadow, receiveShadow и renderOrder),
+// геометрии — в координатах root. Прозрачные и одиночные не сливаются; слитые исходные прячутся (visible = false).
+// → { group, hidden } (group добавить в root); unmergeMeshes — исходные обратно, слитое — долой.
+export function mergeMeshes(root, meshes, name) {
+  root.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert(), mw = new THREE.Matrix4();
+  const buckets = new Map();
+  meshes.forEach(function (o) {
+    if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || !o.visible || Array.isArray(o.material) || o.material.transparent || !o.geometry.index) return;
+    const key = o.material.uuid + (o.castShadow ? '+c' : '') + (o.receiveShadow ? '+r' : '') + '/' + o.renderOrder;
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(o);
+  });
+  const group = new THREE.Group(), hidden = [];
+  group.name = name;
+  const ID = new THREE.Matrix4();
+  buckets.forEach(function (list) {
+    if (list.length < 2) return;
+    // уже в координатах root (куски здания) — без копии: слияние и так копирует
+    const own = [];
+    const geos = list.map(function (o) {
+      mw.multiplyMatrices(inv, o.matrixWorld);
+      if (mw.equals(ID)) return o.geometry;
+      const c = o.geometry.clone().applyMatrix4(mw);
+      own.push(c);
+      return c;
+    });
+    const g = mergeGeometries(geos, false);
+    own.forEach(function (x) { x.dispose(); });
+    if (!g) return;
+    const o = list[0], mesh = new THREE.Mesh(g, o.material);
+    mesh.castShadow = o.castShadow; mesh.receiveShadow = o.receiveShadow; mesh.renderOrder = o.renderOrder;
+    mesh.userData.noAO = o.userData.noAO;
+    group.add(mesh);
+    list.forEach(function (x) { x.visible = false; hidden.push(x); });
+  });
+  return { group, hidden };
+}
+export function unmergeMeshes(state) {
+  if (!state) return;
+  state.hidden.forEach(function (o) { o.visible = true; });
+  if (state.group.parent) state.group.parent.remove(state.group);
+  state.group.children.forEach(function (m) { m.geometry.dispose(); });
+}
+
+// ---------- тень одним вызовом («Телефон») ----------
+// Меши только для прохода тени: в сцене невидимы, shadowOnlyPass включает их на время прохода тени (рендерер строит
+// списки кадра раньше) — в кадр они не попадают.
+export const SHADOW_ONLY = new Set();
+// Проход тени рендерера показывает меши SHADOW_ONLY (один раз на рендерер): ставит scene.js при «Телефоне» до
+// выбора пути кадра — и у mobile.js, и у отладочного ?rv=phone&taa=1 (render.js).
+export function shadowOnlyPass(renderer) {
+  const sm = renderer.shadowMap;
+  if (sm.mbShadowOnly) return;
+  sm.mbShadowOnly = true;
+  const pass = sm.render;
+  sm.render = function (lights, sc, cam) {
+    SHADOW_ONLY.forEach(function (o) { o.visible = true; });
+    try { pass.call(this, lights, sc, cam); } finally { SHADOW_ONLY.forEach(function (o) { o.visible = false; }); }
+  };
+}
+const PROXY_MATERIAL = new THREE.MeshBasicMaterial();
+// Тень мешей meshes одним мешем: их геометрии (позиции и индексы, в координатах root) — в меш только для тени, у
+// исходных castShadow снимается. Берутся непрозрачные односторонние без своего материала глубины, видимые и
+// спрятанные слиянием (mergeMeshes) — тень за них отбрасывает этот меш. → { mesh, used } (mesh добавить в root)
+// или null; dropShadowProxy — исходным тень обратно, меш долой.
+export function shadowProxy(root, meshes, name) {
+  root.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert(), mw = new THREE.Matrix4(), v = new THREE.Vector3(), ID = new THREE.Matrix4();
+  const used = [];
+  let nv = 0, ni = 0;
+  meshes.forEach(function (o) {
+    if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || !o.castShadow || Array.isArray(o.material) || o.customDepthMaterial) return;
+    const m = o.material, g = o.geometry;
+    if (m.transparent || m.alphaTest > 0 || m.side !== THREE.FrontSide || !g.index) return;
+    used.push(o);
+    nv += g.attributes.position.count; ni += g.index.count;
+  });
+  if (!used.length) return null;
+  const pos = new Float32Array(nv * 3), idx = new Uint32Array(ni);
+  let pv = 0, pi = 0;
+  used.forEach(function (o) {
+    const g = o.geometry, p = g.attributes.position, ix = g.index.array, base = pv;
+    mw.multiplyMatrices(inv, o.matrixWorld);
+    // куски здания уже в координатах root — просто копия
+    if (mw.equals(ID) && !p.isInterleavedBufferAttribute && p.itemSize === 3) { pos.set(p.array.subarray(0, p.count * 3), pv * 3); pv += p.count; }
+    else for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i).applyMatrix4(mw); pos[pv * 3] = v.x; pos[pv * 3 + 1] = v.y; pos[pv * 3 + 2] = v.z; pv++; }
+    for (let i = 0; i < ix.length; i++) idx[pi++] = base + ix[i];
+    o.castShadow = false;
+  });
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setIndex(new THREE.BufferAttribute(idx, 1));
+  geo.computeBoundingSphere();
+  const mesh = new THREE.Mesh(geo, PROXY_MATERIAL);
+  mesh.name = name;
+  mesh.castShadow = true;
+  mesh.receiveShadow = false;
+  mesh.visible = false;
+  mesh.userData.noAO = true;
+  SHADOW_ONLY.add(mesh);
+  return { mesh, used };
+}
+export function dropShadowProxy(proxy) {
+  if (!proxy) return;
+  SHADOW_ONLY.delete(proxy.mesh);
+  proxy.used.forEach(function (o) { o.castShadow = true; });
+  if (proxy.mesh.parent) proxy.mesh.parent.remove(proxy.mesh);
+  proxy.mesh.geometry.dispose();
 }

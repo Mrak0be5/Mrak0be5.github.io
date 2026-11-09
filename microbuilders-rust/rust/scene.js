@@ -5,22 +5,23 @@
 // (scaffold.js), бригада MakeHuman (crew.js), рельеф, лес, небо и погода. Клетка логики — 2 м: мир вида ровно ×2
 // к координатам оригинала, камера — копия камеры оригинала (позиция ×2, поворот, угол, сдвиг под интерфейс).
 import * as THREE from 'three';
-import { createTextures } from './textures.js?v=9f2863b';
-import { createMaterials } from './materials.js?v=9f2863b';
-import { createSky, createTerrain, splatMap, terrainMaterial, terrainMesh, meshHeight, mountains, linkSkyTree, createWear, setSeason, setLevelSeason, unpinSeason, SEASON } from './world.js?v=9f2863b';
-import { createPost } from './post.js?v=9f2863b';
-import { createRender, DYNAMIC } from './render.js?v=9f2863b';
-import { createMobile } from './mobile.js?v=9f2863b';
-import { createGrass, createForest, createRocks } from './nature.js?v=9f2863b';
-import { createWorkerFactory } from './people.js?v=9f2863b';
-import { createLife } from './life.js?v=9f2863b';
-import { createBuilding } from './building.js?v=9f2863b';
-import { CELL } from './families.js?v=9f2863b';
-import { createYard } from './yard.js?v=9f2863b';
-import { createScaffold } from './scaffold.js?v=9f2863b';
-import { createCrew } from './crew.js?v=9f2863b';
-import { createLights } from './props.js?v=9f2863b';
-import { roads as siteRoads, pit as sitePit } from './site-layout.js?v=9f2863b';
+import { createTextures } from './textures.js?v=45127fe';
+import { createMaterials } from './materials.js?v=45127fe';
+import { createSky, createTerrain, splatMap, terrainMaterial, terrainMesh, meshHeight, mountains, linkSkyTree, createWear, setSeason, setLevelSeason, unpinSeason, SEASON } from './world.js?v=45127fe';
+import { createPost } from './post.js?v=45127fe';
+import { createRender, DYNAMIC } from './render.js?v=45127fe';
+import { createMobile } from './mobile.js?v=45127fe';
+import { createGrass, createForest, createRocks } from './nature.js?v=45127fe';
+import { createWorkerFactory } from './people.js?v=45127fe';
+import { createLife } from './life.js?v=45127fe';
+import { createBuilding } from './building.js?v=45127fe';
+import { CELL, familyOf } from './families.js?v=45127fe';
+import { createYard } from './yard.js?v=45127fe';
+import { createScaffold } from './scaffold.js?v=45127fe';
+import { createCrew } from './crew.js?v=45127fe';
+import { createLights } from './props.js?v=45127fe';
+import { roads as siteRoads, pit as sitePit } from './site-layout.js?v=45127fe';
+import { stoneDetail, shadowOnlyPass } from './geo.js?v=45127fe';
 
 // Радиус поляны, м: перекур — в 10–20 клетках от здания, обед и сон — в 30–40 (logic.js →
 // pickPerimeterCell), рабочие уходят туда пешком. Лес начинается за краем поляны.
@@ -82,13 +83,13 @@ export function createScene(renderer, opts) {
     cpuMs: 0,
     quality: tier,
   };
-  let sky, post, textures, mats, terrain, splat, grass, factory, wear, life;
+  let sky, post, textures, mats, terrain, splat, grass, factory, wear, life, mount;
   let house, yard, scaffold, crew, lights = null, viewGroups = [];
   // ---------- модули: хозяйство площадки, эффекты, квартал штаба ----------
   // Каждый — свой файл (site.js, fx.js, city.js) вида create(ctx) → { group, build?(world), clear?(), update?(dt, info),
   // react?(event), call?(name, args), active? }. Грузятся динамически: ошибка модуля (при загрузке или в кадре)
   // выключает только его (RustDebug.state().plugins), игра и остальной вид идут дальше. ?only=site,fx — только эти.
-  const LOADERS = { site: function () { return import('./site.js?v=9f2863b'); }, fx: function () { return import('./fx.js?v=9f2863b'); }, city: function () { return import('./city.js?v=9f2863b'); } };
+  const LOADERS = { site: function () { return import('./site.js?v=45127fe'); }, fx: function () { return import('./fx.js?v=45127fe'); }, city: function () { return import('./city.js?v=45127fe'); } };
   const plugins = [];
   const info = { dt: 0, time: 0, hour: 13, night: 0, tempo: 1, camera: null, target: null, origScene: null, origCamera: null, mode: 'site', cityRoot: null };
   async function loadPlugins(ctx) {
@@ -128,6 +129,8 @@ export function createScene(renderer, opts) {
 
   // ---------- запуск: всё, что не зависит от площадки (до старта игры) ----------
   async function prepare(progress) {
+    // «Телефон»: камни (крошка у цоколя, глыбы карьеров, валуны) — заготовки с одним рядом фаски
+    if (quality.mobile) stoneDetail(3);
     await progress(0.03, 'Готовим фактуры…');
     textures = createTextures(renderer, { size: quality.tex });
     const names = textures.names;
@@ -142,21 +145,27 @@ export function createScene(renderer, opts) {
     splat = splatMap(terrain, emptyLayout(), 640, 320);
     // карта вытоптанности — и под спящими в поле (сон — в 30–40 клетках от здания)
     wear = createWear(192, 768);
-    scene.add(terrainMesh(terrain, terrainMaterial(textures, splat, quality, wear)));
-    scene.add(mountains(7, terrain));
+    // «Телефон»: рельеф реже вдали и без тени, у гор в кадре — только окно столбцов, которые видит камера
+    scene.add(terrainMesh(terrain, terrainMaterial(textures, splat, quality, wear), 1400, 280, !!quality.mobile));
+    mount = mountains(7, terrain, !!quality.mobile);
+    scene.add(mount);
     await progress(0.64, 'Трава и лес…');
     // лес раньше травы: кроны пишут подстилку в карту луга, трава под ними не растёт
-    scene.add(createForest(terrain, splat, mats, quality.trees, quality.msaa, 11, quality.farForest === 0 ? null : renderer, !!quality.taa, CLEAR).group);
+    // «Телефон» без дальнего леса: деревья вглубь от кромки — снимками (рендерер для атласа)
+    const forest = createForest(terrain, splat, mats, quality.trees, quality.msaa, 11, quality.farForest === 0 ? null : renderer, !!quality.taa, CLEAR, undefined, quality.farForest === 0 ? renderer : null).group;
+    scene.add(forest);
     grass = createGrass(terrain, splat, [0, 0], quality.grass, 3, wear, CLEAR);
     scene.add(grass.group);
-    scene.add(createRocks(terrain, splat, mats, 21, CLEAR).group);
+    const rocks = createRocks(terrain, splat, mats, 21, CLEAR).group;
+    scene.add(rocks);
+    if (quality.mobile) [forest, rocks].forEach(function (g) { g.traverse(function (o) { if (o.isMesh && o.castShadow) farCasters.push({ o: o, r: reachOf(o), on: true }); }); });
     await progress(0.7, 'Рабочие…');
     factory = createWorkerFactory(quality);
     await factory.ready;
     await progress(0.8, 'Стройка…');
-    house = createBuilding({ E, mats, bevel: !!quality.bevel, pom: !!quality.taa, onChange: function () { if (post && post.gi) post.gi.markDirty(); },
+    house = createBuilding({ E, mats, bevel: !!quality.bevel, pom: !!quality.taa, merge: !!quality.mobile, onChange: function () { if (post && post.gi) post.gi.markDirty(); },
       onPiece: function (x, y, z, kind) { if (life) life.puff(x, y, z, kind); } });
-    yard = createYard({ E, mats });
+    yard = createYard({ E, mats, lite: !!quality.mobile });
     scaffold = createScaffold({ E, mats });
     crew = createCrew({ E, factory, mats, wear, camera, sky,
       layPoint: function (b, from, out) { return house.layPoint(b, from, out); },
@@ -168,12 +177,16 @@ export function createScene(renderer, opts) {
     life = createLife(scene, quality, { camera, weather: 'clear', chimneys: function () { return house ? house.chimneyTops() : []; },
       // высота земли на экране (следы на снегу лежат по ней)
       ground: function (x, z) { return meshHeight(terrain, x, z); },
-      onFx: function () {} });
+      // движения рабочих — в события звука ролика (удар кирки, мастерок, приземление)
+      onFx: function (e) {
+        if (recorded.on && (e.type === 'impact' || e.type === 'tap' || e.type === 'land')) recorded.list.push({ type: 'fx', kind: e.type, metal: !!e.metal, pos: [e.x, e.y, e.z].map(round2) });
+      } });
     await progress(0.9, 'Свет…');
     // глубина резкости — только у камеры за рабочим (съёмка, ролик): фокус на нём
     const postOpts = { sky, lights: function () { return lights ? lights.lights : []; },
       focus: function () { return follow && crew && crew.figure(follow.i) ? camera.position.distanceTo(_tgt) : 0; } };
     // «Телефон» — один проход в холст (mobile.js), «Высокая» — композер с MSAA-целью (post.js), выше — render.js
+    if (quality.mobile) shadowOnlyPass(renderer);
     post = quality.taa ? createRender(renderer, scene, camera, quality, postOpts) : quality.mobile ? createMobile(renderer, scene, camera) : createPost(renderer, scene, camera, quality, postOpts);
     syncSize(true);
     if (post.gi) {
@@ -293,13 +306,20 @@ export function createScene(renderer, opts) {
 
   // Отклик вида на события мира (экономику и звук ведёт оригинал).
   const recorded = { on: false, list: [] };
+  const SOUND_KIND = { wood: 'planks', metal: 'plates' };
+  function round2(v) { return Math.round(v * 100) / 100; }
   function react(event) {
     if (event.type === 'complete') {
       if (crew) crew.cheer(3.5);
       if (post && post.gi) post.gi.markDirty();
     }
     if (event.type === 'scaffold' || event.type === 'strip' || event.type === 'scaffoldWear') scaffoldClock = 99;
-    if (recorded.on && event.type === 'pour' && event.block) recorded.list.push({ type: 'place', material: event.block.materialId, cell: [event.block.x, event.block.y, event.block.z] });
+    // события для звука ролика (RustDebug.record / drain): укладка — с семейством кладки и местом, м; сдача
+    if (recorded.on && event.type === 'pour' && event.block) {
+      const b = event.block, family = familyOf(B.MB, b.materialId);
+      recorded.list.push({ type: 'place', kind: SOUND_KIND[family] || 'stones', pos: [(b.x + 0.5) * CELL, (b.y + 0.5) * CELL, (b.z + 0.5) * CELL].map(round2) });
+    }
+    if (recorded.on && event.type === 'complete') recorded.list.push({ type: 'chime' });
   }
 
   // Час неба как у оригинала (game.js → updateSky): на площадке до открытия ночи, в квартале и под заставкой —
@@ -331,6 +351,9 @@ export function createScene(renderer, opts) {
     camera.position.multiplyScalar(2);
     camera.near = 0.15;
     camera.far = 4000;
+    // сдвиг под интерфейс без панелей (кадр без HUD) может дать нулевую зону — проекция без сдвига, а не NaN
+    if (camera.view && !(camera.view.width > 0 && camera.view.height > 0 && Number.isFinite(camera.view.offsetX + camera.view.offsetY))) camera.clearViewOffset();
+    if (!Number.isFinite(camera.position.x + camera.position.y + camera.position.z)) camera.position.set(40, 30, 40);
     // за поляной рельеф выше нуля: камера не уходит в холм
     const ground = meshHeight(terrain, camera.position.x, camera.position.z) + 1.2;
     if (camera.position.y < ground) camera.position.y = ground;
@@ -508,10 +531,71 @@ export function createScene(renderer, opts) {
     renderer.toneMapping = THREE.AgXToneMapping;
     renderer.toneMappingExposure = sky.state.exposure * exposureGain;
     syncSize(false);
+    if (mount.userData.aim) mount.userData.aim(camera);
+    farShadows();
     post.render(state.time);
     state.cpuMs += (performance.now() - t0 - state.cpuMs) * 0.05;
     state.frames++;
     watchFrame(dt);
+  }
+
+  // «Телефон»: лес, кусты, пни и валуны за краем поляны отбрасывают тень, только когда коробка тени солнца до них
+  // дотягивается (своя камера у опушки): каждый меш — со своего расстояния r (ближний к оси поляны край его
+  // экземпляров, reachOf). С камеры игры тень леса не видна — снимки с ней и без совпадают попиксельно, а в проходе
+  // тени это 0,4 млн треугольников и 20 вызовов.
+  const farCasters = [];
+  const box = Array.from({ length: 8 }, function () { return new THREE.Vector3(); });
+  const _bx = new THREE.Vector3(), _by = new THREE.Vector3(), _bz = new THREE.Vector3(), _bm = new THREE.Matrix4(), _bc = new THREE.Vector3();
+  // ближе всего к оси поляны по горизонтали, м: у экземпляров — по сфере геометрии каждого (снимки елей растут
+  // шейдером шире своей сферы — запас 6 м), у слитых мешей (пни и брёвна по всей опушке, валуны) — по вершинам
+  function reachOf(o) {
+    o.updateWorldMatrix(true, false);
+    const g = o.geometry;
+    let best = Infinity;
+    if (o.isInstancedMesh) {
+      if (!g.boundingSphere) g.computeBoundingSphere();
+      const bs = g.boundingSphere;
+      for (let k = 0; k < o.count; k++) {
+        o.getMatrixAt(k, _bm);
+        _bm.premultiply(o.matrixWorld);
+        _bc.copy(bs.center).applyMatrix4(_bm);
+        best = Math.min(best, Math.hypot(_bc.x, _bc.z) - bs.radius * _bm.getMaxScaleOnAxis());
+      }
+      return best - (o.frustumCulled ? 0 : 6);
+    }
+    const p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) { _bc.fromBufferAttribute(p, i).applyMatrix4(o.matrixWorld); best = Math.min(best, Math.hypot(_bc.x, _bc.z)); }
+    return best;
+  }
+  function farShadows() {
+    if (!farCasters.length) return;
+    const sun = sky.sun, c = sun.shadow.camera;
+    _bm.lookAt(sun.position, sun.target.position, c.up);
+    _bx.setFromMatrixColumn(_bm, 0); _by.setFromMatrixColumn(_bm, 1); _bz.setFromMatrixColumn(_bm, 2);
+    for (let k = 0; k < 8; k++) box[k].copy(sun.position).addScaledVector(_bx, k & 1 ? c.right : c.left).addScaledVector(_by, k & 2 ? c.top : c.bottom).addScaledVector(_bz, -(k & 4 ? c.far : c.near));
+    // самая дальняя от оси поляны точка коробки в слое высот леса (y от −25 до 45 м): углы в слое и пересечения рёбер
+    // с его границами
+    let far = 0;
+    for (let k = 0; k < 8; k++) {
+      const a = box[k];
+      if (a.y >= -25 && a.y <= 45) far = Math.max(far, a.x * a.x + a.z * a.z);
+      for (let bit = 1; bit < 8; bit <<= 1) {
+        if (k & bit) continue;
+        const b = box[k | bit];
+        for (let e = 0; e < 2; e++) {
+          const y = e ? 45 : -25;
+          if ((a.y - y) * (b.y - y) >= 0) continue;
+          const t = (y - a.y) / (b.y - a.y), x = a.x + (b.x - a.x) * t, z = a.z + (b.z - a.z) * t;
+          far = Math.max(far, x * x + z * z);
+        }
+      }
+    }
+    far = Math.sqrt(far);
+    scene.userData.shadowReach = far;
+    farCasters.forEach(function (c) {
+      const on = far > c.r;
+      if (on !== c.on) { c.on = on; c.o.castShadow = on; }
+    });
   }
 
   // программы кадра вида — для ожидания сборки шейдеров игрой (game.js → shadersReady)

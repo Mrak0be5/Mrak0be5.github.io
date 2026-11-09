@@ -5,9 +5,9 @@
 // фарами и зеркалами, бак, ящик, выхлопная труба с кожухом, шесть колёс с протектором, крылья; кузов из стального
 // листа с рёбрами и козырьком, гидроцилиндр подъёма.
 import * as THREE from 'three';
-import { CELL } from './families.js?v=9f2863b';
-import { Pile, M, mul, hex, WHITE, wheel } from './site-kit.js?v=9f2863b';
-import { markDynamic, DYNAMIC } from './render.js?v=9f2863b';
+import { CELL } from './families.js?v=45127fe';
+import { Pile, M, mul, hex, WHITE, wheel } from './site-kit.js?v=45127fe';
+import { markDynamic, DYNAMIC } from './render.js?v=45127fe';
 
 const C = CELL;
 const V = function (x, y, z) { return new THREE.Vector3(x, y, z); };

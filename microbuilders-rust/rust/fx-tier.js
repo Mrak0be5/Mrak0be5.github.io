@@ -3,7 +3,7 @@
 // Кромки — ленты лицом к камере (ширина — от расстояния: читается и с дальнего зума), один вызов отрисовки;
 // свечение поверх кадра (свечение кадра — bloom «Максимума», «Ультры» и «Высокой»), G-буфер не трогает.
 import * as THREE from 'three';
-import { GB_OUT, FX_OUT } from './fx-sprites.js?v=9f2863b';
+import { GB_OUT, FX_OUT } from './fx-sprites.js?v=45127fe';
 
 const MAX = 192;
 

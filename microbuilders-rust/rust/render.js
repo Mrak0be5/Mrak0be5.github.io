@@ -10,9 +10,9 @@
 import * as THREE from 'three';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
-import { VolumePass, QUAD_VERT, FLARE_GLSL, FINISH } from './post.js?v=9f2863b';
-import { createClouds } from './clouds.js?v=9f2863b';
-import { createGI } from './gi.js?v=9f2863b';
+import { VolumePass, QUAD_VERT, FLARE_GLSL, FINISH } from './post.js?v=45127fe';
+import { createClouds } from './clouds.js?v=45127fe';
+import { createGI } from './gi.js?v=45127fe';
 
 // Корни движущихся объектов: их меши дорисовывают скорость (слой 2).
 export const DYNAMIC = new Set();
@@ -311,6 +311,10 @@ uniform mat4 uInvVP, uPrevVP, uCurVP;
 uniform float uReset, uFeedback;
 varying vec2 vUv;
 vec3 toY(vec3 c) { return vec3(dot(c, vec3(0.25, 0.5, 0.25)), dot(c, vec3(0.5, 0.0, -0.5)), dot(c, vec3(-0.25, 0.5, -0.25))); }
+// NaN и бесконечность из одного пикселя (частицы, ткань) история TAA разнесла бы на весь кадр — гасим на входе
+// (по битам: компилятор D3D считает isnan() лишним и выбрасывает его)
+bool bad(float x) { return (floatBitsToUint(x) & 0x7f800000u) == 0x7f800000u; }
+vec3 sane(vec3 c) { return bad(c.x) || bad(c.y) || bad(c.z) ? vec3(0.0) : c; }
 vec3 fromY(vec3 y) { return vec3(y.x + y.y - y.z, y.x + y.z, y.x - y.y - y.z); }
 // обратимое сжатие яркости (Karis): яркие точки не мерцают
 vec3 tm(vec3 c) { return c / (1.0 + max(c.r, max(c.g, c.b))); }
@@ -325,7 +329,7 @@ vec3 history(vec2 uv) {
          + texture2D(tHistory, t12).rgb * (w12.x * w12.y) + texture2D(tHistory, vec2(t3.x, t12.y)).rgb * (w3.x * w12.y)
          + texture2D(tHistory, vec2(t12.x, t3.y)).rgb * (w12.x * w3.y);
   float ws = w12.x * w0.y + w0.x * w12.y + w12.x * w12.y + w3.x * w12.y + w12.x * w3.y;
-  return max(r / ws, vec3(0.0));
+  return max(sane(r / ws), vec3(0.0));
 }
 vec3 clipBox(vec3 lo, vec3 hi, vec3 h, vec3 c) {
   vec3 center = 0.5 * (hi + lo), ext = 0.5 * (hi - lo) + 1e-4;
@@ -352,10 +356,11 @@ void main() {
     vec4 pc = uPrevVP * wp, cc = uCurVP * wp;
     motion = (cc.xy / cc.w - pc.xy / pc.w) * 0.5;
   }
+  if (bad(motion.x) || bad(motion.y)) motion = vec2(0.0);
   vec2 prevUV = vUv - motion;
   vec3 m1 = vec3(0.0), m2 = vec3(0.0), cur = vec3(0.0), lo = vec3(1e9), hi = vec3(-1e9);
   for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
-    vec3 s = toY(tm(texture2D(tColor, uvJ + vec2(float(x), float(y)) * uRTexel).rgb));
+    vec3 s = toY(tm(max(sane(texture2D(tColor, uvJ + vec2(float(x), float(y)) * uRTexel).rgb), vec3(0.0))));
     if (x == 0 && y == 0) cur = s;
     m1 += s; m2 += s * s; lo = min(lo, s); hi = max(hi, s);
   }
@@ -369,7 +374,7 @@ void main() {
   float w = mix(uFeedback, 0.22, clamp(speed / 24.0, 0.0, 1.0));
   if (uReset > 0.5 || prevUV.x < 0.0 || prevUV.y < 0.0 || prevUV.x > 1.0 || prevUV.y > 1.0) w = 1.0;
   vec3 r = mix(h, cur, w);
-  gl_FragColor = vec4(itm(fromY(r)), 1.0);
+  gl_FragColor = vec4(sane(itm(fromY(r))), 1.0);
 }
 `;
 

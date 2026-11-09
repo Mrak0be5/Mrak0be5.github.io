@@ -10,11 +10,11 @@
 import * as THREE from 'three';
 import { edgeTable, triTable } from 'three/addons/objects/MarchingCubes.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { rng, Batch } from './geo.js?v=9f2863b';
-import { linkSky } from './world.js?v=9f2863b';
-import { markDynamic, DYNAMIC } from './render.js?v=9f2863b';
-import { loadHumans, makeHuman } from './humans.js?v=9f2863b';
-import { outfitOf, looksOf, helmetGear, beltGear, radioGear, padGear, auraGeometry, gearMaterials, gearOut, profileRadius } from './cw-ranks.js?v=9f2863b';
+import { rng, Batch } from './geo.js?v=45127fe';
+import { linkSky } from './world.js?v=45127fe';
+import { markDynamic, DYNAMIC } from './render.js?v=45127fe';
+import { loadHumans, makeHuman } from './humans.js?v=45127fe';
+import { outfitOf, looksOf, helmetGear, beltGear, radioGear, padGear, auraGeometry, gearMaterials, gearOut, profileRadius } from './cw-ranks.js?v=45127fe';
 
 // ---------- скелет ----------
 

@@ -11,10 +11,10 @@
 // Пересборка площадки: прежние фигуры освобождаются (материалы, фактуры костей) через два кадра — когда новые уже
 // собрали те же программы шейдеров (иначе программы ушли бы с прежними и собирались бы заново).
 import * as THREE from 'three';
-import { animateWorker } from './people.js?v=9f2863b';
-import { CELL, familyOf, familyMaterial, familyTile, tintOf } from './families.js?v=9f2863b';
-import { roundedBox, boxUV, Batch, hashStr } from './geo.js?v=9f2863b';
-import { createSmoke } from './cw-smoke.js?v=9f2863b';
+import { animateWorker } from './people.js?v=45127fe';
+import { CELL, familyOf, familyMaterial, familyTile, tintOf } from './families.js?v=45127fe';
+import { roundedBox, boxUV, Batch, hashStr } from './geo.js?v=45127fe';
+import { createSmoke } from './cw-smoke.js?v=45127fe';
 
 const TURN_SPEED = 9;       // рад/с (game.js)
 const LADDER_STAND = 0.1;   // доля клетки: стоит у лестницы (лестница — в 0,28 клетки к стене), руки на ступенях

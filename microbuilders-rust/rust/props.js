@@ -1,7 +1,7 @@
 // Хозяйство стройки кубами: мачты освещения на прицепах с генераторами (ночь с 10-го уровня). Всё — из тех
 // же примитивов и материалов, что и остальная сцена.
 import * as THREE from 'three';
-import { Batch, roundedBox, boxUV, cylinder, quad } from './geo.js?v=9f2863b';
+import { Batch, roundedBox, boxUV, cylinder, quad } from './geo.js?v=45127fe';
 
 const W = new THREE.Color(1, 1, 1);
 function M(x, y, z, ry = 0, rx = 0, rz = 0) {
@@ -68,7 +68,8 @@ class Pile {
 }
 
 // Мачты света стройки кубами (ночь с 10-го уровня): по диагонали от здания f (м: x0, x1, z0, z1, h),
-// прожекторы бьют в середину высоты стен. night(k) включает их в сумерки, lights — для теней и GI.
+// прожекторы бьют в середину высоты стен. night(k) включает их в сумерки, lights — для теней и GI. Сила —
+// как у рабочих прожекторов стройки (opts.power, кд): ночная стройка читается, как у оригинала.
 export function createLights(f, mats, opts = {}) {
   const p = new Pile();
   const glow = new Batch();
@@ -99,8 +100,9 @@ export function createLights(f, mats, opts = {}) {
     return sp;
   });
   function night(k) {
-    const on = THREE.MathUtils.smoothstep(k, 0.15, 0.55);
-    spots.forEach(function (sp) { sp.intensity = 150 * on; sp.angle = on > 0.001 ? 0.64 : 0.005; if (sp.castShadow) sp.shadow.autoUpdate = on > 0.01; });
+    // включаются с уходом солнца (сумерки — уже темно, а «ночь» неба ещё мала)
+    const on = THREE.MathUtils.smoothstep(k, 0.02, 0.22);
+    spots.forEach(function (sp) { sp.intensity = (opts.power || 1500) * on; sp.angle = on > 0.001 ? 0.64 : 0.005; if (sp.castShadow) sp.shadow.autoUpdate = on > 0.01; });
     lampMat.emissiveIntensity = 26 * on;
   }
   night(0);

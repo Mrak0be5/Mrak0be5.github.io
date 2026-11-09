@@ -6,9 +6,9 @@
 // гоняет тележку, опускает и поднимает крюк; крюк качается на тросе. Мачта и фундамент — в общей куче площадки,
 // подвижное — свои меши (markDynamic: скорость для TAA).
 import * as THREE from 'three';
-import { CELL } from './families.js?v=9f2863b';
-import { Pile, M, mul, hex, WHITE } from './site-kit.js?v=9f2863b';
-import { markDynamic, DYNAMIC } from './render.js?v=9f2863b';
+import { CELL } from './families.js?v=45127fe';
+import { Pile, M, mul, hex, WHITE } from './site-kit.js?v=45127fe';
+import { markDynamic, DYNAMIC } from './render.js?v=45127fe';
 
 const C = CELL;
 const V = function (x, y, z) { return new THREE.Vector3(x, y, z); };

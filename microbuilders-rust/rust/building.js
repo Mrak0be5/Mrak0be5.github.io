@@ -10,11 +10,12 @@
 // (feature-blocks.js → update); фонарь — стальной столбик с плафоном, ночью горит и светит; вода — дно, бортики,
 // гладь с рябью и отражением неба, фонтан и слив; панорамные окна — остекление во всю клетку, ночью горит 2/3.
 import * as THREE from 'three';
-import { CELL, familyOf, familyMaterial, familyTile, tintOf, tintHex, FAMILY_TEX } from './families.js?v=9f2863b';
-import { classify, pieceBoxes, featureBoxes, chimneyCells, key3, DIRS } from './plan.js?v=9f2863b';
-import { linkSky } from './world.js?v=9f2863b';
-import { DYNAMIC, markDynamic } from './render.js?v=9f2863b';
-import { createFeatureMaterials, pushRod, pushPyramid, pushQuad, pushDisk, pushGlowBox, pushTube } from './feat-parts.js?v=9f2863b';
+import { CELL, familyOf, familyMaterial, familyTile, tintOf, tintHex, FAMILY_TEX } from './families.js?v=45127fe';
+import { classify, pieceBoxes, featureBoxes, chimneyCells, key3, DIRS } from './plan.js?v=45127fe';
+import { linkSky } from './world.js?v=45127fe';
+import { DYNAMIC, markDynamic } from './render.js?v=45127fe';
+import { createFeatureMaterials, pushRod, pushPyramid, pushQuad, pushDisk, pushGlowBox, pushTube } from './feat-parts.js?v=45127fe';
+import { mergeMeshes, unmergeMeshes, shadowProxy, dropShadowProxy } from './geo.js?v=45127fe';
 
 const CHUNK = 8;
 // сечение колонны, м
@@ -280,6 +281,18 @@ export function createBuilding(ctx) {
   // створки дверей: клетка → { hinge, sign, base }; угол раскрытия живёт дольше куска (пересборка не захлопывает)
   const doors = new Map(), doorAngle = new Map();
   let lastT = 0;
+  // ctx.merge («Телефон»): куски, не менявшиеся QUIET кадров (~2 с), рисуются слитыми — по мешу на материал на
+  // «сверхкусок» 2 × 2 × 2 куска (16 клеток, по центру площадки; как участки квартала, city.js → mergeHouses), тень
+  // сверхкуска — одним мешем: у почти готовой «Цитадели» 48 + 47 вызовов здания → 8 + 1. Пересобранный кусок выходит
+  // из слияния своего сверхкуска в том же кадре, до тишины; время слияния не растёт с размером здания.
+  const QUIET = 120;
+  const merges = new Map();       // ключ сверхкуска → { sig, state }
+  // и тень: все куски сверхкуска — одним мешем только для тени (geo.js → shadowProxy), пересборка — с каждым его куском
+  const proxies = new Map();      // ключ сверхкуска → { sig, proxy }
+  let frameNo = 0;
+  const mergeStat = { merges: 0, ms: 0, max: 0 };
+  // по x и z — пары кусков (−1, 0), (1, 2)… вокруг центра площадки, по высоте — (0, 1), (2, 3)… от земли
+  const superKey = function (ck) { const p = ck.split(',').map(Number); return Math.floor((p[0] + 1) / 2) + ',' + Math.floor(p[1] / 2) + ',' + Math.floor((p[2] + 1) / 2); };
 
   const chunkKey = function (x, y, z) { return Math.floor(x / CHUNK) + ',' + Math.floor(y / CHUNK) + ',' + Math.floor(z / CHUNK); };
   const get = function (x, y, z) { return cells.get(key3(x, y, z)); };
@@ -341,6 +354,10 @@ export function createBuilding(ctx) {
   }
 
   function clear() {
+    merges.forEach(function (m) { if (m.state) unmergeMeshes(m.state); });
+    merges.clear();
+    proxies.forEach(function (p) { dropShadowProxy(p.proxy); });
+    proxies.clear();
     chunks.forEach(function (g) { disposeGroup(g); group.remove(g); });
     chunks = new Map();
     partials.forEach(function (p) { if (p.mesh) { group.remove(p.mesh); disposeGroup(p.mesh); } });
@@ -535,6 +552,58 @@ export function createBuilding(ctx) {
     return any;
   }
 
+  // Тень сверхкусков (ctx.merge): кусок пересобран — тень его сверхкуска заново (до слияния: слитые меши тогда без тени).
+  function shadowSupers() {
+    const groups = new Map();
+    chunks.forEach(function (g, ck) { const sk = superKey(ck); if (!groups.has(sk)) groups.set(sk, []); groups.get(sk).push(g); });
+    proxies.forEach(function (p, sk) { if (!groups.has(sk)) { dropShadowProxy(p.proxy); proxies.delete(sk); } });
+    groups.forEach(function (list, sk) {
+      const sig = list.map(function (g) { return g.id; }).join(',');
+      const p = proxies.get(sk);
+      if (p && p.sig === sig) return;
+      if (p) dropShadowProxy(p.proxy);
+      const meshes = [];
+      list.forEach(function (g) { g.children.forEach(function (o) { if (o.isMesh) meshes.push(o); }); });
+      const proxy = shadowProxy(group, meshes, 'building-shadow');
+      if (proxy) group.add(proxy.mesh);
+      proxies.set(sk, { sig: sig, proxy: proxy });
+    });
+  }
+
+  // Тихие куски — в слияние своего сверхкуска (ctx.merge): только меши материалов куска (створки дверей на петлях —
+  // свои, ходят). Сливается не больше одного сверхкуска за кадр: после загрузки или полной пересборки все куски
+  // затихают в одном кадре — остальные ждут своего (рисуются кусками). Выйти из слияния — сразу (пересобранный кусок
+  // иначе виден старым).
+  function mergeQuiet() {
+    let budget = 1;
+    const groups = new Map();
+    chunks.forEach(function (g, ck) {
+      const sk = superKey(ck);
+      if (!groups.has(sk)) groups.set(sk, []);
+      if (frameNo - g.userData.at > QUIET) groups.get(sk).push(g);
+    });
+    merges.forEach(function (m, sk) { if (!groups.has(sk)) { if (m.state) unmergeMeshes(m.state); merges.delete(sk); } });
+    groups.forEach(function (members, sk) {
+      const sig = members.map(function (g) { return g.id; }).join(',');
+      const m = merges.get(sk);
+      if (m && m.sig === sig) return;
+      if (m && m.state) unmergeMeshes(m.state);
+      let state = null;
+      if (members.length > 1) {
+        if (!budget) { merges.set(sk, { sig: null, state: null }); return; }
+        budget--;
+        const t0 = performance.now();
+        const list = [];
+        members.forEach(function (g) { g.children.forEach(function (o) { if (o.isMesh) list.push(o); }); });
+        state = mergeMeshes(group, list, 'building-merged');
+        group.add(state.group);
+        const ms = performance.now() - t0;
+        mergeStat.merges++; mergeStat.ms += ms; mergeStat.max = Math.max(mergeStat.max, ms);
+      }
+      merges.set(sk, { sig: sig, state: state });
+    });
+  }
+
   // Полотно двери: доски на петлях у косяка (доски вертикально), закрыто в плоскости стены; открывается внутрь
   // (от стороны face) перед рабочим — update().
   function leafMesh(l) {
@@ -585,6 +654,7 @@ export function createBuilding(ctx) {
       }
     }
     const g = new THREE.Group();
+    g.userData.at = frameNo;
     if (flush(set, g)) {
       const lo = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
       set.boxes.forEach(function (b) { for (let a = 0; a < 3; a++) { lo[a] = Math.min(lo[a], b[a]); lo[a + 3] = Math.max(lo[a + 3], b[a + 3]); } });
@@ -837,11 +907,13 @@ export function createBuilding(ctx) {
       builtSeen = done;
       ghostDirty = true;
     }
+    frameNo++;
     if (dirty.size) {
       dirty.forEach(buildChunk);
       dirty.clear();
       if (ctx.onChange) ctx.onChange();
     }
+    if (ctx.merge) { shadowSupers(); mergeQuiet(); }
     updatePartials();
     // контур — раз в полсекунды хватает (новые взятые детали пропадают из него)
     ghostTimer += 1;
@@ -867,6 +939,8 @@ export function createBuilding(ctx) {
     doors: function () { const o = {}; doors.forEach(function (d, k) { o[k] = Math.round((doorAngle.get(k) || 0) * 100) / 100; }); return o; },
     // проходы, открывающие створки в последнем кадре, и двери (проверки)
     doorDebug: function () { return { world: !!world, open: Array.from(openNow), keys: Array.from(doors.keys()), t: lastT }; },
+    // слияние тихих кусков (ctx.merge): сколько раз и время, мс; куски, сверхкуски, спрятанные слиянием меши (проверки)
+    mergeInfo: function () { let hidden = 0; merges.forEach(function (m) { if (m.state) hidden += m.state.hidden.length; }); return { merges: mergeStat.merges, ms: Math.round(mergeStat.ms * 10) / 10, max: Math.round(mergeStat.max * 10) / 10, chunks: chunks.size, groups: merges.size, merged: hidden }; },
     // свет фонаря: точка и сила (проверки)
     lamp: function () { return lampLight ? { at: lampAt, intensity: lampLight.intensity } : lampAt ? { at: lampAt, intensity: 0 } : null; },
     ghostOn: function () { return showGhost; },

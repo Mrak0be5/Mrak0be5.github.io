@@ -5,11 +5,11 @@
 // поляны (у оригинала плато уходит за туман). Плато держит забор, мачты, кран, бытовки и миниатюры: где они стоят,
 // ровная часть шире. Координаты рамки — клетки оригинала (site-layout.js), меши — метры вида (×2).
 import * as THREE from 'three';
-import { rng, Batch, boxUV } from './geo.js?v=9f2863b';
+import { rng, Batch, boxUV } from './geo.js?v=45127fe';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
-import { TEXTURE_TILES as TILE } from './textures.js?v=9f2863b';
-import { CELL } from './families.js?v=9f2863b';
-import { vnoise, fbm, hash2 } from './site-kit.js?v=9f2863b';
+import { TEXTURE_TILES as TILE } from './textures.js?v=45127fe';
+import { CELL } from './families.js?v=45127fe';
+import { vnoise, fbm, hash2 } from './site-kit.js?v=45127fe';
 
 const C = CELL;
 // средний тон фактуры камня (как в yard.js): цвет оригинала делится на него

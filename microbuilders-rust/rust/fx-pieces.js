@@ -5,10 +5,10 @@
 // планируют (сопротивление растёт, у плашмя летящих больше), качаются и кувыркаются, ложатся на крышу и землю;
 // блоки — та же кладка, что у ноши рабочих (families.js: семейство → материал, тон материала — цвет экземпляра).
 import * as THREE from 'three';
-import { linkSky } from './world.js?v=9f2863b';
-import { familyOf, familyMaterial, familyTile, tintOf } from './families.js?v=9f2863b';
-import { roundedBox, boxUV, Batch, hashStr } from './geo.js?v=9f2863b';
-import { WIND } from './fx-sprites.js?v=9f2863b';
+import { linkSky } from './world.js?v=45127fe';
+import { familyOf, familyMaterial, familyTile, tintOf } from './families.js?v=45127fe';
+import { roundedBox, boxUV, Batch, hashStr } from './geo.js?v=45127fe';
+import { WIND } from './fx-sprites.js?v=45127fe';
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
 const _c = new THREE.Color(), _e = new THREE.Euler(), _a = new THREE.Vector3();

@@ -6,14 +6,14 @@
 // update(dt, info) }; heightAt(x, z) — высота карьера под точкой (м), debug() — раскладка для снимков.
 // Неподвижное — одна слитая геометрия на материал; подвижное (поворотная часть крана, крюк, самосвал) — свои меши.
 import * as THREE from 'three';
-import { layout } from './site-layout.js?v=9f2863b';
-import { createKit, Pile, disposeTree } from './site-kit.js?v=9f2863b';
-import { buildQuarry } from './site-quarry.js?v=9f2863b';
-import { fence, masts, cabins, minis, machines, pallets } from './site-props.js?v=9f2863b';
-import { buildCrane } from './site-crane.js?v=9f2863b';
-import { buildTruck } from './site-truck.js?v=9f2863b';
-import { buildAmbient } from './site-ambient.js?v=9f2863b';
-import { familyOf, familyMaterial, familyTile, tintOf } from './families.js?v=9f2863b';
+import { layout } from './site-layout.js?v=45127fe';
+import { createKit, Pile, disposeTree } from './site-kit.js?v=45127fe';
+import { buildQuarry } from './site-quarry.js?v=45127fe';
+import { fence, masts, cabins, minis, machines, pallets } from './site-props.js?v=45127fe';
+import { buildCrane } from './site-crane.js?v=45127fe';
+import { buildTruck } from './site-truck.js?v=45127fe';
+import { buildAmbient } from './site-ambient.js?v=45127fe';
+import { familyOf, familyMaterial, familyTile, tintOf } from './families.js?v=45127fe';
 
 export function create(ctx) {
   const group = new THREE.Group();

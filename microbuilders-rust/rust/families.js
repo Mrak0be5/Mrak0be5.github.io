@@ -2,8 +2,8 @@
 // это, кирпич, дерево или металл. Семейство → кладка (рецепт textures.js), её средний тон (тон материала
 // делится на него — получается оттенок вершин) и высота ряда (недостроенная деталь растёт рядами).
 // Общие для здания, двора и ноши рабочих.
-import { TEXTURE_TILES as TILE, TEXTURE_POM as POM } from './textures.js?v=9f2863b';
-import { adoptSky, linkSky } from './world.js?v=9f2863b';
+import { TEXTURE_TILES as TILE, TEXTURE_POM as POM } from './textures.js?v=45127fe';
+import { adoptSky, linkSky } from './world.js?v=45127fe';
 import * as THREE from 'three';
 
 // клетка логики, м

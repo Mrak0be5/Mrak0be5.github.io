@@ -3,10 +3,10 @@
 // и полкам до дна и затихают. Следы ног и колёс — у вида свои (карта троп). Вихри — частицы своим шейдером
 // (как life.js: выходы G-буфера обнулены, смешивание — премультипликация), камешки — три глыбы камня.
 import * as THREE from 'three';
-import { stone } from './geo.js?v=9f2863b';
-import { TEXTURE_TILES as TILE } from './textures.js?v=9f2863b';
-import { CELL } from './families.js?v=9f2863b';
-import { POOLS } from './site-kit.js?v=9f2863b';
+import { stone } from './geo.js?v=45127fe';
+import { TEXTURE_TILES as TILE } from './textures.js?v=45127fe';
+import { CELL } from './families.js?v=45127fe';
+import { POOLS } from './site-kit.js?v=45127fe';
 
 const C = CELL;
 const PER = 44;           // частиц в вихре: 10 — юбка у земли, остальные — воронка

@@ -3,9 +3,9 @@
 // клеток. Камень, песчаник, гранит, мрамор — каменоломня из колотых блоков; кирпич, брус, сталь, бетон —
 // поддоны с пачками той же кладки, что у кубов; стекло — стеклоблоки. Клетка — 2 м.
 import * as THREE from 'three';
-import { rng, stone, roundedBox, boxUV, cylinder, Batch } from './geo.js?v=9f2863b';
-import { TEXTURE_TILES as TILE } from './textures.js?v=9f2863b';
-import { CELL, familyOf, familyMaterial, familyTile, tintOf } from './families.js?v=9f2863b';
+import { rng, stone, roundedBox, boxUV, cylinder, Batch, mergeMeshes, unmergeMeshes, shadowProxy, dropShadowProxy } from './geo.js?v=45127fe';
+import { TEXTURE_TILES as TILE } from './textures.js?v=45127fe';
+import { CELL, familyOf, familyMaterial, familyTile, tintOf } from './families.js?v=45127fe';
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _p = new THREE.Vector3(), _e = new THREE.Euler();
 const _col = new THREE.Color();
@@ -18,17 +18,21 @@ function rockTint(MB, id) {
   return new THREE.Color(Math.min(2.2, _col.r / Math.pow(ROCK_BASE[0], 2.2)), Math.min(2.2, _col.g / Math.pow(ROCK_BASE[1], 2.2)), Math.min(2.2, _col.b / Math.pow(ROCK_BASE[2], 2.2)));
 }
 
+// ctx.lite — «Телефон»: поддоны, пачки, столы и ящики — брусья без фаски (12 треугольников вместо 108), сантиметровой
+// фаски на телефоне не видно; камни — лёгкие заготовки (geo.js → stoneDetail); двор рисуется слитым — по мешу на
+// материал (у «Цитадели» 36 мешей → ~9 вызовов в кадре), тень — одним мешем (geo.js → shadowProxy).
 export function createYard(ctx) {
   const { E, mats } = ctx;
   const MB = E.MB;
+  const S3 = ctx.lite ? 1 : 3, S2 = ctx.lite ? 1 : 2;
   const group = new THREE.Group();
   group.name = 'yard';
-  let world = null;
+  let world = null, merged = null, shadow = null;
   const desks = new Set();
-  const deskTop = boxUV(roundedBox(1.3, 0.05, 0.75, 0.01, 3), TILE.planks[0], TILE.planks[1]);
-  const deskLeg = boxUV(roundedBox(0.06, 0.84, 0.06, 0.008, 3), TILE.planks[0], TILE.planks[1]);
-  const pallet = boxUV(roundedBox(1.6, 0.14, 1.6, 0.012, 3), TILE.planks[0], TILE.planks[1]);
-  const glassBlock = boxUV(roundedBox(0.4, 0.4, 0.4, 0.03, 3), 0.4, 0.4);
+  const deskTop = boxUV(roundedBox(1.3, 0.05, 0.75, 0.01, S3), TILE.planks[0], TILE.planks[1]);
+  const deskLeg = boxUV(roundedBox(0.06, 0.84, 0.06, 0.008, S3), TILE.planks[0], TILE.planks[1]);
+  const pallet = boxUV(roundedBox(1.6, 0.14, 1.6, 0.012, S3), TILE.planks[0], TILE.planks[1]);
+  const glassBlock = boxUV(roundedBox(0.4, 0.4, 0.4, 0.03, S3), 0.4, 0.4);
 
   function build(w) {
     clear();
@@ -42,9 +46,27 @@ export function createYard(ctx) {
     });
     rubble(w, r);
     syncDesks();
+    remerge();
+  }
+
+  // «Телефон»: весь двор — по мешу на материал, тень — одним мешем (пересборка — на новой площадке и с новым столом)
+  function remerge() {
+    if (!ctx.lite) return;
+    if (merged) unmergeMeshes(merged);
+    dropShadowProxy(shadow);
+    const list = [];
+    group.traverse(function (o) { if (o.isMesh) list.push(o); });
+    // тень — до слияния: слитые меши тогда без своей тени
+    shadow = shadowProxy(group, list, 'yard-shadow');
+    if (shadow) group.add(shadow.mesh);
+    merged = mergeMeshes(group, list, 'yard-merged');
+    group.add(merged.group);
   }
 
   function clear() {
+    merged = null;
+    dropShadowProxy(shadow);
+    shadow = null;
     group.children.slice().forEach(function (o) { group.remove(o); o.traverse(function (c) { if (c.geometry) c.geometry.dispose(); }); });
     desks.clear();
     world = null;
@@ -117,7 +139,7 @@ export function createYard(ctx) {
           continue;
         }
         const w = 1.32 + r() * 0.14, h = 0.95 + r() * 0.15;
-        const geo = boxUV(roundedBox(w, h, w, 0.01, 3), tile[0], tile[1], r(), r());
+        const geo = boxUV(roundedBox(w, h, w, 0.01, S3), tile[0], tile[1], r(), r());
         _m.compose(_p.set(cx + (r() - 0.5) * 0.1, y + h / 2, cz + (r() - 0.5) * 0.1), _q, _s.set(1, 1, 1));
         bundles.add(geo, _m, color);
         y += h;
@@ -135,12 +157,12 @@ export function createYard(ctx) {
   // Хозяйство у карьера — с дальней от здания стороны (рабочие подходят со стороны здания, к standX/Z): у кладки —
   // оцинкованное корыто с раствором и мастерком, ведро, мешки цемента на поддоне; у каменоломни — щебень и ведро;
   // у стали и дерева — ящик с инструментом. Не препятствия: логика их не знает, стоят в стороне.
-  const tub = boxUV(roundedBox(0.92, 0.26, 0.62, 0.03, 2), TILE.zinc[0], TILE.zinc[1]);
-  const mortarTop = boxUV(roundedBox(0.84, 0.02, 0.54, 0.008, 2), TILE.mortar[0], TILE.mortar[1]);
+  const tub = boxUV(roundedBox(0.92, 0.26, 0.62, 0.03, S2), TILE.zinc[0], TILE.zinc[1]);
+  const mortarTop = boxUV(roundedBox(0.84, 0.02, 0.54, 0.008, S2), TILE.mortar[0], TILE.mortar[1]);
   const bucket = cylinder(0.13, 0.15, 0.3, 14, true);
   const bag = boxUV(roundedBox(0.52, 0.13, 0.34, 0.05, 3), 1, 1);
-  const lowPallet = boxUV(roundedBox(1.0, 0.12, 0.8, 0.01, 2), TILE.planks[0], TILE.planks[1]);
-  const box = boxUV(roundedBox(0.56, 0.22, 0.26, 0.015, 2), 1, 1);
+  const lowPallet = boxUV(roundedBox(1.0, 0.12, 0.8, 0.01, S2), TILE.planks[0], TILE.planks[1]);
+  const box = boxUV(roundedBox(0.56, 0.22, 0.26, 0.015, S2), 1, 1);
   function tools(mine, family, r) {
     if (!mine.rocks || !mine.rocks.length) return;
     let mx = 0, mz = 0, x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
@@ -210,7 +232,7 @@ export function createYard(ctx) {
       const fam = familyOf(MB, id);
       if (fam === 'wood' || r() < 0.06) {
         const len = 0.25 + r() * 0.5;
-        const g = boxUV(roundedBox(0.09 + r() * 0.06, 0.02, len, 0.004, 2), TILE.planks[0], TILE.planks[1], r(), r());
+        const g = boxUV(roundedBox(0.09 + r() * 0.06, 0.02, len, 0.004, S2), TILE.planks[0], TILE.planks[1], r(), r());
         _q.setFromEuler(_e.set((r() - 0.5) * 0.1, r() * 6.28, (r() - 0.5) * 0.1));
         _m.compose(_p.set(x, 0.012, z), _q, _s.set(1, 1, 1));
         wood.add(g, _m, null);
@@ -262,15 +284,18 @@ export function createYard(ctx) {
   }
 
   function syncDesks() {
-    if (!world) return;
+    if (!world) return false;
+    let added = false;
     world.builders.forEach(function (bld) {
       if (bld.trade === 'engineer') return;
       const key = bld.homeCell.join(',');
       if (desks.has(key)) return;
       desks.add(key);
       desk(bld.homeCell);
+      added = true;
     });
+    return added;
   }
 
-  return { group, build, clear, update: syncDesks };
+  return { group, build, clear, update: function () { if (syncDesks() && merged) remerge(); } };
 }

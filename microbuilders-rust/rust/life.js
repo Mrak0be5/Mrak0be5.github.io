@@ -3,8 +3,8 @@
 // у прожекторов, птицы, пар дыхания и следы на снегу. События движений — очередь фигуры w.fx (people.js).
 // Всё кодом, без файлов текстур.
 import * as THREE from 'three';
-import { CLOUD, WEATHER, linkSky } from './world.js?v=9f2863b';
-import { ATMO } from './atmosphere.js?v=9f2863b';
+import { CLOUD, WEATHER, linkSky } from './world.js?v=45127fe';
+import { ATMO } from './atmosphere.js?v=45127fe';
 
 // выходы G-буфера у собственных шейдеров: прозрачное не трогает буферы под собой
 const GB_OUT = /* glsl */ `

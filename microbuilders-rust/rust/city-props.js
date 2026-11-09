@@ -4,8 +4,8 @@
 // материалы, бытовка), заборы и вещи участков, силуэт будущего здания, кольцо выбора, пятна света фонарей.
 // Всё сливается в «пачки» по материалу (Pile) — мало вызовов отрисовки на телефоне.
 import * as THREE from 'three';
-import { Batch, roundedBox, boxUV, cylinder, stick, stone, rng } from './geo.js?v=9f2863b';
-import { TEXTURE_TILES as TILE } from './textures.js?v=9f2863b';
+import { Batch, roundedBox, boxUV, cylinder, stick, stone, rng } from './geo.js?v=45127fe';
+import { TEXTURE_TILES as TILE } from './textures.js?v=45127fe';
 
 export const WHITE = new THREE.Color(1, 1, 1);
 const _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _s = new THREE.Vector3();

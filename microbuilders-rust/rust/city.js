@@ -6,16 +6,16 @@
 // ход (стройка штаба, рост нового здания по порядку кубов) — как у оригинала. Модуль вида (scene.js → LOADERS):
 // create(ctx) → { group, active, update(dt, info), stats() }.
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { createBuilding } from './building.js?v=9f2863b';
-import { createScaffold } from './scaffold.js?v=9f2863b';
-import { markDynamic } from './render.js?v=9f2863b';
-import { TEXTURE_TILES as TILE } from './textures.js?v=9f2863b';
-import { FAMILY_TEX, familyMaterial } from './families.js?v=9f2863b';
-import { createCityTextures, CITY_TILES as CT } from './city-tex.js?v=9f2863b';
-import * as P from './city-props.js?v=9f2863b';
-import { createSignAtlas, plate } from './city-signs.js?v=9f2863b';
-import { createFeatureMaterials } from './feat-parts.js?v=9f2863b';
-import { rng } from './geo.js?v=9f2863b';
+import { createBuilding } from './building.js?v=45127fe';
+import { createScaffold } from './scaffold.js?v=45127fe';
+import { markDynamic } from './render.js?v=45127fe';
+import { TEXTURE_TILES as TILE } from './textures.js?v=45127fe';
+import { FAMILY_TEX, familyMaterial } from './families.js?v=45127fe';
+import { createCityTextures, CITY_TILES as CT } from './city-tex.js?v=45127fe';
+import * as P from './city-props.js?v=45127fe';
+import { createSignAtlas, plate } from './city-signs.js?v=45127fe';
+import { createFeatureMaterials } from './feat-parts.js?v=45127fe';
+import { rng } from './geo.js?v=45127fe';
 
 const S = 2;               // мир вида = координаты оригинала × 2
 // плоские покрытия тень не отбрасывают (лишние вызовы в проходе тени)

@@ -22,13 +22,13 @@
 // событиям people.js) — strike, puff и мелкие chips рабочих здесь не повторяются. Аврал (rush), заливка (fill*)
 // и монеты (coin) оригинал больше не зовёт (монеты — DOM).
 import * as THREE from 'three';
-import { createSprites, DUST, SMOKE, SPARK, GLINT, WIND } from './fx-sprites.js?v=9f2863b';
-import { createPieces } from './fx-pieces.js?v=9f2863b';
-import { createFlag } from './fx-flag.js?v=9f2863b';
-import { createTierGlow } from './fx-tier.js?v=9f2863b';
-import { familyOf, FAMILY_TEX } from './families.js?v=9f2863b';
-import { classify, chimneyCells, key3 } from './plan.js?v=9f2863b';
-import { SEASON } from './world.js?v=9f2863b';
+import { createSprites, DUST, SMOKE, SPARK, GLINT, WIND } from './fx-sprites.js?v=45127fe';
+import { createPieces } from './fx-pieces.js?v=45127fe';
+import { createFlag } from './fx-flag.js?v=45127fe';
+import { createTierGlow } from './fx-tier.js?v=45127fe';
+import { familyOf, FAMILY_TEX } from './families.js?v=45127fe';
+import { classify, chimneyCells, key3 } from './plan.js?v=45127fe';
+import { SEASON } from './world.js?v=45127fe';
 
 // цвета пыли и дыма (sRGB)
 const SOIL = 0xb9a68a, MORTAR = 0xc4bcad, SAWDUST = 0xd6bf94, EXHAUST = 0x5a554f;
