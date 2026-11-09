@@ -6,17 +6,17 @@
   <meta name="color-scheme" content="light">
   <meta name="theme-color" content="#f5f2ec">
   <meta name="description" content="Каталог предложений вилл Дубая: фотографии, местоположения, высоты потолков, переключатели просмотра и общие комментарии.">
-  <meta name="catalog-release" content="archive-old-20261109">
+  <meta name="catalog-release" content="arthur-20261109">
   <title>Виллы Дубая</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js","three/addons/":"./vendor/three/addons/"}}</script>
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-  <link rel="stylesheet" href="styles.css?v=archive-old-20261109">
+  <link rel="stylesheet" href="styles.css?v=arthur-20261109">
   <script src="vendor/leaflet/leaflet.js" defer></script>
-  <script src="enrich.js?v=archive-old-20261109" defer></script>
-  <script src="data.js?v=archive-old-20261109" defer></script>
-  <script src="app.js?v=archive-old-20261109" defer></script>
+  <script src="enrich.js?v=arthur-20261109" defer></script>
+  <script src="data.js?v=arthur-20261109" defer></script>
+  <script src="app.js?v=arthur-20261109" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#catalog">Перейти к объектам</a>
@@ -48,6 +48,7 @@
           </div>
           <button id="quick-top" class="quick-top-filter" type="button" aria-pressed="false" title="Показать только виллы, отмеченные вами как ТОП">★ ТОП <span id="quick-top-count" class="quick-top-count">0</span></button>
           <button id="quick-new" class="quick-top-filter quick-new-filter" type="button" aria-pressed="false" title="Только предложения Артура за последние 24 часа; сочетается с ТОП и остальными фильтрами">Новые · 24 ч <span id="quick-new-count" class="quick-top-count">0</span></button>
+          <button id="quick-arthur1109" class="quick-top-filter quick-new-filter" type="button" aria-pressed="false" title="Предложения Артура из WhatsApp за 09.11">✦ Артур 09.11 <span id="quick-arthur1109-count" class="quick-top-count">0</span></button>
           <button id="quick-batch" class="quick-top-filter quick-new-filter" type="button" aria-pressed="false" title="Новые виллы из поиска 09.11: до 1 млн AED, вид на озеро или гольф">✦ Новые 09.11 <span id="quick-batch-count" class="quick-top-count">0</span></button>
           <button id="quick-archive" class="quick-top-filter quick-archive-filter" type="button" aria-pressed="false" title="Показать только объекты в архиве">📦 В архиве <span id="quick-archive-count" class="quick-top-count">0</span></button>
           <button id="filters-toggle" class="filters-toggle" type="button" aria-expanded="false" aria-controls="filter-selects">Фильтры<span id="filters-active" class="filters-active" hidden></span></button>
@@ -58,6 +59,8 @@
             <button type="button" data-view="map" aria-pressed="false" aria-label="Карта"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0C18.5 15.4 12 21 12 21z"/><circle cx="12" cy="10" r="2.4"/></svg><span>Карта</span></button>
           </div>
         </div>
+
+        <div class="area-chips" id="area-chips" role="group" aria-label="Районы: можно выбрать несколько"></div>
 
         <div class="filter-selects" id="filter-selects">
           <label class="select-field"><span class="field-caption">Район</span><select id="area"><option value="">Все районы</option></select></label>
@@ -143,6 +146,7 @@
 
           <label class="select-field"><span class="field-caption">Новые</span><select id="filter-new">
             <option value="">Новые: все объекты</option>
+            <option value="arthur1109">✦ Только от Артура 09.11</option>
             <option value="batch">✦ Только новые 09.11 (до 1 млн, озеро/гольф)</option>
             <option value="unseen">✦ Только непросмотренные («Новое»)</option>
           </select></label>

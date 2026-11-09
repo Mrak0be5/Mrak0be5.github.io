@@ -1,6 +1,731 @@
 window.VILLA_CATALOG = {
-  "updatedAt": "2026-11-09T17:14:13.481814+00:00",
+  "updatedAt": "2026-11-09T22:10:41.503098+00:00",
   "properties": [
+    {
+      "id": "arthur1109_calida_vh",
+      "title": "Victory Heights, Calida · B-тип с пристройкой, гольф",
+      "area": "Victory Heights",
+      "agent": "Артур",
+      "agentPhone": "",
+      "price": 950000,
+      "priceLabel": "950 000 AED / год",
+      "priceNote": "Цена Артура в чате 09.11.2026.",
+      "bedrooms": 5,
+      "bathrooms": 6,
+      "plotM2": 854,
+      "buaM2": 585,
+      "ceiling": "Не измерено",
+      "status": "review",
+      "statusLabel": "На рассмотрении",
+      "type": "villa",
+      "cover": "https://static.shared.propertyfinder.ae/media/images/listing/N76QF5C6G8DAKBTD1V61ZBGRH8/f04f597f-2890-40b4-a249-90787b6d42d5/1312x894.jpg?v=b24349211d4232e3976fda4434e3c326",
+      "images": [
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/N76QF5C6G8DAKBTD1V61ZBGRH8/f04f597f-2890-40b4-a249-90787b6d42d5/1312x894.jpg?v=b24349211d4232e3976fda4434e3c326",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/N76QF5C6G8DAKBTD1V61ZBGRH8/f04f597f-2890-40b4-a249-90787b6d42d5/668x452.jpg?v=b24349211d4232e3976fda4434e3c326",
+          "caption": "Фото объявления Property Finder №1"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/N76QF5C6G8DAKBTD1V61ZBGRH8/6302cb3f-c18e-4889-bbfb-0f05994c5ec0/1312x894.jpg?v=ac44843ed095cfc81945ef0baea68ab4",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/N76QF5C6G8DAKBTD1V61ZBGRH8/6302cb3f-c18e-4889-bbfb-0f05994c5ec0/668x452.jpg?v=ac44843ed095cfc81945ef0baea68ab4",
+          "caption": "Фото объявления Property Finder №2"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/N76QF5C6G8DAKBTD1V61ZBGRH8/af27157f-70d3-4983-8511-b693a9fa03ba/1312x894.jpg?v=5252a3a2dbfd9a255dfa1703b9749e10",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/N76QF5C6G8DAKBTD1V61ZBGRH8/af27157f-70d3-4983-8511-b693a9fa03ba/668x452.jpg?v=5252a3a2dbfd9a255dfa1703b9749e10",
+          "caption": "Фото объявления Property Finder №3"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/N76QF5C6G8DAKBTD1V61ZBGRH8/08108579-bdad-4e28-8d8f-e7d42c05a894/1312x894.jpg?v=a6d9125ae71de630df9240eaa10a043a",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/N76QF5C6G8DAKBTD1V61ZBGRH8/08108579-bdad-4e28-8d8f-e7d42c05a894/668x452.jpg?v=a6d9125ae71de630df9240eaa10a043a",
+          "caption": "Фото объявления Property Finder №4"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/N76QF5C6G8DAKBTD1V61ZBGRH8/27a314ce-1074-4ada-b37a-ddc3abc9346d/1312x894.jpg?v=b54aea98ebfb6bc940d3f1aca3cb648d",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/N76QF5C6G8DAKBTD1V61ZBGRH8/27a314ce-1074-4ada-b37a-ddc3abc9346d/668x452.jpg?v=b54aea98ebfb6bc940d3f1aca3cb648d",
+          "caption": "Фото объявления Property Finder №5"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/N76QF5C6G8DAKBTD1V61ZBGRH8/ca830703-5a20-4b67-b3b6-5eac6f2fc7fd/1312x894.jpg?v=3acb93d789288dcf8209d853ec680ec7",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/N76QF5C6G8DAKBTD1V61ZBGRH8/ca830703-5a20-4b67-b3b6-5eac6f2fc7fd/668x452.jpg?v=3acb93d789288dcf8209d853ec680ec7",
+          "caption": "Фото объявления Property Finder №6"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/N76QF5C6G8DAKBTD1V61ZBGRH8/1c2ea71a-07c5-443e-9d90-7ff1b5900a9e/1312x894.jpg?v=31543f28ee69ab38d159dade1acd498b",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/N76QF5C6G8DAKBTD1V61ZBGRH8/1c2ea71a-07c5-443e-9d90-7ff1b5900a9e/668x452.jpg?v=31543f28ee69ab38d159dade1acd498b",
+          "caption": "Фото объявления Property Finder №7"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/N76QF5C6G8DAKBTD1V61ZBGRH8/066c8cca-2544-4ca3-9ac9-1dc8e5b58211/1312x894.jpg?v=2e6f1c8ba89539df132bd73df3b7dc3f",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/N76QF5C6G8DAKBTD1V61ZBGRH8/066c8cca-2544-4ca3-9ac9-1dc8e5b58211/668x452.jpg?v=2e6f1c8ba89539df132bd73df3b7dc3f",
+          "caption": "Фото объявления Property Finder №8"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/N76QF5C6G8DAKBTD1V61ZBGRH8/0e85d1dc-a6c8-4fb3-ae40-146a31ff557d/1312x894.jpg?v=dec7ef7880b06c98bfdd48a60b3232b7",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/N76QF5C6G8DAKBTD1V61ZBGRH8/0e85d1dc-a6c8-4fb3-ae40-146a31ff557d/668x452.jpg?v=dec7ef7880b06c98bfdd48a60b3232b7",
+          "caption": "Фото объявления Property Finder №9"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/N76QF5C6G8DAKBTD1V61ZBGRH8/810b3613-bf52-4e24-a2d4-bf10f71caa8d/1312x894.jpg?v=8157af59ac36d3e520fd6ffdfdfeccc1",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/N76QF5C6G8DAKBTD1V61ZBGRH8/810b3613-bf52-4e24-a2d4-bf10f71caa8d/668x452.jpg?v=8157af59ac36d3e520fd6ffdfdfeccc1",
+          "caption": "Фото объявления Property Finder №10"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/N76QF5C6G8DAKBTD1V61ZBGRH8/36a2ce83-3936-43f8-986a-b8b185e3e4ac/1312x894.jpg?v=78a7e26c87a4e1012f55a9d72ca222a9",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/N76QF5C6G8DAKBTD1V61ZBGRH8/36a2ce83-3936-43f8-986a-b8b185e3e4ac/668x452.jpg?v=78a7e26c87a4e1012f55a9d72ca222a9",
+          "caption": "Фото объявления Property Finder №11"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/N76QF5C6G8DAKBTD1V61ZBGRH8/4d992842-fc78-4d13-9ff4-6de1f6ac2ea5/1312x894.jpg?v=c0623b5c305fe3f52c7a04597c9c2ca5",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/N76QF5C6G8DAKBTD1V61ZBGRH8/4d992842-fc78-4d13-9ff4-6de1f6ac2ea5/668x452.jpg?v=c0623b5c305fe3f52c7a04597c9c2ca5",
+          "caption": "Фото объявления Property Finder №12"
+        }
+      ],
+      "videos": [],
+      "description": "Calida в Victory Heights (Sports City): вилла B-тип, 5 спален, расширена и обновлена. Дом ≈585 м², участок ≈854 м². Свой бассейн, сад, за ним гольф-поле. Артур прислал видео 3:46 и назвал это Jumeirah Golf Estates, но по объявлениям это Victory Heights.",
+      "facts": [
+        "Артур: 950k, 5 спален, BUA 6 300 sqft, участок 9 200 sqft; видео 3:46 в чате.",
+        "Тот же дом у двух агентов: haus & haus (PF 168330551, ADM266701) и Savills (PF 151894839, VI45777-2), оба 950 000.",
+        "Вячеслав в чате: «реновированная, арабские мелкие окошки».",
+        "Объявление Property Finder 168330551 (haus & haus, Oliver Cherry), ref ADM266701."
+      ],
+      "caveats": [
+        "Окна небольшие, «арабские» — по отзыву Вячеслава.",
+        "Потолки не измерены.",
+        "Это Victory Heights, не Jumeirah Golf Estates."
+      ],
+      "listingUrl": "https://www.propertyfinder.ae/en/plp/rent/villa-for-rent-dubai-dubai-sports-city-victory-heights-calida-168330551.html",
+      "mapUrl": "https://maps.google.com/maps?q=25.040854,55.208618",
+      "mapPrecision": "area",
+      "locationLabel": "Victory Heights · точка района, номер дома не получен",
+      "missing": [
+        "Номер виллы и точка дома",
+        "Свежая доступность и окончательная цена"
+      ],
+      "requestState": "",
+      "ref": "ADM266701",
+      "possibleDuplicateIds": [],
+      "sourceNote": "Предложение Артура: WhatsApp «Вячеслав и Инна: недвижимость с Артуром», 09.11.2026. Объявление найдено на Property Finder.",
+      "documents": [],
+      "detailPage": "properties/arthur1109_calida_vh.html",
+      "projectType": "Victory Heights, Calida",
+      "ceilingHeightM": null,
+      "ceilingMaxM": null,
+      "ceilingEstimateNote": "Высота потолков не измерена.",
+      "doubleHeight": "unknown",
+      "doubleHeightLabel": "Второй свет не подтверждён",
+      "waterView": "golf",
+      "waterViewLabel": "Полный вид на гольф-поле Els Club",
+      "pool": "private",
+      "poolLabel": "Свой бассейн",
+      "viewedDefault": false,
+      "rentDefault": false,
+      "isNew": true,
+      "addedAt": "2026-11-09",
+      "newBatch": "arthur-20261109",
+      "sourceAgentId": "arthur",
+      "offeredAt": "2026-11-09T14:55:00+04:00",
+      "furnished": "no",
+      "furnishedLabel": "Без мебели",
+      "construction": "unknown",
+      "constructionLabel": "Стройку рядом не проверяли",
+      "rank": 100,
+      "alsoListed": [
+        "https://www.propertyfinder.ae/en/plp/rent/villa-for-rent-dubai-dubai-sports-city-victory-heights-calida-151894839.html"
+      ]
+    },
+    {
+      "id": "arthur1109_whitefield_pf162320538",
+      "title": "DAMAC Hills, Whitefield · VD1 с бассейном у гольфа",
+      "area": "DAMAC Hills",
+      "agent": "Артур",
+      "agentPhone": "",
+      "price": 535000,
+      "priceLabel": "535 000 AED / год",
+      "priceNote": "Цена из объявления Property Finder на 09.11.2026.",
+      "bedrooms": 5,
+      "bathrooms": 7,
+      "plotM2": 641,
+      "buaM2": 511,
+      "ceiling": "Не измерено",
+      "status": "historical",
+      "statusLabel": "Недоступно · собственник продаёт",
+      "type": "villa",
+      "cover": "https://static.shared.propertyfinder.ae/media/images/listing/K8Q872X8ZQGF7KG59PGAGKKPC4/44b34b8a-28df-4828-b2f9-843acc3378e8/1312x894.jpg?v=45d68114d39d3f3c2d9b675a7b75ee90",
+      "images": [
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/K8Q872X8ZQGF7KG59PGAGKKPC4/44b34b8a-28df-4828-b2f9-843acc3378e8/1312x894.jpg?v=45d68114d39d3f3c2d9b675a7b75ee90",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/K8Q872X8ZQGF7KG59PGAGKKPC4/44b34b8a-28df-4828-b2f9-843acc3378e8/668x452.jpg?v=45d68114d39d3f3c2d9b675a7b75ee90",
+          "caption": "Фото объявления Property Finder №1"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/K8Q872X8ZQGF7KG59PGAGKKPC4/6b2465fe-8b89-40d0-aac7-6a28a22fca05/1312x894.jpg?v=d38cd53608de878606c44b29059e97c7",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/K8Q872X8ZQGF7KG59PGAGKKPC4/6b2465fe-8b89-40d0-aac7-6a28a22fca05/668x452.jpg?v=d38cd53608de878606c44b29059e97c7",
+          "caption": "Фото объявления Property Finder №2"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/K8Q872X8ZQGF7KG59PGAGKKPC4/d771f8d4-8497-4e66-a590-4b87f9bf5a52/1312x894.jpg?v=a63600200917246a98b9cb019c1e144f",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/K8Q872X8ZQGF7KG59PGAGKKPC4/d771f8d4-8497-4e66-a590-4b87f9bf5a52/668x452.jpg?v=a63600200917246a98b9cb019c1e144f",
+          "caption": "Фото объявления Property Finder №3"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/K8Q872X8ZQGF7KG59PGAGKKPC4/7535cd6a-30d4-48b9-b92c-193bee43f95d/1312x894.jpg?v=9947dbb0749dbac8d63603f9805d8073",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/K8Q872X8ZQGF7KG59PGAGKKPC4/7535cd6a-30d4-48b9-b92c-193bee43f95d/668x452.jpg?v=9947dbb0749dbac8d63603f9805d8073",
+          "caption": "Фото объявления Property Finder №4"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/K8Q872X8ZQGF7KG59PGAGKKPC4/a516a724-5a3a-4e9b-a39e-8dcaf7e6fd79/1312x894.jpg?v=cd06dfe88a6cc265d9d5959d2c034d3e",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/K8Q872X8ZQGF7KG59PGAGKKPC4/a516a724-5a3a-4e9b-a39e-8dcaf7e6fd79/668x452.jpg?v=cd06dfe88a6cc265d9d5959d2c034d3e",
+          "caption": "Фото объявления Property Finder №5"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/K8Q872X8ZQGF7KG59PGAGKKPC4/eb01f66a-8725-46a7-b2f9-8e55f5a98524/1312x894.jpg?v=539a2a01998b3e7a83a56575e3478b21",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/K8Q872X8ZQGF7KG59PGAGKKPC4/eb01f66a-8725-46a7-b2f9-8e55f5a98524/668x452.jpg?v=539a2a01998b3e7a83a56575e3478b21",
+          "caption": "Фото объявления Property Finder №6"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/K8Q872X8ZQGF7KG59PGAGKKPC4/0f3b6e30-1fdd-4997-bcd0-83949c3e15ac/1312x894.jpg?v=76aa9e7df9db3a6000f8ea2a95591532",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/K8Q872X8ZQGF7KG59PGAGKKPC4/0f3b6e30-1fdd-4997-bcd0-83949c3e15ac/668x452.jpg?v=76aa9e7df9db3a6000f8ea2a95591532",
+          "caption": "Фото объявления Property Finder №7"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/K8Q872X8ZQGF7KG59PGAGKKPC4/3cefceca-a2d1-4fd8-91cc-7a436525f5ef/1312x894.jpg?v=979aff8a74f95768bc1c27ee6c513a54",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/K8Q872X8ZQGF7KG59PGAGKKPC4/3cefceca-a2d1-4fd8-91cc-7a436525f5ef/668x452.jpg?v=979aff8a74f95768bc1c27ee6c513a54",
+          "caption": "Фото объявления Property Finder №8"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/K8Q872X8ZQGF7KG59PGAGKKPC4/cd9e34be-3d40-41f3-807d-9e2abd7e8fdb/1312x894.jpg?v=bd9c12dbdf4eb071d1945f42285895a7",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/K8Q872X8ZQGF7KG59PGAGKKPC4/cd9e34be-3d40-41f3-807d-9e2abd7e8fdb/668x452.jpg?v=bd9c12dbdf4eb071d1945f42285895a7",
+          "caption": "Фото объявления Property Finder №9"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/K8Q872X8ZQGF7KG59PGAGKKPC4/bedfa44c-209b-4814-845f-bbfd3d4938cb/1312x894.jpg?v=1508465d30b4f964decc2d1c02473840",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/K8Q872X8ZQGF7KG59PGAGKKPC4/bedfa44c-209b-4814-845f-bbfd3d4938cb/668x452.jpg?v=1508465d30b4f964decc2d1c02473840",
+          "caption": "Фото объявления Property Finder №10"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/K8Q872X8ZQGF7KG59PGAGKKPC4/3865bb8f-db53-41f2-a840-83fb26f16bd7/1312x894.jpg?v=dcf6d4219eaa6a0a28ff73c55d2a5814",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/K8Q872X8ZQGF7KG59PGAGKKPC4/3865bb8f-db53-41f2-a840-83fb26f16bd7/668x452.jpg?v=dcf6d4219eaa6a0a28ff73c55d2a5814",
+          "caption": "Фото объявления Property Finder №11"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/K8Q872X8ZQGF7KG59PGAGKKPC4/10a6d3bd-e02e-434e-968a-753b7047a4d1/1312x894.jpg?v=42773f5edb7d472f5d26560207c572e8",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/K8Q872X8ZQGF7KG59PGAGKKPC4/10a6d3bd-e02e-434e-968a-753b7047a4d1/668x452.jpg?v=42773f5edb7d472f5d26560207c572e8",
+          "caption": "Фото объявления Property Finder №12"
+        }
+      ],
+      "videos": [],
+      "description": "Whitefield, тип VD1 (самый большой): 5 спален, 7 санузлов, прислуга и водитель, свой бассейн, вид на гольф. Объявление NOOSA, 535 000 AED, с мебелью.",
+      "facts": [
+        "Артур 10:48: «По этой собственник больше не хочет сдавать, хочет продать. Отбой по ней тоже».",
+        "Объявление PF 162320538 (NOOSA, NOS-R-1144) пока висит: 535 000 AED, с мебелью.",
+        "Объявление Property Finder 162320538 (NOOSA REAL ESTATE L.L.C, Josh Menzies), ref NOS-R-1144."
+      ],
+      "caveats": [
+        "Недоступно: собственник продаёт, в аренду не сдаёт (по словам Артура)."
+      ],
+      "listingUrl": "https://www.propertyfinder.ae/en/plp/rent/villa-for-rent-dubai-damac-hills-whitefield-162320538.html",
+      "mapUrl": "https://maps.google.com/maps?q=25.026957,55.248962",
+      "mapPrecision": "area",
+      "locationLabel": "DAMAC Hills · точка района, номер дома не получен",
+      "missing": [
+        "Номер виллы и точка дома",
+        "Свежая доступность и окончательная цена"
+      ],
+      "requestState": "",
+      "ref": "NOS-R-1144",
+      "possibleDuplicateIds": [],
+      "sourceNote": "Предложение Артура: WhatsApp «Вячеслав и Инна: недвижимость с Артуром», 09.11.2026. Объявление найдено на Property Finder.",
+      "documents": [],
+      "detailPage": "properties/arthur1109_whitefield_pf162320538.html",
+      "projectType": "DAMAC Hills, Whitefield",
+      "ceilingHeightM": null,
+      "ceilingMaxM": null,
+      "ceilingEstimateNote": "Высота потолков не измерена.",
+      "doubleHeight": "unknown",
+      "doubleHeightLabel": "Второй свет не подтверждён",
+      "waterView": "golf",
+      "waterViewLabel": "Гольф-поле за садом",
+      "pool": "private",
+      "poolLabel": "Свой бассейн",
+      "viewedDefault": false,
+      "rentDefault": false,
+      "isNew": true,
+      "addedAt": "2026-11-09",
+      "newBatch": "arthur-20261109",
+      "sourceAgentId": "arthur",
+      "offeredAt": "2026-11-09T10:03:00+04:00",
+      "furnished": "yes",
+      "furnishedLabel": "С мебелью",
+      "construction": "unknown",
+      "constructionLabel": "Стройку рядом не проверяли",
+      "rank": 101,
+      "alsoListed": []
+    },
+    {
+      "id": "arthur1109_whitefield_bayut16291038",
+      "title": "DAMAC Hills, Whitefield · VD1, первая линия гольфа",
+      "area": "DAMAC Hills",
+      "agent": "Артур",
+      "agentPhone": "",
+      "price": 475000,
+      "priceLabel": "475 000 AED / год",
+      "priceNote": "Цена Артура в чате 09.11.2026.",
+      "bedrooms": 5,
+      "bathrooms": null,
+      "plotM2": null,
+      "buaM2": 511,
+      "ceiling": "Не измерено",
+      "status": "historical",
+      "statusLabel": "Недоступно · уже сдана",
+      "type": "villa",
+      "cover": "",
+      "images": [],
+      "videos": [],
+      "description": "Whitefield VD1, первая линия, полный вид на гольф: 5 спален, 6 санузлов, 5 498 sqft. Объявление Bayut 16291038 (Barnes International), 475 000 AED.",
+      "facts": [
+        "Артур 10:01: «Этот юнит арендован, собственник подтвердил этот факт. Не сдаётся»."
+      ],
+      "caveats": [
+        "Недоступно: уже сдана.",
+        "Фото не собраны: Bayut не отдаёт страницу на сервер."
+      ],
+      "listingUrl": "https://www.bayut.com/property/details-16291038.html",
+      "mapUrl": "https://maps.google.com/maps?q=25.026957,55.248962",
+      "mapPrecision": "area",
+      "locationLabel": "DAMAC Hills · точка района, номер дома не получен",
+      "missing": [
+        "Номер виллы и точка дома",
+        "Свежая доступность и окончательная цена"
+      ],
+      "requestState": "",
+      "ref": "",
+      "possibleDuplicateIds": [],
+      "sourceNote": "Предложение Артура: WhatsApp «Вячеслав и Инна: недвижимость с Артуром», 09.11.2026.",
+      "documents": [],
+      "detailPage": "properties/arthur1109_whitefield_bayut16291038.html",
+      "projectType": "DAMAC Hills, Whitefield",
+      "ceilingHeightM": null,
+      "ceilingMaxM": null,
+      "ceilingEstimateNote": "Высота потолков не измерена.",
+      "doubleHeight": "unknown",
+      "doubleHeightLabel": "Второй свет не подтверждён",
+      "waterView": "golf",
+      "waterViewLabel": "Full Golf View, single row",
+      "pool": "unknown",
+      "poolLabel": "Свой бассейн не подтверждён",
+      "viewedDefault": false,
+      "rentDefault": false,
+      "isNew": true,
+      "addedAt": "2026-11-09",
+      "newBatch": "arthur-20261109",
+      "sourceAgentId": "arthur",
+      "offeredAt": "2026-11-09T10:01:00+04:00",
+      "furnished": "unknown",
+      "furnishedLabel": "не указано",
+      "construction": "unknown",
+      "constructionLabel": "Стройку рядом не проверяли",
+      "rank": 102,
+      "alsoListed": []
+    },
+    {
+      "id": "arthur1109_queens_meadow",
+      "title": "DAMAC Hills, Queens Meadow · вилла из брошюры, 800k",
+      "area": "DAMAC Hills",
+      "agent": "Артур",
+      "agentPhone": "",
+      "price": 800000,
+      "priceLabel": "800 000 AED / год",
+      "priceNote": "Цена Артура в чате 09.11.2026.",
+      "bedrooms": 5,
+      "bathrooms": null,
+      "plotM2": null,
+      "buaM2": null,
+      "ceiling": "Не измерено",
+      "status": "review",
+      "statusLabel": "На рассмотрении",
+      "type": "villa",
+      "cover": "",
+      "images": [],
+      "videos": [],
+      "description": "Отдельная вилла в Queens Meadow (DAMAC Hills). Артур прислал PDF-брошюру «Queens Meadow Villa Brochure» на 10 страниц. Агент Дэниз уговаривает собственника сдать в аренду; смотреть можно в любое время. Цена — 800 000 AED.",
+      "facts": [
+        "Артур 17:56: «Дэниз сейчас обрабатывает собственника этой виллы, чтобы сдал в аренду»; 20:55: «Эту можно смотреть, когда захотим»; 21:11: «800к».",
+        "Инна 18:04: «У него там в окнах стена в зелени, то есть вида нифига нет»."
+      ],
+      "caveats": [
+        "В аренду официально ещё не выставлена — собственника уговаривают.",
+        "Вида на гольф нет.",
+        "Брошюра только в WhatsApp; публичного объявления нет."
+      ],
+      "listingUrl": "",
+      "mapUrl": "https://maps.google.com/maps?q=25.032702,55.260033",
+      "mapPrecision": "area",
+      "locationLabel": "DAMAC Hills · точка района, номер дома не получен",
+      "missing": [
+        "Номер виллы и точка дома",
+        "Свежая доступность и окончательная цена"
+      ],
+      "requestState": "",
+      "ref": "",
+      "possibleDuplicateIds": [],
+      "sourceNote": "Предложение Артура: WhatsApp «Вячеслав и Инна: недвижимость с Артуром», 09.11.2026.",
+      "documents": [],
+      "detailPage": "properties/arthur1109_queens_meadow.html",
+      "projectType": "DAMAC Hills, Queens Meadow",
+      "ceilingHeightM": null,
+      "ceilingMaxM": null,
+      "ceilingEstimateNote": "Высота потолков не измерена.",
+      "doubleHeight": "unknown",
+      "doubleHeightLabel": "Второй свет не подтверждён",
+      "waterView": "no",
+      "waterViewLabel": "Вида на поле нет: в окнах стена зелени (Инна)",
+      "pool": "unknown",
+      "poolLabel": "Свой бассейн не подтверждён",
+      "viewedDefault": false,
+      "rentDefault": false,
+      "isNew": true,
+      "addedAt": "2026-11-09",
+      "newBatch": "arthur-20261109",
+      "sourceAgentId": "arthur",
+      "offeredAt": "2026-11-09T17:56:00+04:00",
+      "furnished": "unknown",
+      "furnishedLabel": "не указано",
+      "construction": "unknown",
+      "constructionLabel": "Стройку рядом не проверяли",
+      "rank": 103,
+      "alsoListed": []
+    },
+    {
+      "id": "arthur1109_veneto_corner",
+      "title": "DAMAC Hills, Veneto · угловая, панорама гольфа",
+      "area": "DAMAC Hills",
+      "agent": "Артур",
+      "agentPhone": "",
+      "price": 1000000,
+      "priceLabel": "1 000 000 AED / год",
+      "priceNote": "Цена из объявления Property Finder на 09.11.2026.",
+      "bedrooms": 5,
+      "bathrooms": 6,
+      "plotM2": 668,
+      "buaM2": null,
+      "ceiling": "Не измерено",
+      "status": "review",
+      "statusLabel": "На рассмотрении",
+      "type": "villa",
+      "cover": "https://static.shared.propertyfinder.ae/media/images/listing/4RB8GJEWM4F8TDGTEHZG2FPCBM/cb7a2fc6-c17d-45da-8711-c7d2a80e577f/1312x894.jpg?v=b9b80e7de2111da24f4e48dd6d5e0782",
+      "images": [
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/4RB8GJEWM4F8TDGTEHZG2FPCBM/cb7a2fc6-c17d-45da-8711-c7d2a80e577f/1312x894.jpg?v=b9b80e7de2111da24f4e48dd6d5e0782",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/4RB8GJEWM4F8TDGTEHZG2FPCBM/cb7a2fc6-c17d-45da-8711-c7d2a80e577f/668x452.jpg?v=b9b80e7de2111da24f4e48dd6d5e0782",
+          "caption": "Фото объявления Property Finder №1"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/4RB8GJEWM4F8TDGTEHZG2FPCBM/a8ecfe43-0b8f-43ab-9755-e1661f1e4090/1312x894.jpg?v=17c040cb2bae5bc824e9189cabfc1852",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/4RB8GJEWM4F8TDGTEHZG2FPCBM/a8ecfe43-0b8f-43ab-9755-e1661f1e4090/668x452.jpg?v=17c040cb2bae5bc824e9189cabfc1852",
+          "caption": "Фото объявления Property Finder №2"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/4RB8GJEWM4F8TDGTEHZG2FPCBM/e69edfbe-5f86-4d96-a885-cc339089a840/1312x894.jpg?v=d92d1ea6b9774416a11ef5de0ebbc710",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/4RB8GJEWM4F8TDGTEHZG2FPCBM/e69edfbe-5f86-4d96-a885-cc339089a840/668x452.jpg?v=d92d1ea6b9774416a11ef5de0ebbc710",
+          "caption": "Фото объявления Property Finder №3"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/4RB8GJEWM4F8TDGTEHZG2FPCBM/a9323349-5640-4fca-93fa-00f9787fa942/1312x894.jpg?v=28b44b70721030f70cb173f66b51db57",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/4RB8GJEWM4F8TDGTEHZG2FPCBM/a9323349-5640-4fca-93fa-00f9787fa942/668x452.jpg?v=28b44b70721030f70cb173f66b51db57",
+          "caption": "Фото объявления Property Finder №4"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/4RB8GJEWM4F8TDGTEHZG2FPCBM/39d6b479-b82f-46d8-9fb0-1443e8d998d8/1312x894.jpg?v=feccd09971720db9b47f9d4af3ac274d",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/4RB8GJEWM4F8TDGTEHZG2FPCBM/39d6b479-b82f-46d8-9fb0-1443e8d998d8/668x452.jpg?v=feccd09971720db9b47f9d4af3ac274d",
+          "caption": "Фото объявления Property Finder №5"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/4RB8GJEWM4F8TDGTEHZG2FPCBM/03fc5021-b44c-4049-8fa1-0350a6ee0c3b/1312x894.jpg?v=4f8535dee8010bbf878bfd2378115060",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/4RB8GJEWM4F8TDGTEHZG2FPCBM/03fc5021-b44c-4049-8fa1-0350a6ee0c3b/668x452.jpg?v=4f8535dee8010bbf878bfd2378115060",
+          "caption": "Фото объявления Property Finder №6"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/4RB8GJEWM4F8TDGTEHZG2FPCBM/9a491c16-70da-4a14-bc92-1a2017c3ac32/1312x894.jpg?v=e3d1582506e0d415ed28c6727a7147e1",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/4RB8GJEWM4F8TDGTEHZG2FPCBM/9a491c16-70da-4a14-bc92-1a2017c3ac32/668x452.jpg?v=e3d1582506e0d415ed28c6727a7147e1",
+          "caption": "Фото объявления Property Finder №7"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/4RB8GJEWM4F8TDGTEHZG2FPCBM/9baf0a43-4d69-40f7-9770-ad5224de92c8/1312x894.jpg?v=8580a76580b2924eea255a84f0b88f54",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/4RB8GJEWM4F8TDGTEHZG2FPCBM/9baf0a43-4d69-40f7-9770-ad5224de92c8/668x452.jpg?v=8580a76580b2924eea255a84f0b88f54",
+          "caption": "Фото объявления Property Finder №8"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/4RB8GJEWM4F8TDGTEHZG2FPCBM/73b21986-4585-4230-8f4d-8fe35d34d7de/1312x894.jpg?v=39fbddee0387806a1c0868f6cfcf0955",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/4RB8GJEWM4F8TDGTEHZG2FPCBM/73b21986-4585-4230-8f4d-8fe35d34d7de/668x452.jpg?v=39fbddee0387806a1c0868f6cfcf0955",
+          "caption": "Фото объявления Property Finder №9"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/4RB8GJEWM4F8TDGTEHZG2FPCBM/c855b331-9cca-477b-9520-c0b54efea7ea/1312x894.jpg?v=eabe56d2925023fc06374c01d0764c18",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/4RB8GJEWM4F8TDGTEHZG2FPCBM/c855b331-9cca-477b-9520-c0b54efea7ea/668x452.jpg?v=eabe56d2925023fc06374c01d0764c18",
+          "caption": "Фото объявления Property Finder №10"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/4RB8GJEWM4F8TDGTEHZG2FPCBM/ff21e22e-c6ba-4235-8df0-d2a9bf9bb9ad/1312x894.jpg?v=6b622d3a6d8dfda2a6060ffa5839c6ce",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/4RB8GJEWM4F8TDGTEHZG2FPCBM/ff21e22e-c6ba-4235-8df0-d2a9bf9bb9ad/668x452.jpg?v=6b622d3a6d8dfda2a6060ffa5839c6ce",
+          "caption": "Фото объявления Property Finder №11"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/4RB8GJEWM4F8TDGTEHZG2FPCBM/17a9e538-89ad-4ac8-822f-3b6f2811926b/1312x894.jpg?v=bab1c03bd98c85f67723a1edf788f928",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/4RB8GJEWM4F8TDGTEHZG2FPCBM/17a9e538-89ad-4ac8-822f-3b6f2811926b/668x452.jpg?v=bab1c03bd98c85f67723a1edf788f928",
+          "caption": "Фото объявления Property Finder №12"
+        }
+      ],
+      "videos": [],
+      "description": "Veneto в DAMAC Hills: отдельная угловая вилла, 5 спален, с мебелью, панорамный вид на гольф. Объявление The Boros Collection (Adriano), эксклюзив, 1 000 000 AED. Артур уточняет ключи: у агентства единственный представитель собственника.",
+      "facts": [
+        "Объявление PF 167875436 (The Boros Collection, Boros-R-1275): 1 000 000 AED, с мебелью, участок 7 186 sqft.",
+        "Вячеслав: «Это Veneto, отбой, там потолки супернизкие, мы сегодня такую смотрели». Артур: «Не факт, это другая планировка».",
+        "Объявление Property Finder 167875436 (The Boros Collection, Adriano Borges), ref Boros-R-1275."
+      ],
+      "caveats": [
+        "Потолки в Veneto низкие (по осмотру 09.11); у этой планировки не проверены.",
+        "Цена Артура не названа, в объявлении 1 000 000."
+      ],
+      "listingUrl": "https://www.propertyfinder.ae/en/plp/rent/villa-for-rent-dubai-damac-hills-veneto-at-damac-hills-167875436.html",
+      "mapUrl": "https://maps.google.com/maps?q=25.028666,55.258472",
+      "mapPrecision": "area",
+      "locationLabel": "DAMAC Hills · точка района, номер дома не получен",
+      "missing": [
+        "Номер виллы и точка дома",
+        "Свежая доступность и окончательная цена"
+      ],
+      "requestState": "",
+      "ref": "Boros-R-1275",
+      "possibleDuplicateIds": [],
+      "sourceNote": "Предложение Артура: WhatsApp «Вячеслав и Инна: недвижимость с Артуром», 09.11.2026. Объявление найдено на Property Finder.",
+      "documents": [],
+      "detailPage": "properties/arthur1109_veneto_corner.html",
+      "projectType": "DAMAC Hills, Veneto",
+      "ceilingHeightM": null,
+      "ceilingMaxM": null,
+      "ceilingEstimateNote": "Высота потолков не измерена.",
+      "doubleHeight": "unknown",
+      "doubleHeightLabel": "Второй свет не подтверждён",
+      "waterView": "golf",
+      "waterViewLabel": "Панорамный вид на гольф-поле (угловой участок)",
+      "pool": "unknown",
+      "poolLabel": "Свой бассейн не подтверждён",
+      "viewedDefault": false,
+      "rentDefault": false,
+      "isNew": true,
+      "addedAt": "2026-11-09",
+      "newBatch": "arthur-20261109",
+      "sourceAgentId": "arthur",
+      "offeredAt": "2026-11-09T20:55:00+04:00",
+      "furnished": "yes",
+      "furnishedLabel": "С мебелью",
+      "construction": "unknown",
+      "constructionLabel": "Стройку рядом не проверяли",
+      "rank": 104,
+      "alsoListed": []
+    },
+    {
+      "id": "arthur1109_jge_900k",
+      "title": "Jumeirah Golf Estates · вариант Артура за 900k",
+      "area": "Jumeirah Golf Estates",
+      "agent": "Артур",
+      "agentPhone": "",
+      "price": 900000,
+      "priceLabel": "900 000 AED / год",
+      "priceNote": "Цена Артура в чате 09.11.2026.",
+      "bedrooms": 5,
+      "bathrooms": null,
+      "plotM2": null,
+      "buaM2": null,
+      "ceiling": "Не измерено",
+      "status": "review",
+      "statusLabel": "На рассмотрении · ждём ссылку",
+      "type": "villa",
+      "cover": "",
+      "images": [],
+      "videos": [],
+      "description": "Артур прислал только фото и спросил «А эта как тебе?» — 900 000 AED, Jumeirah Golf Estates. Ссылки и подробностей нет; видео обещал завтра.",
+      "facts": [
+        "Артур 15:13: фото, «А эта как тебе?»; 15:14: «900к»; 15:16: «всё, что сейчас прислал — это гольф эстейт».",
+        "Вячеслав: «Ничего не понятно по ней», попросил видео."
+      ],
+      "caveats": [
+        "Объявление не найдено: в чате только фото без ссылки."
+      ],
+      "listingUrl": "",
+      "mapUrl": "https://maps.google.com/maps?q=25.022000,55.205000",
+      "mapPrecision": "area",
+      "locationLabel": "Jumeirah Golf Estates · точка района, номер дома не получен",
+      "missing": [
+        "Номер виллы и точка дома",
+        "Свежая доступность и окончательная цена"
+      ],
+      "requestState": "",
+      "ref": "",
+      "possibleDuplicateIds": [],
+      "sourceNote": "Предложение Артура: WhatsApp «Вячеслав и Инна: недвижимость с Артуром», 09.11.2026.",
+      "documents": [],
+      "detailPage": "properties/arthur1109_jge_900k.html",
+      "projectType": "Jumeirah Golf Estates",
+      "ceilingHeightM": null,
+      "ceilingMaxM": null,
+      "ceilingEstimateNote": "Высота потолков не измерена.",
+      "doubleHeight": "unknown",
+      "doubleHeightLabel": "Второй свет не подтверждён",
+      "waterView": "golf",
+      "waterViewLabel": "Гольф (по словам Артура, район JGE)",
+      "pool": "unknown",
+      "poolLabel": "Свой бассейн не подтверждён",
+      "viewedDefault": false,
+      "rentDefault": false,
+      "isNew": true,
+      "addedAt": "2026-11-09",
+      "newBatch": "arthur-20261109",
+      "sourceAgentId": "arthur",
+      "offeredAt": "2026-11-09T15:13:00+04:00",
+      "furnished": "unknown",
+      "furnishedLabel": "не указано",
+      "construction": "unknown",
+      "constructionLabel": "Стройку рядом не проверяли",
+      "rank": 105,
+      "alsoListed": []
+    },
+    {
+      "id": "arthur1109_silver_springs_161",
+      "title": "DAMAC Hills, Silver Springs 161 · обсуждаем заезд",
+      "area": "DAMAC Hills",
+      "agent": "Артур",
+      "agentPhone": "",
+      "price": 480000,
+      "priceLabel": "480 000 AED / год",
+      "priceNote": "Цена из объявления Property Finder на 09.11.2026.",
+      "bedrooms": 5,
+      "bathrooms": 6,
+      "plotM2": 680,
+      "buaM2": 511,
+      "ceiling": "Не измерено",
+      "status": "selected",
+      "statusLabel": "Выбрано · встреча с собственником",
+      "type": "villa",
+      "cover": "https://static.shared.propertyfinder.ae/media/images/listing/DZ84CSSN87VWDK309FGYSYQC8C/029c7cd7-e417-4d55-b053-adb50e16a381/1312x894.jpg?v=56d3cca4382503c58a88e6030c80b426",
+      "images": [
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/DZ84CSSN87VWDK309FGYSYQC8C/029c7cd7-e417-4d55-b053-adb50e16a381/1312x894.jpg?v=56d3cca4382503c58a88e6030c80b426",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/DZ84CSSN87VWDK309FGYSYQC8C/029c7cd7-e417-4d55-b053-adb50e16a381/668x452.jpg?v=56d3cca4382503c58a88e6030c80b426",
+          "caption": "Фото объявления Property Finder №1"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/DZ84CSSN87VWDK309FGYSYQC8C/0621ab94-3b59-46cd-93be-35ae8a18be88/1312x894.jpg?v=79f193ff2520af62f64bce72a8935f83",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/DZ84CSSN87VWDK309FGYSYQC8C/0621ab94-3b59-46cd-93be-35ae8a18be88/668x452.jpg?v=79f193ff2520af62f64bce72a8935f83",
+          "caption": "Фото объявления Property Finder №2"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/DZ84CSSN87VWDK309FGYSYQC8C/8c1f87e1-832b-4458-bcc9-60b16658fe9e/1312x894.jpg?v=83dfc5a35d6b27f7bb94fe1da3928fe3",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/DZ84CSSN87VWDK309FGYSYQC8C/8c1f87e1-832b-4458-bcc9-60b16658fe9e/668x452.jpg?v=83dfc5a35d6b27f7bb94fe1da3928fe3",
+          "caption": "Фото объявления Property Finder №3"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/DZ84CSSN87VWDK309FGYSYQC8C/4d9e42b5-ce95-4521-9711-f15f02651243/1312x894.jpg?v=1bb4ab8b8871cc5efd8b2e10e4e91be8",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/DZ84CSSN87VWDK309FGYSYQC8C/4d9e42b5-ce95-4521-9711-f15f02651243/668x452.jpg?v=1bb4ab8b8871cc5efd8b2e10e4e91be8",
+          "caption": "Фото объявления Property Finder №4"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/DZ84CSSN87VWDK309FGYSYQC8C/a1d338f9-c7e4-4930-894c-e9c439d30440/1312x894.jpg?v=f6c796e6af6982c29cb169b98d75dcc7",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/DZ84CSSN87VWDK309FGYSYQC8C/a1d338f9-c7e4-4930-894c-e9c439d30440/668x452.jpg?v=f6c796e6af6982c29cb169b98d75dcc7",
+          "caption": "Фото объявления Property Finder №5"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/DZ84CSSN87VWDK309FGYSYQC8C/9f0dd3e6-c706-4a4c-9613-dab281dadcbf/1312x894.jpg?v=3e87e72b68cc851de8c15fb60635ec80",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/DZ84CSSN87VWDK309FGYSYQC8C/9f0dd3e6-c706-4a4c-9613-dab281dadcbf/668x452.jpg?v=3e87e72b68cc851de8c15fb60635ec80",
+          "caption": "Фото объявления Property Finder №6"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/DZ84CSSN87VWDK309FGYSYQC8C/349265ed-6074-4ecd-9b88-7de0056ed283/1312x894.jpg?v=303426ad70f01de09f4d72c2af78cc69",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/DZ84CSSN87VWDK309FGYSYQC8C/349265ed-6074-4ecd-9b88-7de0056ed283/668x452.jpg?v=303426ad70f01de09f4d72c2af78cc69",
+          "caption": "Фото объявления Property Finder №7"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/DZ84CSSN87VWDK309FGYSYQC8C/3bbb1a79-99ef-4aa9-b04d-f3dfe953a847/1312x894.jpg?v=090a56946030560bacf15d241f87e758",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/DZ84CSSN87VWDK309FGYSYQC8C/3bbb1a79-99ef-4aa9-b04d-f3dfe953a847/668x452.jpg?v=090a56946030560bacf15d241f87e758",
+          "caption": "Фото объявления Property Finder №8"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/DZ84CSSN87VWDK309FGYSYQC8C/231cbfa8-fe02-4038-bd25-95254e01dbb4/1312x894.jpg?v=c98f1902671ed93836e6f73205d32b45",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/DZ84CSSN87VWDK309FGYSYQC8C/231cbfa8-fe02-4038-bd25-95254e01dbb4/668x452.jpg?v=c98f1902671ed93836e6f73205d32b45",
+          "caption": "Фото объявления Property Finder №9"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/DZ84CSSN87VWDK309FGYSYQC8C/9250d634-dc43-48ee-a4d0-bb2504339997/1312x894.jpg?v=3d338016fa05538fe9e9cb2282c094ee",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/DZ84CSSN87VWDK309FGYSYQC8C/9250d634-dc43-48ee-a4d0-bb2504339997/668x452.jpg?v=3d338016fa05538fe9e9cb2282c094ee",
+          "caption": "Фото объявления Property Finder №10"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/DZ84CSSN87VWDK309FGYSYQC8C/3d82f6a7-7f10-4d2e-a257-71342742388a/1312x894.jpg?v=2a7b74740f606c6bf237bd46b60c3950",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/DZ84CSSN87VWDK309FGYSYQC8C/3d82f6a7-7f10-4d2e-a257-71342742388a/668x452.jpg?v=2a7b74740f606c6bf237bd46b60c3950",
+          "caption": "Фото объявления Property Finder №11"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/DZ84CSSN87VWDK309FGYSYQC8C/f4b57c62-b3d3-44a6-9178-10ebe6e95558/1312x894.jpg?v=8003ba9c67af80d6e1b85f5cc623a089",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/DZ84CSSN87VWDK309FGYSYQC8C/f4b57c62-b3d3-44a6-9178-10ebe6e95558/668x452.jpg?v=8003ba9c67af80d6e1b85f5cc623a089",
+          "caption": "Фото объявления Property Finder №12"
+        }
+      ],
+      "videos": [],
+      "description": "Silver Springs, вилла 161. Рассматриваем всерьёз: заезд возможен в воскресенье–понедельник. Собственник хочет встретиться после 15:00 и обсудить сроки передачи, штрафы за задержку, озеленение и покраску, а также оплату переводом из армянского банка.",
+      "facts": [
+        "Артур 21:59: нужны два пермита (около 2 рабочих дней каждый, через кабинет DAMAC): на въезд — от нас после контракта, Ejari и DEWA; на ландшафт и покраску — от собственника.",
+        "Собственник должен подтвердить финансовую ответственность за несвоевременную передачу и сроки облагораживания.",
+        "Номер дома 161 по объявлениям не проверен. Похожие объявления Silver Springs 1, VD1, гольф и озеро, пустая: PF 168330553 (D&B, 480 000) и PF 162316355 (Huspy, 475 000). Фото и цена в карточке — из первого, это может быть другой дом.",
+        "Объявление Property Finder 168330553 (D&B Properties, Deniz Beckers), ref DB-R-67223."
+      ],
+      "caveats": [
+        "Сопоставление с объявлениями PF не доказано.",
+        "Возможно, это та же вилла, что «Silver Springs · 480 000» (arthur_silver480).",
+        "Нужны озеленение и покраска (делает собственник)."
+      ],
+      "listingUrl": "https://www.propertyfinder.ae/en/plp/rent/villa-for-rent-dubai-damac-hills-silver-springs-silver-springs-1-168330553.html",
+      "mapUrl": "https://maps.google.com/maps?q=25.030720,55.255859",
+      "mapPrecision": "area",
+      "locationLabel": "DAMAC Hills · точка района, номер дома не получен",
+      "missing": [
+        "Номер виллы и точка дома",
+        "Свежая доступность и окончательная цена"
+      ],
+      "requestState": "",
+      "ref": "DB-R-67223",
+      "possibleDuplicateIds": [
+        "arthur_silver480"
+      ],
+      "sourceNote": "Предложение Артура: WhatsApp «Вячеслав и Инна: недвижимость с Артуром», 09.11.2026. Объявление найдено на Property Finder.",
+      "documents": [],
+      "detailPage": "properties/arthur1109_silver_springs_161.html",
+      "projectType": "DAMAC Hills, Silver Springs 161",
+      "ceilingHeightM": null,
+      "ceilingMaxM": null,
+      "ceilingEstimateNote": "Высота потолков не измерена.",
+      "doubleHeight": "unknown",
+      "doubleHeightLabel": "Второй свет не подтверждён",
+      "waterView": "yes",
+      "waterViewLabel": "Гольф и озеро (по объявлениям Silver Springs VD1)",
+      "pool": "unknown",
+      "poolLabel": "Свой бассейн не подтверждён",
+      "viewedDefault": false,
+      "rentDefault": false,
+      "isNew": true,
+      "addedAt": "2026-11-09",
+      "newBatch": "arthur-20261109",
+      "sourceAgentId": "arthur",
+      "offeredAt": "2026-11-09T21:59:00+04:00",
+      "furnished": "no",
+      "furnishedLabel": "Без мебели",
+      "construction": "unknown",
+      "constructionLabel": "Стройку рядом не проверяли",
+      "rank": 106,
+      "alsoListed": [
+        "https://www.propertyfinder.ae/en/plp/rent/villa-for-rent-dubai-damac-hills-silver-springs-silver-springs-1-162316355.html"
+      ]
+    },
     {
       "id": "n1109_ji12_gardenhall",
       "title": "Jumeirah Islands, Islamic c12 · Garden Hall на озере",
@@ -121,7 +846,7 @@ window.VILLA_CATALOG = {
       "poolLabel": "Свой бассейн",
       "viewedDefault": false,
       "rentDefault": false,
-      "isNew": true,
+      "isNew": false,
       "addedAt": "2026-11-09",
       "newBatch": "pf-1m-20261109",
       "sourceAgentId": "pf-search",
@@ -254,7 +979,7 @@ window.VILLA_CATALOG = {
       "poolLabel": "Свой бассейн",
       "viewedDefault": false,
       "rentDefault": false,
-      "isNew": true,
+      "isNew": false,
       "addedAt": "2026-11-09",
       "newBatch": "pf-1m-20261109",
       "sourceAgentId": "pf-search",
@@ -383,7 +1108,7 @@ window.VILLA_CATALOG = {
       "poolLabel": "Свой бассейн",
       "viewedDefault": false,
       "rentDefault": false,
-      "isNew": true,
+      "isNew": false,
       "addedAt": "2026-11-09",
       "newBatch": "pf-1m-20261109",
       "sourceAgentId": "pf-search",
@@ -506,7 +1231,7 @@ window.VILLA_CATALOG = {
       "poolLabel": "Свой бассейн",
       "viewedDefault": false,
       "rentDefault": false,
-      "isNew": true,
+      "isNew": false,
       "addedAt": "2026-11-09",
       "newBatch": "pf-1m-20261109",
       "sourceAgentId": "pf-search",
@@ -632,7 +1357,7 @@ window.VILLA_CATALOG = {
       "poolLabel": "Свой бассейн",
       "viewedDefault": false,
       "rentDefault": false,
-      "isNew": true,
+      "isNew": false,
       "addedAt": "2026-11-09",
       "newBatch": "pf-1m-20261109",
       "sourceAgentId": "pf-search",
@@ -755,7 +1480,7 @@ window.VILLA_CATALOG = {
       "poolLabel": "Свой бассейн",
       "viewedDefault": false,
       "rentDefault": false,
-      "isNew": true,
+      "isNew": false,
       "addedAt": "2026-11-09",
       "newBatch": "pf-1m-20261109",
       "sourceAgentId": "pf-search",
@@ -884,7 +1609,7 @@ window.VILLA_CATALOG = {
       "poolLabel": "Свой бассейн не подтверждён",
       "viewedDefault": false,
       "rentDefault": false,
-      "isNew": true,
+      "isNew": false,
       "addedAt": "2026-11-09",
       "newBatch": "pf-1m-20261109",
       "sourceAgentId": "pf-search",
@@ -1009,7 +1734,7 @@ window.VILLA_CATALOG = {
       "poolLabel": "Свой бассейн",
       "viewedDefault": false,
       "rentDefault": false,
-      "isNew": true,
+      "isNew": false,
       "addedAt": "2026-11-09",
       "newBatch": "pf-1m-20261109",
       "sourceAgentId": "pf-search",
@@ -1135,7 +1860,7 @@ window.VILLA_CATALOG = {
       "poolLabel": "Свой бассейн не подтверждён",
       "viewedDefault": false,
       "rentDefault": false,
-      "isNew": true,
+      "isNew": false,
       "addedAt": "2026-11-09",
       "newBatch": "pf-1m-20261109",
       "sourceAgentId": "pf-search",
@@ -1261,7 +1986,7 @@ window.VILLA_CATALOG = {
       "poolLabel": "Свой бассейн не подтверждён",
       "viewedDefault": false,
       "rentDefault": false,
-      "isNew": true,
+      "isNew": false,
       "addedAt": "2026-11-09",
       "newBatch": "pf-1m-20261109",
       "sourceAgentId": "pf-search",
@@ -1374,7 +2099,7 @@ window.VILLA_CATALOG = {
       "poolLabel": "Свой бассейн",
       "viewedDefault": false,
       "rentDefault": false,
-      "isNew": true,
+      "isNew": false,
       "addedAt": "2026-11-09",
       "newBatch": "pf-1m-20261109",
       "sourceAgentId": "pf-search",
@@ -1491,7 +2216,7 @@ window.VILLA_CATALOG = {
       "poolLabel": "Свой бассейн",
       "viewedDefault": false,
       "rentDefault": false,
-      "isNew": true,
+      "isNew": false,
       "addedAt": "2026-11-09",
       "newBatch": "pf-1m-20261109",
       "sourceAgentId": "pf-search",
@@ -1609,7 +2334,7 @@ window.VILLA_CATALOG = {
       "poolLabel": "Свой бассейн",
       "viewedDefault": false,
       "rentDefault": false,
-      "isNew": true,
+      "isNew": false,
       "addedAt": "2026-11-09",
       "newBatch": "pf-1m-20261109",
       "sourceAgentId": "pf-search",
@@ -1726,7 +2451,7 @@ window.VILLA_CATALOG = {
       "poolLabel": "Свой бассейн",
       "viewedDefault": false,
       "rentDefault": false,
-      "isNew": true,
+      "isNew": false,
       "addedAt": "2026-11-09",
       "newBatch": "pf-1m-20261109",
       "sourceAgentId": "pf-search",
@@ -1845,7 +2570,7 @@ window.VILLA_CATALOG = {
       "poolLabel": "Свой бассейн",
       "viewedDefault": false,
       "rentDefault": false,
-      "isNew": true,
+      "isNew": false,
       "addedAt": "2026-11-09",
       "newBatch": "pf-1m-20261109",
       "sourceAgentId": "pf-search",
@@ -1963,7 +2688,7 @@ window.VILLA_CATALOG = {
       "poolLabel": "Свой бассейн",
       "viewedDefault": false,
       "rentDefault": false,
-      "isNew": true,
+      "isNew": false,
       "addedAt": "2026-11-09",
       "newBatch": "pf-1m-20261109",
       "sourceAgentId": "pf-search",
@@ -2082,7 +2807,7 @@ window.VILLA_CATALOG = {
       "poolLabel": "Свой бассейн",
       "viewedDefault": false,
       "rentDefault": false,
-      "isNew": true,
+      "isNew": false,
       "addedAt": "2026-11-09",
       "newBatch": "pf-1m-20261109",
       "sourceAgentId": "pf-search",
@@ -2191,7 +2916,7 @@ window.VILLA_CATALOG = {
       "poolLabel": "Свой бассейн не подтверждён",
       "viewedDefault": false,
       "rentDefault": false,
-      "isNew": true,
+      "isNew": false,
       "addedAt": "2026-11-09",
       "newBatch": "pf-1m-20261109",
       "sourceAgentId": "pf-search",
@@ -2309,7 +3034,7 @@ window.VILLA_CATALOG = {
       "poolLabel": "Свой бассейн не подтверждён",
       "viewedDefault": false,
       "rentDefault": false,
-      "isNew": true,
+      "isNew": false,
       "addedAt": "2026-11-09",
       "newBatch": "pf-1m-20261109",
       "sourceAgentId": "pf-search",
@@ -2418,7 +3143,7 @@ window.VILLA_CATALOG = {
       "poolLabel": "Свой бассейн",
       "viewedDefault": false,
       "rentDefault": false,
-      "isNew": true,
+      "isNew": false,
       "addedAt": "2026-11-09",
       "newBatch": "pf-1m-20261109",
       "sourceAgentId": "pf-search",
@@ -2523,7 +3248,7 @@ window.VILLA_CATALOG = {
       "poolLabel": "Свой бассейн не подтверждён",
       "viewedDefault": false,
       "rentDefault": false,
-      "isNew": true,
+      "isNew": false,
       "addedAt": "2026-11-09",
       "newBatch": "pf-1m-20261109",
       "sourceAgentId": "pf-search",
@@ -2642,7 +3367,7 @@ window.VILLA_CATALOG = {
       "poolLabel": "Свой бассейн",
       "viewedDefault": false,
       "rentDefault": false,
-      "isNew": true,
+      "isNew": false,
       "addedAt": "2026-11-09",
       "newBatch": "pf-1m-20261109",
       "sourceAgentId": "pf-search",
@@ -2752,7 +3477,7 @@ window.VILLA_CATALOG = {
       "poolLabel": "Свой бассейн",
       "viewedDefault": false,
       "rentDefault": false,
-      "isNew": true,
+      "isNew": false,
       "addedAt": "2026-11-09",
       "newBatch": "pf-1m-20261109",
       "sourceAgentId": "pf-search",
@@ -2764,6 +3489,589 @@ window.VILLA_CATALOG = {
       "constructionLabel": "Стройку рядом не проверяли",
       "rank": 23,
       "alsoListed": []
+    },
+    {
+      "id": "n1109_meadows7_hattan_lake",
+      "title": "Meadows 7, Hattan E2 · полный ремонт, озеро с фонтаном",
+      "area": "Meadows",
+      "agent": "Allsopp & Allsopp · Glenn Curtis",
+      "agentPhone": "",
+      "price": 1200000,
+      "priceLabel": "1 200 000 AED / год",
+      "priceNote": "Цена объявления Property Finder на 09.11.2026; чеков: 1.",
+      "bedrooms": 4,
+      "bathrooms": 5,
+      "plotM2": 668,
+      "buaM2": null,
+      "ceiling": "",
+      "status": "review",
+      "statusLabel": "На рассмотрении",
+      "type": "villa",
+      "cover": "https://static.shared.propertyfinder.ae/media/images/listing/AEBTQY76X4MFTKD02VRBM3PCE8/8e122146-e242-4460-842f-d81610312bac/1312x894.jpg?v=cfe55371c28186f72591845fda7b1d7b",
+      "images": [
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/AEBTQY76X4MFTKD02VRBM3PCE8/8e122146-e242-4460-842f-d81610312bac/1312x894.jpg?v=cfe55371c28186f72591845fda7b1d7b",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/AEBTQY76X4MFTKD02VRBM3PCE8/8e122146-e242-4460-842f-d81610312bac/668x452.jpg?v=cfe55371c28186f72591845fda7b1d7b",
+          "caption": "Бассейн, за садом озеро с фонтаном · фото объявления №2"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/AEBTQY76X4MFTKD02VRBM3PCE8/72fd50e0-54df-4f1f-bec4-1f475e97e44f/1312x894.jpg?v=e4dfca6fd406846f940b5f76f239ae5f",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/AEBTQY76X4MFTKD02VRBM3PCE8/72fd50e0-54df-4f1f-bec4-1f475e97e44f/668x452.jpg?v=e4dfca6fd406846f940b5f76f239ae5f",
+          "caption": "Бассейн и сад · фото объявления №1"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/AEBTQY76X4MFTKD02VRBM3PCE8/e5a77202-b800-427a-9ff9-2d8ab663faf7/1312x894.jpg?v=4219be2644ef2c0ebe2b0574a429b60b",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/AEBTQY76X4MFTKD02VRBM3PCE8/e5a77202-b800-427a-9ff9-2d8ab663faf7/668x452.jpg?v=4219be2644ef2c0ebe2b0574a429b60b",
+          "caption": "Кухня · фото объявления №3"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/AEBTQY76X4MFTKD02VRBM3PCE8/953a2df0-24ed-46d7-8af3-7db21389cb73/1312x894.jpg?v=1b4e198fb8e894f8c698e669563d6e2d",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/AEBTQY76X4MFTKD02VRBM3PCE8/953a2df0-24ed-46d7-8af3-7db21389cb73/668x452.jpg?v=1b4e198fb8e894f8c698e669563d6e2d",
+          "caption": "Лестница · фото объявления №9"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/AEBTQY76X4MFTKD02VRBM3PCE8/73d83866-03a5-452b-ac94-d5f1e2d2da71/1312x894.jpg?v=f206288288c24eca6c03ac7783ba1f1d",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/AEBTQY76X4MFTKD02VRBM3PCE8/73d83866-03a5-452b-ac94-d5f1e2d2da71/668x452.jpg?v=f206288288c24eca6c03ac7783ba1f1d",
+          "caption": "Гостиная · фото объявления №14"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/AEBTQY76X4MFTKD02VRBM3PCE8/d01b7f40-3a88-4981-b2b2-83d780d7767a/1312x894.jpg?v=14eae26b5dbceddbd3b5aca38891eb0f",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/AEBTQY76X4MFTKD02VRBM3PCE8/d01b7f40-3a88-4981-b2b2-83d780d7767a/668x452.jpg?v=14eae26b5dbceddbd3b5aca38891eb0f",
+          "caption": "Гостиная · фото объявления №15"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/AEBTQY76X4MFTKD02VRBM3PCE8/56aba00a-c2f9-47e4-821b-9e8138cb326a/1312x894.jpg?v=ebb11e59f540f42b4ce6cd87987d95e9",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/AEBTQY76X4MFTKD02VRBM3PCE8/56aba00a-c2f9-47e4-821b-9e8138cb326a/668x452.jpg?v=ebb11e59f540f42b4ce6cd87987d95e9",
+          "caption": "Холл · фото объявления №5"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/AEBTQY76X4MFTKD02VRBM3PCE8/d2f0b2c7-e355-4b9f-802f-3c9e6d5b6916/1312x894.jpg?v=a2922bee5b671e17473c7e29f53fa4d7",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/AEBTQY76X4MFTKD02VRBM3PCE8/d2f0b2c7-e355-4b9f-802f-3c9e6d5b6916/668x452.jpg?v=a2922bee5b671e17473c7e29f53fa4d7",
+          "caption": "Ванная · фото объявления №12"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/AEBTQY76X4MFTKD02VRBM3PCE8/c82eef95-6c77-455a-97af-560b38b36a89/1312x894.jpg?v=8f327f39c34c23a519d803b99668c51e",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/AEBTQY76X4MFTKD02VRBM3PCE8/c82eef95-6c77-455a-97af-560b38b36a89/668x452.jpg?v=8f327f39c34c23a519d803b99668c51e",
+          "caption": "Ванная · фото объявления №18"
+        }
+      ],
+      "videos": [],
+      "description": "Hattan E2 в Meadows 7 после полного ремонта в белом современном стиле: новая кухня Siemens, санузлы, новый сад с бассейном. Сад выходит прямо на центральное озеро с фонтаном. 4 спальни, участок ≈668 м².",
+      "facts": [
+        "Вид: Центральное озеро с фонтаном прямо за садом.",
+        "Потолки (оценка по фото): комнаты ≈3,0 м, гостиная ≈3.1 м; Двусвет только у входа/лестницы ~5,8–6,5 м.",
+        "Стиль: Фасад прежний, внутри современный ремонт.",
+        "Мебель: Без мебели.",
+        "Стройка рядом: Стройку рядом не проверяли.",
+        "Объявление Property Finder 162795028 (Allsopp & Allsopp, Glenn Curtis) с 2026-10-22; свободна с 2026-10-22; чеков: 1."
+      ],
+      "caveats": [
+        "Потолки обычные (около 3 м), как во всех Meadows."
+      ],
+      "listingUrl": "https://www.propertyfinder.ae/en/plp/rent/villa-for-rent-dubai-meadows-meadows-7-162795028.html",
+      "mapUrl": "https://maps.google.com/maps?q=25.062918,55.177395",
+      "mapPrecision": "area",
+      "locationLabel": "Meadows 7, Meadows · точка района, номер дома не получен",
+      "missing": [
+        "Номер виллы и точка дома",
+        "Свежая доступность и окончательная цена"
+      ],
+      "requestState": "",
+      "ref": "SUP156718",
+      "possibleDuplicateIds": [],
+      "sourceNote": "Найдено 09.11.2026 в полной выгрузке Property Finder (все виллы Дубая в аренду 1–1,2 млн AED, 384 объявления); фото проверены вручную. Потолки — оценка по фото, не замер.",
+      "documents": [],
+      "detailPage": "properties/n1109_meadows7_hattan_lake.html",
+      "projectType": "Meadows 7, Hattan E2 · 4BR",
+      "ceilingHeightM": 3.05,
+      "ceilingMaxM": 6.5,
+      "ceilingEstimateNote": "Оценка по фото объявления (по фото: комнаты с кессонами около 3 м, второй свет только у лестницы (фото 9); у Meadows потолки обычные). Замеров нет. Уверенность: средняя.",
+      "doubleHeight": "foyer",
+      "doubleHeightLabel": "Двусвет только у входа/лестницы ~5,8–6,5 м",
+      "waterView": "yes",
+      "waterViewLabel": "Центральное озеро с фонтаном прямо за садом",
+      "pool": "private",
+      "poolLabel": "Свой бассейн",
+      "viewedDefault": false,
+      "rentDefault": false,
+      "isNew": false,
+      "addedAt": "2026-11-09",
+      "newBatch": "pf-1m-20261109",
+      "sourceAgentId": "pf-search",
+      "style": "renovated",
+      "styleLabel": "Фасад прежний, внутри современный ремонт",
+      "furnished": "no",
+      "furnishedLabel": "Без мебели",
+      "construction": "unknown",
+      "constructionLabel": "Стройку рядом не проверяли",
+      "rank": 24,
+      "alsoListed": []
+    },
+    {
+      "id": "n1109_meadows6_e1_new",
+      "title": "Meadows 6, Hattan E1 · перестроена заново, вид на озеро",
+      "area": "Meadows",
+      "agent": "Luxfolio Real Estate Brokers LLC · Sophie Scott",
+      "agentPhone": "",
+      "price": 1200000,
+      "priceLabel": "1 200 000 AED / год",
+      "priceNote": "Цена объявления Property Finder на 09.11.2026; чеков: 4.",
+      "bedrooms": 5,
+      "bathrooms": 7,
+      "plotM2": 841,
+      "buaM2": 489,
+      "ceiling": "",
+      "status": "review",
+      "statusLabel": "На рассмотрении",
+      "type": "villa",
+      "cover": "https://static.shared.propertyfinder.ae/media/images/listing/XAVZYPPYXYDSBCFVPM355PXSA0/5d652389-e59d-4b58-bb8a-94376a07df34/1312x894.jpg?v=e2349b7e7fa0b5a6f4e2def21cb133e2",
+      "images": [
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/XAVZYPPYXYDSBCFVPM355PXSA0/5d652389-e59d-4b58-bb8a-94376a07df34/1312x894.jpg?v=e2349b7e7fa0b5a6f4e2def21cb133e2",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/XAVZYPPYXYDSBCFVPM355PXSA0/5d652389-e59d-4b58-bb8a-94376a07df34/668x452.jpg?v=e2349b7e7fa0b5a6f4e2def21cb133e2",
+          "caption": "Сад и озеро · фото объявления №2"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/XAVZYPPYXYDSBCFVPM355PXSA0/fb28b04b-4755-4511-8104-2c11d35b17fd/1312x894.jpg?v=74f8baa05abeab08b2f2be9b0a9fca79",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/XAVZYPPYXYDSBCFVPM355PXSA0/fb28b04b-4755-4511-8104-2c11d35b17fd/668x452.jpg?v=74f8baa05abeab08b2f2be9b0a9fca79",
+          "caption": "Дом и бассейн · фото объявления №1"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/XAVZYPPYXYDSBCFVPM355PXSA0/b9622557-c634-4f04-ab72-e9af74e9845f/1312x894.jpg?v=359239383c7d48b3993d34e9a813e1ea",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/XAVZYPPYXYDSBCFVPM355PXSA0/b9622557-c634-4f04-ab72-e9af74e9845f/668x452.jpg?v=359239383c7d48b3993d34e9a813e1ea",
+          "caption": "Вид с балкона · фото объявления №20"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/XAVZYPPYXYDSBCFVPM355PXSA0/0197838f-571a-48f1-bb58-718bcb5a40b6/1312x894.jpg?v=722a78156068e52467f83da6523c264f",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/XAVZYPPYXYDSBCFVPM355PXSA0/0197838f-571a-48f1-bb58-718bcb5a40b6/668x452.jpg?v=722a78156068e52467f83da6523c264f",
+          "caption": "Гостиная с выходом к бассейну · фото объявления №7"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/XAVZYPPYXYDSBCFVPM355PXSA0/82f6c5a9-06de-4efd-acfd-5f0024d8234a/1312x894.jpg?v=d374297f32046d9d78ea5751cad776b4",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/XAVZYPPYXYDSBCFVPM355PXSA0/82f6c5a9-06de-4efd-acfd-5f0024d8234a/668x452.jpg?v=d374297f32046d9d78ea5751cad776b4",
+          "caption": "Гостиная · фото объявления №9"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/XAVZYPPYXYDSBCFVPM355PXSA0/74a8fe7b-8bb5-450e-8301-3f67d96324ed/1312x894.jpg?v=486da52de7f116702b30e8fbed3389ee",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/XAVZYPPYXYDSBCFVPM355PXSA0/74a8fe7b-8bb5-450e-8301-3f67d96324ed/668x452.jpg?v=486da52de7f116702b30e8fbed3389ee",
+          "caption": "Гостиная · фото объявления №10"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/XAVZYPPYXYDSBCFVPM355PXSA0/375078f4-dc93-40c9-a3f6-539477437f6f/1312x894.jpg?v=b39025e2d631585dd4de65ddd5921038",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/XAVZYPPYXYDSBCFVPM355PXSA0/375078f4-dc93-40c9-a3f6-539477437f6f/668x452.jpg?v=b39025e2d631585dd4de65ddd5921038",
+          "caption": "Кухня · фото объявления №4"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/XAVZYPPYXYDSBCFVPM355PXSA0/e1644d4b-f200-4b25-b015-fd602ad53f51/1312x894.jpg?v=ea8f740e27501f696269a27da35565da",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/XAVZYPPYXYDSBCFVPM355PXSA0/e1644d4b-f200-4b25-b015-fd602ad53f51/668x452.jpg?v=ea8f740e27501f696269a27da35565da",
+          "caption": "Ванная · фото объявления №13"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/XAVZYPPYXYDSBCFVPM355PXSA0/fd0cdb33-d5ad-4257-b07b-3dc5fce1573b/1312x894.jpg?v=510d1cd5a0ee43a1412355cb4751087b",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/XAVZYPPYXYDSBCFVPM355PXSA0/fd0cdb33-d5ad-4257-b07b-3dc5fce1573b/668x452.jpg?v=510d1cd5a0ee43a1412355cb4751087b",
+          "caption": "Ванная · фото объявления №18"
+        }
+      ],
+      "videos": [],
+      "description": "Hattan E1 в Meadows 6 полностью перестроена в современном стиле: открытая гостиная, окна в пол, новая кухня и санузлы, водопад в саду, бассейн. Из сада и с балкона видно озеро. 5 спален, дом ≈489 м², участок ≈841 м².",
+      "facts": [
+        "Вид: Озеро за садом, вдали башни JLT.",
+        "Потолки (оценка по фото): комнаты ≈3.1 м, гостиная ≈3.2 м; Без второго света.",
+        "Стиль: Современная архитектура.",
+        "Мебель: Без мебели.",
+        "Стройка рядом: Стройку рядом не проверяли.",
+        "Объявление Property Finder 166050114 (Luxfolio Real Estate Brokers LLC, Sophie Scott) с 2026-10-29; свободна с 2026-09-08; чеков: 4."
+      ],
+      "caveats": [
+        "Потолки обычные, второго света нет.",
+        "4 чека."
+      ],
+      "listingUrl": "https://www.propertyfinder.ae/en/plp/rent/villa-for-rent-dubai-meadows-meadows-6-166050114.html",
+      "mapUrl": "https://maps.google.com/maps?q=25.058390,55.170380",
+      "mapPrecision": "area",
+      "locationLabel": "Meadows 6, Meadows · точка района, номер дома не получен",
+      "missing": [
+        "Номер виллы и точка дома",
+        "Свежая доступность и окончательная цена"
+      ],
+      "requestState": "",
+      "ref": "LXF-R-186557",
+      "possibleDuplicateIds": [],
+      "sourceNote": "Найдено 09.11.2026 в полной выгрузке Property Finder (все виллы Дубая в аренду 1–1,2 млн AED, 384 объявления); фото проверены вручную. Потолки — оценка по фото, не замер.",
+      "documents": [],
+      "detailPage": "properties/n1109_meadows6_e1_new.html",
+      "projectType": "Meadows 6, Hattan E1 · 5BR",
+      "ceilingHeightM": 3.15,
+      "ceilingMaxM": 3.4,
+      "ceilingEstimateNote": "Оценка по фото объявления (по фото: гостиная одноэтажная, окна в пол). Замеров нет. Уверенность: средняя.",
+      "doubleHeight": "no",
+      "doubleHeightLabel": "Без второго света",
+      "waterView": "yes",
+      "waterViewLabel": "Озеро за садом, вдали башни JLT",
+      "pool": "private",
+      "poolLabel": "Свой бассейн",
+      "viewedDefault": false,
+      "rentDefault": false,
+      "isNew": false,
+      "addedAt": "2026-11-09",
+      "newBatch": "pf-1m-20261109",
+      "sourceAgentId": "pf-search",
+      "style": "modern",
+      "styleLabel": "Современная архитектура",
+      "furnished": "no",
+      "furnishedLabel": "Без мебели",
+      "construction": "unknown",
+      "constructionLabel": "Стройку рядом не проверяли",
+      "rank": 25,
+      "alsoListed": []
+    },
+    {
+      "id": "n1109_emirates_hills_lake_mansion",
+      "title": "Emirates Hills, Sector E · особняк 8 спален у озера",
+      "area": "Emirates Hills",
+      "agent": "Hamptons International - Leasing · Zaineb Benzarrougue",
+      "agentPhone": "",
+      "price": 1020000,
+      "priceLabel": "1 020 000 AED / год",
+      "priceNote": "Цена объявления Property Finder на 09.11.2026; чеков: 1.",
+      "bedrooms": 7,
+      "bathrooms": 7,
+      "plotM2": 1724,
+      "buaM2": 1486,
+      "ceiling": "",
+      "status": "review",
+      "statusLabel": "На рассмотрении",
+      "type": "villa",
+      "cover": "https://static.shared.propertyfinder.ae/media/images/listing/SNH2CANH27E4WC75MR89K0Q97G/f17600d6-4343-4364-827e-996f88b3656a/1312x894.jpg?v=9d6db976265950c5ca63972cab0c6595",
+      "images": [
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/SNH2CANH27E4WC75MR89K0Q97G/f17600d6-4343-4364-827e-996f88b3656a/1312x894.jpg?v=9d6db976265950c5ca63972cab0c6595",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/SNH2CANH27E4WC75MR89K0Q97G/f17600d6-4343-4364-827e-996f88b3656a/668x452.jpg?v=9d6db976265950c5ca63972cab0c6595",
+          "caption": "Озеро с крыши · фото объявления №18"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/SNH2CANH27E4WC75MR89K0Q97G/f2a731df-07ad-4e40-9968-ff0915ec69d1/1312x894.jpg?v=c7a2a75ea3cc949274681dd223d3542e",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/SNH2CANH27E4WC75MR89K0Q97G/f2a731df-07ad-4e40-9968-ff0915ec69d1/668x452.jpg?v=c7a2a75ea3cc949274681dd223d3542e",
+          "caption": "Терраса на крыше и озеро · фото объявления №1"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/SNH2CANH27E4WC75MR89K0Q97G/4319e837-b961-410b-a005-e4d59de5aa3d/1312x894.jpg?v=60ddef596c35916b4d13f36296916781",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/SNH2CANH27E4WC75MR89K0Q97G/4319e837-b961-410b-a005-e4d59de5aa3d/668x452.jpg?v=60ddef596c35916b4d13f36296916781",
+          "caption": "Вид на озеро · фото объявления №19"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/SNH2CANH27E4WC75MR89K0Q97G/d925f4a5-6d6a-4a04-b4c9-998bb0a5473e/1312x894.jpg?v=1a61f7aebb26ecae50bad651a4f0c4c8",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/SNH2CANH27E4WC75MR89K0Q97G/d925f4a5-6d6a-4a04-b4c9-998bb0a5473e/668x452.jpg?v=1a61f7aebb26ecae50bad651a4f0c4c8",
+          "caption": "Атриум с куполом · фото объявления №2"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/SNH2CANH27E4WC75MR89K0Q97G/7b1dcf7b-fcac-4891-98d3-d93384cfd51e/1312x894.jpg?v=47b595c609b80cf180e00f12cfd554d2",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/SNH2CANH27E4WC75MR89K0Q97G/7b1dcf7b-fcac-4891-98d3-d93384cfd51e/668x452.jpg?v=47b595c609b80cf180e00f12cfd554d2",
+          "caption": "Атриум · фото объявления №14"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/SNH2CANH27E4WC75MR89K0Q97G/51fa7a8a-30cb-4292-a507-5872252b4559/1312x894.jpg?v=6f879527f6c860378b78dd817582cc81",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/SNH2CANH27E4WC75MR89K0Q97G/51fa7a8a-30cb-4292-a507-5872252b4559/668x452.jpg?v=6f879527f6c860378b78dd817582cc81",
+          "caption": "Холл и столовая · фото объявления №3"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/SNH2CANH27E4WC75MR89K0Q97G/f2433931-dded-4d8f-a813-73b5327168e4/1312x894.jpg?v=cdd4b37d36f3c75ced9c8143af7c8eda",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/SNH2CANH27E4WC75MR89K0Q97G/f2433931-dded-4d8f-a813-73b5327168e4/668x452.jpg?v=cdd4b37d36f3c75ced9c8143af7c8eda",
+          "caption": "Дом и бассейн · фото объявления №20"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/SNH2CANH27E4WC75MR89K0Q97G/6eb723d1-76da-4976-8c6c-d300bd42c498/1312x894.jpg?v=25ab206afb21b34a29c3a03584205623",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/SNH2CANH27E4WC75MR89K0Q97G/6eb723d1-76da-4976-8c6c-d300bd42c498/668x452.jpg?v=25ab206afb21b34a29c3a03584205623",
+          "caption": "Бассейн · фото объявления №17"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/SNH2CANH27E4WC75MR89K0Q97G/92ac7c64-62cc-41dc-9bce-f1310e69d4ee/1312x894.jpg?v=8e29d80ac8a927b80b948ce3b87b9ffe",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/SNH2CANH27E4WC75MR89K0Q97G/92ac7c64-62cc-41dc-9bce-f1310e69d4ee/668x452.jpg?v=8e29d80ac8a927b80b948ce3b87b9ffe",
+          "caption": "Кухня · фото объявления №4"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/SNH2CANH27E4WC75MR89K0Q97G/06be507f-9966-4305-95fe-68410a6c77b3/1312x894.jpg?v=4b923bb2fe1ef8493c20080444352751",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/SNH2CANH27E4WC75MR89K0Q97G/06be507f-9966-4305-95fe-68410a6c77b3/668x452.jpg?v=4b923bb2fe1ef8493c20080444352751",
+          "caption": "Кинотеатр · фото объявления №13"
+        }
+      ],
+      "videos": [],
+      "description": "Особняк 8 спален в Emirates Hills: дом ≈1 486 м² на участке ≈1 724 м², лифт, кинотеатр, сауна, крытый бассейн-грот, терраса на крыше. Атриум с куполом на три этажа. С крыши и балконов видно большое озеро и поле. Интерьер вычурный.",
+      "facts": [
+        "Вид: Большое озеро и гольф Montgomerie, лучший вид с крыши.",
+        "Потолки (оценка по фото): комнаты ≈3.6 м, гостиная ≈4.2 м; Двусветный зал-холл ~9,0–12,0 м.",
+        "Стиль: Классика, без современного ремонта.",
+        "Мебель: С мебелью.",
+        "Стройка рядом: Стройку рядом не проверяли.",
+        "Объявление Property Finder 163251320 (Hamptons International - Leasing, Zaineb Benzarrougue) с 2026-10-23; свободна с 2026-04-01; чеков: 1."
+      ],
+      "caveats": [
+        "Один дом у ~54 агентов за 1,02–1,2 млн; дешевле всего у Hamptons — 1 020 000, с мебелью.",
+        "Стиль вычурный, сад с искусственным газоном."
+      ],
+      "listingUrl": "https://www.propertyfinder.ae/en/plp/rent/villa-for-rent-dubai-emirates-hills-sector-e-163251320.html",
+      "mapUrl": "https://maps.google.com/maps?q=25.064981,55.173763",
+      "mapPrecision": "area",
+      "locationLabel": "Sector E, Emirates Hills · точка района, номер дома не получен",
+      "missing": [
+        "Номер виллы и точка дома",
+        "Свежая доступность и окончательная цена"
+      ],
+      "requestState": "",
+      "ref": "HI-R-12650_1",
+      "possibleDuplicateIds": [],
+      "sourceNote": "Найдено 09.11.2026 в полной выгрузке Property Finder (все виллы Дубая в аренду 1–1,2 млн AED, 384 объявления); фото проверены вручную. Потолки — оценка по фото, не замер.",
+      "documents": [],
+      "detailPage": "properties/n1109_emirates_hills_lake_mansion.html",
+      "projectType": "Emirates Hills, Sector E · 7BR",
+      "ceilingHeightM": 3.6,
+      "ceilingMaxM": 12.0,
+      "ceilingEstimateNote": "Оценка по фото объявления (по фото: атриум с куполом на три этажа, лифт; комнаты высокие). Замеров нет. Уверенность: средняя.",
+      "doubleHeight": "yes",
+      "doubleHeightLabel": "Двусветный зал-холл ~9,0–12,0 м",
+      "waterView": "yes",
+      "waterViewLabel": "Большое озеро и гольф Montgomerie, лучший вид с крыши",
+      "pool": "private",
+      "poolLabel": "Свой бассейн",
+      "viewedDefault": false,
+      "rentDefault": false,
+      "isNew": false,
+      "addedAt": "2026-11-09",
+      "newBatch": "pf-1m-20261109",
+      "sourceAgentId": "pf-search",
+      "style": "classic",
+      "styleLabel": "Классика, без современного ремонта",
+      "furnished": "yes",
+      "furnishedLabel": "С мебелью",
+      "construction": "unknown",
+      "constructionLabel": "Стройку рядом не проверяли",
+      "rank": 26,
+      "alsoListed": []
+    },
+    {
+      "id": "n1109_jge_siennalakes_lake",
+      "title": "Jumeirah Golf Estates, Sienna Lakes · гольф и озеро",
+      "area": "Jumeirah Golf Estates",
+      "agent": "Luxe Haven Real Estate · Adeel Malik",
+      "agentPhone": "",
+      "price": 1100000,
+      "priceLabel": "1 100 000 AED / год",
+      "priceNote": "Цена объявления Property Finder на 09.11.2026; чеков: 1.",
+      "bedrooms": 5,
+      "bathrooms": 6,
+      "plotM2": null,
+      "buaM2": null,
+      "ceiling": "",
+      "status": "review",
+      "statusLabel": "На рассмотрении",
+      "type": "villa",
+      "cover": "https://static.shared.propertyfinder.ae/media/images/listing/B1WSY6WBXDSEEE4TY57GB92WX8/b47131dd-1c58-428f-b84d-76f6373dd3e7/1312x894.jpg?v=3c1bdf20ebf1420889ca5ebec73cf564",
+      "images": [
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/B1WSY6WBXDSEEE4TY57GB92WX8/b47131dd-1c58-428f-b84d-76f6373dd3e7/1312x894.jpg?v=3c1bdf20ebf1420889ca5ebec73cf564",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/B1WSY6WBXDSEEE4TY57GB92WX8/b47131dd-1c58-428f-b84d-76f6373dd3e7/668x452.jpg?v=3c1bdf20ebf1420889ca5ebec73cf564",
+          "caption": "Вид на озеро и поле · фото объявления №14"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/B1WSY6WBXDSEEE4TY57GB92WX8/3e56576e-3976-4f75-8f22-946f246ad9b2/1312x894.jpg?v=93a4a7af9318ba4c40e85bd4c1fcb28e",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/B1WSY6WBXDSEEE4TY57GB92WX8/3e56576e-3976-4f75-8f22-946f246ad9b2/668x452.jpg?v=93a4a7af9318ba4c40e85bd4c1fcb28e",
+          "caption": "Гостиная у бассейна, за ним поле · фото объявления №3"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/B1WSY6WBXDSEEE4TY57GB92WX8/1634f1cc-cc2f-4d31-9b89-d49ba6a9a271/1312x894.jpg?v=32fb9ef9f7c196688ce495858bc99476",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/B1WSY6WBXDSEEE4TY57GB92WX8/1634f1cc-cc2f-4d31-9b89-d49ba6a9a271/668x452.jpg?v=32fb9ef9f7c196688ce495858bc99476",
+          "caption": "Спальня с видом на поле · фото объявления №5"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/B1WSY6WBXDSEEE4TY57GB92WX8/8cb80c4d-2dc1-41ad-adfc-9a8d6757cdc7/1312x894.jpg?v=bdfcd5e827b9d256928f7a99bb9b353f",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/B1WSY6WBXDSEEE4TY57GB92WX8/8cb80c4d-2dc1-41ad-adfc-9a8d6757cdc7/668x452.jpg?v=bdfcd5e827b9d256928f7a99bb9b353f",
+          "caption": "Гостиная · фото объявления №10"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/B1WSY6WBXDSEEE4TY57GB92WX8/e6216f05-3b1e-45e7-9fe0-abdcf11b0802/1312x894.jpg?v=b68d1264cadbee4bea0503a246eaeee2",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/B1WSY6WBXDSEEE4TY57GB92WX8/e6216f05-3b1e-45e7-9fe0-abdcf11b0802/668x452.jpg?v=b68d1264cadbee4bea0503a246eaeee2",
+          "caption": "Гостиная · фото объявления №13"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/B1WSY6WBXDSEEE4TY57GB92WX8/d19c5212-25f7-4a27-9403-e7418d485f2f/1312x894.jpg?v=9b59e88b4c04c779788143e191b42141",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/B1WSY6WBXDSEEE4TY57GB92WX8/d19c5212-25f7-4a27-9403-e7418d485f2f/668x452.jpg?v=9b59e88b4c04c779788143e191b42141",
+          "caption": "Кухня · фото объявления №6"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/B1WSY6WBXDSEEE4TY57GB92WX8/ba1d9aaf-1f56-4488-9f6e-dec28b4007cb/1312x894.jpg?v=369308ea450662a05ed60dbce546c483",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/B1WSY6WBXDSEEE4TY57GB92WX8/ba1d9aaf-1f56-4488-9f6e-dec28b4007cb/668x452.jpg?v=369308ea450662a05ed60dbce546c483",
+          "caption": "Фасад · фото объявления №1"
+        }
+      ],
+      "videos": [],
+      "description": "Вилла 5 спален в Sienna Lakes с мебелью: из гостиной и спален видно озеро и поле Fire. Свой бассейн, высокие окна-арки. Интерьер классический.",
+      "facts": [
+        "Вид: Озеро и поле Fire из гостиной и спален.",
+        "Потолки (оценка по фото): комнаты ≈3.4 м, гостиная ≈3.6 м; Без второго света.",
+        "Стиль: Классика, без современного ремонта.",
+        "Мебель: С мебелью.",
+        "Стройка рядом: Стройку рядом не проверяли.",
+        "Объявление Property Finder 155572191 (Luxe Haven Real Estate, Adeel Malik) с 2026-10-07; свободна с 2026-04-27; чеков: 1.",
+        "Тот же дом у другого агента: Driven, 1 100 000, частично с мебелью — похоже, тот же дом — https://www.propertyfinder.ae/en/plp/rent/villa-for-rent-dubai-jumeirah-golf-estates-sienna-lakes-135140699.html"
+      ],
+      "caveats": [
+        "С мебелью."
+      ],
+      "listingUrl": "https://www.propertyfinder.ae/en/plp/rent/villa-for-rent-dubai-jumeirah-golf-estates-sienna-lakes-155572191.html",
+      "mapUrl": "https://maps.google.com/maps?q=25.014469,55.211514",
+      "mapPrecision": "area",
+      "locationLabel": "Sienna Lakes, Jumeirah Golf Estates · точка района, номер дома не получен",
+      "missing": [
+        "Номер виллы и точка дома",
+        "Свежая доступность и окончательная цена"
+      ],
+      "requestState": "",
+      "ref": "LH-1332-P",
+      "possibleDuplicateIds": [],
+      "sourceNote": "Найдено 09.11.2026 в полной выгрузке Property Finder (все виллы Дубая в аренду 1–1,2 млн AED, 384 объявления); фото проверены вручную. Потолки — оценка по фото, не замер.",
+      "documents": [],
+      "detailPage": "properties/n1109_jge_siennalakes_lake.html",
+      "projectType": "Jumeirah Golf Estates, Sienna Lakes · 5BR",
+      "ceilingHeightM": 3.35,
+      "ceilingMaxM": 3.8,
+      "ceilingEstimateNote": "Оценка по фото объявления (по фото: потолки с кессонами, высокие окна-арки). Замеров нет. Уверенность: средняя.",
+      "doubleHeight": "no",
+      "doubleHeightLabel": "Без второго света",
+      "waterView": "yes",
+      "waterViewLabel": "Озеро и поле Fire из гостиной и спален",
+      "pool": "private",
+      "poolLabel": "Свой бассейн",
+      "viewedDefault": false,
+      "rentDefault": false,
+      "isNew": false,
+      "addedAt": "2026-11-09",
+      "newBatch": "pf-1m-20261109",
+      "sourceAgentId": "pf-search",
+      "style": "classic",
+      "styleLabel": "Классика, без современного ремонта",
+      "furnished": "yes",
+      "furnishedLabel": "С мебелью",
+      "construction": "unknown",
+      "constructionLabel": "Стройку рядом не проверяли",
+      "rank": 27,
+      "alsoListed": [
+        "https://www.propertyfinder.ae/en/plp/rent/villa-for-rent-dubai-jumeirah-golf-estates-sienna-lakes-135140699.html"
+      ]
+    },
+    {
+      "id": "n1109_turf_6br_golf_lake",
+      "title": "DAMAC Hills, The Turf · 6 спален, гольф и озеро",
+      "area": "DAMAC Hills",
+      "agent": "EXOTIC HAVEN REAL ESTATE L.L.C · Tanvi Kapoor Khanji",
+      "agentPhone": "",
+      "price": 1150000,
+      "priceLabel": "1 150 000 AED / год",
+      "priceNote": "Цена объявления Property Finder на 09.11.2026; чеков: 1.",
+      "bedrooms": 6,
+      "bathrooms": 6,
+      "plotM2": null,
+      "buaM2": null,
+      "ceiling": "",
+      "status": "review",
+      "statusLabel": "На рассмотрении · просим −200k",
+      "type": "villa",
+      "cover": "https://static.shared.propertyfinder.ae/media/images/listing/61SBT57HBD4Q9VH2DVDQX7XN1C/69434fb5-900f-4a99-8353-d0c373ef4e40/1312x894.jpg?v=b6a29d6153ba1dce503f0fb0e58541d9",
+      "images": [
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/61SBT57HBD4Q9VH2DVDQX7XN1C/69434fb5-900f-4a99-8353-d0c373ef4e40/1312x894.jpg?v=b6a29d6153ba1dce503f0fb0e58541d9",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/61SBT57HBD4Q9VH2DVDQX7XN1C/69434fb5-900f-4a99-8353-d0c373ef4e40/668x452.jpg?v=b6a29d6153ba1dce503f0fb0e58541d9",
+          "caption": "Озеро и поле за бассейном · фото объявления №3"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/61SBT57HBD4Q9VH2DVDQX7XN1C/d0c0ada5-b350-4b47-ade0-41181941f62b/1312x894.jpg?v=8b51415f015565998271a20358d84238",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/61SBT57HBD4Q9VH2DVDQX7XN1C/d0c0ada5-b350-4b47-ade0-41181941f62b/668x452.jpg?v=8b51415f015565998271a20358d84238",
+          "caption": "Дом и сад · фото объявления №1"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/61SBT57HBD4Q9VH2DVDQX7XN1C/494a27f3-49b9-47d1-80bc-465b05884148/1312x894.jpg?v=8945a0fdf4385c5825b51bb55523668a",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/61SBT57HBD4Q9VH2DVDQX7XN1C/494a27f3-49b9-47d1-80bc-465b05884148/668x452.jpg?v=8945a0fdf4385c5825b51bb55523668a",
+          "caption": "Сад · фото объявления №2"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/61SBT57HBD4Q9VH2DVDQX7XN1C/1688b81b-334a-498d-9336-87ba0ea32c87/1312x894.jpg?v=ab13f2f38dacf0aedea5bfbfa5ca0a2f",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/61SBT57HBD4Q9VH2DVDQX7XN1C/1688b81b-334a-498d-9336-87ba0ea32c87/668x452.jpg?v=ab13f2f38dacf0aedea5bfbfa5ca0a2f",
+          "caption": "Гостиная · фото объявления №4"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/61SBT57HBD4Q9VH2DVDQX7XN1C/06dc6329-2842-4127-b3f4-3d70be8188e2/1312x894.jpg?v=050e6a54f055abafca053eee1bd38784",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/61SBT57HBD4Q9VH2DVDQX7XN1C/06dc6329-2842-4127-b3f4-3d70be8188e2/668x452.jpg?v=050e6a54f055abafca053eee1bd38784",
+          "caption": "Столовая · фото объявления №6"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/61SBT57HBD4Q9VH2DVDQX7XN1C/6e4380c4-3d8d-429f-a282-e6c71e97b025/1312x894.jpg?v=7020623e51615130066ba888400a59ab",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/61SBT57HBD4Q9VH2DVDQX7XN1C/6e4380c4-3d8d-429f-a282-e6c71e97b025/668x452.jpg?v=7020623e51615130066ba888400a59ab",
+          "caption": "Холл · фото объявления №7"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/61SBT57HBD4Q9VH2DVDQX7XN1C/a7d097df-3d7b-4d5d-9836-ca8eddae5f09/1312x894.jpg?v=a3b9dacb49502efd5b703ed553e474c8",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/61SBT57HBD4Q9VH2DVDQX7XN1C/a7d097df-3d7b-4d5d-9836-ca8eddae5f09/668x452.jpg?v=a3b9dacb49502efd5b703ed553e474c8",
+          "caption": "Кухня · фото объявления №13"
+        },
+        {
+          "src": "https://static.shared.propertyfinder.ae/media/images/listing/61SBT57HBD4Q9VH2DVDQX7XN1C/8fab1704-178c-40cd-aad0-5489728dac1e/1312x894.jpg?v=86c350793808c6839879b4b9e6a642d0",
+          "thumb": "https://static.shared.propertyfinder.ae/media/images/listing/61SBT57HBD4Q9VH2DVDQX7XN1C/8fab1704-178c-40cd-aad0-5489728dac1e/668x452.jpg?v=86c350793808c6839879b4b9e6a642d0",
+          "caption": "Спальня · фото объявления №11"
+        }
+      ],
+      "videos": [],
+      "description": "Современная вилла 6 спален в The Turf с мебелью: бассейн с джакузи, за ним озеро и поле. Отделка дорогая, люстры.",
+      "facts": [
+        "Артур 20:54 прислал этот же дом (PF 113242728): смотреть можно самое позднее в четверг. Вячеслав: если скинут 200k, как инвестору, готовы забрать в четверг. Собственник возвращается в среду.",
+        "Вид: Озеро и поле Trump International за бассейном.",
+        "Потолки (оценка по фото): комнаты ≈3.2 м, гостиная ≈3.5 м; Двусвет только у входа/лестницы ~6,0–6,8 м.",
+        "Стиль: Современная архитектура.",
+        "Мебель: С мебелью.",
+        "Стройка рядом: Есть риск: стройка или дорожные работы рядом.",
+        "Объявление Property Finder 113242728 (EXOTIC HAVEN REAL ESTATE L.L.C, Tanvi Kapoor Khanji) с 2026-07-08; свободна с 2026-06-23; чеков: 1."
+      ],
+      "caveats": [
+        "На снимке за полем песок — в The Turf пустые участки и стройка (проверка 07.11).",
+        "Только с мебелью."
+      ],
+      "listingUrl": "https://www.propertyfinder.ae/en/plp/rent/villa-for-rent-dubai-damac-hills-the-turf-113242728.html",
+      "mapUrl": "https://maps.google.com/maps?q=25.020605,55.254807",
+      "mapPrecision": "area",
+      "locationLabel": "The Turf, Damac Hills · точка района, номер дома не получен",
+      "missing": [
+        "Номер виллы и точка дома",
+        "Свежая доступность и окончательная цена"
+      ],
+      "requestState": "",
+      "ref": "TURFR",
+      "possibleDuplicateIds": [],
+      "sourceNote": "Найдено 09.11.2026 в полной выгрузке Property Finder (все виллы Дубая в аренду 1–1,2 млн AED, 384 объявления); фото проверены вручную. Потолки — оценка по фото, не замер.",
+      "documents": [],
+      "detailPage": "properties/n1109_turf_6br_golf_lake.html",
+      "projectType": "DAMAC Hills, The Turf · 6BR",
+      "ceilingHeightM": 3.25,
+      "ceilingMaxM": 6.8,
+      "ceilingEstimateNote": "Оценка по фото объявления (по фото 9: проём лестницы на два этажа; гостиная одноэтажная). Замеров нет. Уверенность: средняя.",
+      "doubleHeight": "foyer",
+      "doubleHeightLabel": "Двусвет только у входа/лестницы ~6,0–6,8 м",
+      "waterView": "yes",
+      "waterViewLabel": "Озеро и поле Trump International за бассейном",
+      "pool": "private",
+      "poolLabel": "Свой бассейн",
+      "viewedDefault": false,
+      "rentDefault": false,
+      "isNew": true,
+      "addedAt": "2026-11-09",
+      "newBatch": "arthur-20261109",
+      "sourceAgentId": "arthur",
+      "style": "modern",
+      "styleLabel": "Современная архитектура",
+      "furnished": "yes",
+      "furnishedLabel": "С мебелью",
+      "construction": "risk",
+      "constructionLabel": "Есть риск: стройка или дорожные работы рядом",
+      "rank": 28,
+      "alsoListed": [],
+      "offeredAt": "2026-11-09T20:54:00+04:00"
     },
     {
       "id": "arthur_veneto_20261105",
@@ -9122,7 +10430,7 @@ window.VILLA_CATALOG = {
       "buaM2": null,
       "ceiling": "комнаты ≈3,1 м (2,9–3,3 м) · гостиная ≈3,4 м",
       "status": "review",
-      "statusLabel": "На рассмотрении",
+      "statusLabel": "На рассмотрении · стройка за забором",
       "type": "unknown",
       "cover": "gallery/turf-ed74eb575ae071.webp",
       "images": [
@@ -9323,7 +10631,9 @@ window.VILLA_CATALOG = {
         }
       ],
       "description": "Вилла №17 с заявленным видом на гольф. Агент сообщил о ремонте соседней виллы и работах через дорогу.",
-      "facts": [],
+      "facts": [
+        "Артур 10:02 снова прислал этот дом (PF 166526251): «за забором на соседнем участке стройка, как и в случае с самой первой виллой. Но посмотреть можем». Объявление: 5BR, 7 425 sqft, без мебели, 510 000."
+      ],
       "caveats": [
         "Совпадение с ранее осмотренной TF19 не доказано."
       ],
@@ -9357,7 +10667,11 @@ window.VILLA_CATALOG = {
       "poolLabel": "Своего нет · общий бассейн комьюнити",
       "viewedDefault": false,
       "rentDefault": false,
-      "addedAt": "2026-11-02"
+      "addedAt": "2026-11-02",
+      "offeredAt": "2026-11-09T10:02:00+04:00",
+      "sourceAgentId": "arthur",
+      "newBatch": "arthur-20261109",
+      "isNew": true
     },
     {
       "id": "yasmin_samantha_425",
@@ -10056,31 +11370,17 @@ window.VILLA_CATALOG = {
     }
   },
   "newReset": {
-    "id": "pf-1m-20261109",
+    "id": "arthur-20261109",
     "keep": [
-      "n1109_ji12_gardenhall",
-      "n1109_ji_med_lakebridge",
-      "n1109_ji48_entfoyer",
-      "n1109_ji14_entfoyer",
-      "n1109_aseel_golf",
-      "n1109_jge_flametree_lake",
-      "n1109_jge_sanctuary_hole5",
-      "n1109_jge_orangelake",
-      "n1109_dh_picadilly_vd2",
-      "n1109_ar_mirador_single",
-      "n1109_ji11_entfoyer",
-      "n1109_ji_islamic_625",
-      "n1109_ji15_fountain",
-      "n1109_ji_med_gardenhall",
-      "n1109_ji10_masterview",
-      "n1109_jge_sundials",
-      "n1109_jge_siennaviews",
-      "n1109_jge_limetree_850",
-      "n1109_jge_limetree_granada",
-      "n1109_jge_siennalakes",
-      "n1109_dhe_golfplace",
-      "n1109_emirates_hills_6br",
-      "n1109_lakes_hattan"
+      "arthur1109_calida_vh",
+      "arthur1109_whitefield_pf162320538",
+      "arthur1109_whitefield_bayut16291038",
+      "arthur1109_queens_meadow",
+      "arthur1109_veneto_corner",
+      "arthur1109_jge_900k",
+      "arthur1109_silver_springs_161",
+      "n1109_turf_6br_golf_lake",
+      "turf"
     ]
   },
   "archiveAll": {

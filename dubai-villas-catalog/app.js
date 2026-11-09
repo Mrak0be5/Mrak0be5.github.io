@@ -1931,6 +1931,7 @@
 
   // Новые фильтры 09.11: подборка, стиль, мебель, стройка рядом.
   const NEW_BATCH = 'pf-1m-20261109';
+  const areaSet = new Set();
   function propertyFurnished(property) {
     const raw = (text(property.furnished) || text(property.listing && property.listing.furnished)).toLowerCase();
     return ['no', 'yes', 'partly'].includes(raw) ? raw : 'unknown';
@@ -1945,6 +1946,7 @@
     const v = (id) => ($(id) ? $(id).value : '');
     const nf = v('filter-new');
     if (nf === 'batch' && property.newBatch !== NEW_BATCH) return false;
+    if (nf === 'arthur1109' && property.newBatch !== 'arthur-20261109') return false;
     if (nf === 'unseen' && property.change !== 'new') return false;
     const st = v('filter-style');
     if (st === 'modern' && property.style !== 'modern') return false;
@@ -1961,6 +1963,34 @@
     if (co === 'not-risk' && c === 'risk') return false;
     if (co === 'risk' && c !== 'risk') return false;
     return true;
+  }
+
+  // Районы кнопками (09.11): можно выбрать несколько; число — сколько объектов в районе с учётом архива.
+  function renderAreaChips() {
+    const box = $('area-chips');
+    if (!box) return;
+    const inArchive = ($('filter-archive') && $('filter-archive').value) === 'yes';
+    const counts = new Map();
+    for (const p of properties) {
+      if (!!getPropertyToggle(p).archived !== inArchive) continue;
+      const a = p.area || '∅';
+      counts.set(a, (counts.get(a) || 0) + 1);
+    }
+    for (const a of areaSet) if (!counts.has(a)) counts.set(a, 0);
+    box.replaceChildren();
+    const all = el('button', 'area-chip', 'Все районы');
+    all.type = 'button';
+    all.setAttribute('aria-pressed', String(!areaSet.size));
+    all.addEventListener('click', () => { areaSet.clear(); render(); });
+    box.append(all);
+    for (const [a, n] of [...counts].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))) {
+      const b = el('button', 'area-chip', a === '∅' ? 'Район не указан' : a);
+      b.type = 'button';
+      b.append(el('span', 'n', String(n)));
+      b.setAttribute('aria-pressed', String(areaSet.has(a)));
+      b.addEventListener('click', () => { if (areaSet.has(a)) areaSet.delete(a); else areaSet.add(a); render(); });
+      box.append(b);
+    }
   }
 
   function baseFilter() {
@@ -1982,6 +2012,7 @@
       if (state.onlyNew && !isRecentArthur(property)) return false;
       if (!query.every((word) => property.search.includes(word))) return false;
       if (area && (property.area || '∅') !== area) return false;
+      if (areaSet.size && !areaSet.has(property.area || '∅')) return false;
       if (agent && (property.agent || '∅') !== agent) return false;
       if (beds && (number(property.bedrooms) || 0) < beds) return false;
       if (withComments && commentCount(property) === 0) return false;
@@ -2956,6 +2987,7 @@
       if (node && node.value) count++;
     }
     if (state.onlyNew) count++;
+    if (areaSet.size) count++;
     if ($('with-comments').checked) count++;
     if ($('sort').value !== 'source') count++;
     return count;
@@ -3005,6 +3037,11 @@
       quickArchive.setAttribute('aria-pressed', String(!!$('filter-archive') && $('filter-archive').value === 'yes'));
       $('quick-archive-count').textContent = String(properties.filter((p) => getPropertyToggle(p).archived).length);
     }
+    const quickArthur = $('quick-arthur1109');
+    if (quickArthur) {
+      quickArthur.setAttribute('aria-pressed', String(!!$('filter-new') && $('filter-new').value === 'arthur1109'));
+      $('quick-arthur1109-count').textContent = String(properties.filter((p) => p.newBatch === 'arthur-20261109').length);
+    }
     const quickBatch = $('quick-batch');
     if (quickBatch) {
       quickBatch.setAttribute('aria-pressed', String(!!$('filter-new') && $('filter-new').value === 'batch'));
@@ -3033,6 +3070,7 @@
     if ($('search').value.trim()) params.set('q', $('search').value.trim());
     if (state.status) params.set('status', state.status);
     if (state.onlyNew) params.set('new', '1');
+    if (areaSet.size) params.set('areas', [...areaSet].join('|'));
     for (const id of FILTER_SELECT_IDS) {
       if ($(id) && $(id).value) params.set(id, $(id).value);
     }
@@ -3056,6 +3094,8 @@
       if (node && value && [...node.options].some((option) => option.value === value)) node.value = value;
     }
     state.onlyNew = params.get('new') === '1';
+    areaSet.clear();
+    for (const a of (params.get('areas') || '').split('|')) if (a) areaSet.add(a);
     $('with-comments').checked = params.get('comments') === '1';
     state.view = ['list', 'map'].includes(params.get('view')) ? params.get('view') : 'grid';
   }
@@ -3066,6 +3106,7 @@
       if (node) node.classList.toggle('is-filtered', !!(node.value && node.value !== 'source'));
     }
     lastArchiveSig = archiveSig();
+    renderAreaChips();
     const base = baseFilter();
     const filtered = base.filter((property) => matchesStatus(property, state.status));
     const sortKey = sorters[$('sort').value];
@@ -3136,6 +3177,10 @@
   });
   if ($('quick-archive')) $('quick-archive').addEventListener('click', () => {
     if ($('filter-archive')) $('filter-archive').value = $('filter-archive').value === 'yes' ? '' : 'yes';
+    render();
+  });
+  if ($('quick-arthur1109')) $('quick-arthur1109').addEventListener('click', () => {
+    if ($('filter-new')) $('filter-new').value = $('filter-new').value === 'arthur1109' ? '' : 'arthur1109';
     render();
   });
   if ($('quick-batch')) $('quick-batch').addEventListener('click', () => {
