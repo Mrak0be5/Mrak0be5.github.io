@@ -276,8 +276,8 @@ window.VILLA_CATALOG = {
       "plotM2": null,
       "buaM2": 511,
       "ceiling": "Не измерено",
-      "status": "historical",
-      "statusLabel": "Недоступно · уже сдана",
+      "status": "unavailable",
+      "statusLabel": "Скрыто: нет фото",
       "type": "villa",
       "cover": "",
       "images": [],
@@ -326,7 +326,11 @@ window.VILLA_CATALOG = {
       "construction": "unknown",
       "constructionLabel": "Стройку рядом не проверяли",
       "rank": 102,
-      "alsoListed": []
+      "alsoListed": [],
+      "hiddenFrom": {
+        "status": "historical",
+        "statusLabel": "Недоступно · уже сдана"
+      }
     },
     {
       "id": "arthur1109_queens_meadow",
@@ -342,8 +346,8 @@ window.VILLA_CATALOG = {
       "plotM2": null,
       "buaM2": null,
       "ceiling": "Не измерено",
-      "status": "review",
-      "statusLabel": "На рассмотрении",
+      "status": "unavailable",
+      "statusLabel": "Скрыто: нет фото",
       "type": "villa",
       "cover": "",
       "images": [],
@@ -394,7 +398,11 @@ window.VILLA_CATALOG = {
       "construction": "unknown",
       "constructionLabel": "Стройку рядом не проверяли",
       "rank": 103,
-      "alsoListed": []
+      "alsoListed": [],
+      "hiddenFrom": {
+        "status": "review",
+        "statusLabel": "На рассмотрении"
+      }
     },
     {
       "id": "arthur1109_veneto_corner",
@@ -539,8 +547,8 @@ window.VILLA_CATALOG = {
       "plotM2": null,
       "buaM2": null,
       "ceiling": "Не измерено",
-      "status": "review",
-      "statusLabel": "На рассмотрении · ждём ссылку",
+      "status": "unavailable",
+      "statusLabel": "Скрыто: нет фото",
       "type": "villa",
       "cover": "",
       "images": [],
@@ -589,7 +597,11 @@ window.VILLA_CATALOG = {
       "construction": "unknown",
       "constructionLabel": "Стройку рядом не проверяли",
       "rank": 105,
-      "alsoListed": []
+      "alsoListed": [],
+      "hiddenFrom": {
+        "status": "review",
+        "statusLabel": "На рассмотрении · ждём ссылку"
+      }
     },
     {
       "id": "arthur1109_silver_springs_161",
@@ -11146,8 +11158,8 @@ window.VILLA_CATALOG = {
       "plotM2": null,
       "buaM2": null,
       "ceiling": "комнаты ≈3,1 м (2,9–3,3 м) · гостиная ≈3,4 м · по аналогам",
-      "status": "historical",
-      "statusLabel": "Уже осматривали",
+      "status": "unavailable",
+      "statusLabel": "Скрыто: нет фото",
       "type": "unknown",
       "cover": "",
       "images": [],
@@ -11187,7 +11199,11 @@ window.VILLA_CATALOG = {
       "viewedDefault": true,
       "rentDefault": false,
       "addedAt": "2026-11-02",
-      "sourceAgentId": "arthur"
+      "sourceAgentId": "arthur",
+      "hiddenFrom": {
+        "status": "historical",
+        "statusLabel": "Уже осматривали"
+      }
     },
     {
       "id": "legacy_longview",
