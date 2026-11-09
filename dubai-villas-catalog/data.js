@@ -81,7 +81,13 @@ window.VILLA_CATALOG = {
           "caption": "Фото объявления Property Finder №12"
         }
       ],
-      "videos": [],
+      "videos": [
+        {
+          "src": "https://mrak0be5.github.io/dubai-villas-catalog/videos/arthur1109_calida_vh.mp4",
+          "caption": "Видео Артура 3:47 · WhatsApp 09.11",
+          "poster": "gallery/arthur1109_calida_vh-video-poster.webp"
+        }
+      ],
       "description": "Calida в Victory Heights (Sports City): вилла B-тип, 5 спален, расширена и обновлена. Дом ≈585 м², участок ≈854 м². Свой бассейн, сад, за ним гольф-поле. Артур прислал видео 3:46 и назвал это Jumeirah Golf Estates, но по объявлениям это Victory Heights.",
       "facts": [
         "Артур: 950k, 5 спален, BUA 6 300 sqft, участок 9 200 sqft; видео 3:46 в чате.",
@@ -341,26 +347,76 @@ window.VILLA_CATALOG = {
       "price": 800000,
       "priceLabel": "800 000 AED / год",
       "priceNote": "Цена Артура в чате 09.11.2026.",
-      "bedrooms": 5,
-      "bathrooms": null,
-      "plotM2": null,
-      "buaM2": null,
+      "bedrooms": 4,
+      "bathrooms": 5,
+      "plotM2": 415,
+      "buaM2": 297,
       "ceiling": "Не измерено",
-      "status": "unavailable",
-      "statusLabel": "Скрыто: нет фото",
+      "status": "review",
+      "statusLabel": "На рассмотрении",
       "type": "villa",
-      "cover": "",
-      "images": [],
+      "cover": "gallery/arthur1109_queens_meadow-p001.webp",
+      "images": [
+        {
+          "src": "gallery/arthur1109_queens_meadow-p001.webp",
+          "thumb": "gallery/thumb-arthur1109_queens_meadow-p001.webp",
+          "caption": "Обложка брошюры: Queens Meadow, 4 спальни · PDF стр. 1/10"
+        },
+        {
+          "src": "gallery/arthur1109_queens_meadow-p002.webp",
+          "thumb": "gallery/thumb-arthur1109_queens_meadow-p002.webp",
+          "caption": "Характеристики: 4BR, 5 санузлов, дом 3 200 sqft, участок 4 466 sqft · PDF стр. 2/10"
+        },
+        {
+          "src": "gallery/arthur1109_queens_meadow-p003.webp",
+          "thumb": "gallery/thumb-arthur1109_queens_meadow-p003.webp",
+          "caption": "Гостиная и столовая · PDF стр. 3/10"
+        },
+        {
+          "src": "gallery/arthur1109_queens_meadow-p004.webp",
+          "thumb": "gallery/thumb-arthur1109_queens_meadow-p004.webp",
+          "caption": "Гостиная с ТВ-стеной · PDF стр. 4/10"
+        },
+        {
+          "src": "gallery/arthur1109_queens_meadow-p005.webp",
+          "thumb": "gallery/thumb-arthur1109_queens_meadow-p005.webp",
+          "caption": "Кухня и бар · PDF стр. 5/10"
+        },
+        {
+          "src": "gallery/arthur1109_queens_meadow-p006.webp",
+          "thumb": "gallery/thumb-arthur1109_queens_meadow-p006.webp",
+          "caption": "Холл и лестница · PDF стр. 6/10"
+        },
+        {
+          "src": "gallery/arthur1109_queens_meadow-p007.webp",
+          "thumb": "gallery/thumb-arthur1109_queens_meadow-p007.webp",
+          "caption": "Спальни · PDF стр. 7/10"
+        },
+        {
+          "src": "gallery/arthur1109_queens_meadow-p008.webp",
+          "thumb": "gallery/thumb-arthur1109_queens_meadow-p008.webp",
+          "caption": "Ванная · PDF стр. 8/10"
+        },
+        {
+          "src": "gallery/arthur1109_queens_meadow-p009.webp",
+          "thumb": "gallery/thumb-arthur1109_queens_meadow-p009.webp",
+          "caption": "Сад и бассейн · PDF стр. 9/10"
+        },
+        {
+          "src": "gallery/arthur1109_queens_meadow-p010.webp",
+          "thumb": "gallery/thumb-arthur1109_queens_meadow-p010.webp",
+          "caption": "Список работ по ремонту · PDF стр. 10/10"
+        }
+      ],
       "videos": [],
-      "description": "Отдельная вилла в Queens Meadow (DAMAC Hills). Артур прислал PDF-брошюру «Queens Meadow Villa Brochure» на 10 страниц. Агент Дэниз уговаривает собственника сдать в аренду; смотреть можно в любое время. Цена — 800 000 AED.",
+      "description": "Queens Meadow (DAMAC Hills): вилла 4 спальни, 5 санузлов, дом 3 200 sqft (≈297 м²), участок 4 466 sqft (≈415 м²), свой бассейн. Полностью перестроена: открытая гостиная, дизайнерская кухня с баром, новая лестница, ванные, сад с бассейном. Брошюра — продажная (7 200 000 AED); Дэниз уговаривает собственника сдать в аренду. Артур: аренда 800 000, смотреть можно в любое время.",
       "facts": [
         "Артур 17:56: «Дэниз сейчас обрабатывает собственника этой виллы, чтобы сдал в аренду»; 20:55: «Эту можно смотреть, когда захотим»; 21:11: «800к».",
         "Инна 18:04: «У него там в окнах стена в зелени, то есть вида нифига нет»."
       ],
       "caveats": [
         "В аренду официально ещё не выставлена — собственника уговаривают.",
-        "Вида на гольф нет.",
-        "Брошюра только в WhatsApp; публичного объявления нет."
+        "Вида на гольф нет."
       ],
       "listingUrl": "",
       "mapUrl": "https://maps.google.com/maps?q=25.032702,55.260033",
@@ -374,7 +430,12 @@ window.VILLA_CATALOG = {
       "ref": "",
       "possibleDuplicateIds": [],
       "sourceNote": "Предложение Артура: WhatsApp «Вячеслав и Инна: недвижимость с Артуром», 09.11.2026.",
-      "documents": [],
+      "documents": [
+        {
+          "href": "https://mrak0be5.github.io/dubai-villas-catalog/materials/arthur1109_queens_meadow.pdf",
+          "label": "PDF Queens Meadow · 10 страниц"
+        }
+      ],
       "detailPage": "properties/arthur1109_queens_meadow.html",
       "projectType": "DAMAC Hills, Queens Meadow",
       "ceilingHeightM": null,
@@ -384,8 +445,8 @@ window.VILLA_CATALOG = {
       "doubleHeightLabel": "Второй свет не подтверждён",
       "waterView": "no",
       "waterViewLabel": "Вида на поле нет: в окнах стена зелени (Инна)",
-      "pool": "unknown",
-      "poolLabel": "Свой бассейн не подтверждён",
+      "pool": "private",
+      "poolLabel": "Свой бассейн · по брошюре",
       "viewedDefault": false,
       "rentDefault": false,
       "isNew": true,
@@ -399,10 +460,8 @@ window.VILLA_CATALOG = {
       "constructionLabel": "Стройку рядом не проверяли",
       "rank": 103,
       "alsoListed": [],
-      "hiddenFrom": {
-        "status": "review",
-        "statusLabel": "На рассмотрении"
-      }
+      "style": "modern",
+      "styleLabel": "Современная архитектура"
     },
     {
       "id": "arthur1109_veneto_corner",
@@ -547,20 +606,44 @@ window.VILLA_CATALOG = {
       "plotM2": null,
       "buaM2": null,
       "ceiling": "Не измерено",
-      "status": "unavailable",
-      "statusLabel": "Скрыто: нет фото",
+      "status": "review",
+      "statusLabel": "На рассмотрении · ждём ссылку",
       "type": "villa",
-      "cover": "",
-      "images": [],
+      "cover": "gallery/arthur1109_jge_900k-01.webp",
+      "images": [
+        {
+          "src": "gallery/arthur1109_jge_900k-01.webp",
+          "thumb": "gallery/thumb-arthur1109_jge_900k-01.webp",
+          "caption": "Бассейн и терраса, за забором гольф · фото Артура 1/5"
+        },
+        {
+          "src": "gallery/arthur1109_jge_900k-02.webp",
+          "thumb": "gallery/thumb-arthur1109_jge_900k-02.webp",
+          "caption": "Пустой участок у поля перед домом · фото Артура 2/5"
+        },
+        {
+          "src": "gallery/arthur1109_jge_900k-03.webp",
+          "thumb": "gallery/thumb-arthur1109_jge_900k-03.webp",
+          "caption": "Пергола, бассейн и газон · фото Артура 3/5"
+        },
+        {
+          "src": "gallery/arthur1109_jge_900k-04.webp",
+          "thumb": "gallery/thumb-arthur1109_jge_900k-04.webp",
+          "caption": "Гостиная с окнами в пол на бассейн · фото Артура 4/5"
+        },
+        {
+          "src": "gallery/arthur1109_jge_900k-05.webp",
+          "thumb": "gallery/thumb-arthur1109_jge_900k-05.webp",
+          "caption": "Кухня-остров у гостиной · фото Артура 5/5"
+        }
+      ],
       "videos": [],
-      "description": "Артур прислал только фото и спросил «А эта как тебе?» — 900 000 AED, Jumeirah Golf Estates. Ссылки и подробностей нет; видео обещал завтра.",
+      "description": "Артур прислал альбом из 5 фото и спросил «А эта как тебе?» — 900 000 AED, Jumeirah Golf Estates. На фото современная вилла после ремонта: свой бассейн, пергола, гостиная с окнами в пол на бассейн, кухня-остров, светлая плитка. За забором гольф-поле. Ссылки на объявление нет; видео обещал завтра.",
       "facts": [
         "Артур 15:13: фото, «А эта как тебе?»; 15:14: «900к»; 15:16: «всё, что сейчас прислал — это гольф эстейт».",
         "Вячеслав: «Ничего не понятно по ней», попросил видео."
       ],
-      "caveats": [
-        "Объявление не найдено: в чате только фото без ссылки."
-      ],
+      "caveats": [],
       "listingUrl": "",
       "mapUrl": "https://maps.google.com/maps?q=25.022000,55.205000",
       "mapPrecision": "area",
@@ -583,8 +666,8 @@ window.VILLA_CATALOG = {
       "doubleHeightLabel": "Второй свет не подтверждён",
       "waterView": "golf",
       "waterViewLabel": "Гольф (по словам Артура, район JGE)",
-      "pool": "unknown",
-      "poolLabel": "Свой бассейн не подтверждён",
+      "pool": "private",
+      "poolLabel": "Свой бассейн · по фото",
       "viewedDefault": false,
       "rentDefault": false,
       "isNew": true,
@@ -598,10 +681,8 @@ window.VILLA_CATALOG = {
       "constructionLabel": "Стройку рядом не проверяли",
       "rank": 105,
       "alsoListed": [],
-      "hiddenFrom": {
-        "status": "review",
-        "statusLabel": "На рассмотрении · ждём ссылку"
-      }
+      "style": "modern",
+      "styleLabel": "Современная архитектура"
     },
     {
       "id": "arthur1109_silver_springs_161",
