@@ -1,6 +1,7 @@
 // Эффекты в реалистичном виде: вызовы эффектов оригинала (art/fx.js — загрузчик отдаёт их сюда через
-// call(name, args) с теми же числами; координаты оригинала, мир вида — ×2) и свои летящие блоки кладки (в
-// оригинале — мини-кубы flyMesh из рук каменщика, game.js → updateHandCube). Модуль вида (scene.js → LOADERS):
+// call(name, args) с теми же числами; координаты оригинала, мир вида — ×2). Летящих блоков кладки (мини-кубы
+// flyMesh оригинала, game.js → updateHandCube) нет: пачку из рук в ряд кладёт сам каменщик (ms-lay.js,
+// building.js — деталь растёт пачками в такт его рукам). Модуль вида (scene.js → LOADERS):
 // create(ctx) → { group, build, clear, update(dt, info), call(name, args) }.
 //   place  — деталь встала: пыль из шва по низу детали (по её форме: стена, колонна, массив; у плиты перекрытия —
 //            по её верху) — низкая быстрая «юбка» (видна с зума игрока) и оседающая дымка; есть опора (земля,
@@ -16,19 +17,19 @@
 //            (fx-flag.js; на трубе, шесте, навершии, кресте и зубце вида — на кровле рядом);
 //   clear  — ×20 и смена уровня: всё пропадает.
 // Пыль в тени здания освещена только небом (луч к солнцу по сетке клеток), в дождь её почти нет, с земли —
-// в тон глине сезона, чуть светлее земли (в воздух уходит мелкая фракция). Блоки из рук на паузе не летят, на
-// ×2…×10 — чаще, на ×20 — нет. Модуль правок общих файлов не требует (scene.js → LOADERS.fx уже грузит его).
+// в тон глине сезона, чуть светлее земли (в воздух уходит мелкая фракция). Модуль правок общих файлов не требует
+// (scene.js → LOADERS.fx уже грузит его).
 // Удары кирки, постукивание мастерком, выдох дыма и пыль из-под ног дают движения бригады вида (life.js по
 // событиям people.js) — strike, puff и мелкие chips рабочих здесь не повторяются. Аврал (rush), заливка (fill*)
 // и монеты (coin) оригинал больше не зовёт (монеты — DOM).
 import * as THREE from 'three';
-import { createSprites, DUST, SMOKE, SPARK, GLINT, WIND } from './fx-sprites.js?v=45127fe';
-import { createPieces } from './fx-pieces.js?v=45127fe';
-import { createFlag } from './fx-flag.js?v=45127fe';
-import { createTierGlow } from './fx-tier.js?v=45127fe';
-import { familyOf, FAMILY_TEX } from './families.js?v=45127fe';
-import { classify, chimneyCells, key3 } from './plan.js?v=45127fe';
-import { SEASON } from './world.js?v=45127fe';
+import { createSprites, DUST, SMOKE, SPARK, GLINT, WIND } from './fx-sprites.js?v=ff29707';
+import { createPieces } from './fx-pieces.js?v=ff29707';
+import { createFlag } from './fx-flag.js?v=ff29707';
+import { createTierGlow } from './fx-tier.js?v=ff29707';
+import { familyOf } from './families.js?v=ff29707';
+import { classify, chimneyCells, key3 } from './plan.js?v=ff29707';
+import { SEASON } from './world.js?v=ff29707';
 
 // цвета пыли и дыма (sRGB)
 const SOIL = 0xb9a68a, MORTAR = 0xc4bcad, SAWDUST = 0xd6bf94, EXHAUST = 0x5a554f;
@@ -46,9 +47,9 @@ export function create(ctx) {
   const phone = !!q.mobile || ctx.tier === 'phone';
   const rich = !!q.taa;
   // бюджет: «Телефон» — до 260 спрайтов, без фольги и теней от эффектов
-  const caps = phone ? { sprites: 260, chips: 48, confetti: 96, foil: 0, flyers: 20 }
-    : rich ? { sprites: 1100, chips: 180, confetti: 200, foil: 90, flyers: 48 }
-      : { sprites: 700, chips: 120, confetti: 150, foil: 54, flyers: 40 };
+  const caps = phone ? { sprites: 260, chips: 48, confetti: 96, foil: 0 }
+    : rich ? { sprites: 1100, chips: 180, confetti: 200, foil: 90 }
+      : { sprites: 700, chips: 120, confetti: 150, foil: 54 };
   const group = new THREE.Group();
   group.name = 'fx';
   // «Телефон»: экран мал — пыль с зума игрока гуще и крупнее (иначе клуб в несколько пикселей не читается)
@@ -59,7 +60,7 @@ export function create(ctx) {
   const glow = createTierGlow();
   group.add(sprites.mesh, pieces.group, flag.group, glow.mesh);
   const R = Math.random;
-  const _c = new THREE.Color(), _v = new THREE.Vector3(), _to = new THREE.Vector3();
+  const _c = new THREE.Color();
 
   // Сырость: в дождь и грозу пыли почти нет, в снег — меньше; земля мокнет и сохнет за несколько секунд.
   // Погода — как у оригинала (MicroBuildersSim.weatherAt, scene.js → syncWeather).
@@ -478,50 +479,6 @@ export function create(ctx) {
     }
   }
 
-  // ---------- блоки из рук каменщика ----------
-  // Как мини-кубы оригинала (game.js → updateHandCube: каждые 0,09 с, полёт 0,3 с): блок той же кладки летит низкой
-  // дугой от рук к верху растущей детали (house.layPoint) и садится в ряд по его оси. Реже: блок крупнее кубика.
-  const RATE = phone ? 0.26 : 0.17;
-  const flyClock = [];
-  function handBlocks(dt, info) {
-    const w = world();
-    // пауза — новых не бросают (у оригинала мини-кубы идут по времени игры), ×20 — без эффектов
-    if (!w || !ctx.crew || !ctx.house || info.tempo >= 20 || info.tempo <= 0) return;
-    // на ×2…×10 каменщик кладёт быстрее — и бросает чаще (не чаще втрое: глаз всё равно не различит)
-    const pace = Math.min(3, info.tempo);
-    const views = ctx.crew.views();
-    for (let i = 0; i < views.length; i++) {
-      const v = views[i];
-      if (!v) continue;
-      const b = v.builder, fig = v.w;
-      const block = b.phase === 'place' ? b.carry[0] : null;
-      if (!block || block.built || v.pose || !fig.group.visible) { flyClock[i] = -1; continue; }
-      // первый блок — вразнобой у разных рабочих
-      flyClock[i] = (flyClock[i] === undefined || flyClock[i] < 0 ? R() * RATE : flyClock[i]) + dt * pace;
-      if (flyClock[i] < RATE) continue;
-      flyClock[i] -= RATE * (0.8 + R() * 0.4);
-      if (!ctx.house.layPoint(block, fig.pos, _to)) continue;
-      const h = fig.heading || 0, high = fig.anim && (fig.anim.action === 'work-high' || fig.anim.action === 'climb');
-      _v.set(fig.pos.x + Math.sin(h) * 0.3, fig.pos.y + (high ? 1.5 : 1.12), fig.pos.z + Math.cos(h) * 0.3);
-      // вдоль ряда: поперёк направления от рабочего к детали
-      let dx = _to.x - _v.x, dz = _to.z - _v.z;
-      const dl = Math.hypot(dx, dz) || 1;
-      dx /= dl; dz /= dl;
-      const kind = ctx.house.kindAt(block.x, block.y, block.z);
-      const spread = kind === 'wall' ? 0.55 : kind === 'pillar' ? 0.06 : 0.75;
-      const s = (R() - 0.5) * 2 * spread;
-      _to.x += -dz * s; _to.z += dx * s;
-      // садится на видимый ряд: деталь растёт целыми рядами кладки (building.js), верх ряда — не ниже доли заливки
-      if (kind !== 'plate') {
-        const course = FAMILY_TEX[familyOf(B.MB, block.materialId)].course, y0 = block.y * CELL;
-        _to.y = y0 + Math.min(CELL, Math.max(course, Math.ceil((_to.y - y0) / course - 1e-6) * course));
-      }
-      _to.y += 0.1;
-      const dist = _v.distanceTo(_to);
-      pieces.fly(block.materialId, _v.x, _v.y, _v.z, _to.x, _to.y, _to.z, 0.3 + dist * 0.06, 0.3 + dist * 0.15, Math.atan2(-dx, -dz));
-    }
-  }
-
   function clear() {
     sprites.clear(); pieces.clear(); flag.hide(); glow.clear();
     salvo.left = 0;
@@ -532,13 +489,12 @@ export function create(ctx) {
   let mode = 'site';
   return {
     group,
-    // новая площадка: всё долой, сетки летящих блоков её семейств — заранее (программы — в первом кадре площадки)
+    // новая площадка: всё долой
     build: function (w) {
       clear();
       shapesOf = null; rolesOf = null;
       // роли клеток — сразу, под брифингом (а не на первой укладке)
       if (w && w.blocks && ctx.house) roleMap(w);
-      if (w && w.blocks) pieces.prepare(w.blocks.map(function (b) { return b.materialId; }));
     },
     clear: clear,
     // чертёж вида пересобран (building.js → rescan: прорубленная дверь, автозаполнение, молния) — формы клеток заново
@@ -562,7 +518,6 @@ export function create(ctx) {
         if (salvo.t <= 0) { fire(3 - salvo.left); salvo.left--; salvo.t = SALVO; }
       }
       syncDry(dt);
-      handBlocks(dt, info);
       if (ctx.sky) { sprites.light(ctx.sky); flag.light(ctx.sky, info.camera); }
       sprites.update(dt, info.camera);
       pieces.update(dt);

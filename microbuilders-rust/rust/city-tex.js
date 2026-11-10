@@ -3,7 +3,7 @@
 // GLSL: H(uv) → x — высота в метрах, yzw — маски; A(uv, h, cav) → альбедо (линейное); RM(uv, h, cav) →
 // шероховатость и металл. tile — сколько метров в плитке фактуры (геометрия делит свои координаты на него).
 import * as THREE from 'three';
-import { NOISE } from './glsl.js?v=45127fe';
+import { NOISE } from './glsl.js?v=ff29707';
 
 const RECIPES = {};
 

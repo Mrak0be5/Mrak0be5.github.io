@@ -5,23 +5,23 @@
 // (scaffold.js), бригада MakeHuman (crew.js), рельеф, лес, небо и погода. Клетка логики — 2 м: мир вида ровно ×2
 // к координатам оригинала, камера — копия камеры оригинала (позиция ×2, поворот, угол, сдвиг под интерфейс).
 import * as THREE from 'three';
-import { createTextures } from './textures.js?v=45127fe';
-import { createMaterials } from './materials.js?v=45127fe';
-import { createSky, createTerrain, splatMap, terrainMaterial, terrainMesh, meshHeight, mountains, linkSkyTree, createWear, setSeason, setLevelSeason, unpinSeason, SEASON } from './world.js?v=45127fe';
-import { createPost } from './post.js?v=45127fe';
-import { createRender, DYNAMIC } from './render.js?v=45127fe';
-import { createMobile } from './mobile.js?v=45127fe';
-import { createGrass, createForest, createRocks } from './nature.js?v=45127fe';
-import { createWorkerFactory } from './people.js?v=45127fe';
-import { createLife } from './life.js?v=45127fe';
-import { createBuilding } from './building.js?v=45127fe';
-import { CELL, familyOf } from './families.js?v=45127fe';
-import { createYard } from './yard.js?v=45127fe';
-import { createScaffold } from './scaffold.js?v=45127fe';
-import { createCrew } from './crew.js?v=45127fe';
-import { createLights } from './props.js?v=45127fe';
-import { roads as siteRoads, pit as sitePit } from './site-layout.js?v=45127fe';
-import { stoneDetail, shadowOnlyPass } from './geo.js?v=45127fe';
+import { createTextures } from './textures.js?v=ff29707';
+import { createMaterials } from './materials.js?v=ff29707';
+import { createSky, createTerrain, splatMap, terrainMaterial, terrainMesh, meshHeight, mountains, linkSkyTree, createWear, setSeason, setLevelSeason, unpinSeason, SEASON } from './world.js?v=ff29707';
+import { createPost } from './post.js?v=ff29707';
+import { createRender, DYNAMIC } from './render.js?v=ff29707';
+import { createMobile } from './mobile.js?v=ff29707';
+import { createGrass, createForest, createRocks } from './nature.js?v=ff29707';
+import { createWorkerFactory } from './people.js?v=ff29707';
+import { createLife } from './life.js?v=ff29707';
+import { createBuilding } from './building.js?v=ff29707';
+import { CELL, familyOf } from './families.js?v=ff29707';
+import { createYard } from './yard.js?v=ff29707';
+import { createScaffold } from './scaffold.js?v=ff29707';
+import { createCrew } from './crew.js?v=ff29707';
+import { createLights } from './props.js?v=ff29707';
+import { roads as siteRoads, pit as sitePit } from './site-layout.js?v=ff29707';
+import { stoneDetail, shadowOnlyPass } from './geo.js?v=ff29707';
 
 // Радиус поляны, м: перекур — в 10–20 клетках от здания, обед и сон — в 30–40 (logic.js →
 // pickPerimeterCell), рабочие уходят туда пешком. Лес начинается за краем поляны.
@@ -89,7 +89,7 @@ export function createScene(renderer, opts) {
   // Каждый — свой файл (site.js, fx.js, city.js) вида create(ctx) → { group, build?(world), clear?(), update?(dt, info),
   // react?(event), call?(name, args), active? }. Грузятся динамически: ошибка модуля (при загрузке или в кадре)
   // выключает только его (RustDebug.state().plugins), игра и остальной вид идут дальше. ?only=site,fx — только эти.
-  const LOADERS = { site: function () { return import('./site.js?v=45127fe'); }, fx: function () { return import('./fx.js?v=45127fe'); }, city: function () { return import('./city.js?v=45127fe'); } };
+  const LOADERS = { site: function () { return import('./site.js?v=ff29707'); }, fx: function () { return import('./fx.js?v=ff29707'); }, city: function () { return import('./city.js?v=ff29707'); } };
   const plugins = [];
   const info = { dt: 0, time: 0, hour: 13, night: 0, tempo: 1, camera: null, target: null, origScene: null, origCamera: null, mode: 'site', cityRoot: null };
   async function loadPlugins(ctx) {
@@ -169,7 +169,10 @@ export function createScene(renderer, opts) {
     scaffold = createScaffold({ E, mats });
     crew = createCrew({ E, factory, mats, wear, camera, sky,
       layPoint: function (b, from, out) { return house.layPoint(b, from, out); },
-      kindAt: function (x, y, z) { return house.kindAt(x, y, z); } });
+      kindAt: function (x, y, z) { return house.kindAt(x, y, z); },
+      // земля под колесом тачки (карьер площадки) и поддоны крана как запас у места работы — модуль площадки 'site'
+      ground: function (x, z) { const sp = plugin('site'); return sp && sp.heightAt ? Math.max(0, sp.heightAt(x, z)) : 0; },
+      site: function () { return plugin('site'); } });
     scene.add(house.group, yard.group, scaffold.group, crew.group);
     viewGroups = [house.group, yard.group, scaffold.group, crew.group];
     B.on(function (event) { react(event); each('react', event); });
@@ -197,7 +200,9 @@ export function createScene(renderer, opts) {
     sky.update(state.hour, 0, target);
     await progress(0.93, 'Площадка и квартал…');
     await loadPlugins({ THREE, renderer, scene, camera, target, quality, tier, mats, textures, terrain, sky, E, B, CELL, params, state, house, yard, crew, scaffold,
-      ground: function (x, z) { return meshHeight(terrain, x, z); }, linkSkyTree: linkSkyTree, markGI: function () { if (post && post.gi) post.gi.markDirty(); } });
+      ground: function (x, z) { return meshHeight(terrain, x, z); }, linkSkyTree: linkSkyTree, markGI: function () { if (post && post.gi) post.gi.markDirty(); },
+      // модули площадки видят друг друга (запас у места работы берёт поддоны крана у 'site')
+      plugin: function (name) { return plugin(name); } });
     mark('модули');
     linkSkyTree(scene);
     mark('свет и G-буфер');

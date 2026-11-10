@@ -2,20 +2,23 @@
 // стена, окно в проёме, дверной проём, колонна, перекрытие (роли — plan.js). Стены и плиты одной кладки
 // сливаются: фактура лежит в мировых координатах (ряды кирпича идут через детали), грани у готовых соседей не
 // рисуются. Сетка разбита на куски 8 × 8 × 8 клеток — при постройке детали пересобирается её кусок (и соседний,
-// если деталь на границе). Недостроенная деталь растёт рядами своей кладки (плита — полосами) на долю
-// (poured + доля текущего мини-куба) / N³, как кольцо над рабочим в оригинале. Будущие детали фронта работ —
-// тонкий контур (подсветка оригинала). Постройки городка — те же детали.
+// если деталь на границе). Недостроенная деталь на ×1 растёт единицами своей кладки — пачками в такт рукам
+// каменщика (ms-lay.js: кирпич, камень, брус, лист, щит; плита — полосами): пачка ложится в ту долю времени
+// укладки, когда рука её кладёт, чуть оседает; под неё мастерок тянет полосу свежего раствора. На ×5 и ×20 —
+// рядами своей кладки на долю (poured + доля текущего мини-куба) / N³, как кольцо над рабочим в оригинале.
+// Будущие детали фронта работ — тонкий контур (подсветка оригинала). Постройки городка — те же детали.
 // Особые блоки — как у оригинала (art/features.js): двери, прорубленные по ходу стройки (logic.js → retrofitDoor),
 // и люки появляются в стене и перекрытии, когда логика их врезала; створки открываются на петле перед рабочим
 // (feature-blocks.js → update); фонарь — стальной столбик с плафоном, ночью горит и светит; вода — дно, бортики,
 // гладь с рябью и отражением неба, фонтан и слив; панорамные окна — остекление во всю клетку, ночью горит 2/3.
 import * as THREE from 'three';
-import { CELL, familyOf, familyMaterial, familyTile, tintOf, tintHex, FAMILY_TEX } from './families.js?v=45127fe';
-import { classify, pieceBoxes, featureBoxes, chimneyCells, key3, DIRS } from './plan.js?v=45127fe';
-import { linkSky } from './world.js?v=45127fe';
-import { DYNAMIC, markDynamic } from './render.js?v=45127fe';
-import { createFeatureMaterials, pushRod, pushPyramid, pushQuad, pushDisk, pushGlowBox, pushTube } from './feat-parts.js?v=45127fe';
-import { mergeMeshes, unmergeMeshes, shadowProxy, dropShadowProxy } from './geo.js?v=45127fe';
+import { CELL, familyOf, familyMaterial, familyTile, tintOf, tintHex, FAMILY_TEX } from './families.js?v=ff29707';
+import { classify, pieceBoxes, featureBoxes, chimneyCells, key3, DIRS } from './plan.js?v=ff29707';
+import { linkSky } from './world.js?v=ff29707';
+import { DYNAMIC, markDynamic } from './render.js?v=ff29707';
+import { createFeatureMaterials, pushRod, pushPyramid, pushQuad, pushDisk, pushGlowBox, pushTube } from './feat-parts.js?v=ff29707';
+import { mergeMeshes, unmergeMeshes, shadowProxy, dropShadowProxy } from './geo.js?v=ff29707';
+import { LAY, PHASE, HAND_SPAN, layClock, layUnits, mergeUnits, fullCourses, packRange, laidCount, replan } from './ms-lay.js?v=ff29707';
 
 const CHUNK = 8;
 // сечение колонны, м
@@ -197,6 +200,14 @@ void main() {
 const BOX_EDGES = [[0, 1, 2, 3, 1, 2], [0, 1, 2, 0, 4, 2], [0, 1, 2, 0, 1, 5], [3, 4, 5, 0, 4, 5], [3, 4, 5, 3, 1, 5], [3, 4, 5, 3, 4, 2],
   [3, 1, 2, 3, 4, 2], [3, 1, 2, 3, 1, 5], [0, 4, 2, 3, 4, 2], [0, 4, 2, 0, 4, 5], [0, 1, 5, 3, 1, 5], [0, 1, 5, 0, 4, 5]];
 
+// Предпросмотр детали до укладки (ms-lay.js → LAY.preview, crew.js → standFor): здания регистрируются, отвечает то, чей
+// блок.
+const PREVIEWS = [];
+LAY.preview = function (b, side) {
+  for (let i = 0; i < PREVIEWS.length; i++) if (PREVIEWS[i].has(b)) return PREVIEWS[i].preview(b, side);
+  return null;
+};
+
 export function createBuilding(ctx) {
   const { E, mats } = ctx;
   const MB = E.MB;
@@ -268,11 +279,26 @@ export function createBuilding(ctx) {
     group.add(lampPool);
   }
 
+  // Полосы свежего раствора под следующую пачку (мастерок ведёт её вдоль ряда): одна сетка экземплярами на все
+  // растущие детали — один вызов отрисовки. Видна с загрузки три кадра одним экземпляром под землёй: программа
+  // материала с экземплярами собирается тогда, а не рывком на первой укладке.
+  const BEDS = 24;
+  const bedMesh = new THREE.InstancedMesh(white(new THREE.BoxGeometry(1, 1, 1)), mats.mortar, BEDS);
+  bedMesh.name = 'lay-beds';
+  bedMesh.frustumCulled = false;
+  bedMesh.castShadow = false;
+  bedMesh.receiveShadow = true;
+  bedMesh.userData.noGI = true;
+  bedMesh.setMatrixAt(0, new THREE.Matrix4().makeTranslation(0, -80, 0));
+  bedMesh.count = ctx.lampLight !== false ? 1 : 0;
+  bedMesh.visible = bedMesh.count > 0;
+  group.add(bedMesh);
+
   let world = null;
   let cells = new Map();          // клетка → { x, y, z, wall, glass, door, solid, kind, links, family, mat }
   let chunks = new Map();         // ключ куска → Group
   const dirty = new Set();
-  let partials = new Map();       // id блока → { mesh, step }
+  let partials = new Map();       // id блока → { mesh, step, rv — пачка по единице (pushPack) }
   let ghost = null, ghostDirty = true, ghostTimer = 0;
   let builtSeen = 0;
   const seenBuilt = new Set();
@@ -360,8 +386,9 @@ export function createBuilding(ctx) {
     proxies.clear();
     chunks.forEach(function (g) { disposeGroup(g); group.remove(g); });
     chunks = new Map();
-    partials.forEach(function (p) { if (p.mesh) { group.remove(p.mesh); disposeGroup(p.mesh); } });
+    partials.forEach(dropPartial);
     partials = new Map();
+    plans.clear();
     if (ghost) { group.remove(ghost); ghost.geometry.dispose(); ghost = null; }
     if (camp) { disposeGroup(camp); group.remove(camp); camp = null; }
     campSig = '';
@@ -429,7 +456,7 @@ export function createBuilding(ctx) {
     const solid = set.solid[fam] || (set.solid[fam] = newBuf());
     cut(p.solid).forEach(function (q) { box(solid, q.b, q.skip, familyTile(fam), tint, 0.022); });
     // растущая кладка: по верху ряда — свежий раствор, чуть шире ряда (у сруба и стали — без раствора)
-    if (clip && clip.h !== undefined && clip.h < CELL - 1e-3 && MORTAR_BED[fam]) {
+    if (clip && clip.h !== undefined && clip.h < CELL - 1e-3 && clip.bed !== false && MORTAR_BED[fam]) {
       cut(p.solid).forEach(function (q) {
         const b = q.b;
         if (b[4] - b[1] < 0.02 || b[4] < c.y * CELL + clip.h - 1e-3) return;
@@ -529,6 +556,7 @@ export function createBuilding(ctx) {
     const add = function (buf, material, shadow) {
       if (!buf.idx.length) return;
       const mesh = new THREE.Mesh(makeGeometry(buf), material);
+      buf.mesh = mesh;
       mesh.castShadow = shadow;
       mesh.receiveShadow = true;
       g.add(mesh);
@@ -705,22 +733,312 @@ export function createBuilding(ctx) {
     return Math.min(1, (b.poured + part) / total);
   }
 
-  function updatePartials() {
-    const seen = new Set();
+  // ---------- кладка в такт рукам (ms-lay.js) ----------
+  // план укладки детали: единицы её кладки в порядке укладки — один раз на укладку (сторона — клетка рабочего); деталь из
+  // мини-кубов (grid ≥ 2, уровни с 19-го) держит план и между ходками: уложенное — единицами прежнего плана, новая
+  // ходка (другой рабочий или другая сторона) переставляет только остаток (ms-lay.js → replan)
+  const plans = new Map();        // id блока → { cells, owner, fam, course, special, plate, units, info }
+  const CLOCK = {};
+  let planSeq = 0;
+  const _bm = new THREE.Matrix4(), _bs = new THREE.Vector3(), _bp = new THREE.Vector3(), _bq = new THREE.Quaternion();
+  function planOf(b, c, builder) {
+    let pl = plans.get(b.id);
+    const side = [(builder.cell[0] + 0.5) * CELL, (builder.cell[2] + 0.5) * CELL];
+    if (pl && pl.cells === cells && pl.owner === builder.index && Math.abs(pl.side[0] - side[0]) + Math.abs(pl.side[1] - side[1]) < 0.5) return pl;
+    const old = pl && pl.cells === cells && !pl.special ? pl : null;
+    const p = pieceBoxes(c, get, built, opts);
+    const fam = c.family, course = FAMILY_TEX[fam] ? FAMILY_TEX[fam].course : 0.5;
+    // шест, крест, навершие, люк в кладке и портал — растут рядами (в такт рукам, но не единицами)
+    const special = p.rods.length > 0 || !!c.cross || !!c.finial || c.kind === 'cut' || (c.kind === 'hatch' && c.hatchBase !== 'plate') || (!p.solid.length && !p.plate.length);
+    let units = special ? [] : layUnits(c, p, fam, course, c.y * CELL, side);
+    // часть детали уже лежит (прежние ходки): она — первой, как лежит; остаток — по новой стойке (единицы те же; у
+    // камня массива швы — по лицу, другие — дальше по прежнему плану)
+    if (old && units.length && b.poured > 0) units = replan(old.units, Math.floor(old.units.length * b.poured / MB.pourTotal(b) + 1e-6), units) || old.units;
+    // ящик детали (кладка и плита, без заходов в стены) — где встать каменщику (crew.js)
+    const box = [Infinity, c.y * CELL, Infinity, -Infinity, (c.y + 1) * CELL, -Infinity];
+    p.solid.concat(p.plate.filter(function (q) { return !q.ext; })).forEach(function (q) {
+      box[0] = Math.min(box[0], q.b[0]); box[2] = Math.min(box[2], q.b[2]); box[3] = Math.max(box[3], q.b[3]); box[5] = Math.max(box[5], q.b[5]);
+    });
+    if (!(box[3] > box[0])) { box[0] = c.x * CELL + 0.8; box[2] = c.z * CELL + 0.8; box[3] = box[0] + 0.4; box[5] = box[2] + 0.4; }
+    // у какого лица встанет рабочий: смотрит вдоль x — по оси, где его клетка дальше за краем ящика (как ms-lay.js →
+    // layUnits: массив кладут рядами вдоль этого лица; crew.js → standFor встаёт у него же)
+    const xView = Math.abs(side[0] - (box[0] + box[3]) / 2) - (box[3] - box[0]) / 2 >= Math.abs(side[1] - (box[2] + box[5]) / 2) - (box[5] - box[2]) / 2;
+    pl = { id: ++planSeq, cells: cells, owner: builder.index, fam: fam, course: course, special: special || !units.length, plate: units.length > 0 && !!units[0].plate,
+      units: units, span: units.length && units[0].plate ? 1 : HAND_SPAN[fam] || 2, prevW: 0, prevJ: -1, side: side,
+      info: { mode: 'tied', K: 0, j: 0, c: 0, w: 0, cyc: 0, fam: fam, kind: c.kind, count: 0, laid: 0, pack: [0, 0, 0], hand: [0, 0, 0], tap: [0, 0, 0],
+        from: [0, 0, 0], to: [0, 0, 0], bed: null, box: box, xView: xView, width: 0, mortar: false, block: b } };
+    plans.set(b.id, pl);
+    return pl;
+  }
+  // Ящик детали блока b и лицо, у которого встанет рабочий со стороны side [x, z] (как planOf), — до укладки: бригада
+  // ведёт рабочего к стойке заранее, по последним шагам пути (crew.js → standFor, ms-lay.js → LAY.preview). Не кладка
+  // (вода, фонарь, стекло) — null.
+  const _pv = { box: null, xView: true, kind: '' };
+  // зданий несколько (площадка и дома квартала штаба) — предпросмотр у того, чей это блок; дома квартала (lampLight:
+  // false, создаются заново с каждым кварталом) — без рабочих, не регистрируются
+  if (ctx.lampLight !== false) PREVIEWS.push({ has: function (b) { const c = world && b ? get(b.x, b.y, b.z) : null; return !!c && (c.wall === b || c.glass === b || c.door === b || c.hatch === b); }, preview: preview });
+  function preview(b, side) {
+    if (!world || !b) return null;
+    const c = get(b.x, b.y, b.z);
+    if (!c || !c.solid) return null;
+    const p = pieceBoxes(c, get, built, opts);
+    const box = _pv.box || (_pv.box = [0, 0, 0, 0, 0, 0]);
+    box[0] = Infinity; box[1] = c.y * CELL; box[2] = Infinity; box[3] = -Infinity; box[4] = (c.y + 1) * CELL; box[5] = -Infinity;
+    p.solid.concat(p.plate.filter(function (q) { return !q.ext; })).forEach(function (q) {
+      box[0] = Math.min(box[0], q.b[0]); box[2] = Math.min(box[2], q.b[2]); box[3] = Math.max(box[3], q.b[3]); box[5] = Math.max(box[5], q.b[5]);
+    });
+    if (!(box[3] > box[0])) { box[0] = c.x * CELL + 0.8; box[2] = c.z * CELL + 0.8; box[3] = box[0] + 0.4; box[5] = box[2] + 0.4; }
+    _pv.xView = Math.abs(side[0] - (box[0] + box[3]) / 2) - (box[3] - box[0]) / 2 >= Math.abs(side[1] - (box[2] + box[5]) / 2) - (box[5] - box[2]) / 2;
+    _pv.kind = c.kind;
+    return _pv;
+  }
+  // середина верха единиц пачки [ja, jb) у места u (номер в пачке, дробный) — плавно между соседними местами
+  const _h0 = [0, 0, 0], _h1 = [0, 0, 0];
+  function handAt(pl, ja, jb, u, out) {
+    const n = jb - ja;
+    u = Math.max(0, Math.min(n - 1, u));
+    const i = Math.floor(u), t = u - i;
+    centerOf(pl, ja, n, i, _h0);
+    if (t > 0 && i + 1 < n) { centerOf(pl, ja, n, i + 1, _h1); for (let a = 0; a < 3; a++) _h0[a] += (_h1[a] - _h0[a]) * t; }
+    out[0] = _h0[0]; out[1] = _h0[1]; out[2] = _h0[2];
+    return out;
+  }
+  // середина верха span единиц подряд у единицы m пачки (по одной на ряд ступеньки — рука идёт по ступеньке ровно,
+  // без зигзага по рядам)
+  function centerOf(pl, ja, n, m, out) {
+    const s = pl.span, lo = Math.max(0, Math.min(n - s, m - (s >> 1))), hi = Math.min(n, lo + s);
+    let x = 0, y = 0, z = 0;
+    for (let q = lo; q < hi; q++) { const b = pl.units[ja + q].b; x += b[0] + b[3]; z += b[2] + b[5]; y += b[4]; }
+    out[0] = x / 2 / (hi - lo); out[1] = y / (hi - lo); out[2] = z / 2 / (hi - lo);
+    return out;
+  }
+  // Сведения о пачке j для рук (crew.js, people.js): центр её верха, точка руки (середина единиц у места, где они
+  // сейчас ложатся, на единицу вперёд — рука ИК догоняет цель), точка подбивки (на три единицы позади), постель —
+  // нижний ряд пачки (мастерок ведёт раствор от from к to по её верху), ширина постели, сколько единиц и уложено.
+  function packInfo(pl, ck, b) {
+    const info = pl.info;
+    info.mode = ck.mode; info.K = ck.K; info.j = ck.j; info.c = ck.c; info.w = ck.w; info.cyc = ck.cyc;
+    info.count = 0; info.laid = 0; info.bed = null; info.block = b;
+    const U = pl.units.length;
+    if (ck.mode !== 'tied' || pl.special || !U) {
+      // ряды: рука — к верху растущей детали
+      layPoint(b, _bp.set((ck.builder.cell[0] + 0.5) * CELL, 0, (ck.builder.cell[2] + 0.5) * CELL), _bs);
+      info.pack[0] = info.hand[0] = info.tap[0] = _bs.x; info.pack[1] = info.hand[1] = info.tap[1] = _bs.y; info.pack[2] = info.hand[2] = info.tap[2] = _bs.z;
+      return info;
+    }
+    const r = packRange(U, ck, ck.j), ja = Math.min(r[0], U - 1), jb = Math.max(ja + 1, Math.min(r[1], U));
+    let k0 = Infinity;
+    for (let i = ja; i < jb; i++) if (pl.units[i].k < k0) k0 = pl.units[i].k;
+    let sx = 0, sz = 0, top = -Infinity, n = 0;
+    const bed = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+    let first = null, last = null;
+    for (let i = ja; i < jb; i++) {
+      const q = pl.units[i].b;
+      sx += (q[0] + q[3]) / 2; sz += (q[2] + q[5]) / 2; top = Math.max(top, q[4]); n++;
+      if (pl.units[i].k !== k0) continue;
+      for (let a = 0; a < 3; a++) { bed[a] = Math.min(bed[a], q[a]); bed[a + 3] = Math.max(bed[a + 3], q[a + 3]); }
+      if (!first) first = q;
+      last = q;
+    }
+    info.count = n;
+    info.laid = Math.max(0, Math.min(n, laidCount(U, ck) - ja));
+    info.pack[0] = sx / n; info.pack[1] = top; info.pack[2] = sz / n;
+    // рука: единица, что ложится сейчас (w — доля окна), на единицу вперёд; подбивка — на три позади
+    const u = ck.w * n - 0.5;
+    handAt(pl, ja, jb, u + 1, info.hand);
+    handAt(pl, ja, jb, u - 3, info.tap);
+    info.bed = bed;
+    // мастерок — от первой единицы ряда пачки к последней (вдоль ряда — по ходу единиц; одна единица — вдоль длинной
+    // оси постели; у массива единицы во всю глубину, ряд — поперёк неё), по её низу
+    const ux = (last[0] + last[3] - first[0] - first[3]) / 2, uz = (last[2] + last[5] - first[2] - first[5]) / 2;
+    const ax = Math.abs(ux) + Math.abs(uz) > 0.05 ? Math.abs(ux) >= Math.abs(uz) : bed[3] - bed[0] >= bed[5] - bed[2];
+    const fa = ax ? (first[0] + first[3]) / 2 : (first[2] + first[5]) / 2, la = ax ? (last[0] + last[3]) / 2 : (last[2] + last[5]) / 2;
+    const lo = ax ? bed[0] : bed[2], hi = ax ? bed[3] : bed[5];
+    const s0 = fa <= la ? lo : hi, s1 = fa <= la ? hi : lo;
+    const mid = ax ? (bed[2] + bed[5]) / 2 : (bed[0] + bed[3]) / 2;
+    info.from[0] = ax ? s0 : mid; info.from[1] = bed[1]; info.from[2] = ax ? mid : s0;
+    info.to[0] = ax ? s1 : mid; info.to[1] = bed[1]; info.to[2] = ax ? mid : s1;
+    info.width = ax ? bed[5] - bed[2] : bed[3] - bed[0];
+    info.mortar = !!MORTAR_BED[pl.fam] || pl.fam === 'concrete';
+    nearFace(pl, info, ax);
+    return info;
+  }
+  // Массив (цоколь во всю клетку): рука, подбивка и мастерок — у ближнего лица, не глубже 0,3 м; полоса раствора —
+  // по ближнему краю постели шириной 0,3 м. Стена, что уходит от рабочего (с торца), — нет: рука идёт вдоль ряда.
+  function nearFace(pl, info, bedAlongX) {
+    if (info.kind !== 'mass') return;
+    // лицо со стороны рабочего — по оси, где он дальше за краем ящика (как crew.js → standFor)
+    const B = info.box, sd = pl.side;
+    const dx = sd[0] - (B[0] + B[3]) / 2, dz = sd[1] - (B[2] + B[5]) / 2;
+    const fa = Math.abs(dx) - (B[3] - B[0]) / 2 >= Math.abs(dz) - (B[5] - B[2]) / 2 ? 0 : 2, sg = (fa === 0 ? dx : dz) >= 0 ? -1 : 1;
+    if (B[fa + 3] - B[fa] <= 0.7) return;
+    const near = sg > 0 ? B[fa] : B[fa + 3], lim = near + 0.3 * sg;
+    const pull = function (P) { P[fa] = sg > 0 ? Math.min(P[fa], lim) : Math.max(P[fa], lim); };
+    pull(info.hand); pull(info.tap); pull(info.pack);
+    // постель поперёк взгляда (ряд вдоль лица) — полоса у лица; вдоль взгляда (ряд уходит от рабочего) — её начало
+    if ((fa === 2) === bedAlongX) {
+      const across = near + 0.15 * sg;
+      info.from[fa] = info.to[fa] = across;
+      info.width = Math.min(info.width, 0.3);
+    } else { pull(info.from); pull(info.to); }
+  }
+  // Полоса раствора пачки: тянется за мастерком (PHASE.bed), под пачкой выступает швом, срезается (PHASE.trim).
+  function bedStrip(info) {
+    if (!info.bed || !info.mortar || bedMesh.count >= BEDS) return;
+    const c = info.c;
+    if (c < PHASE.bed[0] || c >= PHASE.trim[0] + 0.04) return;
+    const s = THREE.MathUtils.smoothstep(c, PHASE.bed[0], PHASE.bed[1]);
+    const f = info.from, t = info.to;
+    const x0 = f[0], z0 = f[2], x1 = f[0] + (t[0] - f[0]) * s, z1 = f[2] + (t[2] - f[2]) * s;
+    const ax = Math.abs(t[0] - f[0]) >= Math.abs(t[2] - f[2]);
+    const w = info.width + 0.012;
+    _bp.set((x0 + x1) / 2, f[1] + 0.005, (z0 + z1) / 2);
+    _bs.set(ax ? Math.max(0.01, Math.abs(x1 - x0)) : w, 0.014, ax ? w : Math.max(0.01, Math.abs(z1 - z0)));
+    bedMesh.setMatrixAt(bedMesh.count++, _bm.compose(_bp, _bq, _bs));
+  }
+  // единицы [a, b) рядов от minK — бруски в набор (смежные одного ряда сливаются); плита — своей кладкой
+  function unitBuf(set, c, pl) {
+    const fam = pl.plate ? plateFamily(c) : c.family;
+    return { fam: fam, tint: shade(tintOf(MB, c.mat, fam), jitter(c.x, c.y, c.z)),
+      buf: pl.plate ? (set.plate[fam] || (set.plate[fam] = newBuf())) : (set.solid[fam] || (set.solid[fam] = newBuf())) };
+  }
+  function pushUnits(set, c, pl, a, b, minK) {
+    if (b <= a) return;
+    const u = unitBuf(set, c, pl), skip = c.y === 0 ? [3] : [];
+    mergeUnits(pl.units, a, b, minK).forEach(function (q) { pushBox(u.buf, q.b, skip, familyTile(u.fam), u.tint); });
+  }
+  // Пачка [a, b) — последней в своём буфере, по единице (без слияния): рука кладёт их по одной — видимая часть меша
+  // (drawRange) растёт на единицу, сетка не пересобирается. ends — конец индексов каждой единицы.
+  function pushPack(set, c, pl, a, b) {
+    if (b <= a) return null;
+    const u = unitBuf(set, c, pl), skip = c.y === 0 ? [3] : [];
+    const rv = { buf: u.buf, base: u.buf.idx.length, ends: [], shown: -1, from: a };
+    for (let i = a; i < b; i++) { pushBox(u.buf, pl.units[i].b, skip, familyTile(u.fam), u.tint); rv.ends.push(u.buf.idx.length); }
+    return rv;
+  }
+  // видно m единиц пачки; события 'unit' — новым (ms-lay.js → LAY.listen)
+  function reveal(p, pl, m) {
+    const rv = p.rv;
+    if (!rv || !rv.buf.mesh) return;
+    m = Math.max(0, Math.min(rv.ends.length, m));
+    if (rv.shown === m) return;
+    if (LAY.listening() && rv.shown >= 0) {
+      for (let i = rv.shown; i < m; i++) {
+        const q = pl.units[rv.from + i].b;
+        LAY.emit('unit', { block: pl.info.block, i: rv.from + i, at: [(q[0] + q[3]) / 2, q[4], (q[2] + q[5]) / 2], b: q });
+      }
+    }
+    const n = m > 0 ? rv.ends[m - 1] : rv.base;
+    rv.buf.mesh.geometry.setDrawRange(0, n);
+    // пустой меш не рисуется вовсе (three с drawRange 0 всё равно зовёт отрисовку)
+    rv.buf.mesh.visible = n > 0;
+    rv.shown = m;
+  }
+  function dropPartial(p) {
+    if (p.mesh) { group.remove(p.mesh); disposeGroup(p.mesh); p.mesh = null; }
+    p.rv = null;
+  }
+
+  // Стекло окна (блок логики со стеклом — glassOf): в такт рукам (ms-lay.js) рама и стекло встают, когда рука вставляет
+  // их в проём (первая пачка — рама, последняя — стекло; одна пачка — всё сразу, с половины окна «положить»); рядами —
+  // по доле укладки (рама с 0,3, стекло с 0,6). Сведения о пачке: рука — к проёму со стороны рабочего, ящик — стена
+  // клетки (у её лица встанет рабочий; проём ярусом выше — с подмостей, crew.js). Готово (built) — стекло в куске.
+  const GLASS_OPTS = { pillar: function (c) { return opts.pillar(c); }, glass: function () { return true; } };
+  function glassPartial(b, seen, active) {
+    const c = get(b.x, b.y, b.z);
+    const ck = c && c.solid && c.glass === b ? layClock(MB, world, b, 'glass', CLOCK) : null;
+    if (!ck) { LAY.info.delete(b); return; }
+    active.add(b.id);
+    let pl = plans.get(b.id);
+    const side = [(ck.builder.cell[0] + 0.5) * CELL, (ck.builder.cell[2] + 0.5) * CELL];
+    if (!pl || pl.cells !== cells || !pl.glassP || Math.abs(pl.side[0] - side[0]) + Math.abs(pl.side[1] - side[1]) > 0.5) {
+      const p = pieceBoxes(c, get, built, GLASS_OPTS);
+      const box = [Infinity, c.y * CELL, Infinity, -Infinity, (c.y + 1) * CELL, -Infinity];
+      p.solid.forEach(function (q) { box[0] = Math.min(box[0], q.b[0]); box[2] = Math.min(box[2], q.b[2]); box[3] = Math.max(box[3], q.b[3]); box[5] = Math.max(box[5], q.b[5]); });
+      if (!(box[3] > box[0])) { box[0] = c.x * CELL + 0.8; box[2] = c.z * CELL + 0.8; box[3] = box[0] + 0.4; box[5] = box[2] + 0.4; }
+      const xView = Math.abs(side[0] - (box[0] + box[3]) / 2) - (box[3] - box[0]) / 2 >= Math.abs(side[1] - (box[2] + box[5]) / 2) - (box[5] - box[2]) / 2;
+      const g = p.glass.length ? p.glass[0].b : [box[0], box[1] + 1, box[2], box[3], box[1] + 1.4, box[5]];
+      // рука — у проёма со стороны рабочего (на 6 см от стекла)
+      const gx = (g[0] + g[3]) / 2, gy = (g[1] + g[4]) / 2, gz = (g[2] + g[5]) / 2, thinX = g[3] - g[0] < g[5] - g[2];
+      const sg = thinX ? Math.sign(side[0] - gx) || 1 : Math.sign(side[1] - gz) || 1;
+      const pk = [gx + (thinX ? sg * 0.06 : 0), gy, gz + (thinX ? 0 : sg * 0.06)];
+      pl = { id: ++planSeq, cells: cells, owner: ck.builder.index, glassP: p, side: side, special: true, units: [], prevJ: -1, prevW: 0, shown: -1,
+        info: { mode: 'tied', K: 0, j: 0, c: 0, w: 0, cyc: 0, fam: 'glass', kind: 'glass', count: 1, laid: 0, pack: pk, hand: pk.slice(), tap: pk.slice(),
+          from: pk.slice(), to: pk.slice(), bed: null, box: box, xView: xView, width: 0, mortar: false, block: b } };
+      plans.set(b.id, pl);
+    }
+    const info = pl.info;
+    info.mode = ck.mode; info.K = ck.K; info.j = ck.j; info.c = ck.c; info.w = ck.w; info.cyc = ck.cyc; info.block = b;
+    // сколько частей вставлено: 0, 1 — рама, 2 — рама и стекло
+    const tied = ck.mode === 'tied';
+    const n = tied ? (ck.K <= 1 ? (ck.w >= 0.5 ? 2 : 0) : ck.j === ck.K - 1 && ck.w >= 0.5 ? 2 : ck.j > 0 || ck.w >= 0.5 ? 1 : 0) : (ck.fill >= 0.6 ? 2 : ck.fill >= 0.3 ? 1 : 0);
+    info.laid = n; info.count = 1;
+    LAY.info.set(b, info);
+    if (!n) return;
+    seen.add(b.id);
+    let p = partials.get(b.id);
+    if (!p) { p = { mesh: null, rv: null, step: -1 }; partials.set(b.id, p); }
+    if (p.step === 'g' + n) return;
+    p.step = 'g' + n;
+    dropPartial(p);
+    const set = newSet();
+    pl.glassP.steel.forEach(function (q) { pushBox(set.steel, q.b, q.skip, [1, 1], WHITE); });
+    if (n >= 2) pl.glassP.glass.forEach(function (q) { pushBox(set.glass, q.b, q.skip, [1, 1], WHITE); });
+    const g = new THREE.Group();
+    flush(set, g);
+    p.mesh = g;
+    group.add(g);
+    // событие кладки: часть легла (проверки — rv-fin*.mjs, эффекты)
+    if (LAY.listening() && pl.shown !== n) {
+      const q = (n >= 2 ? pl.glassP.glass[0] : pl.glassP.steel[0]);
+      if (q) LAY.emit('unit', { block: b, i: n - 1, at: [(q.b[0] + q.b[3]) / 2, q.b[4], (q.b[2] + q.b[5]) / 2], b: q.b });
+    }
+    pl.shown = n;
+  }
+  function updatePartials(dt) {
+    const seen = new Set(), active = new Set();
+    bedMesh.count = 0;
     for (let i = 0; i < world.blocks.length; i++) {
       const b = world.blocks[i];
-      if (b.built || b.glassOf !== undefined) continue;
-      const fill = fillOf(b);
-      if (fill <= 0.001) continue;
+      if (b.built) continue;
+      if (b.glassOf !== undefined) { glassPartial(b, seen, active); continue; }
       const c = get(b.x, b.y, b.z);
       const feat = !!c && !c.solid && featOf(c) === b;
       if (!c || (!c.solid && !feat)) continue;
+      // часы рук: на ×1 — пачками в такт (tied), иначе рядами по доле заливки
+      const ck = feat ? null : layClock(MB, world, b, c.family, CLOCK);
+      const tied = !!ck && ck.mode === 'tied';
+      const pl = ck ? planOf(b, c, ck.builder) : null;
+      // никто не кладёт, а часть уложена прежними ходками (grid ≥ 2): видно ровно уложенные единицы плана
+      const kept = !ck && !feat && b.poured > 0 && LAY.tempo < 5 ? plans.get(b.id) : null;
+      const keep = !!kept && kept.cells === cells && !kept.special && kept.units.length > 0;
+      if (ck) {
+        active.add(b.id);
+        LAY.info.set(b, packInfo(pl, ck, b));
+        if (tied) {
+          bedStrip(pl.info);
+          // пачка уложена (окно кончилось или пошёл следующий цикл)
+          if (LAY.listening() && pl.prevJ >= 0 && ((ck.j === pl.prevJ && pl.prevW < 1 && ck.w >= 1) || (ck.j > pl.prevJ && pl.prevW < 1))) LAY.emit('pack', { block: b, j: pl.prevJ, K: ck.K });
+          pl.prevJ = ck.j; pl.prevW = ck.w;
+        }
+      } else LAY.info.delete(b);
+      const fill = tied ? ck.frac : fillOf(b);
+      if (fill <= 0.001 && !(tied && !pl.special)) continue;
       seen.add(b.id);
       let p = partials.get(b.id);
-      if (!p) { p = { mesh: null, step: -1 }; partials.set(b.id, p); }
-      // стена растёт рядами своей кладки, плита — полосами по 0,5 м; фонарь и бассейн — по 0,25 м (вода — готовым)
-      let clip, step;
-      if (feat) {
+      if (!p) { p = { mesh: null, rv: null, step: -1 }; partials.set(b.id, p); }
+      // стена растёт рядами своей кладки, плита — полосами по 0,5 м; фонарь и бассейн — по 0,25 м (вода — готовым);
+      // в такт рукам — единицами: пачки до текущей — сеткой, текущая — по единице от руки (drawRange)
+      let clip = null, step, laid = -1, from = -1, to = -1;
+      if (tied && !pl.special) {
+        const U = pl.units.length, r = packRange(U, ck, ck.j);
+        from = Math.min(r[0], U); to = Math.min(r[1], U);
+        laid = Math.max(from, Math.min(to, laidCount(U, ck)));
+        step = 'p' + pl.id + ':' + from + ':' + to;
+      } else if (keep) {
+        laid = from = to = Math.min(kept.units.length, Math.floor(kept.units.length * b.poured / MB.pourTotal(b) + 1e-6));
+        step = 'k' + kept.id + ':' + laid;
+      } else if (feat) {
         step = Math.max(0.25, Math.ceil(fill * 8 - 1e-6) / 4);
         clip = { h: step };
       } else if (c.kind === 'plate') {
@@ -732,21 +1050,36 @@ export function createBuilding(ctx) {
         step = h;
         clip = { h: h };
       }
-      if (p.step === step) continue;
+      if (p.step === step) {
+        if (p.rv) reveal(p, pl, laid - from);
+        continue;
+      }
       p.step = step;
+      dropPartial(p);
       const set = newSet();
-      if (feat) emitFeature(set, c, clip); else emit(set, c, get, built, clip);
+      if (laid >= 0) {
+        // целые ряды — деталью с рамками (как рядами), начатые ряды — единицами, текущая пачка — по единице
+        const px = keep ? kept : pl;
+        const hb = px.plate ? 0 : fullCourses(px.units, from);
+        if (hb > 0) emit(set, c, get, built, { h: hb * px.course, bed: false });
+        pushUnits(set, c, px, 0, from, hb);
+        p.rv = pushPack(set, c, px, from, to);
+      } else if (feat) emitFeature(set, c, clip); else emit(set, c, get, built, clip);
       const g = new THREE.Group();
       flush(set, g);
-      if (p.mesh) { group.remove(p.mesh); disposeGroup(p.mesh); }
       p.mesh = g;
       group.add(g);
+      if (p.rv) reveal(p, pl, laid - from);
     }
     partials.forEach(function (p, id) {
       if (seen.has(id)) return;
-      if (p.mesh) { group.remove(p.mesh); disposeGroup(p.mesh); }
+      dropPartial(p);
       partials.delete(id);
     });
+    // планы укладки — пока блок у рабочего и пока деталь из мини-кубов не достроена (уложенное — по плану)
+    plans.forEach(function (pl, id) { const b = pl.info.block; if (!active.has(id) && (!b || b.built || !(b.poured > 0))) plans.delete(id); });
+    bedMesh.visible = bedMesh.count > 0;
+    if (bedMesh.count) bedMesh.instanceMatrix.needsUpdate = true;
   }
 
   // Куда тянется рука каменщика: верх растущей детали блока b у стороны рабочего (from — его стопы, мир).
@@ -914,7 +1247,7 @@ export function createBuilding(ctx) {
       if (ctx.onChange) ctx.onChange();
     }
     if (ctx.merge) { shadowSupers(); mergeQuiet(); }
-    updatePartials();
+    updatePartials(Math.max(0, dt));
     // контур — раз в полсекунды хватает (новые взятые детали пропадают из него)
     ghostTimer += 1;
     if (ghostDirty || ghostTimer > 30) { buildGhost(); ghostDirty = false; ghostTimer = 0; }

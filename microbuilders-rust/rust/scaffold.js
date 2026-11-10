@@ -5,9 +5,9 @@
 // лесов: хомуты на узлах, диагональные связи по наружным граням, опорные пятки на подкладных досках у земли,
 // бортовые доски по краю настила.
 import * as THREE from 'three';
-import { roundedBox, boxUV, cylinder, Batch } from './geo.js?v=45127fe';
-import { CELL } from './families.js?v=45127fe';
-import { TEXTURE_TILES as TILE } from './textures.js?v=45127fe';
+import { roundedBox, boxUV, cylinder, Batch } from './geo.js?v=ff29707';
+import { CELL } from './families.js?v=ff29707';
+import { TEXTURE_TILES as TILE } from './textures.js?v=ff29707';
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _p = new THREE.Vector3(), _e = new THREE.Euler();
 const WHITE = new THREE.Color(1, 1, 1), CRACK = new THREE.Color(1.25, 0.72, 0.3), DARK = new THREE.Color(0.62, 0.62, 0.64);

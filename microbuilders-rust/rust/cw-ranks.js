@@ -12,8 +12,8 @@
 // снаряжение — по одной слитой сетке на кость (пояс, грудь, плечи, каска), цвет — в вершинах.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { Batch } from './geo.js?v=45127fe';
-import { linkSky } from './world.js?v=45127fe';
+import { Batch } from './geo.js?v=ff29707';
+import { linkSky } from './world.js?v=ff29707';
 
 const GOLD = 0xffcf4a, TAPE = 0xeef3f8, METAL = 0xc9ced4;
 const RANK_FALLBACK = [

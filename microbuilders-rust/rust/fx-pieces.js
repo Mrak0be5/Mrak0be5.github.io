@@ -1,14 +1,13 @@
-// Твёрдые осколки эффектов (fx.js): каменная крошка и щепа, конфетти сдачи (бумага и фольга), блоки кладки,
-// летящие из рук каменщика в растущий ряд. Каждый вид — один InstancedMesh освещённым материалом вида (небо,
-// тени, G-буфер — linkSky): крошка — грубый многогранник с цветом материала, отскакивает и ложится на пол или
-// верх готовой детали; конфетти — изогнутый листок: залп летит баллистикой, потом листки расходятся и
-// планируют (сопротивление растёт, у плашмя летящих больше), качаются и кувыркаются, ложатся на крышу и землю;
-// блоки — та же кладка, что у ноши рабочих (families.js: семейство → материал, тон материала — цвет экземпляра).
+// Твёрдые осколки эффектов (fx.js): каменная крошка и щепа, конфетти сдачи (бумага и фольга). Каждый вид — один
+// InstancedMesh освещённым материалом вида (небо, тени, G-буфер — linkSky): крошка — грубый многогранник с цветом
+// материала, отскакивает и ложится на пол или верх готовой детали; конфетти — изогнутый листок: залп летит
+// баллистикой, потом листки расходятся и планируют (сопротивление растёт, у плашмя летящих больше), качаются
+// и кувыркаются, ложатся на крышу и землю. Летящих из рук каменщика блоков больше нет: пачка переходит в ряд
+// из руки (ms-lay.js, building.js).
 import * as THREE from 'three';
-import { linkSky } from './world.js?v=45127fe';
-import { familyOf, familyMaterial, familyTile, tintOf } from './families.js?v=45127fe';
-import { roundedBox, boxUV, Batch, hashStr } from './geo.js?v=45127fe';
-import { WIND } from './fx-sprites.js?v=45127fe';
+import { linkSky } from './world.js?v=ff29707';
+import { hashStr } from './geo.js?v=ff29707';
+import { WIND } from './fx-sprites.js?v=ff29707';
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
 const _c = new THREE.Color(), _e = new THREE.Euler(), _a = new THREE.Vector3();
@@ -110,7 +109,7 @@ function instanced(geo, material, cap, name) {
   return mesh;
 }
 
-// opts: { mats, MB, caps: { chips, confetti, foil, flyers }, floorAt(x, y, z), foil: bool }
+// opts: { mats, MB, caps: { chips, confetti, foil }, floorAt(x, y, z), foil: bool }
 export function createPieces(opts) {
   const group = new THREE.Group();
   group.name = 'fx-pieces';
@@ -235,94 +234,17 @@ export function createPieces(opts) {
     set.flush();
   }
 
-  // ---------- блоки кладки, летящие в ряд ----------
-  // по семейству — свой InstancedMesh: брусок 0,19 м с фаской, кладка семейства (как ноша рабочих, crew.js)
-  const BLOCK = 0.19;
-  const flyers = new Map();
-  function flyerSet(materialId) {
-    const MB = opts.MB;
-    const family = familyOf(MB, materialId);
-    let set = flyers.get(family);
-    if (set) return set;
-    const tile = family === 'glass' ? [0.4, 0.4] : familyTile(family);
-    const h = hashStr(family);
-    const b = new Batch();
-    b.add(boxUV(roundedBox(BLOCK, BLOCK, BLOCK, 0.008, 3), tile[0], tile[1], (h % 97) / 97, (h % 89) / 89), new THREE.Matrix4(), new THREE.Color(1, 1, 1));
-    const mesh = instanced(b.geometry(), familyMaterial(opts.mats, family), caps.flyers, 'fx-fly-' + family);
-    mesh.castShadow = !!opts.shadows;
-    group.add(mesh);
-    set = bodies(mesh, caps.flyers);
-    set.family = family;
-    flyers.set(family, set);
-    return set;
-  }
-  // от (x0…) к (x1…) за dur с, дугой высотой arc; yaw — поворот в ряду
-  function fly(materialId, x0, y0, z0, x1, y1, z1, dur, arc, yaw) {
-    const set = flyerSet(materialId);
-    const MB = opts.MB;
-    const t = tintOf(MB, materialId, set.family === 'glass' ? 'glass' : set.family);
-    const o = set.add(x0, y0, z0, set.family === 'glass' ? [1, 1, 1] : t);
-    const d = set.d;
-    // VX..VZ — откуда, WX..WZ — куда (поля тела под полёт)
-    d[o + VX] = x0; d[o + VY] = y0; d[o + VZ] = z0;
-    d[o + WX] = x1; d[o + WY] = y1; d[o + WZ] = z1;
-    d[o + LIFE] = dur; d[o + AUX] = arc; d[o + AUX2] = yaw;
-    d[o + FLOOR] = (Math.random() - 0.5) * 2.4;   // кувырок в полёте, рад
-  }
-  function stepFlyers(dt) {
-    flyers.forEach(function (set) {
-      const d = set.d;
-      for (let i = set.n - 1; i >= 0; i--) {
-        const o = i * F;
-        d[o + AGE] += dt;
-        if (d[o + AGE] >= d[o + LIFE] + 0.05) { set.remove(i); continue; }
-      }
-      for (let i = 0; i < set.n; i++) {
-        const o = i * F;
-        const u = Math.min(1, d[o + AGE] / d[o + LIFE]);
-        const e = u * (2 - u);  // к концу медленнее — блок «садится» в ряд
-        d[o + X] = d[o + VX] + (d[o + WX] - d[o + VX]) * e;
-        d[o + Y] = d[o + VY] + (d[o + WY] - d[o + VY]) * e + Math.sin(Math.PI * u) * d[o + AUX];
-        d[o + Z] = d[o + VZ] + (d[o + WZ] - d[o + VZ]) * e;
-        // кувырок гаснет к посадке, в ряду — по оси ряда
-        const tumble = d[o + FLOOR] * (1 - e);
-        _q.setFromEuler(_e.set(tumble, d[o + AUX2] + tumble * 0.6, tumble * 0.4));
-        d[o + QX] = _q.x; d[o + QY] = _q.y; d[o + QZ] = _q.z; d[o + QW] = _q.w;
-        // сел — уходит в ряд (кладка растёт рядами, building.js)
-        set.write(i, 1 - ss(u, 0.86, 1) * 0.9);
-      }
-      set.flush();
-    });
-  }
-
-  // Сетки блоков всех семейств площадки — заранее (fx.js → build) и первые кадры площадки видимы пустыми: вариант
-  // материала с экземплярами (и его тень) соберёт первый кадр новой стройки, пока открыт брифинг, а не первый
-  // бросок посреди игры. Общий прогрев игры (game.js → shadersReady → renderer.compile) их не застаёт: площадку
-  // вид строит уже после него, в первом кадре.
-  const WARM_FRAMES = 3;
-  function prepare(materialIds) {
-    const seen = new Set();
-    materialIds.forEach(function (id) {
-      if (typeof id !== 'string' || seen.has(id)) return;
-      seen.add(id);
-      // на каждой площадке: свет (мачты ночи) и тени меняют программы — старая могла не подойти
-      flyerSet(id).warm = WARM_FRAMES;
-    });
-  }
   function update(dt) {
     stepChips(dt);
     stepConfetti(paper, dt);
     stepConfetti(foil, dt);
-    stepFlyers(dt);
   }
   function clear() {
     chips.clear(); paper.clear(); if (foil) foil.clear();
-    flyers.forEach(function (s) { s.clear(); });
   }
+  // летящих блоков больше нет: блок переходит в ряд из рук каменщика (building.js, ms-lay.js) — flyers всегда 0
   function count() {
-    let f = 0;
-    flyers.forEach(function (s) { f += s.n; });
-    return { chips: chips.n, confetti: paper.n + (foil ? foil.n : 0), flyers: f };
+    return { chips: chips.n, confetti: paper.n + (foil ? foil.n : 0), flyers: 0 };
   }
-  return { group, chip, confetti, fly, prepare, update, clear, count, hasFoil: !!foil };
+  return { group, chip, confetti, update, clear, count, hasFoil: !!foil };
 }

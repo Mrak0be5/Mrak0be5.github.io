@@ -5,9 +5,9 @@
 // Солнце за полотнищем — ткань просвечивает. Флагшток и фурнитура — одна геометрия (цвет вершин), ткань —
 // вторая: два вызова отрисовки. Размер — как у оригинала: древко 1,6 клетки × scale (3,2 м при scale 1).
 import * as THREE from 'three';
-import { linkSky } from './world.js?v=45127fe';
-import { DYNAMIC } from './render.js?v=45127fe';
-import { cylinder, roundedBox, Batch } from './geo.js?v=45127fe';
+import { linkSky } from './world.js?v=ff29707';
+import { DYNAMIC } from './render.js?v=ff29707';
+import { cylinder, roundedBox, Batch } from './geo.js?v=ff29707';
 
 const POLE = 3.2;                  // высота флагштока, м (scale 1)
 const CLOTH_W = 1.8, CLOTH_H = 1.2; // полотнище, м

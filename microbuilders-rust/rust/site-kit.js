@@ -2,10 +2,10 @@
 // как props.js), примитивы с фаской и без (на «Телефоне» — простые коробки: меньше вершин), трубы от точки к точке,
 // фермы, свои материалы (грунт, щебень, трава, лампы) из фактур вида. Всё в метрах вида.
 import * as THREE from 'three';
-import { Batch, roundedBox, boxUV, cylinder } from './geo.js?v=45127fe';
-import { TEXTURE_TILES as TILE } from './textures.js?v=45127fe';
-import { linkSky, adoptSky } from './world.js?v=45127fe';
-import * as WORLD from './world.js?v=45127fe';
+import { Batch, roundedBox, boxUV, cylinder } from './geo.js?v=ff29707';
+import { TEXTURE_TILES as TILE } from './textures.js?v=ff29707';
+import { linkSky, adoptSky } from './world.js?v=ff29707';
+import * as WORLD from './world.js?v=ff29707';
 
 // Сезон вида (world.js SEASON, если он есть): тон породы главы (uSeRock) и перекраска луга — те же uniform-ы, что
 // у рельефа, поэтому плато, полки и стенки карьера одного тона с землёй поляны (осенью — солома, а не зелень).

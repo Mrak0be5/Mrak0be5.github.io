@@ -10,11 +10,13 @@
 import * as THREE from 'three';
 import { edgeTable, triTable } from 'three/addons/objects/MarchingCubes.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { rng, Batch } from './geo.js?v=45127fe';
-import { linkSky } from './world.js?v=45127fe';
-import { markDynamic, DYNAMIC } from './render.js?v=45127fe';
-import { loadHumans, makeHuman } from './humans.js?v=45127fe';
-import { outfitOf, looksOf, helmetGear, beltGear, radioGear, padGear, auraGeometry, gearMaterials, gearOut, profileRadius } from './cw-ranks.js?v=45127fe';
+import { rng, Batch } from './geo.js?v=ff29707';
+import { linkSky } from './world.js?v=ff29707';
+import { markDynamic, DYNAMIC } from './render.js?v=ff29707';
+import { loadHumans, makeHuman } from './humans.js?v=ff29707';
+import { outfitOf, looksOf, helmetGear, beltGear, radioGear, padGear, auraGeometry, gearMaterials, gearOut, profileRadius } from './cw-ranks.js?v=ff29707';
+import { PHASE } from './ms-lay.js?v=ff29707';
+import { cycle, crouchFor } from './sk-pose.js?v=ff29707';
 
 // ---------- скелет ----------
 
@@ -1359,6 +1361,103 @@ function fx(w, type, p, extra) {
   w.fx.push(Object.assign({ type: type, x: p.x || 0, y: p.y || 0, z: p.z || 0, pick: !!p.pick, hammer: !!p.hammer, mouth: !!p.mouth, ember: !!p.ember }, extra || null));
 }
 
+// Ноша в носилке (sk-crew.js → a.sk, позы sk-pose.js): слой позы поверх ходьбы и стойки — null, если носилки нет
+// (рама за спиной — прежние лямки).
+function carryPose(a) {
+  const sk = a.sk;
+  return sk && sk.kind && sk.kind !== 'back' && sk.mode !== 'stow' && sk.pose ? sk.pose : null;
+}
+// Кисти на ноше: ручки тачки (мир) или древко козы, брус, лист, рама, ящик (оси груди). → сколько рук держат.
+function carryGrips(a, P) {
+  const sk = a.sk;
+  let n = 0;
+  if (P.handL === 'grip') {
+    const q = sk.gripLW ? point(sk.gripLW) : sk.gripLC ? point(sk.gripLC, true) : null;
+    if (q) { reach('L', q, null, 0, POLE_LOW.L); n++; }
+  }
+  if (P.handR === 'grip') {
+    const q = sk.gripRW ? point(sk.gripRW) : sk.gripRC ? point(sk.gripRC, true) : null;
+    if (q) { reach('R', q, null, 0, POLE_LOW.R); n++; }
+  }
+  return n;
+}
+const CYC = {};
+
+// Кладка в такт рукам (ms-lay.js, доли цикла — PHASE): цикл по фазе c укладки логики. Левая: из ноши на раме за
+// плечом или с поддона рядом (a.laySrc — модуль запаса, LAY.source) берёт пачку (PHASE.take) → к первой единице
+// пачки → в окне «положить» (PHASE.lay) ведёт её вдоль ряда по ступеньке яруса: из-под ладони ложится единица за
+// единицей (L.hand — середина единиц, что ложатся сейчас; в тот же миг их показывает здание), ладонь прижимает →
+// к источнику. Правая с мастерком (кладка на растворе): полоса раствора по постели пачки от L.from к L.to
+// (PHASE.bed — та же доля, что у полосы в здании), в окне идёт за левой (L.tap — на три единицы позади) и осаживает
+// уложенные ручкой, после — подбивка дважды (PHASE.tap) и срезка лишнего раствора вдоль лица постели (PHASE.trim,
+// крошка); у бруса и листа — молоток: поднят, пока левая кладёт, затем брус осаживает двумя ударами, лист — заклёпки
+// тремя (искры).
+const LAY_HOLD = { on: false };
+// сдвиг таза (оси фигуры: x — влево, z — вперёд, м) — вес к поддону при взятии пачки
+const HIPSH = { x: 0, z: 0 };
+const _kp = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+function layTied(w, a, L, c, tg) {
+  const S = Math.sin;
+  const hd = L.hand, la = PHASE.lay[0], lb = PHASE.lay[1];
+  const hammer = L.fam === 'wood' || L.fam === 'metal';
+  a.layTool = hammer ? 'hammer' : 'trowel';
+  // левая: у источника с PHASE.src[0] до PHASE.src[1] следующего цикла (сжала пачку в PHASE.take), к ряду — после
+  // взятия, от ряда — после окна
+  const toRow = ss(c, PHASE.src[1], la) * (1 - ss(c, lb + 0.01, PHASE.src[0]));
+  const win = c > la && c < lb ? (c - la) / (lb - la) : -1;
+  // кисть — над местом единицы: кирпич в ладони (в 0,1 м от запястья) ложится на верх ряда; прижим — до четырёх
+  // за окно (чаще глаз не различит)
+  const dip = win >= 0 ? Math.pow(Math.abs(S(Math.PI * win * Math.min(4, Math.max(1, L.count)))), 2) : 0;
+  PT.a.set(hd[0], hd[1] + 0.13 - 0.03 * dip, hd[2]).addScaledVector(_f, -0.05).addScaledVector(_l, 0.03);
+  // у источника кисть — у верхней штуки (ладонь ложится на неё и сжимает: штука в ладони — в 0,1 м от запястья)
+  reach('L', a.laySrc ? point(PT.c.copy(a.laySrc).setY(a.laySrc.y + 0.05)) : point(FRAME, true), point(PT.a), toRow, POLE_LOW.L);
+  // пачка в руке — с мига взятия, если кисть дошла до источника (a.tookJ — после позы, animateWorker), иначе — с окна
+  // «положить» (единица, что ложится сейчас)
+  LAY_HOLD.on = (c > PHASE.take && c < lb && a.tookJ === L.j) || (c > la - 0.03 && c < lb);
+  if (crossed(a.prev, c, la + (lb - la) * 0.35) || crossed(a.prev, c, la + (lb - la) * 0.8)) fx(w, 'place', _v.set(hd[0], hd[1], hd[2]), { color: a.fxColor });
+  const K = _kp;
+  if (!hammer && L.bed) {
+    const f = L.from, e = L.to, sp = ss(c, PHASE.bed[0], PHASE.bed[1]);
+    // K0 — мастерок на постели (кисть выше и ближе к фигуре: полотно в 0,2 м от запястья по кисти)
+    K[0].set(f[0] + (e[0] - f[0]) * sp, f[1] + 0.15, f[2] + (e[2] - f[2]) * sp).addScaledVector(_f, -0.08);
+    // K1 — в окне за левой: осаживает уложенные ручкой (короткие тычки); ведёт вправо — правая не заходит за левую,
+    // ждёт справа над рядом
+    const tp = L.tap, jab = win >= 0 ? Math.abs(S(Math.PI * win * 5)) : 0;
+    if ((tp[0] - hd[0]) * _l.x + (tp[2] - hd[2]) * _l.z < -0.05) K[1].set(tp[0], tp[1] + 0.2 - 0.06 * jab, tp[2]).addScaledVector(_f, -0.06).addScaledVector(_l, -0.12);
+    else K[1].set(hd[0], hd[1] + 0.3, hd[2]).addScaledVector(_f, -0.14).addScaledVector(_l, -0.26);
+    // K2 — подбивка ручкой по верху последних единиц
+    const t0 = PHASE.tap[0], t1 = PHASE.tap[1];
+    const knock = Math.abs(S((c - t0) / (t1 - t0) * Math.PI * 2)) * bump(c, t0, t1);
+    K[2].set(hd[0], hd[1] + 0.2 - 0.08 * knock, hd[2]).addScaledVector(_f, -0.05);
+    // K3 — срезка: полотно ребром вдоль лица постели, от конца к началу
+    const tr = ss(c, PHASE.trim[0], PHASE.trim[1]), half = (L.width || 0.36) / 2 + 0.03;
+    K[3].set(e[0] + (f[0] - e[0]) * tr, f[1] + 0.12, e[2] + (f[2] - e[2]) * tr).addScaledVector(_f, -half - 0.06);
+    const q = PT.b.copy(K[0]);
+    q.lerp(K[1], ss(c, PHASE.bed[1], la + 0.06));
+    q.lerp(K[2], ss(c, lb - 0.02, t0));
+    q.lerp(K[3], ss(c, t1 - 0.02, PHASE.trim[0] + 0.01));
+    q.lerp(K[0], ss(c, PHASE.trim[1], 1.0));
+    reach('R', point(q), null, 0, POLE_LOW.R);
+    if (crossed(a.prev, c, t0 + (t1 - t0) * 0.25) || crossed(a.prev, c, t0 + (t1 - t0) * 0.75)) fx(w, 'tap', _v.set(hd[0], hd[1] + 0.02, hd[2]), { color: a.fxColor, metal: false });
+    if (crossed(a.prev, c, (PHASE.trim[0] + PHASE.trim[1]) / 2)) fx(w, 'place', _v.copy(K[3]).setY(f[1] + 0.02), { color: [0.62, 0.6, 0.56] });
+  } else {
+    // молоток: поднят, пока левая кладёт; после — удары по верху уложенного (брус — два, лист — три по заклёпкам)
+    const n = L.fam === 'metal' ? 3 : 2, t0 = lb, t1 = 0.97;
+    const blow = bump(c, t0, t1) * Math.abs(S((c - t0) / (t1 - t0) * Math.PI * n));
+    K[1].set(hd[0], hd[1] + 0.42, hd[2]).addScaledVector(_f, -0.16).addScaledVector(_l, -0.2);
+    K[2].set(hd[0], hd[1] + 0.36 - 0.24 * blow, hd[2]).addScaledVector(_f, -0.1).addScaledVector(_l, -0.06);
+    const q = PT.b.copy(K[1]).lerp(K[2], ss(c, t0 - 0.04, t0 + 0.02) * (1 - ss(c, t1 - 0.01, 1.0)));
+    reach('R', point(q), null, 0, POLE_LOW.R);
+    for (let i = 0; i < n; i++) {
+      const at = t0 + (i + 0.5) * (t1 - t0) / n;
+      if (crossed(a.prev, c, at)) fx(w, 'tap', _v.set(hd[0], hd[1] + 0.02, hd[2]), { color: a.fxColor, metal: L.fam === 'metal' });
+    }
+  }
+  return toRow;
+}
+
+// бег: длина цикла (два шага), м, при которой частота шагов начинает расти со скоростью (опорная стопа — на земле)
+const RUN_CYCLE = 3.2;
 // a.speed — м/с (идёт или бежит), a.action: idle | lay | pick | hammer | screw | tie | climb | work-high | mantle |
 // jump | plan | smoke | eat | rest | sleep; a.stage 0..1 — ход залезания на куб или прыжка; a.target — точка
 // в мире (верх растущей кладки у фигуры, середина стола); a.hold — блок для руки (вид из crew.js); a.load 0..1 —
@@ -1366,6 +1465,7 @@ function fx(w, type, p, extra) {
 export function animateWorker(w, dt, time) {
   const a = w.anim;
   TARGET.forEach(function (e) { e.set(0, 0, 0); });
+  HIPSH.x = 0; HIPSH.z = 0;
   IK_REQ.length = 0;
   const S = Math.sin, C = Math.cos;
   const armDown = 0.6;
@@ -1382,12 +1482,17 @@ export function animateWorker(w, dt, time) {
   const moving = a.speed > 0.05;
   // усталость к ночи и голод (0..1 сверх порога, где они уже замедляют работу, — crew.js): сутулится, мах рук меньше
   const tired = a.tired || 0, hungry = a.hungry || 0;
+  // ноша в носилке (коза, тачка, брус, лист, вёдра, рама со стеклом — sk-crew.js): поза под вес, кисти на ноше
+  const SKP = carryPose(a);
   if (moving) {
     // шаг до ~2,4 м/с, дальше — бег (рабочие оригинала ходят 4–8 м/с на клетке 2 м): частота шагов
     // растёт медленно, длина шага — быстро; наклон вперёд, колено выше, руки согнуты, фаза полёта
     const run = ss(a.speed, 2.4, 4.8);
-    const stride = (1.35 + a.speed * 0.25) * (1 - 0.12 * load);
-    const rate = THREE.MathUtils.lerp(a.speed / stride, 1.45 + 0.035 * a.speed, run);
+    const stride = (1.35 + a.speed * 0.25) * (1 - 0.12 * load) * (SKP ? SKP.stride : 1);
+    // бег: частота растёт медленно, пока цикл (два шага) не длиннее RUN_CYCLE м — дальше растёт и она (бегом 7–14 м/с
+    // при почти постоянной частоте опорная стопа скользила по земле 2,6–9,5 м/с; под ношей шаг короче — чаще)
+    const runRate = Math.max(1.45 + 0.035 * a.speed, a.speed / (RUN_CYCLE * (1 - 0.12 * load) * (SKP ? SKP.stride : 1)));
+    const rate = THREE.MathUtils.lerp(a.speed / stride, runRate, run);
     a.phase += rate * Math.PI * 2 * dt;
     const p = a.phase;
     const amp = Math.min(1, a.speed / 1.3);
@@ -1399,17 +1504,27 @@ export function animateWorker(w, dt, time) {
     set(B.footL, L(Math.max(0, -S(p)) * 0.25 * amp, Math.max(0, -S(p)) * 0.35 - 0.1, run), 0, 0);
     set(B.footR, L(Math.max(0, S(p)) * 0.25 * amp, Math.max(0, S(p)) * 0.35 - 0.1, run), 0, 0);
     // с ношей мах рук меньше, кисти держат лямки у груди
-    const straps = ss(load, 0.2, 0.6) * (1 - 0.7 * run);
+    const straps = SKP ? 0 : ss(load, 0.2, 0.6) * (1 - 0.7 * run);
     const swing = 1 - 0.65 * straps;
     set(B.upperArmL, L(L(S(p) * 0.32 * amp, S(p) * 0.75 - 0.15, run) * swing, -0.55, straps), 0, L(-armDown * (1 - 0.45 * run), -0.18, straps));
     set(B.upperArmR, L(L(-S(p) * 0.32 * amp, -S(p) * 0.75 - 0.15, run) * swing, -0.55, straps), 0, L(armDown * (1 - 0.45 * run), 0.18, straps));
     set(B.foreArmL, L(L(-0.25 - Math.max(0, S(p)) * 0.3 * amp, -1.45 - Math.max(0, S(p)) * 0.2, run), -1.95, straps), 0, 0);
     set(B.foreArmR, L(L(-0.25 - Math.max(0, -S(p)) * 0.3 * amp, -1.45 - Math.max(0, -S(p)) * 0.2, run), -1.95, straps), 0, 0);
     if (straps > 0.3) { gripL = gripR = 0.9; }
+    if (SKP && a.action !== 'cheer') {
+      // носилка: рука на ноше не машет, другая — меньше; кисти — на ручках тачки, древке козы, ноше на плече; с вёдрами
+      // руки разведены (вёдра мимо ног)
+      TARGET[B.upperArmL].x *= SKP.swingL; TARGET[B.upperArmR].x *= SKP.swingR;
+      if (SKP.spread) { TARGET[B.upperArmL].z += SKP.spread; TARGET[B.upperArmR].z -= SKP.spread; }
+      carryGrips(a, SKP);
+      gripL = SKP.gripL; gripR = SKP.gripR; styleL = SKP.styleL; styleR = SKP.styleR;
+    }
     // таз: поворот за ногой и проседание над ногой в махе; плечи — навстречу тазу
     set(B.hips, 0, S(p) * L(0.06 * amp, 0.12, run), S(p) * 0.045 * amp * (1 - 0.5 * run));
     set(B.chest, L(0.04, 0.1, run), -S(p) * L(0.08 * amp, 0.16, run), -S(p) * 0.03 * amp);
-    TARGET[B.spine].x += 0.16 * run + 0.08 * load + 0.12 * Math.max(0, Math.min(1, (a.over || 1) - 1)) + 0.1 * tired;
+    TARGET[B.spine].x += 0.16 * run + (SKP ? SKP.lean : 0.08 * load) + 0.12 * Math.max(0, Math.min(1, (a.over || 1) - 1)) + 0.1 * tired;
+    // от плеча с ношей — корпус в другую сторону (противовес)
+    if (SKP) TARGET[B.spine].z -= SKP.side;
     // усталый: голова ниже, руки висят (мах меньше)
     if (tired > 0) {
       TARGET[B.head].x += 0.14 * tired;
@@ -1439,9 +1554,9 @@ export function animateWorker(w, dt, time) {
     set(B.shinR, 0.1 * Math.max(0, sh), 0, 0);
     TARGET[B.spine].z -= 0.02 * sh;
     // разворот на месте: переступает с ноги на ногу, пока поворачивается
-    a.turnK = (a.turnK || 0) + ((a.turn > 0.8 ? 1 : 0) - (a.turnK || 0)) * (1 - Math.exp(-dt * 8));
-    if (a.turnK > 0.02 && (a.action === 'idle' || a.action === 'lay' || a.action === 'plan' || a.action === 'smoke')) {
-      a.turnPh = (a.turnPh || 0) + dt * 9;
+    a.turnK = (a.turnK || 0) + ((a.turn > 0.8 || (a.shuffle || 0) > 0.2 ? 1 : 0) - (a.turnK || 0)) * (1 - Math.exp(-dt * 8));
+    if (a.turnK > 0.02 && (a.action === 'idle' || a.action === 'lay' || a.action === 'drop' || a.action === 'plan' || a.action === 'smoke')) {
+      a.turnPh = (a.turnPh || 0) + dt * ((a.shuffle || 0) > 0.2 ? 13 : 9);
       const st = a.turnK, q = a.turnPh;
       TARGET[B.thighL].x += -Math.max(0, S(q)) * 0.35 * st; TARGET[B.thighR].x += -Math.max(0, -S(q)) * 0.35 * st;
       TARGET[B.shinL].x += Math.max(0, S(q)) * 0.6 * st; TARGET[B.shinR].x += Math.max(0, -S(q)) * 0.6 * st;
@@ -1451,7 +1566,7 @@ export function animateWorker(w, dt, time) {
     if (tired > 0 && (a.action === 'idle' || a.action === 'plan' || a.action === 'smoke')) {
       TARGET[B.spine].x += 0.08 * tired; TARGET[B.chest].x += 0.06 * tired; TARGET[B.head].x += 0.16 * tired;
     }
-    if (a.action === 'idle' && (tired > 0.25 || hungry > 0.3)) {
+    if (a.action === 'idle' && !SKP && (tired > 0.25 || hungry > 0.3)) {
       // усталый зевает (раз в 8–11 с): голова назад, ладонь ко рту; голодный — ладонь на живот, потирает
       const P = 8 + (w.seed % 4), c = ((time + w.seed * 2.3) % P) / P, g = bump(c, 0.0, 0.3);
       if (g > 0 && tired > 0.25) {
@@ -1465,7 +1580,7 @@ export function animateWorker(w, dt, time) {
         TARGET[B.head].x += 0.12 * g;
         gripL = 0.15; styleL = 'flat';
       }
-    } else if (a.action === 'idle') {
+    } else if (a.action === 'idle' && !SKP) {
       // жесты ожидания раз в 10–14 с (по номеру рабочего): потянуться, потереть шею, поправить каску
       const P = 10 + (w.seed % 5), c = ((time + w.seed * 3.7) % P) / P, g = bump(c, 0.0, 0.24);
       const kind = Math.floor((time + w.seed * 3.7) / P + w.seed) % 3;
@@ -1492,37 +1607,102 @@ export function animateWorker(w, dt, time) {
     if (a.action === 'lay') {
       // Кладка: левая рука берёт блок с рамы за плечом, несёт к верху ряда и прижимает; правая — мастерок:
       // раствор вдоль ряда, затем осаживает блок. Поза — по высоте верха кладки над стопами: низко — присед,
-      // по пояс — наклон, у головы — выпрямлен и тянется.
-      const P = 1.9, c = (t % P) / P;
+      // по пояс — наклон, у головы — выпрямлен и тянется. На ×1 (a.lay, ms-lay.js) цикл идёт по фазе укладки
+      // логики: левая ведёт пачку вдоль ряда, единицы ложатся из-под ладони — в тот же миг они появляются в детали.
+      const Lw = a.lay && a.lay.mode === 'tied' ? a.lay : null;
+      const P = 1.9, c = Lw ? Lw.c : (t % P) / P;
       const tg = a.target || near(PT.e, w, 0.65, 0, 0.6);
       const rel = tg.y - w.pos.y;
       const low = 1 - ss(rel, 0.3, 0.95), high = ss(rel, 1.25, 1.75);
       const bend = (1 - high) * (0.55 - 0.3 * low) * (0.9 + 0.1 * S(c * 6.283));
       TARGET[B.spine].x += bend * 0.8 + 0.2 * low;
       TARGET[B.chest].x += bend * 0.3;
+      // левая у ряда (та же доля, что в layTied): к ряду тянется корпус, к источнику — поза взятия ниже
+      const toRowT = Lw ? ss(c, PHASE.src[1], PHASE.lay[0]) * (1 - ss(c, PHASE.lay[1] + 0.01, PHASE.src[0])) : 0;
+      // далёкий ряд (край настила, деталь по диагонали) и единицы у края ряда: наклон вперёд по дальности, вбок и
+      // поворот корпуса к месту, где ложатся единицы (L.hand); a.layK — добор (кисть не доставала прошлые кадры)
+      if (Lw) {
+        const hx = Lw.hand[0] - w.pos.x, hz = Lw.hand[2] - w.pos.z, dist = Math.hypot(hx, hz);
+        const fw = hx * _f.x + hz * _f.z, sd = hx * _l.x + hz * _l.z;
+        // с поддона рядом (a.laySrc) — у источника корпус весь к нему (ниже), к ряду — по ходу левой
+        const far = ss(dist, 0.5, 1.1) * (1 - high), k = a.laySrc ? toRowT : 0.35 + 0.65 * toRowT;
+        TARGET[B.spine].x += (0.3 * far + 0.3 * (a.layK || 0)) * k;
+        TARGET[B.chest].x += 0.12 * far * k;
+        const turn = THREE.MathUtils.clamp(Math.atan2(sd, Math.max(0.2, fw)), -1, 1);
+        TARGET[B.spine].y += 0.3 * turn * k; TARGET[B.chest].y += 0.15 * turn * k;
+        // вбок — к левой: минус по z (поворот вокруг z на +угол клонит корпус вправо)
+        TARGET[B.spine].z -= 0.24 * Math.sign(sd) * ss(Math.abs(sd), 0.3, 0.9) * (1 - 0.5 * high) * k;
+      }
       TARGET[B.head].x += 0.22 * (1 - high) - 0.35 * high;
       set(B.thighL, -1.15 * low - 0.1 * (1 - low), 0, -0.1 * low); set(B.thighR, -1.15 * low - 0.1 * (1 - low), 0, 0.1 * low);
       set(B.shinL, 1.75 * low + 0.12 * (1 - low), 0, 0); set(B.shinR, 1.75 * low + 0.12 * (1 - low), 0, 0);
       set(B.footL, -0.55 * low + 0.12 * high, 0, 0); set(B.footR, -0.55 * low + 0.12 * high, 0, 0);
       bob = -0.33 * low - 0.03 * (1 - low) * (1 - high) + 0.04 * high;
-      // левая: рама (0–0.2) → к ряду (0.2–0.45) → прижать (0.45–0.56) → лежит на блоке → назад к раме
-      const toRow = ss(c, 0.18, 0.45) * (1 - ss(c, 0.9, 1.0));
-      const press = bump(c, 0.45, 0.6);
-      along(PT.a, tg, 0.1, 0.05, 0.1 - 0.07 * press);
-      reach('L', point(FRAME, true), point(PT.a), toRow, POLE_LOW.L);
-      holdBlock = c > 0.17 && c < 0.5;
+      // разворот на месте без прибитых стоп (×5) — переступает с ноги на ногу, руки работают дальше; со стопами на
+      // опоре (a.plant) шаги ставит plantFeet
+      if (a.turnK > 0.02 && !a.plant) {
+        const st = a.turnK, q = a.turnPh || 0;
+        TARGET[B.thighL].x += -Math.max(0, S(q)) * 0.35 * st; TARGET[B.thighR].x += -Math.max(0, -S(q)) * 0.35 * st;
+        TARGET[B.shinL].x += Math.max(0, S(q)) * 0.6 * st; TARGET[B.shinR].x += Math.max(0, -S(q)) * 0.6 * st;
+        bob += -0.015 * st * Math.abs(S(q));
+      }
+      let toRow;
+      if (Lw) toRow = layTied(w, a, Lw, c, tg);
+      else {
+        a.layTool = 'trowel';
+        // левая: рама (0–0.2) → к ряду (0.2–0.45) → прижать (0.45–0.56) → лежит на блоке → назад к раме
+        toRow = ss(c, 0.18, 0.45) * (1 - ss(c, 0.9, 1.0));
+        const press = bump(c, 0.45, 0.6);
+        along(PT.a, tg, 0.1, 0.05, 0.1 - 0.07 * press);
+        reach('L', a.laySrc ? point(a.laySrc) : point(FRAME, true), point(PT.a), toRow, POLE_LOW.L);
+        LAY_HOLD.on = c > 0.17 && c < 0.5;
+        // правая: раствор вдоль ряда (0–0.4), ждёт (0.4–0.56), осаживает тремя ударами (0.56–0.86)
+        const spread = 1 - ss(c, 0.36, 0.44);
+        const tap = bump(c, 0.56, 0.88);
+        const knock = Math.abs(S((c - 0.56) / 0.32 * Math.PI * 3)) * tap;
+        along(PT.b, tg, -0.2 + 0.32 * S(c / 0.4 * Math.PI), 0.08, 0.04);
+        along(PT.c, tg, 0.06, 0.06, 0.2 - 0.12 * knock);
+        reach('R', point(PT.b), point(PT.c), 1 - spread, POLE_LOW.R);
+        if (crossed(a.prev, c, 0.5)) fx(w, 'place', along(_v, tg, 0.1, 0, 0), { color: a.fxColor });
+        if (crossed(a.prev, c, 0.67) || crossed(a.prev, c, 0.77)) fx(w, 'tap', along(_v, tg, 0.06, 0, 0.02), { color: a.fxColor, metal: a.fxMetal });
+      }
+      // Пачка с поддона рядом (LAY.source — модуль запаса), пока левая у него: таз — к поддону (стопы на опоре держат
+      // ноги — a.plant) и смещён к нему до 0,15 м (вес на ближнюю ногу), наклон — в осях таза (вперёд по тазу, остаток —
+      // вбок к поддону): левое плечо идёт к стопке, рука достаёт верх; присед — только к низкой стопке (ниже 0,5 м),
+      // иначе — наклон по пояс (без качания вверх-вниз каждый цикл). a.takeK — добор: кисть не дошла до поддона в
+      // прошлые циклы — глубже (после ИК, ниже). Корпус к ряду возвращается к 0,2 цикла (к окну «положить» поза уже
+      // у ряда, без отставания). Таз опустит plantBob — стопы на опоре
+      if (a.laySrc) {
+        const tB = Lw ? ss(c, PHASE.src[1], PHASE.lay[0] - 0.1) * (1 - ss(c, PHASE.lay[1] + 0.01, PHASE.src[0])) : toRow;
+        const k = 1 - tB, rk = a.takeK || 0;
+        const sx = a.laySrc.x - w.pos.x, sz = a.laySrc.z - w.pos.z, dy = (a.laySrc.y - w.pos.y) / (w.group.scale.x || 1);
+        const hd = Math.hypot(sx, sz) / (w.group.scale.x || 1);
+        // сзади (брус и лист вдоль заднего края настила) — разворот всегда влево: берёт левая
+        let ang = Math.atan2(sx * _l.x + sz * _l.z, sx * _f.x + sz * _f.z);
+        if (ang < -2.2) ang += 2 * Math.PI;
+        const ac = THREE.MathUtils.clamp(ang, -1.45, 1.45), th = ac * k;
+        if (a.plant) { const shf = Math.min(0.15, Math.max(0, hd - 0.45)) * k; HIPSH.x = Math.sin(ac) * shf; HIPSH.z = Math.cos(ac) * shf; }
+        // таз — к источнику (со стопами на опоре; без них — корпус); позвоночник не скручивается: скрутка поверх
+        // наклона вбок уводила его назад, а левое плечо — от поддона. Наклон — вперёд по тазу и вбок (остаток угла)
+        const hipT = a.plant ? 0.45 * th : 0;
+        TARGET[B.hips].y += hipT;
+        if (!a.plant) TARGET[B.spine].y += 0.3 * th;
+        TARGET[B.chest].y += 0.15 * th;
+        const rem = a.plant ? th - hipT : 0.5 * th;
+        const hinge = (1 - ss(dy, 0.6, 1.25)) * (1 - low);
+        const bend = (0.55 * hinge + 0.3 * hinge * ss(hd, 0.35, 0.95) + 0.45 * rk) * k;
+        TARGET[B.spine].x += bend * Math.cos(rem);
+        TARGET[B.spine].z -= Math.min(0.8, bend * Math.abs(Math.sin(rem))) * Math.sign(rem);
+        TARGET[B.chest].x += (0.2 * hinge + 0.15 * rk) * k * Math.max(0.3, Math.cos(rem));
+        const sq = Math.min(1, 0.75 * (1 - ss(dy, 0.15, 0.5)) + 0.5 * rk) * k * (1 - low);
+        TARGET[B.thighL].x -= 0.9 * sq; TARGET[B.thighR].x -= 0.9 * sq;
+        TARGET[B.shinL].x += 1.4 * sq; TARGET[B.shinR].x += 1.4 * sq;
+        TARGET[B.footL].x -= 0.45 * sq; TARGET[B.footR].x -= 0.45 * sq;
+      }
+      holdBlock = LAY_HOLD.on;
       gripL = holdBlock ? 1 : 0.15;
       styleL = holdBlock ? 'fist' : 'flat';
-      // правая: раствор вдоль ряда (0–0.4), ждёт (0.4–0.56), осаживает тремя ударами (0.56–0.86)
-      const spread = 1 - ss(c, 0.36, 0.44);
-      const tap = bump(c, 0.56, 0.88);
-      const knock = Math.abs(S((c - 0.56) / 0.32 * Math.PI * 3)) * tap;
-      along(PT.b, tg, -0.2 + 0.32 * S(c / 0.4 * Math.PI), 0.08, 0.04);
-      along(PT.c, tg, 0.06, 0.06, 0.2 - 0.12 * knock);
-      reach('R', point(PT.b), point(PT.c), 1 - spread, POLE_LOW.R);
       gripR = 1;
-      if (crossed(a.prev, c, 0.5)) fx(w, 'place', along(_v, tg, 0.1, 0, 0), { color: a.fxColor });
-      if (crossed(a.prev, c, 0.67) || crossed(a.prev, c, 0.77)) fx(w, 'tap', along(_v, tg, 0.06, 0, 0.02), { color: a.fxColor, metal: a.fxMetal });
       a.prev = c;
     } else if (a.action === 'pick') {
       // Кирка: замах над головой (корпус назад), удар (корпус вперёд, колени мягко), выдернуть и снова.
@@ -1544,6 +1724,54 @@ export function animateWorker(w, dt, time) {
       reach('L', { handle: 0.3 }, null, 0, POLE.L);
       gripL = gripR = 1;
       if (crossed(a.prev, c, 0.58)) fx(w, 'impact', { pick: true }, { color: a.fxColor });
+      a.prev = c;
+    } else if ((a.action === 'load' || a.action === 'drop') && a.sk && a.sk.A && a.sk.B) {
+      // Погрузка у карьера и штабеля, выкладка ноши на поддон у места работы (sk-crew.js: точки A — откуда, B — куда):
+      // цикл «взять — положить» по фазе логики (sk.c; выкладка — sk.cycles циклов по ~0,4 с, погрузка — цикл на штуку):
+      // тянется к A, присев к низкой точке, берёт обеими, несёт к B (присед — по высоте B), кладёт, назад. Корпус — к
+      // точке, где руки сейчас (стопы на опоре: таз к ней 0,45 угла и смещён к ней до 0,14 м, остаток — наклоном вбок),
+      // наклон вперёд — по дальности (носилка и поддон в 0,5–1 м от стоп), руки по ИК без отставания (crossed ниже).
+      const sk = a.sk;
+      const n = a.action === 'drop' || sk.mode === 'fetch' ? Math.max(1, sk.cycles || 1) : 1;
+      const c = Math.min(0.999, sk.c * n - Math.floor(Math.min(n - 1e-6, sk.c * n)));
+      cycle(c, CYC);
+      const sc = w.group.scale.x || 1;
+      PT.e.copy(sk.A).lerp(sk.B, CYC.reach);
+      const hx = PT.e.x - w.pos.x, hz = PT.e.z - w.pos.z, hd = Math.hypot(hx, hz) / sc;
+      const ac = THREE.MathUtils.clamp(Math.atan2(hx * _l.x + hz * _l.z, hx * _f.x + hz * _f.z), -1.5, 1.5);
+      const crA = crouchFor(sk.A.y - w.pos.y), crB = crouchFor(sk.B.y - w.pos.y);
+      const cr = crA + (crB - crA) * CYC.reach;
+      set(B.thighL, -1.15 * cr - 0.1 * (1 - cr), 0, -0.1 * cr); set(B.thighR, -1.15 * cr - 0.1 * (1 - cr), 0, 0.1 * cr);
+      set(B.shinL, 1.75 * cr + 0.12 * (1 - cr), 0, 0); set(B.shinR, 1.75 * cr + 0.12 * (1 - cr), 0, 0);
+      set(B.footL, -0.55 * cr, 0, 0); set(B.footR, -0.55 * cr, 0, 0);
+      const hipT = a.plant ? 0.45 * ac : 0;
+      TARGET[B.hips].y += hipT;
+      if (!a.plant) TARGET[B.spine].y += 0.3 * ac;
+      TARGET[B.chest].y += 0.15 * ac;
+      const rem = a.plant ? ac - hipT : 0.5 * ac, far = ss(hd, 0.35, 0.95);
+      const bend = 0.15 + 0.45 * cr + 0.42 * far * (1 - 0.4 * cr);
+      TARGET[B.spine].x += bend * Math.cos(rem);
+      TARGET[B.spine].z -= Math.min(0.8, bend * Math.abs(Math.sin(rem))) * Math.sign(rem);
+      TARGET[B.chest].x += (0.1 * cr + 0.15 * far) * Math.max(0.3, Math.cos(rem));
+      TARGET[B.head].x += 0.18;
+      if (a.plant) { const shf = Math.min(0.14, Math.max(0, hd - 0.45)); HIPSH.x = Math.sin(ac) * shf; HIPSH.z = Math.cos(ac) * shf; }
+      // шаг к точке стойки, пока выкладывает, — переступает (со стопами на опоре — шаги plantFeet)
+      if (a.turnK > 0.02 && !a.plant) {
+        const st = a.turnK, q = a.turnPh || 0;
+        TARGET[B.thighL].x += -Math.max(0, S(q)) * 0.35 * st; TARGET[B.thighR].x += -Math.max(0, -S(q)) * 0.35 * st;
+        TARGET[B.shinL].x += Math.max(0, S(q)) * 0.6 * st; TARGET[B.shinR].x += Math.max(0, -S(q)) * 0.6 * st;
+      }
+      // запястья — над штукой (она в ладонях), руки — по бокам штуки (поперёк направления к ней)
+      const ux = hd > 0.05 ? -hz / (hd * sc) : _l.x, uz = hd > 0.05 ? hx / (hd * sc) : _l.z;
+      PT.a.copy(sk.A); PT.a.x += ux * 0.1; PT.a.z += uz * 0.1; PT.a.y += 0.1;
+      PT.b.copy(sk.B); PT.b.x += ux * 0.1; PT.b.z += uz * 0.1; PT.b.y += 0.1;
+      PT.c.copy(sk.A); PT.c.x -= ux * 0.1; PT.c.z -= uz * 0.1; PT.c.y += 0.1;
+      PT.d.copy(sk.B); PT.d.x -= ux * 0.1; PT.d.z -= uz * 0.1; PT.d.y += 0.1;
+      reach('L', point(PT.a), point(PT.b), CYC.reach, POLE_LOW.L);
+      reach('R', point(PT.c), point(PT.d), CYC.reach, POLE_LOW.R);
+      holdBlock = CYC.holding;
+      gripL = gripR = CYC.grip; styleL = styleR = CYC.holding ? 'fist' : 'flat';
+      if (crossed(a.prev, c, 0.84)) fx(w, 'place', _v.copy(sk.B), { color: a.fxColor });
       a.prev = c;
     } else if (a.action === 'hammer') {
       const sw = (S(t * 9.0) * 0.5 + 0.5);
@@ -1629,13 +1857,17 @@ export function animateWorker(w, dt, time) {
       } else if (hold === 'L') { set(B.upperArmL, -1.45, -0.15, -0.35); set(B.foreArmL, -0.75, 0, 0); }
       else { set(B.upperArmR, -1.45, 0.15, 0.35); set(B.foreArmR, -0.75, 0, 0); }
       if (a.hiPlace) {
-        // блок к стене над головой: подносит (0–0,45), прижимает (0,45–0,7), отпускает
-        const c = (t % 2.2) / 2.2, up = ss(c, 0.05, 0.45) * (1 - ss(c, 0.8, 0.98));
-        near(PT.b, w, 0.32, 0.12, 1.3); near(PT.c, w, 0.42, 0.1, 1.95 - 0.04 * bump(c, 0.45, 0.7));
+        // блок к стене над головой: подносит (0–0,45), прижимает (0,45–0,7), отпускает; на ×1 — по фазе укладки
+        // (a.lay): в окне «положить» — к единицам, что ложатся сейчас (L.hand), если они в досягаемости
+        const Lw = a.lay && a.lay.mode === 'tied' ? a.lay : null;
+        const c = Lw ? Lw.c : (t % 2.2) / 2.2, up = Lw ? ss(c, PHASE.take, PHASE.lay[0]) * (1 - ss(c, PHASE.lay[1], 0.98)) : ss(c, 0.05, 0.42) * (1 - ss(c, 0.8, 0.98));
+        near(PT.b, w, 0.32, 0.12, 1.3);
+        if (Lw && Lw.hand[1] - w.pos.y < 2.15) PT.c.set(Lw.hand[0], Lw.hand[1] + 0.1 - 0.03 * bump(c, PHASE.lay[0], PHASE.lay[1]), Lw.hand[2]).addScaledVector(_f, -0.08);
+        else near(PT.c, w, 0.42, 0.1, 1.95 - 0.04 * bump(c, 0.45, 0.7));
         reach('L', point(PT.b), point(PT.c), up, POLE.L);
-        holdBlock = c < 0.72;
+        holdBlock = Lw ? c > PHASE.take && c < PHASE.lay[1] : c < 0.72;
         gripL = holdBlock ? 1 : 0.2; styleL = holdBlock ? 'fist' : 'flat'; gripR = 1;
-        if (crossed(a.prev, c, 0.55)) fx(w, 'place', near(_v, w, 0.45, 0.1, 1.95), { color: a.fxColor });
+        if (crossed(a.prev, c, Lw ? (PHASE.lay[0] + PHASE.lay[1]) / 2 : 0.55)) fx(w, 'place', Lw ? _v.copy(PT.c) : near(_v, w, 0.45, 0.1, 1.95), { color: a.fxColor });
         a.prev = c;
       } else {
         set(B.upperArmR, -2.3 - sw * 0.35, 0.1, 0.25);
@@ -1802,6 +2034,14 @@ export function animateWorker(w, dt, time) {
       bare = kind !== 3 && lie > 0.85 ? (side || 0) : null;
     }
   }
+  // стоит с ношей в носилке (ждёт, поднял носилку на плечо): наклон под вес, кисти на ноше
+  if (!moving && SKP && (a.action === 'idle' || (a.action === 'load' && !(a.sk.A && a.sk.B)))) {
+    TARGET[B.spine].x += SKP.lean;
+    TARGET[B.spine].z -= SKP.side;
+    if (SKP.spread) { TARGET[B.upperArmL].z += SKP.spread; TARGET[B.upperArmR].z -= SKP.spread; }
+    carryGrips(a, SKP);
+    gripL = SKP.gripL; gripR = SKP.gripR; styleL = SKP.styleL; styleR = SKP.styleR;
+  }
   // жест поверх действия (правая рука): «Айда курить!» — машет к себе над головой; новый разряд — кулак вверх
   if (a.gesture) {
     a.gestT += dt;
@@ -1836,19 +2076,43 @@ export function animateWorker(w, dt, time) {
   // плавный переход к цели: корпус и руки без ИК, затем руки по ИК от уже повёрнутой груди; на ×20 (a.snap) — сразу,
   // как поворот у оригинала: логика за кадр уходит на треть секунды, и сглаживание отставало бы (лежит, хотя уже идёт)
   const k = a.snap ? 1 : 1 - Math.exp(-dt * 14);
+  // кладка в такт рукам: цели рук непрерывны (доли цикла) — руки по ИК без отставания (кисть там, где ложится единица
+  // и где верх запаса); первые 0,3 с, как встал класть (после подхода, другого действия), — плавно из прежней позы
+  const tiedLay = (a.action === 'lay' && !!a.lay && a.lay.mode === 'tied') || false;
+  a.layOn = tiedLay && !moving ? (a.layOn || 0) + dt : 0;
+  // погрузка и выкладка по штуке (цикл 0,4–0,45 с) — так же: руки по ИК сразу, корпус быстрее
+  const cycAct = !moving && (a.action === 'load' || a.action === 'drop') && !!(a.sk && a.sk.A);
+  a.cycOn = cycAct ? (a.cycOn || 0) + dt : 0;
+  // кисти на ручках тачки на ходу — тоже сразу (тачка жёсткая, корпус качается: со сглаживанием кисти отставали)
+  const kIK = (tiedLay && a.layOn > 0.3) || (cycAct && a.cycOn > 0.2) || (!!a.sk && !!(a.sk.gripLW || a.sk.gripRW) && !a.snap) ? 1 : k;
+  // корпус в кладке в такт рукам — быстрее (цикл 0,7–1 с: к поддону и обратно успевает за окно у источника)
+  const kB = tiedLay && a.layOn > 0.3 && !a.snap ? 1 - Math.exp(-dt * 30) : cycAct && a.cycOn > 0.2 && !a.snap ? 1 - Math.exp(-dt * 24) : k;
   let ikL = false, ikR = false;
   for (let i = 0; i < IK_REQ.length; i++) { if (IK_REQ[i].sd === 'L') ikL = true; else ikR = true; }
   for (let i = 1; i < BONES.length; i++) {
     if ((ikL && (i === B.upperArmL || i === B.foreArmL)) || (ikR && (i === B.upperArmR || i === B.foreArmR))) continue;
     _q.setFromEuler(TARGET[i]);
-    w.pose[i].slerp(_q, k);
+    w.pose[i].slerp(_q, kB);
     w.bones[i].quaternion.copy(w.pose[i]);
   }
+  // таз смещён к поддону (взятие пачки, стопы на опоре) — плавно, как поза; иначе — на месте
+  const hb = w.bones[B.hips];
+  if (w.hipsRestX === undefined) { w.hipsRestX = hb.position.x; w.hipsRestZ = hb.position.z; }
+  a.hipShX = (a.hipShX || 0) + (HIPSH.x - (a.hipShX || 0)) * kB;
+  a.hipShZ = (a.hipShZ || 0) + (HIPSH.z - (a.hipShZ || 0)) * kB;
+  hb.position.x = w.hipsRestX + a.hipShX; hb.position.z = w.hipsRestZ + a.hipShZ;
+  // кладка и выкладка со стопами на опоре (crew.js → a.plant): стопы стоят, где стояли, пока таз смещается; шаг — по
+  // одной ноге (plantFeet, до таза: высота таза — по уже поставленным стопам)
+  const planted = !moving && !a.snap && !!a.plant && (a.action === 'lay' || a.action === 'drop' || a.action === 'load');
+  if (planted) plantFeet(w, a, dt); else a.feet = null;
   // стоя на месте — стопы на земле (plantBob): таз — по нижней точке ботинок; у радости — ещё подскок
-  if (!moving && PLANT[a.action]) bob = plantBob(w) + (a.action === 'cheer' ? bob + 0.04 : 0);
-  // высота таза: мелкие колебания (шаг, дыхание) — сразу, большие перемены позы (сесть, лечь, встать) — плавно
-  if (a.bobS === undefined || a.snap) a.bobS = bob;
+  const plant = !moving && PLANT[a.action];
+  if (plant) bob = plantBob(w) + (a.action === 'cheer' ? bob + 0.04 : 0);
+  // высота таза: мелкие колебания (шаг, дыхание) — сразу, большие перемены позы (сесть, лечь, встать) — плавно; стоя
+  // на месте второй кадр подряд — ровно по стопам (поза уже сглажена, отставание таза уводило подошвы в опору)
+  if (a.bobS === undefined || a.snap || (plant && a.plantPrev && a.action !== 'cheer')) a.bobS = bob;
   else a.bobS += (bob - a.bobS) * (1 - Math.exp(-dt * (Math.abs(bob - a.bobS) > 0.06 ? 9 : 40)));
+  a.plantPrev = plant;
   w.bones[B.hips].position.y = (w.hipsRest || BONES[B.hips][2][1]) + a.bobS;
   if (IK_REQ.length) {
     const chest = w.bones[B.chest];
@@ -1867,13 +2131,27 @@ export function animateWorker(w, dt, time) {
         if (q.b) { resolve(chest, q.b, _v2); _v.lerp(_v2, q.k); }
       }
       armIK(w, q.sd, _v, q.pole);
+      // недолёт кисти левой (м): цель дальше вытянутой руки — добор наклона кладки и взятия (a.layK, a.takeK)
+      if (q.sd === 'L') { const J = w.armRest.L; a.ikGap = _v.distanceTo(J.sh) - (J.L1 + J.L2) * 0.97; }
       [B['upperArm' + q.sd], B['foreArm' + q.sd]].forEach(function (i) {
         _q.setFromEuler(TARGET[i]);
-        w.pose[i].slerp(_q, k);
+        w.pose[i].slerp(_q, kIK);
         w.bones[i].quaternion.copy(w.pose[i]);
       });
     }
   }
+  // кладка в такт рукам: кисть не достала до поддона (у источника) или до места кладки (в окне) — поза глубже со
+  // следующих кадров; достала до поддона — пачка взята (её видно в руке с PHASE.take, layTied)
+  if (tiedLay && a.ikGap !== undefined) {
+    const c = a.lay.c, short = a.ikGap > 0.02;
+    const atSrc = c >= PHASE.src[0] + 0.03 || c < PHASE.src[1] - 0.02, atRow = c > PHASE.lay[0] + 0.03 && c < PHASE.lay[1] - 0.03;
+    if (atSrc && a.laySrc) a.takeK = THREE.MathUtils.clamp((a.takeK || 0) + dt * (short ? 4 : -0.3), 0, 1);
+    if (atRow) a.layK = THREE.MathUtils.clamp((a.layK || 0) + dt * (short ? 2.5 : -0.4), 0, 1);
+    if (atSrc && (!a.laySrc || a.ikGap < 0.06)) a.tookJ = c >= PHASE.src[0] ? a.lay.j + 1 : a.lay.j;
+  }
+  // для проверок (rv-msf.mjs): недолёт левой в последнем кадре и добор взятия
+  a.ikGapL = a.ikGap === undefined ? null : a.ikGap;
+  a.ikGap = undefined;
   // Рама ноши висит на лямках: в наклоне (присед кладки, удар кирки) она поворачивается вокруг верха лямок у плеч
   // меньше груди — низ с полкой подходит к пояснице (жёстко на груди полка уходила на 20 см за таз)
   if (w.stack && w.stack.visible && w.stack.userData.restQ) {
@@ -1911,15 +2189,20 @@ export function animateWorker(w, dt, time) {
   // инструмент в руке — по действию; при смене действия прежний ещё 0,2 с в руке, пока рука выходит из позы
   const T = w.tools, LT = w.leftTools, was = a.t < 0.2 ? a.from : null;
   const doing = function (x, y) { return a.action === x || was === x || (!!y && (a.action === y || was === y)); };
-  T.hammer.visible = doing('hammer') || (doing('work-high') && !a.hiPlace);
-  T.trowel.visible = doing('lay');
+  T.hammer.visible = doing('hammer') || (doing('work-high') && !a.hiPlace) || (a.action === 'lay' && a.layTool === 'hammer');
+  T.trowel.visible = doing('lay') && !(a.action === 'lay' && a.layTool === 'hammer');
   T.drill.visible = doing('screw');
   T.pickaxe.visible = doing('pick');
   T.cigarette.visible = doing('smoke');
   T.sandwich.visible = doing('eat');
   LT.lunchbox.visible = doing('eat');
   if (a.hold && LT.block.geometry !== a.hold.geometry) { LT.block.geometry = a.hold.geometry; LT.block.material = a.hold.material; }
+  // охапка от поддона крана (sk-crew.js fetch): несёт в руках
+  if (a.action === 'fetch' && a.sk && a.sk.armful) holdBlock = true;
   LT.block.visible = holdBlock && !!a.hold;
+  // пачка в левой (кладка в такт рукам): где она в мире — модулям запаса и эффектам (crew → figure(i).anim.held)
+  a.holding = LT.block.visible;
+  if (a.holding && a.lay) LT.block.getWorldPosition(a.held || (a.held = new THREE.Vector3()));
   if (T.cigarette.visible) T.cigarette.userData.ember.material.emissiveIntensity = 1.2 + 7 * ember;
   // каска: лёжа снята (bare — бок, на котором лежит), иначе на голове
   if (w.helmetOff) w.helmetOff(bare !== null, bare || 0);
@@ -1961,7 +2244,7 @@ const HEAD_M = new THREE.Matrix4();
 // Стопы на земле: в позах стоя на месте таз опускается или поднимается так, чтобы нижняя точка ботинок (пятка или
 // носок — точки в осях кости стопы) была там же, где в покое: присед кладки, удар кирки, стойка у стола, перекур.
 // Прежние подобранные проседания таза уводили носки в землю на 3–15 см или поднимали над ней (cwf-tmp/cycle.mjs).
-const PLANT = { idle: 1, lay: 1, pick: 1, hammer: 1, screw: 1, tie: 1, plan: 1, smoke: 1, cheer: 1 };
+const PLANT = { idle: 1, lay: 1, pick: 1, load: 1, drop: 1, hammer: 1, screw: 1, tie: 1, plan: 1, smoke: 1, cheer: 1 };
 const FOOT_PTS = [new THREE.Vector3(0, -0.09, -0.06), new THREE.Vector3(0, -0.09, 0.15)];
 const LEGS = [[B.thighL, B.shinL, B.footL], [B.thighR, B.shinR, B.footR]];
 const _pm = new THREE.Matrix4(), _pm2 = new THREE.Matrix4(), _pv = new THREE.Vector3(), _one = new THREE.Vector3(1, 1, 1), _q1 = new THREE.Quaternion();
@@ -1982,6 +2265,102 @@ function lowestFoot(w, rest) {
 function plantBob(w) {
   if (w.footRest === undefined) w.footRest = lowestFoot(w, true);
   return w.footRest - lowestFoot(w, false);
+}
+// Стопы на опоре (кладка и выкладка, crew.js → a.plant): щиколотка каждой ноги держит точку в мире, пока таз
+// смещается (шаг вдоль ряда к новой стойке, разворот к пачке, расхождение); ушла от своего места под тазом дальше
+// STEP_AT — шаг этой ногой: подъём на STEP_LIFT и перенос за STEP_T с к месту под тазом (с опережением по ходу тела),
+// по одной ноге. Ноги — ИК двух звеньев (бедро, голень) в осях таза поверх сглаженной позы, колено — в своей
+// плоскости, стопа держит поворот (подошва как в позе). Высота — как в позе (таз потом ставит plantBob).
+const STEP_AT = 0.1, STEP_T = 0.26, STEP_LIFT = 0.07, STEP_FAR = 0.45;
+const _lh = new THREE.Vector3(), _lk = new THREE.Vector3(), _la = new THREE.Vector3(), _ld = new THREE.Vector3(), _lp = new THREE.Vector3(),
+  _lk2 = new THREE.Vector3(), _la2 = new THREE.Vector3(), _lu = new THREE.Vector3(), _lw = new THREE.Vector3();
+const _q3 = new THREE.Quaternion(), _q4 = new THREE.Quaternion(), _q5 = new THREE.Quaternion(), _q6 = new THREE.Quaternion(), _q7 = new THREE.Quaternion(),
+  _qhips = new THREE.Quaternion(), _qhi = new THREE.Quaternion();
+const HOME = [new THREE.Vector3(), new THREE.Vector3()], ANK = [new THREE.Vector3(), new THREE.Vector3()];
+// щиколотка ноги l в осях таза (от сустава таза): бедро, колено, щиколотка
+function legFK(w, l, H, K, A) {
+  const th = w.bones[LEGS[l][0]], sh = w.bones[LEGS[l][1]], ft = w.bones[LEGS[l][2]];
+  H.copy(th.position);
+  K.copy(sh.position).applyQuaternion(th.quaternion).add(H);
+  A.copy(ft.position).applyQuaternion(_q3.copy(th.quaternion).multiply(sh.quaternion)).add(K);
+}
+function plantFeet(w, a, dt) {
+  const s = w.group.scale.x || 1, hd = w.heading || 0, cs = Math.cos(hd), sn = Math.sin(hd);
+  const hips = w.bones[B.hips];
+  _qhips.copy(hips.quaternion); _qhi.copy(_qhips).invert();
+  // оси таза → мир: поворот таза, его точка, курс и масштаб фигуры
+  const toWorld = function (p, out) {
+    out.copy(p).applyQuaternion(_qhips).add(hips.position);
+    const x = out.x, z = out.z;
+    return out.set(w.pos.x + (x * cs + z * sn) * s, w.pos.y + out.y * s, w.pos.z + (-x * sn + z * cs) * s);
+  };
+  for (let l = 0; l < 2; l++) {
+    const th = w.bones[LEGS[l][0]], sh = w.bones[LEGS[l][1]], ft = w.bones[LEGS[l][2]];
+    // место стопы под тазом — по ноге в покое (присед и наклон его не двигают: стопы стоят, таз уходит назад)
+    _la.copy(th.position).add(sh.position).add(ft.position);
+    HOME[l].set(w.pos.x + (_la.x * cs + _la.z * sn) * s, 0, w.pos.z + (-_la.x * sn + _la.z * cs) * s);
+    legFK(w, l, _lh, _lk, ANK[l]);
+  }
+  // скорость тела (опережение шага)
+  const vx = a.plantAt && dt > 0 ? (w.pos.x - a.plantAt.x) / dt : 0, vz = a.plantAt && dt > 0 ? (w.pos.z - a.plantAt.z) / dt : 0;
+  (a.plantAt || (a.plantAt = new THREE.Vector3())).copy(w.pos);
+  let F = a.feet;
+  if (!F) {
+    // встал: стопы — где они сейчас по позе (дальше шагами к месту под тазом)
+    F = a.feet = { p: [toWorld(ANK[0], new THREE.Vector3()), toWorld(ANK[1], new THREE.Vector3())], step: -1, t: 0, from: new THREE.Vector3() };
+    return;
+  }
+  const e0 = Math.hypot(F.p[0].x - HOME[0].x, F.p[0].z - HOME[0].z), e1 = Math.hypot(F.p[1].x - HOME[1].x, F.p[1].z - HOME[1].z);
+  // сорвался (прыжок тела, телепорт) — стопы сразу под тазом
+  if (Math.max(e0, e1) > 1.2) { F.p[0].copy(HOME[0]); F.p[1].copy(HOME[1]); F.step = -1; return; }
+  if (F.step < 0 && Math.max(e0, e1) > STEP_AT) { F.step = e0 >= e1 ? 0 : 1; F.t = 0; F.from.copy(F.p[F.step]); }
+  const lift = [0, 0];
+  if (F.step >= 0) {
+    const i = F.step, sp = Math.min(1, Math.hypot(vx, vz));
+    // далеко ушла — шаг быстрее
+    F.t = Math.min(1, F.t + dt / (STEP_T * (Math.max(e0, e1) > STEP_FAR ? 0.6 : 1)));
+    const u = ss(F.t, 0, 1), lead = STEP_T * 0.55 * sp / Math.max(1e-3, Math.hypot(vx, vz));
+    const tx = HOME[i].x + vx * lead, tz = HOME[i].z + vz * lead;
+    F.p[i].x = F.from.x + (tx - F.from.x) * u; F.p[i].z = F.from.z + (tz - F.from.z) * u;
+    lift[i] = STEP_LIFT * Math.sin(Math.PI * F.t);
+    if (F.t >= 1) F.step = -1;
+  }
+  // нога не тянется дальше STEP_FAR от места под тазом (не растягивается) — точка подтягивается
+  for (let l = 0; l < 2; l++) {
+    const dx = F.p[l].x - HOME[l].x, dz = F.p[l].z - HOME[l].z, d = Math.hypot(dx, dz);
+    if (d > STEP_FAR + 0.15) { F.p[l].x = HOME[l].x + dx / d * (STEP_FAR + 0.15); F.p[l].z = HOME[l].z + dz / d * (STEP_FAR + 0.15); }
+  }
+  for (let l = 0; l < 2; l++) {
+    // цель щиколотки в осях таза: мир → оси фигуры → оси таза; высота — как в позе (+ подъём шага)
+    const wx = F.p[l].x - w.pos.x, wz = F.p[l].z - w.pos.z;
+    _ld.set((wx * cs - wz * sn) / s, 0, (wx * sn + wz * cs) / s);
+    _lw.copy(ANK[l]).applyQuaternion(_qhips).add(hips.position);
+    _ld.y = _lw.y + lift[l] / s;
+    _ld.sub(hips.position).applyQuaternion(_qhi);
+    legFK(w, l, _lh, _lk, _la);
+    if (_ld.distanceToSquared(_la) < 1e-8) continue;
+    const l1 = _lk.distanceTo(_lh), l2 = _la.distanceTo(_lk);
+    const d = _lu.subVectors(_ld, _lh), dist = THREE.MathUtils.clamp(d.length(), Math.abs(l1 - l2) + 1e-3, (l1 + l2) * 0.9995);
+    d.normalize();
+    // колено — в плоскости, где оно сейчас (вперёд, если нога прямая)
+    _lp.subVectors(_lk, _lh).addScaledVector(d, -_lk2.subVectors(_lk, _lh).dot(d));
+    if (_lp.lengthSq() < 1e-8) _lp.set(0, 0, 1).addScaledVector(d, -d.z);
+    _lp.normalize();
+    const ca = (l1 * l1 - l2 * l2 + dist * dist) / (2 * dist), hk = Math.sqrt(Math.max(0, l1 * l1 - ca * ca));
+    _lk2.copy(_lh).addScaledVector(d, ca).addScaledVector(_lp, hk);
+    _la2.copy(_lh).addScaledVector(d, dist);
+    const th = w.bones[LEGS[l][0]], sh = w.bones[LEGS[l][1]], ft = w.bones[LEGS[l][2]];
+    // поворот бедра: колено туда, где надо; голени: щиколотка — к цели; стопа — прежний поворот в осях таза
+    const q1 = _q4.setFromUnitVectors(_lw.subVectors(_lk, _lh).normalize(), _lp.subVectors(_lk2, _lh).normalize());
+    const Ws = _q5.copy(th.quaternion).multiply(sh.quaternion), Wf = _q6.copy(Ws).multiply(ft.quaternion);
+    _la.sub(_lk).applyQuaternion(q1);
+    const q2 = _q7.setFromUnitVectors(_la.normalize(), _lw.subVectors(_la2, _lk2).normalize());
+    th.quaternion.premultiply(q1);
+    // новая голень в осях таза: q2·q1·Ws; в осях бедра — (q1·Qt)⁻¹·q2·q1·Ws
+    Ws.premultiply(q1).premultiply(q2);
+    sh.quaternion.copy(_q3.copy(th.quaternion).invert().multiply(Ws));
+    ft.quaternion.copy(Ws.invert().multiply(Wf));
+  }
 }
 function resolve(chest, pt, out) {
   out.copy(pt.p);

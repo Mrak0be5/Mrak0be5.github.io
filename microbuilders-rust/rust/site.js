@@ -1,19 +1,23 @@
 // Хозяйство площадки в реалистичном виде: карьер-подкова с уступами и плато (site-quarry.js), на плато — забор
 // с сигнальной лентой, мачты освещения, башенный кран, городок бытовок и миниатюры прошлых строек; во дворе —
-// техника компании, у въезда — самосвал и поддоны с блоками (site-props.js, site-crane.js, site-truck.js).
+// техника компании, у въезда — самосвал и поддоны с блоками (site-props.js, site-crane.js, site-truck.js). Кран
+// работает на стройку: когда она ушла вверх, поднимает поддоны материала яруса на леса (site-crane.js, cr-*.js);
+// поставленные поддоны (1,2 × 0,6 м, у наружных перил настила) — deliveries(), взять — consume(id, n), убылью
+// управляет другой модуль — claim(true), события поддонов — onCrane(fn) (переживает смену площадки) и
+// call('craneDelivery' | 'craneReady' | 'craneUpdate' | 'craneCleared') у модулей (cr-stock.js).
 // Раскладка — формулы оригинала (site-layout.js: art/quarry.js, art/props.js, art/vehicles.js, game.js
 // quarryCells), мир вида ×2. Модуль вида (scene.js → LOADERS): create(ctx) → { group, build(world), clear(),
 // update(dt, info) }; heightAt(x, z) — высота карьера под точкой (м), debug() — раскладка для снимков.
 // Неподвижное — одна слитая геометрия на материал; подвижное (поворотная часть крана, крюк, самосвал) — свои меши.
 import * as THREE from 'three';
-import { layout } from './site-layout.js?v=45127fe';
-import { createKit, Pile, disposeTree } from './site-kit.js?v=45127fe';
-import { buildQuarry } from './site-quarry.js?v=45127fe';
-import { fence, masts, cabins, minis, machines, pallets } from './site-props.js?v=45127fe';
-import { buildCrane } from './site-crane.js?v=45127fe';
-import { buildTruck } from './site-truck.js?v=45127fe';
-import { buildAmbient } from './site-ambient.js?v=45127fe';
-import { familyOf, familyMaterial, familyTile, tintOf } from './families.js?v=45127fe';
+import { layout } from './site-layout.js?v=ff29707';
+import { createKit, Pile, disposeTree } from './site-kit.js?v=ff29707';
+import { buildQuarry } from './site-quarry.js?v=ff29707';
+import { fence, masts, cabins, minis, machines, pallets } from './site-props.js?v=ff29707';
+import { buildCrane } from './site-crane.js?v=ff29707';
+import { buildTruck } from './site-truck.js?v=ff29707';
+import { buildAmbient } from './site-ambient.js?v=ff29707';
+import { familyOf, familyMaterial, familyTile, tintOf } from './families.js?v=ff29707';
 
 export function create(ctx) {
   const group = new THREE.Group();
@@ -23,7 +27,12 @@ export function create(ctx) {
   // материал кладки семейства (общий с двором и зданием)
   const family = function (fam) { return familyMaterial(ctx.mats, fam); };
   family.tile = familyTile;
-  let built = null, blink = 0, lastError = null;
+  let built = null, blink = 0, lastError = null, claimed = false, reach, keep;
+  // слушатели поддонов крана (onCrane): общие на все площадки, каждая новая площадка передаёт им свои события
+  const craneListeners = [];
+  function craneEvent(e) { craneListeners.slice().forEach(function (fn) { try { fn(e); } catch (err) { console.error('site: слушатель крана', err); } }); }
+  // события мира — крану (поддоны у каменщиков убывают по укладке того же материала)
+  if (ctx.E && ctx.E.on) ctx.E.on(function (e) { if (built) built.crane.event(e); });
   const timings = {};
 
   // Ошибка сборки одной площадки не выключает модуль (scene.js fail() выключил бы его до перезагрузки): площадка
@@ -59,7 +68,8 @@ export function create(ctx) {
     P.mudK = 0.55;
     pallets(P, kit, lay, MB, h);
     P.mudK = 0.4;
-    const crane = buildCrane(P, kit, lay, h, family);
+    const crane = buildCrane(P, kit, lay, quarry, family, ctx, world);
+    crane.stock.on(craneEvent);
     const still = P.build(family);
     still.name = 'site-static';
     group.add(still, crane.group);
@@ -68,7 +78,8 @@ export function create(ctx) {
     const ambient = buildAmbient(kit, ctx, lay, quarry);
     group.add(ambient.group);
     ctx.linkSkyTree(group);
-    built = { lay: lay, quarry: quarry, crane: crane, truck: truck, ambient: ambient };
+    built = { lay: lay, quarry: quarry, crane: crane, truck: truck, ambient: ambient, world: world };
+    if (claimed) crane.stock.claim(true, reach, keep);
     // лес вида (nature.js, группа 'forest') строится раз на запуск по кругу поляны: деревья и кусты, что попали
     // в след карьера (плато с хозяйством на больших площадках уходит за 120 м), — убрать до следующей площадки
     cutNature(ctx.scene ? [ctx.scene.getObjectByName('forest')] : [], quarry.covers);
@@ -119,8 +130,8 @@ export function create(ctx) {
 
   function update(dt, info) {
     if (!built || info.mode !== 'site') return;
-    // кран стоит на паузе игры; самосвал — по часам оригинала (зеркало)
-    built.crane.update(info.tempo > 0 ? dt : 0);
+    // кран — в темпе игры (на паузе стоит); самосвал — по часам оригинала (зеркало)
+    built.crane.update(dt, info, built.world);
     built.truck.update(dt, info);
     built.ambient.update(dt, info);
     // прожекторы мачт и фары — в сумерки и ночью; красные огни крана мигают
@@ -144,9 +155,27 @@ export function create(ctx) {
     return { frame: [S.x0, S.x1, S.z0, S.z1], scale: S.scale, top: S.top, crane: [L.crane.x, L.crane.y, L.crane.z], cabins: [L.cabins.x, L.cabins.y, L.cabins.z],
       truck: [L.supply.truck.x, L.supply.truck.z], minis: L.minis.length, machines: L.machines.filter(function (m) { return m.tier <= L.tier; }).map(function (m) { return m.kind; }),
       meshes: calls, tris: Math.round(tris), timings: timings, hCrane: built.quarry.heightAt(L.crane.x * 2, L.crane.z * 2), ambient: built.ambient.state(),
-      reach: built.quarry.reach, natureCut: cutCount, error: lastError };
+      reach: built.quarry.reach, natureCut: cutCount, error: lastError, crane: built.crane.state() };
   }
 
   return { group: group, build: build, clear: clear, update: update, debug: debug,
-    heightAt: function (x, z) { return built ? built.quarry.heightAt(x, z) : 0; } };
+    heightAt: function (x, z) { return built ? built.quarry.heightAt(x, z) : 0; },
+    // поддоны, поставленные краном на леса (cr-stock.js → info): [{ id, materialId, family, deck, cell, x, y, z
+    // (м вида, середина низа поддона), yaw, side, left, total, ready, top, next, unit, t, age, mason }];
+    // delivery(id) — один (null — нет); consume(id, n) — взять n единиц сверху (→ осталось, −1 — нет такого);
+    // claim(true[, reach]) — убыль ведёт другой модуль (reach — в скольких м от точки стойки каменщика он берёт с поддона
+    // крана, по умолчанию 1,25: кран ставит поддон в эту досягаемость); onCrane(fn) — события { type, pallet } (→ отписка): craneDelivery,
+    // craneReady, craneUpdate (убыло после готовности: left, top, next), craneCleared
+    deliveries: function () { return built ? built.crane.stock.list() : []; },
+    delivery: function (id) { return built ? built.crane.stock.get(id) : null; },
+    consume: function (id, n) { return built ? built.crane.stock.consume(id, n) : -1; },
+    // expire(id) — снять ненужный поддон с грузом (оседает и тает; craneCleared why 'stale')
+    expire: function (id) { return built ? built.crane.stock.expire(id) : false; },
+    // recall(id) — вернуть ненужный поддон крану: кран заберёт его с настила на склад (craneCleared why 'back')
+    recall: function (id) { return built ? built.crane.stock.recall(id) : false; },
+    // keep — сколько с после готовности поддон ждёт, пока захвачено (по умолчанию 90)
+    claim: function (on, r, k) { claimed = !!on; if (r !== undefined) reach = r; if (k !== undefined) keep = k; if (built) built.crane.stock.claim(claimed, reach, keep); return claimed; },
+    onCrane: function (fn) { craneListeners.push(fn); return function () { const i = craneListeners.indexOf(fn); if (i >= 0) craneListeners.splice(i, 1); }; },
+    // проверки: состояние крана, задание сейчас, перемотка крана без кадров
+    crane: function (cmd, a) { if (!built) return null; const cr = built.crane; return cmd === 'force' ? cr.force() : cmd === 'skip' ? cr.skip(a || 1) : cr.state(); } };
 }

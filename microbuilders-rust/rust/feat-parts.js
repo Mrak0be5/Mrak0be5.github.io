@@ -4,7 +4,7 @@
 // по дуге (струи фонтана).
 // Буфер — как у building.js: { pos, nrm, uv, col, idx }; фактура — в метрах по осям детали (tile).
 import * as THREE from 'three';
-import { linkSky } from './world.js?v=45127fe';
+import { linkSky } from './world.js?v=ff29707';
 
 // ---------- материалы ----------
 // Вода: тёмная гладь с отражением неба (окружение сцены, на «Максимуме» и SSR) — рябь бегущими волнами и шумом

@@ -1,7 +1,7 @@
 // Хозяйство стройки кубами: мачты освещения на прицепах с генераторами (ночь с 10-го уровня). Всё — из тех
 // же примитивов и материалов, что и остальная сцена.
 import * as THREE from 'three';
-import { Batch, roundedBox, boxUV, cylinder, quad } from './geo.js?v=45127fe';
+import { Batch, roundedBox, boxUV, cylinder, quad } from './geo.js?v=ff29707';
 
 const W = new THREE.Color(1, 1, 1);
 function M(x, y, z, ry = 0, rx = 0, rz = 0) {

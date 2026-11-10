@@ -2,9 +2,9 @@
 // окружение для отражений из того же неба (PMREM), дымка цвета горизонта, рельеф с выровненной площадкой,
 // карта покрытия земли (глина, щебень, колеи, трава) и горы на горизонте.
 import * as THREE from 'three';
-import { NOISE } from './glsl.js?v=45127fe';
-import { rng } from './geo.js?v=45127fe';
-import { ATMO, ATMO_GLSL, AP_GLSL, uniforms as atmoUniforms, apUniforms, createAtmosphere } from './atmosphere.js?v=45127fe';
+import { NOISE } from './glsl.js?v=ff29707';
+import { rng } from './geo.js?v=ff29707';
+import { ATMO, ATMO_GLSL, AP_GLSL, uniforms as atmoUniforms, apUniforms, createAtmosphere } from './atmosphere.js?v=ff29707';
 
 // ---------- облака и их тень ----------
 // Облака — слой на высоте 1,5–3,2 км (середина 2,3 км): небо рисует их с перспективой (render.js — объёмными), а каждый материал сцены (linkSky) получает

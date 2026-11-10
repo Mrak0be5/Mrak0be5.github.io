@@ -3,9 +3,9 @@
 // техника компании на стоянке во дворе, поддоны с блоками у въезда. Места — из site-layout.js (клетки
 // оригинала), здесь всё в метрах вида (×2) и складывается в общую кучу по материалам (site-kit.js Pile).
 import * as THREE from 'three';
-import { boxUV, corrugated, quad, rng, torus } from './geo.js?v=45127fe';
-import { CELL, familyOf, tintOf, familyTile } from './families.js?v=45127fe';
-import { M, mul, hex, WHITE, wheel } from './site-kit.js?v=45127fe';
+import { boxUV, corrugated, quad, rng, torus } from './geo.js?v=ff29707';
+import { CELL, familyOf, tintOf, familyTile } from './families.js?v=ff29707';
+import { M, mul, hex, WHITE, wheel } from './site-kit.js?v=ff29707';
 
 const C = CELL;
 const V = function (x, y, z) { return new THREE.Vector3(x, y, z); };
