@@ -1468,7 +1468,21 @@ window.createMarinaBuildings = function (data, world, sites, detail = {}) {
       parts.find(p=>p.n)?.n || (site.id==='ain' ? 'Ain Dubai' : site.name || site.id);
     addEntry(id,name,parts,site);
   }
-  for (const [id,parts] of byOsm) addEntry(id,parts.find(p=>p.n)?.n || 'OSM '+id,parts);
+  // Публичные названия со старшей карты района; совпадение строго по идентификатору OSM.
+  const localNames={
+    "w101512709": "Al Thuraya Tower 2",
+    "w120286898": "Radisson Blu Dubai Media City",
+    "w120286899": "Radisson Blu Dubai Media City",
+    "w385809069": "Radisson Blu Dubai Media City",
+    "w433294227": "Sukoon Tower",
+    "w498273838": "Landmark Group",
+    "w499378718": "Ariyana Tower",
+    "w499378720": "Bunyan Tower",
+    "w501462238": "The Royal Oceanic",
+    "w1074877790": "Sulafa Tower",
+    "w1074877791": "Marina 101"
+};
+  for (const [id,parts] of byOsm) addEntry(id,parts.find(p=>p.n)?.n || parts.map(p=>localNames[p.osm]).find(Boolean) || 'OSM '+id,parts);
 
   function at(x,z) {
     let best;
@@ -1486,9 +1500,31 @@ window.createMarinaBuildings = function (data, world, sites, detail = {}) {
 
   function owner(source) { return owners.get(source)?.entry || null; }
 
+  const selectedTint={value:-1},hoverTint={value:-1},tinted=new WeakSet();
+  const tintIds=new Map(entries.map((e,i)=>[e,i+1]));
   function bind(mesh,ranges,instances=false) {
-    if (ranges.length) meshes.set(mesh,{ranges,instances});
+    if(!ranges.length)return;
+    meshes.set(mesh,{ranges,instances});
+    if(instances||mesh.geometry.index||!mesh.material.isMeshStandardMaterial)return;
+    const ids=new Float32Array(mesh.geometry.attributes.position.count);
+    for(const [from,to,entry] of ranges)ids.fill(tintIds.get(entry)||0,3*from,3*to);
+    mesh.geometry.setAttribute('atlasObject',new THREE.BufferAttribute(ids,1));
+    const mat=mesh.material;
+    if(tinted.has(mat))return;
+    tinted.add(mat);
+    const compile=mat.onBeforeCompile,cache=mat.customProgramCacheKey();
+    mat.customProgramCacheKey=()=>cache+'-atlas-selection';
+    mat.defaultAttributeValues={...mat.defaultAttributeValues,atlasObject:[0]};
+    mat.onBeforeCompile=function(shader,renderer){
+      compile.call(this,shader,renderer);
+      shader.uniforms.atlasSelected=selectedTint;shader.uniforms.atlasHover=hoverTint;
+      shader.vertexShader='attribute float atlasObject; varying float vAtlasObject;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvAtlasObject=atlasObject;');
+      shader.fragmentShader='uniform float atlasSelected, atlasHover; varying float vAtlasObject;\n'+shader.fragmentShader.replace('#include <color_fragment>',
+        '#include <color_fragment>\nfloat selection = 1.-step(.45,abs(vAtlasObject-atlasSelected));float over = 1.-step(.45,abs(vAtlasObject-atlasHover));diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.11,.62,.44),max(.43*selection,.25*over));');
+    };
+    mat.needsUpdate=true;
   }
+  function highlight(selected,hover){selectedTint.value=tintIds.get(selected)||-1;hoverTint.value=tintIds.get(hover)||-1;}
 
   function fromHit(hit) {
     if (!hit) return null;
@@ -1703,7 +1739,7 @@ window.createMarinaBuildings = function (data, world, sites, detail = {}) {
     return onlyTest ? false : positions;
   }
 
-  return {entries,at,levels,windows,fromHit,availability,owner,capture,bind};
+  return {entries,at,levels,windows,fromHit,availability,owner,capture,bind,highlight};
 };
 
 ;
@@ -1910,7 +1946,628 @@ function createMarinaDoor(scene,style,catalog,buildings){
 
 ;
 'use strict';
-function createMarinaBuildingUI(catalog,onSelect,onPose) {
+
+// Обзор с плоскостью захвата: точка карты остаётся под курсором при сдвиге, щипке и прокрутке.
+function createExplorerControls({surface,view,camera,focus,drone,bounds,active,refresh,interrupt,pick,labelAt,hover}) {
+  const T=THREE, clamp=T.MathUtils.clamp, ray=new T.Raycaster();
+  const points=new Map(), velocity=new T.Vector2(), delta=new T.Vector3();
+  let pair=null,lastTap=null,timer=0,zoom=null,lastHover=0,mouseOver=null;
+  const minRange=25,maxRange=7400,minTilt=.105,maxTilt=1.519;
+  function sync(){
+    focus.x=clamp(focus.x,bounds[0],bounds[2]);focus.z=clamp(focus.z,bounds[1],bounds[3]);
+    refresh();camera.updateMatrixWorld();
+  }
+  function groundAt(x,y){
+    const r=view.getBoundingClientRect();
+    ray.setFromCamera({x:2*(x-r.left)/r.width-1,y:1-2*(y-r.top)/r.height},camera);
+    const direction=ray.ray.direction;
+    if(direction.y>-.04)return null;
+    const t=(focus.y-ray.ray.origin.y)/direction.y;
+    return t>0&&t<drone.r*7?ray.ray.at(t,new T.Vector3()):null;
+  }
+  function shift(x,z){focus.x+=x;focus.z+=z;sync();}
+  function anchor(pt,x,y){
+    const now=groundAt(x,y);if(!pt||!now)return false;
+    delta.copy(pt).sub(now);const d=Math.hypot(delta.x,delta.z),gain=d>0?Math.min(1,.6*drone.r/d):1;
+    shift(delta.x*gain,delta.z*gain);return true;
+  }
+  function fallbackPan(dx,dy){
+    const k=2*drone.r*Math.tan(camera.fov*Math.PI/360)/Math.max(1,view.clientHeight),a=drone.theta;
+    shift(k*(-Math.cos(a)*dx-Math.sin(a)*dy),k*(Math.sin(a)*dx-Math.cos(a)*dy));
+  }
+  function magnify(center,mult){
+    const r=clamp(drone.r*mult,minRange,maxRange),actual=r/drone.r;
+    focus.x=center.x+(focus.x-center.x)*actual;focus.z=center.z+(focus.z-center.z)*actual;
+    drone.r=r;sync();
+  }
+  function rotateAbout(center,a){
+    const x=focus.x-center.x,z=focus.z-center.z,c=Math.cos(a),s=Math.sin(a);
+    focus.x=center.x+x*c+z*s;focus.z=center.z-x*s+z*c;
+    drone.theta+=a;sync();
+  }
+  function stopPendingTap(){if(timer)clearTimeout(timer);timer=0;lastTap=null;}
+  function stop(){points.clear();pair=null;velocity.set(0,0);zoom=null;stopPendingTap();mouseOver=null;hover(null);}
+  function startZoom(x,y,k){
+    interrupt();velocity.set(0,0);
+    const factor=clamp(drone.r*k,minRange,maxRange)/drone.r;
+    zoom={center:groundAt(x,y)||focus.clone(),log:Math.log(factor),t:0,ease:0};
+  }
+  function pairState(){
+    const [a,b]=points.values(),mx=(a.x+b.x)*.5,my=(a.y+b.y)*.5;
+    return {mx,my,d:Math.max(1,Math.hypot(b.x-a.x,b.y-a.y)),a:Math.atan2(b.y-a.y,b.x-a.x)};
+  }
+  function pointerDown(e){
+    if(!active()||points.size>=2||(!e.isPrimary&&e.pointerType==='mouse'))return;
+    const now=performance.now(),x=e.clientX,y=e.clientY;
+    interrupt();zoom=null;velocity.set(0,0);mouseOver=null;hover(null);
+    const isDouble=e.pointerType==='touch'&&lastTap&&now-lastTap.t<310&&Math.hypot(x-lastTap.x,y-lastTap.y)<34;
+    stopPendingTap();
+    const v={x,y,startX:x,startY:y,now,lastMove:now,label:labelAt(e.target),kind:e.pointerType,button:e.button,
+      rotate:e.button===2||e.shiftKey||e.ctrlKey||e.metaKey,drag:false,double:isDouble,anchor:groundAt(x,y)};
+    points.set(e.pointerId,v);
+    if(e.isTrusted)surface.setPointerCapture(e.pointerId);
+    if(points.size===2){
+      const q=pairState();pair={start:q,prev:q,pt:groundAt(q.mx,q.my)||focus.clone(),kind:null,turned:false,t0:now};
+      for(const p of points.values()){p.multi=true;p.double=false;}
+    }
+  }
+  function pointerMove(e){
+    if(!active())return;
+    const v=points.get(e.pointerId),x=e.clientX,y=e.clientY;
+    if(!v){if(e.pointerType==='mouse'&&!points.size){mouseOver={x,y,target:e.target};}return;}
+    const oldX=v.x,oldY=v.y;v.x=x;v.y=y;
+    if(pair&&points.size===2){
+      const a=[...points.values()],q=pairState(),dx0=a[0].x-a[0].startX,dx1=a[1].x-a[1].startX,dy0=a[0].y-a[0].startY,dy1=a[1].y-a[1].startY;
+      if(!pair.kind){
+        const slop=Math.max(Math.hypot(dx0,dy0),Math.hypot(dx1,dy1));
+        if(slop<7)return;
+        if(Math.abs(q.d-pair.start.d)<Math.max(10,pair.start.d*.12)&&Math.abs(dx0)+Math.abs(dx1)<Math.abs(dy0)+Math.abs(dy1)&&
+            Math.abs(dy0-dy1)<18 && !(dy0*dy1<0)){
+          if(Math.min(Math.abs(dy0),Math.abs(dy1))<3 && slop<18)return;
+          pair.kind='tilt';
+        } else pair.kind='zoom';
+      }
+      if(pair.kind==='tilt'){
+        drone.phi=clamp(drone.phi+(q.my-pair.prev.my)*.005,minTilt,maxTilt);sync();
+        anchor(pair.pt,q.mx,q.my);
+      }else{
+        magnify(pair.pt,pair.prev.d/q.d);
+        const offset=Math.atan2(Math.sin(q.a-pair.start.a),Math.cos(q.a-pair.start.a));
+        if(pair.turned||Math.abs(offset)>.175){
+          const d=pair.turned?q.a-pair.prev.a:offset;pair.turned=true;
+          rotateAbout(pair.pt,Math.atan2(Math.sin(d),Math.cos(d)));
+        }
+        anchor(pair.pt,q.mx,q.my);
+      }
+      pair.prev=q;return;
+    }
+    const dx=x-oldX,dy=y-oldY;
+    if(!v.drag&&Math.hypot(x-v.startX,y-v.startY)<(v.kind==='touch'?7:4))return;
+    const first=!v.drag;v.drag=true;
+    if(v.rotate){
+      drone.theta-=dx*.0052;drone.phi=clamp(drone.phi+dy*.0042,minTilt,maxTilt);sync();
+    }else if(v.button===1||v.double){
+      magnify(v.anchor||focus.clone(),Math.exp(dy*(v.double?-.012:.008)));
+    }else{
+      const px=focus.x,pz=focus.z,now=performance.now();
+      if(!anchor(v.anchor,x,y))fallbackPan(dx,dy);
+      const dt=clamp((now-v.lastMove)/1000,.008,.14);
+      const k=first?1:.44;
+      velocity.x+=(clamp((focus.x-px)/dt,-drone.r*3,drone.r*3)-velocity.x)*k;
+      velocity.y+=(clamp((focus.z-pz)/dt,-drone.r*3,drone.r*3)-velocity.y)*k;
+      v.lastMove=now;
+    }
+  }
+  function pointerUp(e){
+    const p=points.get(e.pointerId);if(!p)return;points.delete(e.pointerId);
+    if(e.type==='pointercancel'||e.type==='lostpointercapture'){stop();return;}
+    if(!active())return;
+    const now=performance.now(),jump=Math.hypot(e.clientX-p.startX,e.clientY-p.startY);
+    if(p.multi){
+      const left=points.values().next().value;
+      if(left){
+        left.twoTap=pair&&!pair.kind&&now-pair.t0<350?pair.start:null;
+        left.anchor=groundAt(left.x,left.y);left.startX=left.x;left.startY=left.y;left.drag=false;left.lastMove=now;
+      } else if(p.twoTap&&!p.drag&&jump<9&&now-p.now<400)startZoom(p.twoTap.mx,p.twoTap.my,2);
+      pair=null;velocity.set(0,0);return;
+    }
+    if(p.drag||jump>=7||now-p.now>550||p.button!==0||p.rotate){
+      if(now-p.lastMove>80)velocity.set(0,0);return;
+    }
+    if(p.double){startZoom(p.x,p.y,.5);return;}
+    if(p.kind==='touch'){
+      lastTap={t:now,x:p.x,y:p.y};
+      timer=setTimeout(()=>{timer=0;lastTap=null;if(active())pick(p.x,p.y,p.label);},238);
+    }else pick(p.x,p.y,p.label);
+  }
+  for(const [ev,fn] of [['pointerdown',pointerDown],['pointermove',pointerMove],['pointerup',pointerUp],['pointercancel',pointerUp],['lostpointercapture',pointerUp]])surface.addEventListener(ev,fn);
+  surface.addEventListener('pointerleave',()=>{mouseOver=null;hover(null);});
+  surface.addEventListener('contextmenu',e=>{if(active())e.preventDefault();});
+  surface.addEventListener('wheel',e=>{
+    if(!active())return;
+    e.preventDefault();interrupt();zoom=null;velocity.set(0,0);stopPendingTap();
+    const d=e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?view.clientHeight:1);
+    magnify(groundAt(e.clientX,e.clientY)||focus.clone(),Math.exp(clamp(d,-360,360)*.00165));
+  },{passive:false});
+  function update(dt){
+    if(!active())return;
+    if(zoom){const z=zoom;z.t=Math.min(1,z.t+dt/.26);const f=1-(1-z.t)**3;
+      magnify(z.center,Math.exp((f-z.ease)*z.log));z.ease=f;if(z.t>=1)zoom=null;}
+    else if(!points.size&&velocity.lengthSq()>.2){shift(velocity.x*dt,velocity.y*dt);velocity.multiplyScalar(Math.exp(-8.7*dt));}
+    if(mouseOver&&performance.now()-lastHover>100){lastHover=performance.now();hover(mouseOver);mouseOver=null;}
+  }
+  function nudge(action){
+    stop();interrupt();
+    if(action==='north'){drone.theta=0;sync();return;}
+    if(action==='left'||action==='right'){drone.theta+=(action==='right'?1:-1)*Math.PI/6;sync();return;}
+    const r=view.getBoundingClientRect();startZoom(r.left+r.width/2,r.top+r.height/2,action==='in'?.7:1/.7);
+  }
+  return {update,stop,nudge,dragging:()=>points.size>0};
+}
+
+;
+'use strict';
+
+window.createMarinaLabels = function (catalog, root, camera, view) {
+  const T = THREE, ground = 1.5, cellSize = 64, screenCell = 48;
+  const modes = {
+    aerial: { range: 7400, detail: 8, limit: 150 },
+    walk: { range: 900, detail: 12, limit: 76 },
+    drive: { range: 650, detail: 16, limit: 46 }
+  };
+  const offsets = [[0, 0], [-32, 0], [32, 0], [0, 1], [-29, 1], [29, 1], [0, 2], [-50, 0], [50, 0]];
+  const doc = root.ownerDocument;
+  const byId = new Map(), solids = new Map();
+  const names = new Map();
+  const items = [...catalog.entries].sort((a, b) => a.id < b.id ? -1 : Number(a.id > b.id));
+  const sites = typeof MARINA_SITES === 'undefined' ? [] : MARINA_SITES;
+  const clean = s => String(s ?? '').replace(/[\u200b\ufeff]/g, '').replace(/\s+/g, ' ').trim();
+  const normalized = s => s.normalize('NFKC').toLowerCase();
+  const overlaps = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
+  const cell = v => Math.floor(v / cellSize);
+  const key = (i, j) => i * 65536 + j;
+  const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+  function insideRing(ring, x, z) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [ax, az] = ring[j], [bx, bz] = ring[i];
+      if ((az > z) !== (bz > z) && x < ax + (bx - ax) * (z - az) / (bz - az)) inside = !inside;
+    }
+    return inside;
+  }
+
+  const inside = ({ p, holes }, x, z) => insideRing(p, x, z) && !holes.some(h => insideRing(h, x, z));
+
+  function roofCenter(shape) {
+    const [x0, z0, x1, z1] = shape.bounds;
+    const center = [(x0 + x1) / 2, (z0 + z1) / 2];
+    if (inside(shape, ...center)) return center;
+    const [outer, ...holes] = [shape.p, ...shape.holes].map(ring =>
+      ring.map(([x, z]) => new T.Vector2(x, z))
+    );
+    const faces = T.ShapeUtils.triangulateShape(outer, holes);
+    const vertices = outer.concat(...holes);
+    let area = 0, point = shape.p[0];
+    for (const [i, j, k] of faces) {
+      const a = vertices[i], b = vertices[j], c = vertices[k];
+      const size = Math.abs((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x));
+      if (size <= area) continue;
+      area = size;
+      point = [(a.x + b.x + c.x) / 3, (a.y + b.y + c.y) / 3];
+    }
+    return point;
+  }
+
+  function addSolid(item, part, top = part.h, bottom = part.min || 0) {
+    if (!(part.p?.length >= 3) || !Number.isFinite(top)) return;
+    const bounds = part.bounds ?? part.p.reduce(([x0, z0, x1, z1], [x, z]) => [
+      Math.min(x0, x), Math.min(z0, z), Math.max(x1, x), Math.max(z1, z)
+    ], [Infinity, Infinity, -Infinity, -Infinity]);
+    const [x0, z0, x1, z1] = bounds;
+    const solid = {
+      item, p: part.p, holes: part.holes || [], bounds,
+      base: ground + Math.max(0, bottom), top: ground + Math.max(bottom + .3, top),
+      span: Math.max(x1 - x0, z1 - z0), area: (x1 - x0) * (z1 - z0), stamp: 0
+    };
+    for (let i = cell(x0); i <= cell(x1); i++) {
+      for (let j = cell(z0); j <= cell(z1); j++) {
+        const id = key(i, j);
+        if (!solids.has(id)) solids.set(id, []);
+        solids.get(id).push(solid);
+      }
+    }
+    return solid;
+  }
+
+  const kinds={roof:'Навес',industrial:'Промкорпус',construction:'Стройка',hotel:'Отель',retail:'Торг. корпус',service:'Корпус',commercial:'Корпус',restaurant:'Ресторан',garage:'Гараж',parking:'Паркинг',mosque:'Мечеть',bridge:'Мост'};
+  const prepared = items.map((entry, index) => {
+    const sourceName = clean(entry.name);
+    const named = !!sourceName && !/^OSM\s+[\w:-]+$/i.test(sourceName);
+    const number = index + 1;
+    const category=kinds[entry.type] || (entry.parts?.some(p=>p.part)?'Корпус':'Дом');
+    const full = named ? sourceName : category+' №'+number;
+    let short = full;
+    if (named && full.length > 17) {
+      short=full.replace(/,?\s+a Tribute Portfolio Hotel$/i,'').replace(/\s*\([^)]*\)\s*$/,'')
+        .replace(/^The Residences At\s+/i,'').replace(/^The\s+/i,'')
+        .replace(/\bResidential\s+(?=Towers?\b)/gi,'').replace(/\bHotel Apartments\b/gi,'Apts.')
+        .replace(/\bServiced Apartments\b/gi,'Apts.').replace(/\bHotel & Suites\b/gi,'Hotel')
+        .replace(/,?\s+Dubai Marina$/i,'').replace(/,\s+Dubai$/i,'').trim()||full;
+      if(short.length>22)short=short.replace(/\bResidences?\b/gi,'Res.').replace(/\bApartments\b/gi,'Apts.')
+        .replace(/\bBuilding\b/gi,'Bldg.').replace(/\bPrivate Limited$/i,'').replace(/\bHotel Dubai\b/i,'').trim();
+      if(short.length>24){
+        const suffix=short.match(/(?:\s+|-)((?:[A-Z]|[IVX]{1,4}|\d+[A-Z]?|North|South|East|West))$/i)?.[0]||'';
+        const prefix=short.slice(0,22-suffix.length);
+        const boundary=prefix.lastIndexOf(' ');
+        short=(boundary>=12?prefix.slice(0,boundary):prefix).trimEnd()+'…'+suffix;
+      }
+    }
+    const item = { entry, full, short, number, named, roofs: [], width: 0 };
+    byId.set(String(entry.id), item);
+    const k = normalized(short);
+    if (!names.has(k)) names.set(k, []);
+    names.get(k).push(item);
+
+    const site = entry.siteId && sites.find(s => s.id === entry.siteId && s.x === entry.x && s.z === entry.z);
+    const shapes = [];
+    for (const part of entry.parts?.length ? entry.parts : [entry]) {
+      if (site?.omit.includes(part.osm)) continue;
+      const source = part.source ?? part;
+      const shape = addSolid(item, part, source.h, source.min);
+      if (shape) shapes.push(shape);
+    }
+    if (site && site.id !== 'ain') {
+      // shortcut: для авторских моделей используем исходные контуры OSM с поправкой на высоту модели.
+      for (const part of entry.parts || []) {
+        if (!site.omit.includes(part.osm)) continue;
+        const source = part.source ?? part;
+        addSolid(item, part, Math.min(entry.h, source.h), source.min);
+      }
+    }
+
+    if (entry.siteId && Number.isFinite(entry.h)) {
+      item.roofs.push({
+        x: entry.x, z: entry.z, y: ground + entry.h + 1.4,
+        span: Math.max(site?.w ?? 0, ...shapes.map(s => s.span), 20)
+      });
+    } else {
+      shapes.sort((a, b) => b.top - a.top || b.area - a.area);
+      for (const shape of shapes.slice(0, 3)) {
+        if (shape.top < shapes[0].top - 8) break;
+        const [x, z] = roofCenter(shape);
+        item.roofs.push({ x, z, y: shape.top + 1.4, span: shape.span });
+      }
+      if (!item.roofs.length && Number.isFinite(entry.x) && Number.isFinite(entry.z)) {
+        item.roofs.push({ x: entry.x, z: entry.z, y: ground + (entry.h || 0) + 1.4, span: 8 });
+      }
+    }
+    return item;
+  });
+
+  const used = new Set(names.keys());
+  for (const group of names.values()) {
+    if (group.length < 2) continue;
+    const fullNames = group.map(item => normalized(item.full));
+    for (const item of group) {
+      let suffix = ' · №' + item.number;
+      while (used.has(normalized(item.short + suffix))) suffix += ' · №' + item.number;
+      item.short += suffix;
+      if (fullNames.filter(name => name === normalized(item.full)).length > 1) item.full += suffix;
+      used.add(normalized(item.short));
+    }
+  }
+
+  const itemOf = entry => byId.get(String(entry?.id ?? entry));
+  function shortName(entry) {
+    return itemOf(entry)?.short ?? clean(entry?.name);
+  }
+
+  const eye = new T.Vector3(), projected = new T.Vector4();
+  const matrix = new T.Matrix4(), previous = new T.Matrix4();
+  let rayStamp = 0;
+
+  function intersectsSolid(solid, dx, dy, dz) {
+    const [x0, z0, x1, z1] = solid.bounds;
+    let lo = 0, hi = .9999;
+    for (let axis = 0; axis < 3; axis++) {
+      const start = axis === 0 ? eye.x : axis === 1 ? eye.y : eye.z;
+      const delta = axis === 0 ? dx : axis === 1 ? dy : dz;
+      const min = axis === 0 ? x0 : axis === 1 ? solid.base + .25 : z0;
+      const max = axis === 0 ? x1 : axis === 1 ? solid.top - .1 : z1;
+      if (Math.abs(delta) < 1e-8) {
+        if (start < min || start > max) return false;
+        continue;
+      }
+      const a = (min - start) / delta, b = (max - start) / delta;
+      lo = Math.max(lo, Math.min(a, b));
+      hi = Math.min(hi, Math.max(a, b));
+      if (lo >= hi) return false;
+    }
+    const mid = (lo + hi) / 2;
+    if (inside(solid, eye.x + dx * mid, eye.z + dz * mid)) return true;
+    for (const ring of [solid.p, ...solid.holes]) {
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [ax, az] = ring[j], [bx, bz] = ring[i];
+        const ex = bx - ax, ez = bz - az, cross = dx * ez - dz * ex;
+        if (Math.abs(cross) < 1e-8) continue;
+        const ox = ax - eye.x, oz = az - eye.z;
+        const t = (ox * ez - oz * ex) / cross, u = (ox * dz - oz * dx) / cross;
+        if (t > lo - 1e-8 && t < hi + 1e-8 && u >= 0 && u < 1) return true;
+      }
+    }
+    return false;
+  }
+
+  function occluded(item, roof) {
+    const dx = roof.x - eye.x, dy = roof.y - eye.y, dz = roof.z - eye.z;
+    const stepX = Math.sign(dx), stepZ = Math.sign(dz);
+    const deltaX = cellSize / Math.abs(dx), deltaZ = cellSize / Math.abs(dz);
+    let i = cell(eye.x), j = cell(eye.z);
+    let nextX = dx ? ((i + (stepX > 0 ? 1 : 0)) * cellSize - eye.x) / dx : Infinity;
+    let nextZ = dz ? ((j + (stepZ > 0 ? 1 : 0)) * cellSize - eye.z) / dz : Infinity;
+    const stamp = ++rayStamp;
+    for (;;) {
+      for (const solid of solids.get(key(i, j)) || []) {
+        if (solid.item === item || solid.stamp === stamp) continue;
+        solid.stamp = stamp;
+        if (intersectsSolid(solid, dx, dy, dz)) return true;
+      }
+      if (Math.min(nextX, nextZ) >= 1) return false;
+      if (nextX < nextZ) {
+        i += stepX;
+        nextX += deltaX;
+      } else {
+        j += stepZ;
+        nextZ += deltaZ;
+      }
+    }
+  }
+
+  const active = new Map(), free = [];
+  const buttonEntry = new WeakMap();
+  const hudSelector = '.explorer-tools, .explorer-card, .brand, .compass, .tools, .route-bar, #toast, .hero, .street, .window-hud, .dpad, .pedals, .minimap, .panel';
+  const measure = doc.createElement('canvas').getContext('2d');
+  let probe, fontKey = '', height = 22;
+  let enabled = true, dirty = true, reserved = null, lastRead = -Infinity;
+  let viewport, fixed = [];
+  let lastMode, lastSelected, lastHover, lastFocused;
+
+  function createButton() {
+    const button = doc.createElement('button');
+    button.type = 'button';
+    button.className = 'building-pin';
+    button.style.position = 'absolute';
+    button.style.left = '0';
+    button.style.top = '0';
+    button.style.boxSizing = 'border-box';
+    const label = doc.createElement('span');
+    label.className = 'building-pin-text';
+    button.appendChild(label);
+    return button;
+  }
+
+  function readStyle() {
+    if (!probe) {
+      probe = createButton();
+      probe.setAttribute('aria-hidden', 'true');
+      probe.tabIndex = -1;
+      probe.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none';
+      root.appendChild(probe);
+    }
+    const style = doc.defaultView.getComputedStyle(probe.firstChild);
+    const options = doc.defaultView.getComputedStyle(root);
+    const font = [style.fontWeight, style.fontSize, style.fontFamily].join(' ');
+    const nextHeight = Math.max(12, parseFloat(options.getPropertyValue('--label-height')) || 22);
+    const inset = Math.max(0, parseFloat(options.getPropertyValue('--label-inline-inset')) || 16);
+    const signature = [font, style.letterSpacing, doc.fonts?.status, nextHeight, inset].join('|');
+    if (signature === fontKey) return;
+    fontKey = signature;
+    height = nextHeight;
+    const spacing = parseFloat(style.letterSpacing) || 0;
+    if (measure) measure.font = font;
+    for (const item of prepared) {
+      const textWidth = measure ? measure.measureText(item.short).width : item.short.length * 7;
+      item.width = Math.ceil(textWidth + Math.max(0, spacing) * item.short.length + inset);
+    }
+    dirty = true;
+  }
+
+  function rectsEqual(a, b) {
+    return a?.length === b.length && a.every((value, i) => value === b[i]);
+  }
+
+  function readLayout() {
+    const canvas = view.getBoundingClientRect(), outer = root.getBoundingClientRect();
+    const next = [canvas.left - outer.left, canvas.top - outer.top, canvas.width, canvas.height];
+    const targets = reserved ?? doc.querySelectorAll(hudSelector);
+    const boxes = [];
+    for (const target of targets) {
+      if (target.hidden) continue;
+      if (target.getBoundingClientRect) {
+        const style = doc.defaultView.getComputedStyle(target);
+        if (style.visibility === 'hidden' || style.display === 'none' || Number(style.opacity) === 0) continue;
+      }
+      const r = target.getBoundingClientRect?.() ?? target;
+      const left = r.left ?? r.x, top = r.top ?? r.y;
+      const right = r.right ?? left + r.width, bottom = r.bottom ?? top + r.height;
+      if (!(right > left && bottom > top)) continue;
+      boxes.push([left - outer.left - 4, top - outer.top - 4, right - outer.left + 4, bottom - outer.top + 4]);
+    }
+    if (!rectsEqual(viewport, next) || fixed.length !== boxes.length || fixed.some((box, i) => !rectsEqual(box, boxes[i]))) {
+      dirty = true;
+    }
+    viewport = next;
+    fixed = boxes;
+  }
+
+  function recycle(keep) {
+    for (const [item, button] of active) {
+      if (keep?.has(item)) continue;
+      active.delete(item);
+      buttonEntry.delete(button);
+      item.slot = null;
+      if (button === doc.activeElement) button.blur();
+      delete button.dataset.labelBuilding;
+      button.style.display = 'none';
+      free.push(button);
+    }
+  }
+
+  function entryAtElement(element) {
+    const button = element?.closest?.('button[data-label-building]');
+    return button && root.contains(button) ? buttonEntry.get(button)?.entry ?? null : null;
+  }
+
+  function setEnabled(on) {
+    enabled = Boolean(on);
+    dirty = true;
+    if (!enabled) recycle();
+  }
+
+  function setReservedRects(rects) {
+    reserved = rects ?? null;
+    lastRead = -Infinity;
+    dirty = true;
+  }
+
+  function update({ mode = 'aerial', selected = null, hover = null, force = false, reservedRects } = {}) {
+    if (reservedRects !== undefined && reservedRects !== reserved) setReservedRects(reservedRects);
+    if (!enabled || mode === 'window') {
+      if (active.size) recycle();
+      dirty = true;
+      return;
+    }
+    const now = performance.now();
+    if (!viewport || force || mode !== lastMode || now - lastRead >= 180) {
+      readStyle();
+      readLayout();
+      lastRead = now;
+    }
+    const [left, top, w, h] = viewport;
+    if (w < 32 || h < 32) {
+      recycle();
+      return;
+    }
+    const picked = itemOf(selected), hovered = itemOf(hover), focused = buttonEntry.get(doc.activeElement);
+    camera.updateWorldMatrix(true, false);
+    matrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    if (!force && !dirty && picked === lastSelected && hovered === lastHover && focused === lastFocused &&
+        mode === lastMode && matrix.equals(previous)) return;
+    lastMode = mode;
+    lastSelected = picked;
+    lastHover = hovered;
+    lastFocused = focused;
+    previous.copy(matrix);
+    dirty = false;
+    eye.setFromMatrixPosition(camera.matrixWorld);
+    const settings = modes[mode] ?? modes.aerial;
+    const limit = Math.min(settings.limit, Math.max(18, Math.floor(w * h / 3700)));
+    const focal = h * camera.projectionMatrix.elements[5] / 2;
+    const candidates = [];
+
+    for (const item of prepared) {
+      const priority = item === picked ? 3 : item === hovered ? 2 : item === focused ? 1 : 0;
+      let score = -Infinity, anchors;
+      for (const roof of item.roofs) {
+        const distance = eye.distanceToSquared(roof);
+        const range = settings.range * (priority ? 1.35 : 1);
+        if (distance > range * range) continue;
+        projected.set(roof.x, roof.y, roof.z, 1).applyMatrix4(matrix);
+        const depth = projected.w;
+        if (depth <= 0 || Math.abs(projected.z) > depth) continue;
+        const x = left + (projected.x / depth + 1) * w / 2;
+        const y = top + (1 - projected.y / depth) * h / 2;
+        if (x < left || x > left + w || y < top || y > top + h) continue;
+        const size = roof.span * focal / (camera.isOrthographicCamera ? 1 : depth);
+        if (!priority && size < settings.detail) continue;
+        score = Math.max(score, Math.min(size, 115) + (item.named ? 21 : 0) + (active.has(item) ? 7 : 0) - distance / 2e6);
+        (anchors ??= []).push({ roof, x: Math.round(x), y: Math.round(y) });
+      }
+      if (anchors) candidates.push({ item, priority, score, anchors });
+    }
+    candidates.sort((a, b) => b.priority - a.priority || b.score - a.score || a.item.number - b.item.number);
+
+    const occupied = new Map(), placements = new Map();
+    function visit(box, callback) {
+      for (let i = Math.floor(box[0] / screenCell); i <= Math.floor(box[2] / screenCell); i++) {
+        for (let j = Math.floor(box[1] / screenCell); j <= Math.floor(box[3] / screenCell); j++) {
+          if (callback(key(i, j))) return true;
+        }
+      }
+      return false;
+    }
+    for (const box of fixed) visit(box, id => {
+      if (!occupied.has(id)) occupied.set(id, []);
+      occupied.get(id).push(box);
+    });
+    for (const { item, anchors, priority } of candidates) {
+      if (placements.size >= limit) break;
+      const width = Math.min(item.width, Math.floor(w * .68), 270);
+      // При наведении приоритет меняется, уже наведённая кнопка сохраняет своё место.
+      const saved = priority && item.slot;
+      const retries = saved ? [saved.offset, ...offsets.filter(offset => offset !== saved.offset)] : offsets;
+      if (saved && anchors.length > 1) anchors.sort((a, b) => Number(b.roof === saved.roof) - Number(a.roof === saved.roof));
+      for (const anchor of anchors) {
+        let visible;
+        for (const offset of retries) {
+          const [dx, row] = offset;
+          const x = clamp(anchor.x + dx, left + width / 2 + 4, left + w - width / 2 - 4);
+          const y = anchor.y - 5 - row * (height + 3);
+          if (Math.abs(x - anchor.x) > 64 || y - height < top + 3) continue;
+          const box = [x - width / 2 - 2, y - height - 2, x + width / 2 + 2, y + 2];
+          if (visit(box, id => occupied.get(id)?.some(other => overlaps(box, other)))) continue;
+          const stemBox = [Math.min(x, anchor.x) - 1, y, Math.max(x, anchor.x) + 1, anchor.y];
+          if (fixed.some(other => overlaps(stemBox, other))) continue;
+          visible ??= !occluded(item, anchor.roof);
+          if (!visible) break;
+          visit(box, id => {
+            if (!occupied.has(id)) occupied.set(id, []);
+            occupied.get(id).push(box);
+          });
+          placements.set(item, { x, y, anchor, width, priority });
+          item.slot = { roof: anchor.roof, offset };
+          break;
+        }
+        if (placements.has(item)) break;
+      }
+    }
+
+    recycle(placements);
+    for (const [item, { x, y, anchor, width, priority }] of placements) {
+      let button = active.get(item);
+      if (!button) {
+        button = free.pop() ?? createButton();
+        button.dataset.labelBuilding = item.entry.id;
+        button.firstChild.textContent = item.short;
+        button.title = item.full;
+        button.setAttribute('aria-label', item.full);
+        if (!button.parentNode) root.appendChild(button);
+        button.style.display = '';
+        buttonEntry.set(button, item);
+        active.set(item, button);
+      }
+      const dx = x - anchor.x, dy = y - anchor.y;
+      button.classList.toggle('is-selected', item === picked);
+      button.classList.toggle('is-hovered', item === hovered);
+      button.classList.toggle('has-leader', dx !== 0 || dy < -5);
+      button.style.width = width + 'px';
+      button.style.height = height + 'px';
+      button.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -100%)`;
+      button.style.zIndex = String(1 + priority);
+      button.style.setProperty('--label-dx', dx + 'px');
+      button.style.setProperty('--label-dy', dy + 'px');
+      button.style.setProperty('--label-stem-length', Math.hypot(dx, dy).toFixed(1) + 'px');
+      button.style.setProperty('--label-stem-angle', Math.atan2(-dy, -dx) + 'rad');
+    }
+  }
+
+  return { update, entryAtElement, shortName, setEnabled, setReservedRects };
+};
+
+;
+'use strict';
+function createMarinaBuildingUI(catalog,onSelect,onPose,shortName=e=>e.name) {
   const by=id=>document.getElementById(id);
   const search=by('building-query'),directory=by('building-directory'),results=by('building-results');
   const floorSelect=by('window-floor'),indexInput=by('window-index'),plan=by('window-plan'),planWrap=by('window-plan-wrap');
@@ -1920,7 +2577,7 @@ function createMarinaBuildingUI(catalog,onSelect,onPose) {
   const normalizedAlias=new Map(Object.entries(alias).map(([key,value])=>[norm(key),value]));
   const latin=word=>normalizedAlias.get(word)||word.replace(/[а-яё]/g,c=>translit[c]);
   const contains=new Set(catalog.entries);
-  const names=catalog.entries.map(e=>({e,text:norm([e.name,e.id,...e.searchNames||[],...e.osmIds.flatMap(k=>MARINA_BUILDING_DETAIL.osm[k]?.aliases||[])].join(' '))}))
+  const names=catalog.entries.map(e=>({e,text:norm([e.name,shortName(e),e.id,...e.searchNames||[],...e.osmIds.flatMap(k=>MARINA_BUILDING_DETAIL.osm[k]?.aliases||[])].join(' '))}))
     .sort((a,b)=>Number(!!b.e.siteId)-Number(!!a.e.siteId)||Number(!!b.e.parts?.some(p=>p.n))-Number(!!a.e.parts?.some(p=>p.n))||a.e.name.localeCompare(b.e.name,'ru',{numeric:true}));
   let matches=names,limit=24,entry=null,floor=0,windows=[],index=0,projected=[];
   const source=e=>({osm:'Этажность из OpenStreetMap',estimated:'Этажность оценена по высоте',landmark:'Этажность по данным о здании',none:'У сооружения нет обычных этажей'}[e?.levelSource]||'Этажность модели');
@@ -1929,7 +2586,7 @@ function createMarinaBuildingUI(catalog,onSelect,onPose) {
     for(const {e} of matches.slice(0,limit)){
       const b=document.createElement('button');b.type='button';b.dataset.building=e.id;
       const n=document.createElement('span'),detail=document.createElement('small');
-      n.textContent=e.name;detail.textContent=[e.osm?'OSM '+e.osm:'',e.floorCount?e.floorCount+' эт.':'Сооружение'].filter(Boolean).join(' · ');
+      n.textContent=/^OSM\s/.test(e.name)?shortName(e):e.name;detail.textContent=[e.osm?'OSM '+e.osm:'',e.floorCount?e.floorCount+' эт.':'Сооружение'].filter(Boolean).join(' · ');
       b.append(n,detail);b.addEventListener('click',()=>{directory.open=false;search.value='';filter();onSelect(e);});fragment.append(b);
     }
     if(!matches.length){const p=document.createElement('p');p.textContent='Здание не найдено. Попробуйте другую часть названия или выберите контур на карте.';fragment.append(p);}
@@ -2031,7 +2688,7 @@ function createMarinaBuildingUI(catalog,onSelect,onPose) {
     if(chosen==null)return false;
     entry=e;floor=chosen;windows=candidates;
     floorSelect.replaceChildren(...floors.map(f=>new Option(String(f),String(f))));
-    floorSelect.value=String(floor);by('window-building').textContent=e.name;
+    floorSelect.value=String(floor);by('window-building').textContent=/^OSM\s/.test(e.name)?shortName(e):e.name;
     display(nearest(windows,hint));return true;
   }
   floorSelect.addEventListener('change',()=>{
@@ -5114,7 +5771,7 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
     return {p: p.map(point => [...point]), meters};
   }
 
-  window.createMarinaMap = function ({canvas, mini, data, places = [], onPick, buildings: buildingCatalog}) {
+  window.createMarinaMap = function ({canvas, mini, data, places = [], onPick, buildings: buildingCatalog, shortName=e=>e.name}) {
     const [left, top, right, bottom] = data.bounds;
     const center = [(left + right) / 2, (top + bottom) / 2];
     const roads = data.roads.filter(visible);
@@ -5286,6 +5943,7 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
       }
     }
 
+    const mapBuildings=(buildingCatalog?.entries||[]).filter(e=>!places.some(p=>p.id===e.siteId)).sort((a,b)=>Number(/^OSM /.test(a.name))-Number(/^OSM /.test(b.name))||(b.h||0)-(a.h||0));
     function labels(ctx, width, height) {
       const boxes = [], names = new Set(), pins = [];
       ctx.textBaseline = 'middle';
@@ -5326,6 +5984,15 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
         dot(ctx, x, y, 4.5, '#edd3a2', '#152a2d');
       }
 
+      if(view.scale>=.5){
+        ctx.font='500 11px system-ui, sans-serif';
+        for(const e of mapBuildings){
+          const [x,y]=screen([e.x,e.z],view,width,height);if(!inView(x,y))continue;
+          if(view.scale<1.15&&/^OSM /.test(e.name))continue;
+          const caption=shortName(e),w=ctx.measureText(caption).width;
+          if(reserve(x-w/2,y,w,15))text(caption,x-w/2,y,'#c4d9ce');
+        }
+      }
       const minimum = Math.max(0.12, 0.83 * minScale());
       if (view.scale < minimum) return;
       ctx.font = '11px system-ui, sans-serif';
@@ -5684,7 +6351,7 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
   }
   try{
     const T=THREE, data=MARINA_DATA, places=MARINA_PLACES;
-    const canvas=by('view'),yieldUI=()=>new Promise(ok=>setTimeout(ok,10));
+    const canvas=by('view'),surface=by('explorer-surface'),pins=by('building-pins'),yieldUI=()=>new Promise(ok=>setTimeout(ok,10));
     stage('Загрузка карты района…',8);await yieldUI();
     const renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'high-performance',logarithmicDepthBuffer:true});
     renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;
@@ -5727,8 +6394,48 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
       clearTimeout(toastTimer);by('toast').textContent=text;by('toast').hidden=false;by('toast').classList.add('show');
       toastTimer=setTimeout(()=>{by('toast').hidden=true;by('toast').classList.remove('show');},3200);
     }
-    const nav=createMarinaMap({canvas:by('map-canvas'),mini:by('mini'),data,places,buildings:catalog,onPick:(place,hint)=>setChoice(place,hint)});
-    const buildingUI=createMarinaBuildingUI(catalog,entry=>{setChoice(entry);nav.reveal(entry);},applyWindow);
+    let cardEntry=null,hovered=null,labelsOn=true,directorySelection=false;
+    const labels=createMarinaLabels(catalog,pins,camera,canvas);
+    const controls=createExplorerControls({surface,view:canvas,camera,focus,drone,bounds:data.bounds,
+      active:()=>mode==='aerial'&&!panel,refresh:()=>cameraAerial(0),interrupt:()=>{aerialTarget=null;},
+      labelAt:e=>labels.entryAtElement(e),pick:pickAt,hover:updateHover});
+    function pinLayout(force=false){
+      if(!panel)labels.update({mode,selected:cardEntry,hover:hovered,force});
+    }
+    function intersectAt(x,y){
+      const r=canvas.getBoundingClientRect();
+      picker.setFromCamera({x:2*(x-r.left)/r.width-1,y:1-2*(y-r.top)/r.height},camera);
+      const hit=picker.intersectObjects(pickable,true)[0];
+      return {hit,entry:hit?catalog.fromHit(hit):null};
+    }
+    function updateHover(pointer){
+      const entry=pointer?(labels.entryAtElement(pointer.target)||intersectAt(pointer.x,pointer.y).entry):null;
+      const tag=by('hover-building-name');
+      tag.hidden=!entry||!!labels.entryAtElement(pointer?.target);
+      if(!tag.hidden){
+        tag.textContent=labels.shortName(entry);
+        tag.style.left=clamp(pointer.x+13,3,Math.max(3,canvas.clientWidth-195))+'px';
+        tag.style.top=clamp(pointer.y+18,3,canvas.clientHeight-26)+'px';
+      }
+      if(entry===hovered)return;
+      hovered=entry;surface.dataset.hover=String(!!entry);
+      catalog.highlight(cardEntry,hovered);pinLayout(true);
+    }
+    function pickAt(x,y,entry){
+      if(entry){inspect(entry,null);return;}
+      const hit=intersectAt(x,y);
+      if(hit.entry)inspect(hit.entry,hit.hit.point);else dismiss();
+    }
+    function dismiss(){
+      cardEntry=null;hovered=null;by('hover-building-name').hidden=true;surface.dataset.hover='false';catalog.highlight(null,null);
+      by('explorer-card').hidden=true;body.dataset.inspecting='false';
+      pinLayout(true);
+    }
+    const nav=createMarinaMap({canvas:by('map-canvas'),mini:by('mini'),data,places,buildings:catalog,shortName:e=>labels.shortName(e),onPick:(place,hint)=>setChoice(place,hint)});
+    const buildingUI=createMarinaBuildingUI(catalog,entry=>{
+      if(directorySelection)inspect(entry,null);
+      else {setChoice(entry);nav.reveal(entry);}
+    },applyWindow,e=>labels.shortName(e));
     function applyWindow(view){
       const switchMode=mode!=='window'||panel;
       if(switchMode){clearRoute();setPanel('');sceneMode('window');showPlace(view.entry);}
@@ -5748,27 +6455,51 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
       note(labels[arrival.source]);return true;
     }
     function inspect(entry,hint){
-      setPanel('map');setChoice(entry,hint);nav.reveal(entry);
+      if(!entry)return;
+      if(panel)setPanel('');
+      const wasAerial=mode==='aerial';
+      if(!wasAerial){
+        sceneMode('aerial');
+        focus.set(p.x,Math.max(5,Math.min(150,p.y*.6)),p.z);
+        Object.assign(drone,{theta:p.yaw+Math.PI,phi:.56,r:390});
+      }
+      controls.stop();cardEntry=entry;setChoice(entry,hint);
+      const boundsList=entry.parts.map(b=>b.bounds),h=entry.h||9;
+      const extent=boundsList.length?Math.max(
+        Math.max(...boundsList.map(b=>b[2]))-Math.min(...boundsList.map(b=>b[0])),
+        Math.max(...boundsList.map(b=>b[3]))-Math.min(...boundsList.map(b=>b[1]))):20;
+      const narrow=camera.aspect<1;
+      aerialTarget={focus:new T.Vector3(entry.x,Math.min(h*.43,140),entry.z),theta:drone.theta,phi:.61,
+        r:clamp(Math.max(110,extent*1.9,h*1.85)*(narrow?1.45:1),105,2350)};
+      const abbreviated=labels.shortName(entry);
+      by('explorer-name').textContent=/^OSM\s/i.test(entry.name)?abbreviated:entry.name;
+      by('explorer-info').textContent=[entry.floorCount?entry.floorCount+' эт.':'Сооружение',Number.isFinite(h)?Math.round(h)+' м':'',
+        /^OSM\s/i.test(entry.name)?'Условное название':''].filter(Boolean).join(' · ');
+      const b=by('explorer-card'),win=b.querySelector('[data-action="window"]'),entr=b.querySelector('[data-action="entrance"]');
+      win.disabled=!catalog.levels(entry).length;
+      const arrival=entries.find(entry);entr.disabled=!arrival;entr.querySelector('span').textContent=arrival?.source==='path'?'Пешком рядом':'Ко входу';
+      b.hidden=false;body.dataset.inspecting='true';catalog.highlight(cardEntry,hovered);pinLayout(true);
     }
     function setChoice(place,hint=null){
       if(!buildingUI.isBuilding(place)&&place.id){
         const owned=catalog.entries.find(e=>e.siteId===place.id);if(owned)place=owned;
       }
-      pickHint=hint;mapChoice=place;buildingUI.mapSelection(place,buildingUI.isBuilding(place)?entries.find(place):null);by('map-name').textContent=place.name||'Точка на карте';
+      pickHint=hint;mapChoice=place;buildingUI.mapSelection(place,buildingUI.isBuilding(place)?entries.find(place):null);by('map-name').textContent=/^OSM\s/i.test(place.name)?labels.shortName(place):place.name||'Точка на карте';
       by('map-desc').textContent=buildingUI.isBuilding(place)?(place.floorCount?'Выберите окно на нужном этаже или начните прогулку у здания.':place.note||'У этого сооружения можно начать прогулку.'):place.desc||'Можно начать прогулку или подъехать по ближайшей улице.';
       nav.setSelection(place);
     }
-    function resetInput(){keys.clear();fingers.clear();touchLook=false;turnWheel=0;}
+    function resetInput(){keys.clear();fingers.clear();touchLook=false;turnWheel=0;controls.stop();}
     function setPanel(value){
       resetInput();panel=value;body.dataset.panel=value;
       for(const n of ['map','settings','places'])by(n+'-panel').hidden=n!==value;
       if(value==='map'){
-        const ref=mode==='aerial'?selected:p;
-        setChoice(selected);nav.open(ref.x,ref.z);
+        const ref=mode==='aerial'?(cardEntry||focus):p;
+        setChoice(cardEntry||selected);nav.open(ref.x,ref.z);
+        if(cardEntry)nav.reveal(cardEntry);
       }else nav.close();
     }
     function sceneMode(next){
-      mode=next;body.dataset.mode=next;
+      mode=next;body.dataset.mode=next;dismiss();
       for(const btn of document.querySelectorAll('[data-action="walk"],[data-action="drive"],[data-action="aerial"]'))
         btn.setAttribute('aria-pressed',String(btn.dataset.action===next));
       resetInput();fleet.playerCar.visible=next==='drive';
@@ -5785,7 +6516,8 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
       nav.setSelection(place);
     }
     function aerialPose(place,smooth=false){
-      const e=place.eye||[place.x-270,132,place.z+360],t=place.target||[place.x,25,place.z];
+      const home=place.id==='marina';
+      const e=home?(camera.aspect<.85?[-650,2000,2600]:[-1040,1250,1760]):place.eye||[place.x-270,132,place.z+360],t=home?[55,32,175]:place.target||[place.x,25,place.z];
       const to=new T.Vector3(...t),eye=new T.Vector3(...e),off=eye.clone().sub(to);
       const dest={focus:to,r:off.length(),phi:Math.asin(off.y/off.length()),theta:Math.atan2(off.x,off.z)};
       if(smooth&&mode==='aerial'){aerialTarget=dest;return;}
@@ -5800,7 +6532,9 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
       if(aerialTarget){
         const k=1-Math.exp(-4*dt);focus.lerp(aerialTarget.focus,k);
         drone.r+=(aerialTarget.r-drone.r)*k;drone.phi+=(aerialTarget.phi-drone.phi)*k;drone.theta=mixAngle(drone.theta,aerialTarget.theta,k);
-        if(focus.distanceToSquared(aerialTarget.focus)<.1 && Math.abs(drone.r-aerialTarget.r)<.3)aerialTarget=null;
+        if(focus.distanceToSquared(aerialTarget.focus)<.015 && Math.abs(drone.r-aerialTarget.r)<.05&&Math.abs(angle(drone.theta-aerialTarget.theta))<.001&&Math.abs(drone.phi-aerialTarget.phi)<.001){
+          focus.copy(aerialTarget.focus);Object.assign(drone,{r:aerialTarget.r,phi:aerialTarget.phi,theta:aerialTarget.theta});aerialTarget=null;
+        }
       }
       const r=drone.r*Math.cos(drone.phi);
       camera.position.set(focus.x+r*Math.sin(drone.theta),Math.max(3,focus.y+drone.r*Math.sin(drone.phi)),focus.z+r*Math.cos(drone.theta));
@@ -5907,7 +6641,7 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
       if(mode==='aerial'){
         if(input('left','a','right','d','w','up','s','down')){
           aerialTarget=null;drone.theta+=(Number(input('d','right'))-Number(input('a','left')))*dt*.72;
-          drone.r=clamp(drone.r*Math.exp((Number(input('s','down'))-Number(input('w','up')))*dt),45,2500);
+          drone.r=clamp(drone.r*Math.exp((Number(input('s','down'))-Number(input('w','up')))*dt),25,7400);
         }
         return;
       }
@@ -6006,8 +6740,10 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
     }
     function handleAction(id){
       if(id==='close'){setPanel('');return;}
+      if(id==='clear-building'){dismiss();aerialTarget=null;return;}
+      if(id==='selected-on-map'&&cardEntry){directorySelection=false;setPanel('map');return;}
       if(id==='buildings'){
-        setPanel('map');if(windowView&&mode==='window'){setChoice(windowView.entry);nav.reveal(windowView.entry);}
+        directorySelection=true;setPanel('map');if(windowView&&mode==='window'){setChoice(windowView.entry);nav.reveal(windowView.entry);}
         by('building-directory').open=true;return;
       }
       if(id==='window'){
@@ -6015,7 +6751,7 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
         return;
       }
       if(id==='entrance'||id==='window-entrance'){toDoor(id==='entrance'?mapChoice:windowView?.entry);return;}
-      if(['map','places','settings'].includes(id)){setPanel(panel===id?'':id);return;}
+      if(['map','places','settings'].includes(id)){directorySelection=false;setPanel(panel===id?'':id);return;}
       if(id==='previous'||id==='next'){
         const idx=(Math.max(0,placeIndex)+(id==='next'?1:-1)+places.length)%places.length;
         aerial(places[idx],true);
@@ -6051,7 +6787,7 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
       if(e.ctrlKey||e.metaKey||e.altKey||e.target.isContentEditable||/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;
       const isButton=/BUTTON|A|SUMMARY/.test(e.target.tagName);
       if(isButton&&(e.code==='Space'||e.code==='Enter')&&panel)return;
-      if(e.code==='Escape'){if(panel)setPanel('');else if(mode!=='aerial')aerial(selected);return;}
+      if(e.code==='Escape'){if(panel)setPanel('');else if(cardEntry){dismiss();aerialTarget=null;}else if(mode!=='aerial')aerial(selected);return;}
       if(e.repeat&&!aliases[e.code])return;
       if(e.code==='KeyM'){e.preventDefault();handleAction('map');return;}
       if(panel)return;
@@ -6066,9 +6802,19 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
       const up=()=>{keys.delete(b.dataset.key);b.classList.remove('active');};
       b.addEventListener('pointerdown',down);['pointerup','pointercancel','lostpointercapture'].forEach(ev=>b.addEventListener(ev,up));
     });
+    document.querySelectorAll('[data-navigate]').forEach(b=>b.addEventListener('click',()=>{
+      if(mode!=='aerial'||panel)return;
+      if(b.dataset.navigate==='home'){aerial(places[0],true);return;}
+      controls.nudge(b.dataset.navigate);
+    }));
+    by('toggle-pins').addEventListener('click',()=>{labelsOn=!labelsOn;labels.setEnabled(labelsOn);by('toggle-pins').setAttribute('aria-pressed',String(labelsOn));pinLayout(true);});
+    pins.addEventListener('click',e=>{
+      const entry=labels.entryAtElement(e.target);
+      if(entry&&!panel&&(e.detail===0||mode!=='aerial'))inspect(entry,null);
+    });
     let oldPinch=0,tap=null;
     canvas.addEventListener('pointerdown',e=>{
-      if(panel)return;
+      if(panel||mode==='aerial')return;
       tap=fingers.size===0&&mode!=='window'&&e.button===0?{id:e.pointerId,x:e.clientX,y:e.clientY}:null;
       fingers.set(e.pointerId,[e.clientX,e.clientY]);if(e.isTrusted)canvas.setPointerCapture(e.pointerId);touchLook=true;oldPinch=0;aerialTarget=null;
     });
@@ -6076,16 +6822,14 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
       const old=fingers.get(e.pointerId);if(!old||panel)return;
       if(tap&&Math.hypot(e.clientX-tap.x,e.clientY-tap.y)>5)tap=null;
       const dx=e.clientX-old[0],dy=e.clientY-old[1];fingers.set(e.pointerId,[e.clientX,e.clientY]);
-      if((mode==='aerial'||mode==='window')&&fingers.size>1){
+      if(mode==='window'&&fingers.size>1){
         const [a,b]=[...fingers.values()],pinch=Math.hypot(a[0]-b[0],a[1]-b[1]);
         if(oldPinch>0){const factor=oldPinch/Math.max(1,pinch);
-          if(mode==='aerial')drone.r=clamp(drone.r*factor,45,2500);
-          else {camera.fov=clamp(camera.fov*factor,30,75);camera.updateProjectionMatrix();}
+          camera.fov=clamp(camera.fov*factor,30,75);camera.updateProjectionMatrix();
         }
         oldPinch=pinch;return;
       }
-      if(mode==='aerial'){drone.theta-=dx*.0044;drone.phi=clamp(drone.phi+dy*.0032,-.06,1.42);}
-      else if(mode==='window'){
+      if(mode==='window'){
         const base=windowView.point.yaw;p.yaw=base+clamp(angle(p.yaw-base)-dx*.0042,-1.48,1.48);
         p.pitch=clamp(p.pitch-dy*.0034,-1.36,1.30);
       }
@@ -6096,13 +6840,10 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
       const choose=e.type==='pointerup'&&tap?.id===e.pointerId&&!panel&&Math.hypot(e.clientX-tap.x,e.clientY-tap.y)<=5;
       tap=null;fingers.delete(e.pointerId);touchLook=fingers.size>0;oldPinch=0;
       if(!choose)return;
-      const r=canvas.getBoundingClientRect();
-      picker.setFromCamera({x:2*(e.clientX-r.left)/r.width-1,y:1-2*(e.clientY-r.top)/r.height},camera);
-      const hit=picker.intersectObjects(pickable,true)[0],entry=hit&&catalog.fromHit(hit);
-      if(entry)inspect(entry,{x:hit.point.x,y:hit.point.y,z:hit.point.z});
+      pickAt(e.clientX,e.clientY,null);
     };
     ['pointerup','pointercancel','lostpointercapture'].forEach(ev=>canvas.addEventListener(ev,release));
-    canvas.addEventListener('wheel',e=>{if(mode==='window'&&!panel){e.preventDefault();camera.fov=clamp(camera.fov*Math.exp(clamp(e.deltaY,-250,250)*.001),30,75);camera.updateProjectionMatrix();return;}if(mode==='aerial'&&!panel){e.preventDefault();aerialTarget=null;drone.r=clamp(drone.r*Math.exp(clamp(e.deltaY,-300,300)*.001),45,2500);}},{passive:false});
+    canvas.addEventListener('wheel',e=>{if(mode==='window'&&!panel){e.preventDefault();camera.fov=clamp(camera.fov*Math.exp(clamp(e.deltaY,-250,250)*.001),30,75);camera.updateProjectionMatrix();}},{passive:false});
     window.addEventListener('resize',resize);
     canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();failView(new Error('Графический контекст потерян.'));});
     canvas.addEventListener('webglcontextrestored',()=>location.reload());
@@ -6112,7 +6853,7 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
         const steps=Math.max(1,Math.ceil(dt/.025));
         for(let i=0;i<steps;i++)stepPlayer(dt/steps);
         traffic.update(dt,mode==='aerial'||mode==='window'?null:p);
-        if(mode==='aerial')cameraAerial(dt);else cameraStreet(dt);
+        if(mode==='aerial'){controls.update(dt);cameraAerial(dt);}else cameraStreet(dt);
       }
       if(panel&&!force)return;
       props.updateCamera(camera.position,quality==='balanced');tram.update(elapsed);fleet.update(elapsed,camera.position);
@@ -6120,7 +6861,7 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
       light.water.material.uniforms.time.value=elapsed*.46;
       const shadowCenter=mode==='aerial'?focus:p;light.shadows(shadowCenter.x,shadowCenter.z,mode==='aerial');
       if(heldFrame++%8===0)postShadow();
-      renderer.info.reset();post.draw(scene,camera);
+      renderer.info.reset();post.draw(scene,camera);pinLayout();
       if(engine){engine.frequency.value=35+Math.abs(p.speed)*3.8;engineGain.gain.value=mode==='drive'?.065:0;}
       if(elapsed-lastUi>.19||lastUi<0||force){
         lastUi=elapsed;const drive=mode==='drive',yaw=mode==='aerial'?drone.theta+Math.PI:p.yaw;
@@ -6128,7 +6869,7 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
         body.style.setProperty('--heading',String(bearing));
         by('bearing').textContent=['С','СВ','В','ЮВ','Ю','ЮЗ','З','СЗ'][Math.round(bearing/45)%8]+' · '+String(bearing).padStart(3,'0')+'°';
         by('speed').textContent=String(Math.round(Math.abs(p.speed)*3.6));
-        const pos=mode==='aerial'?selected:p;nav.miniUpdate(pos.x,pos.z,yaw,route||undefined);
+        const pos=mode==='aerial'?focus:p;nav.miniUpdate(pos.x,pos.z,yaw,route||undefined);
       }
       if(elapsed-lastGPS>.85||lastGPS<0){lastGPS=elapsed;if(mode==='walk'||mode==='drive'){
         const near=world.nearbyRoad(p.x,p.z,mode==='drive'?'drive':'walk',40,p.y);
@@ -6147,7 +6888,7 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
     light.capture();stage('Открываем набережную…',98);update(.016,true);
     loading.hidden=true;body.classList.add('ready');requestAnimationFrame(frame);
     // Стенд вызывает тот же игровой цикл в своей фоновой вкладке, где Chrome приостанавливает rAF.
-    window.MarinaAtlas={ready:true,update,camera,renderer,scene,world,catalog,entries,traffic,places,nav,props,city,light,tram,frontage,
-      get windowView(){return windowView;},get mode(){return mode;},get player(){return {...p};},get selection(){return selected;},get route(){return route;},get quality(){return quality;},get busy(){return lightChanging;}};
+    window.MarinaAtlas={ready:true,update,camera,renderer,scene,world,catalog,labels,entries,traffic,places,nav,props,city,light,tram,frontage,
+      get inspected(){return cardEntry;},get overview(){return {x:focus.x,y:focus.y,z:focus.z,...drone};},get windowView(){return windowView;},get mode(){return mode;},get player(){return {...p};},get selection(){return selected;},get route(){return route;},get quality(){return quality;},get busy(){return lightChanging;}};
   }catch(err){failView(err);}
 })();
