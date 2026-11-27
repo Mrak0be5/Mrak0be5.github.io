@@ -7706,6 +7706,25 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
       const arrival=entries.find(entry);entr.disabled=!arrival;entr.querySelector('span').textContent=arrival?.source==='path'?'Пешком рядом':'Ко входу';
       architectureCard(entry);b.hidden=false;body.dataset.inspecting='true';catalog.highlight(studyView?null:cardEntry,studyView&&hovered===cardEntry?null:hovered);pinLayout(true);
     }
+    function dorraView(view,snap=false){
+      const entry=cardEntry;if(entry?.siteId!=='dorra')return;
+      const preset={canal:[.38,-.14,149,39],street:[-1.96,.19,177,35],roof:[-.47,1.17,154,33]}[view];if(!preset)return;
+      controls.stop();studyView=true;catalog.highlight(null,null);scene.updateMatrixWorld(true);
+      const [fav,phi,dist,y]=preset,r=dist*(camera.aspect<.85?1.4:1),target=new T.Vector3(entry.x,y,entry.z);
+      const alternate=world.inspectionHeading(entry,fav,phi,r,y),ray=new T.Raycaster(),origin=new T.Vector3(),dir=new T.Vector3();
+      let heading=alternate;
+      // Проверяем реальный фасад, поскольку из некоторых точек Dorra Bay закрыт Al Bateen.
+      for(const t of [fav,alternate,fav+.24,fav-.24,fav+.48,fav-.48,fav+.75,fav-.75]){
+        origin.set(target.x+Math.sin(t)*Math.cos(phi)*r,Math.max(3,y+Math.sin(phi)*r),target.z+Math.cos(t)*Math.cos(phi)*r);
+        ray.set(origin,dir.subVectors(target,origin).normalize());ray.far=r+90;
+        const first=ray.intersectObjects(pickable,true)[0];
+        if(first&&catalog.fromHit(first)===entry){heading=t;break;}
+      }
+      const next={theta:heading,phi,r,focus:target};
+      if(snap){aerialTarget=null;Object.assign(drone,{theta:heading,phi,r});focus.copy(target);cameraAerial(0);}
+      else aerialTarget=next;
+      by('dorra-views').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.dorra===view)));
+    }
     function setChoice(place,hint=null){
       if(!buildingUI.isBuilding(place)&&place.id){
         const owned=catalog.entries.find(e=>e.siteId===place.id);if(owned)place=owned;
@@ -8006,10 +8025,7 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
     });
     document.addEventListener('click',e=>{
       const b=e.target.closest('button,[data-action]');if(!b)return;
-      if(b.dataset.dorra&&cardEntry?.siteId==='dorra'){
-        const preset={canal:[.38,-.14,149,39],street:[-2.74,.17,160,38],roof:[-.47,1.17,154,33]}[b.dataset.dorra];
-        if(preset){controls.stop();studyView=true;catalog.highlight(null,null);aerialTarget={theta:preset[0],phi:preset[1],r:preset[2]*(camera.aspect<.85?1.4:1),focus:new T.Vector3(cardEntry.x,preset[3],cardEntry.z)};}return;
-      }
+      if(b.dataset.dorra){dorraView(b.dataset.dorra);return;}
       if(b.dataset.action)handleAction(b.dataset.action);else if(b.dataset.light)setLight(b.dataset.light);else if(b.dataset.quality)setQuality(b.dataset.quality);
     });
     const aliases={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',Space:'space',ShiftLeft:'shift',ShiftRight:'shift',KeyW:'w',KeyA:'a',KeyS:'s',KeyD:'d'};
@@ -8121,8 +8137,7 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
       const dorra=catalog.entries.find(e=>e.siteId==='dorra');
       if(dorra){
         if(launchOptions.get('study')==='1'){labelsOn=false;labels.setEnabled(false);by('toggle-pins').setAttribute('aria-pressed','false');}
-        inspect(dorra,null);studyView=true;catalog.highlight(null,null);aerialTarget=null;focus.set(dorra.x,39,dorra.z);
-        Object.assign(drone,{theta:.38,phi:-.14,r:149*(camera.aspect<.85?1.4:1)});cameraAerial(0);
+        inspect(dorra,null);dorraView('canal',true);
       }
     }
     light.shadows(focus.x,focus.z,true);await yieldUI();
@@ -8131,6 +8146,6 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
     if(surveyData.unavailable)note('Подробная геометрия не загрузилась. Показаны резервные модели по контурам.');
     // Стенд вызывает тот же игровой цикл в своей фоновой вкладке, где Chrome приостанавливает rAF.
     window.MarinaAtlas={ready:true,update,camera,renderer,scene,world,catalog,labels,entries,traffic,places,nav,props,city,light,tram,frontage,
-      reconstruction,get inspected(){return cardEntry;},get overview(){return {x:focus.x,y:focus.y,z:focus.z,...drone};},get windowView(){return windowView;},get mode(){return mode;},get player(){return {...p};},get selection(){return selected;},get route(){return route;},get quality(){return quality;},get busy(){return lightChanging;}};
+      reconstruction,screenEntry:(x,y)=>intersectAt(x,y).entry?.id||null,get inspected(){return cardEntry;},get overview(){return {x:focus.x,y:focus.y,z:focus.z,...drone};},get windowView(){return windowView;},get mode(){return mode;},get player(){return {...p};},get selection(){return selected;},get route(){return route;},get quality(){return quality;},get busy(){return lightChanging;}};
   }catch(err){failView(err);}
 })();
