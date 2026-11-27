@@ -1,0 +1,1495 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='12' fill='%230d1e21'/%3E%3Ccircle cx='24' cy='24' r='17' fill='none' stroke='%23bcd4c9'/%3E%3Cpath d='m28 7-1 19-8 15 2-19z' fill='%23bdebdc'/%3E%3C/svg%3E">
+<meta name="theme-color" content="#061215">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="Marina Atlas — трёхмерная Dubai Marina по данным OpenStreetMap: обзор, прогулка и поездка по улицам.">
+<title>Marina Atlas — Dubai Marina в 3D</title>
+<style>/* Marina Atlas — HUD поверх полноэкранной WebGL-сцены.
+   Видимость: [hidden] всегда скрывает; body[data-mode] выбирает HUD обзора или улицы;
+   body[data-panel] прячет игровой HUD под открытой панелью. */
+
+[hidden] { display: none !important; }
+
+:root {
+  --ink: #061215;
+  --text: #f1eee6;
+  --title: #f7f1e4;
+  --muted: #a8b8b1;
+  --dim: #7d8f88;
+  --sand: #e9cf9f;
+  --sand-deep: #c9a66b;
+  --mint: #85f2c6;
+  --line: rgba(233, 207, 159, .15);
+  --line-strong: rgba(233, 207, 159, .38);
+
+  --glass-bg: linear-gradient(180deg, rgba(16, 36, 39, .58), rgba(7, 19, 22, .72));
+  --glass-solid: rgba(7, 19, 22, .86);
+  --glass-shadow: 0 14px 34px -14px rgba(0, 0, 0, .6), inset 0 1px 0 rgba(255, 255, 255, .06);
+  --blur: blur(16px) saturate(1.25);
+
+  --serif: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, "Times New Roman", serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  --gap: clamp(14px, 2.2vw, 28px);
+  --top: calc(env(safe-area-inset-top, 0px) + var(--gap));
+  --right: calc(env(safe-area-inset-right, 0px) + var(--gap));
+  --bottom: calc(env(safe-area-inset-bottom, 0px) + var(--gap));
+  --left: calc(env(safe-area-inset-left, 0px) + var(--gap));
+  --hud-top: calc(var(--top) + 64px);
+  --mini: clamp(150px, 14vw, 208px);
+  --cw: 280px;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root { --glass-bg: rgba(8, 21, 24, .9); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root { --glass-bg: rgba(8, 21, 24, .94); --glass-solid: rgba(7, 19, 22, .97); --blur: none; }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: var(--ink);
+  color: var(--text);
+  font: 15px/1.45 var(--sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+button:disabled, button[aria-disabled="true"] { opacity: .42; cursor: default; }
+
+a { color: var(--sand); text-underline-offset: 3px; text-decoration-thickness: 1px; }
+
+:focus-visible { outline: 2px solid var(--mint); outline-offset: 3px; }
+:focus:not(:focus-visible) { outline: none; }
+
+kbd {
+  display: inline-block;
+  min-width: 1.9em;
+  margin-right: 3px;
+  padding: 2px 6px;
+  border: 1px solid rgba(241, 238, 230, .22);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .04);
+  color: var(--text);
+  font: 600 10.5px/1.3 var(--sans);
+  text-align: center;
+}
+
+.sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+.icon {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---------- Сцена ---------- */
+
+#view {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: grab;
+  outline: none;
+}
+#view:active { cursor: grabbing; }
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(to bottom, rgba(4, 12, 14, .55), rgba(4, 12, 14, 0) 150px),
+    linear-gradient(to top, rgba(4, 12, 14, .66), rgba(4, 12, 14, .16) 32%, rgba(4, 12, 14, 0) 50%);
+  transition: background-color .3s ease;
+}
+body[data-panel="places"] .scrim,
+body[data-panel="settings"] .scrim { background-color: rgba(4, 12, 14, .34); }
+
+/* ---------- Общие элементы ---------- */
+
+.glass, .tool, .btn-glass, .round, .mini-btn, .chip-btn, #guided, .map-zoom, .pad, .pedal {
+  background: var(--glass-bg);
+  border: 1px solid var(--line);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+}
+
+.tool, .btn, .round, .chip-btn, .pad, .pedal, .choice, .toggle, .place-entry, .segmented button, .map-zoom button {
+  transition: color .18s ease, border-color .18s ease, background-color .18s ease, transform .12s ease;
+}
+.tool:active, .btn:active, .round:active, .chip-btn:active, .choice:active { transform: scale(.97); }
+
+@media (hover: hover) {
+  .tool:hover, .btn-glass:hover, .round:hover, .chip-btn:hover, .mini-btn:hover,
+  .map-zoom button:hover, .segmented button:hover { color: var(--sand); border-color: var(--line-strong); }
+  .btn-primary:hover { filter: brightness(1.06); }
+}
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 10px;
+  color: var(--sand);
+  font: 600 11px/1.2 var(--sans);
+  letter-spacing: .24em;
+  text-transform: uppercase;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 48px;
+  padding: 0 22px 0 18px;
+  border-radius: 999px;
+  color: var(--text);
+  font: 600 15px/1 var(--sans);
+  letter-spacing: .01em;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.btn-primary {
+  color: #1c1709;
+  background: linear-gradient(180deg, #f3dfb4, #d9b679);
+  border: 1px solid rgba(255, 240, 210, .55);
+  box-shadow: 0 12px 30px -12px rgba(233, 207, 159, .6), inset 0 1px 0 rgba(255, 255, 255, .5);
+}
+.btn.wide { width: 100%; margin-top: 14px; }
+
+.round {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  color: var(--text);
+}
+
+body:not([data-mode="drive"]) .drive-only,
+body[data-mode="drive"] .walk-only { display: none; }
+
+/* ---------- HUD ---------- */
+
+.hud {
+  position: fixed;
+  z-index: 10;
+  transition: opacity .25s ease, visibility .25s;
+}
+body[data-panel="map"] .hud,
+body[data-panel="places"] .hud,
+body[data-panel="settings"] .hud { opacity: 0; visibility: hidden; pointer-events: none; }
+
+/* Верхняя панель */
+.topbar {
+  top: var(--top);
+  left: var(--left);
+  right: var(--right);
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: start;
+  gap: 16px;
+  pointer-events: none;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  justify-self: start;
+  color: var(--sand);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, .55);
+}
+.brand-mark { width: 44px; height: 44px; flex: none; filter: drop-shadow(0 2px 8px rgba(0, 0, 0, .45)); }
+.brand-text { min-width: 0; }
+.brand-text strong {
+  display: block;
+  color: var(--title);
+  font: italic 400 21px/1.1 var(--serif);
+  letter-spacing: .01em;
+  white-space: nowrap;
+}
+.brand-text span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font: 600 10px/1.2 var(--sans);
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Компас-лента. Курс задаётся числом без единиц: style.setProperty('--heading', 312) */
+.compass {
+  justify-self: center;
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  padding-top: 2px;
+}
+.compass-window {
+  position: relative;
+  width: var(--cw);
+  height: 32px;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 24%, #000 76%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 24%, #000 76%, transparent);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .6));
+}
+.compass-track {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2160px;
+  transform: translateX(calc(var(--cw) / 2 - (var(--heading, 0) + 360) * 2px));
+  background:
+    repeating-linear-gradient(90deg, rgba(233, 207, 159, .95) 0 1px, transparent 1px 90px) left bottom / 100% 11px no-repeat,
+    repeating-linear-gradient(90deg, rgba(241, 238, 230, .5) 0 1px, transparent 1px 10px) left bottom / 100% 5px no-repeat;
+  will-change: transform;
+}
+.compass-track span {
+  position: absolute;
+  top: 3px;
+  left: calc(var(--i) * 90px);
+  transform: translateX(-50%);
+  color: var(--muted);
+  font: 600 10px/1 var(--sans);
+  letter-spacing: .1em;
+}
+.compass-track span.major { top: 0; color: var(--title); font: 400 15px/1 var(--serif); letter-spacing: 0; }
+.compass-needle {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 2px;
+  height: 15px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--mint);
+  box-shadow: 0 0 10px rgba(133, 242, 198, .7);
+}
+#bearing {
+  color: var(--sand);
+  font: 600 11px/1.2 var(--sans);
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, .7);
+}
+
+.tools { justify-self: end; display: flex; gap: 8px; pointer-events: auto; }
+.tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 17px 0 13px;
+  border-radius: 999px;
+  color: var(--text);
+  font: 600 14px/1 var(--sans);
+}
+.tool .icon { color: var(--sand); }
+
+/* Маршрут и уведомления */
+.route-bar {
+  top: calc(var(--top) + 72px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - var(--left) - var(--right));
+}
+#guided {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  max-width: 520px;
+  margin: 0;
+  padding: 10px 18px 10px 14px;
+  border-radius: 999px;
+  color: var(--text);
+  font: 600 13.5px/1.3 var(--sans);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+#guided::before {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mint);
+  box-shadow: 0 0 0 4px rgba(133, 242, 198, .16);
+}
+.chip-btn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 15px 0 11px;
+  border-radius: 999px;
+  color: var(--sand);
+  font: 600 13px/1 var(--sans);
+}
+.chip-btn .icon { width: 18px; height: 18px; }
+
+#toast {
+  position: fixed;
+  z-index: 50;
+  top: calc(var(--top) + 126px);
+  left: 50%;
+  max-width: min(440px, calc(100vw - var(--left) - var(--right)));
+  margin: 0;
+  padding: 11px 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--glass-solid);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  color: var(--text);
+  font: 500 14px/1.4 var(--sans);
+  text-align: center;
+  pointer-events: none;
+  transform: translateX(-50%);
+  transition: opacity .25s ease, transform .25s ease, visibility .25s;
+}
+#toast:empty { opacity: 0; visibility: hidden; transform: translate(-50%, -6px); }
+
+/* Обзор: место */
+.hero {
+  left: var(--left);
+  bottom: var(--bottom);
+  width: min(640px, calc(100vw - var(--left) - var(--right) - var(--mini) - 48px));
+  pointer-events: none;
+}
+body[data-mode="walk"] .hero,
+body[data-mode="drive"] .hero { display: none; }
+
+.hero .eyebrow { min-height: 20px; margin-bottom: 14px; text-shadow: 0 1px 8px rgba(0, 0, 0, .6); }
+.hero .eyebrow::before { content: ""; width: 36px; height: 1px; background: currentColor; opacity: .75; }
+#place-name {
+  margin: 0;
+  color: var(--title);
+  font: 400 clamp(46px, 6.2vw, 100px)/.95 var(--serif);
+  letter-spacing: -.015em;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+  text-shadow: 0 2px 30px rgba(0, 0, 0, .45), 0 1px 3px rgba(0, 0, 0, .35);
+}
+#place-desc {
+  max-width: 46ch;
+  margin: 16px 0 24px;
+  color: rgba(241, 238, 230, .88);
+  font-size: clamp(15px, 1.15vw, 17px);
+  line-height: 1.5;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, .65);
+}
+.hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; pointer-events: auto; }
+.stepper { display: flex; align-items: center; gap: 6px; margin-left: 8px; }
+.count {
+  min-width: 58px;
+  color: var(--muted);
+  font: 600 12px/1 var(--sans);
+  letter-spacing: .14em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, .7);
+}
+
+/* Улица: пешком / за рулём */
+.street {
+  display: none;
+  left: var(--left);
+  bottom: var(--bottom);
+  width: min(380px, calc(100vw - var(--left) - var(--right) - var(--mini) - 24px));
+  gap: 10px;
+  padding: 16px 18px 14px;
+  border-radius: 22px;
+}
+body[data-mode="walk"] .street,
+body[data-mode="drive"] .street { display: grid; }
+
+.street-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.street-mode {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--sand);
+  font: 600 11px/1.2 var(--sans);
+  letter-spacing: .22em;
+  text-transform: uppercase;
+}
+.street-mode .icon { color: var(--mint); }
+.speed { display: flex; align-items: baseline; gap: 5px; margin: 0; }
+#speed { color: var(--title); font: 400 40px/1 var(--serif); font-variant-numeric: tabular-nums lining-nums; }
+.speed small { color: var(--muted); font: 600 11px/1 var(--sans); letter-spacing: .12em; }
+#street-name {
+  margin: 0;
+  color: var(--text);
+  font: 400 22px/1.2 var(--serif);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, .24);
+}
+.segmented button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 40px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--muted);
+  font: 600 13px/1 var(--sans);
+}
+.segmented .icon { width: 18px; height: 18px; }
+body[data-mode="walk"] .segmented [data-action="walk"],
+body[data-mode="drive"] .segmented [data-action="drive"] {
+  color: var(--sand);
+  background: rgba(233, 207, 159, .14);
+  border-color: rgba(233, 207, 159, .32);
+}
+.key-hint { margin: 0; color: var(--dim); font-size: 11.5px; line-height: 1.9; }
+
+/* Экранное управление */
+.touch {
+  display: none;
+  left: var(--left);
+  right: var(--right);
+  bottom: var(--bottom);
+  align-items: flex-end;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.dpad {
+  display: grid;
+  grid-template: repeat(3, 56px) / repeat(3, 56px);
+  gap: 5px;
+  pointer-events: auto;
+}
+.pad, .pedal {
+  color: var(--text);
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.pad { display: grid; place-items: center; border-radius: 16px; }
+.pad .icon { width: 26px; height: 26px; }
+.pad.up { grid-area: 1 / 2; }
+.pad.left { grid-area: 2 / 1; }
+.pad.right { grid-area: 2 / 3; }
+.pad.down { grid-area: 3 / 2; }
+.pad.left .icon { rotate: -90deg; }
+.pad.right .icon { rotate: 90deg; }
+.pad.down .icon { rotate: 180deg; }
+.pedals { display: flex; gap: 10px; pointer-events: auto; }
+.pedal {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 3px;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  font: 600 10.5px/1 var(--sans);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.pedal .icon { width: 26px; height: 26px; color: var(--sand); }
+.pad:active, .pedal:active,
+.pad[aria-pressed="true"], .pedal[aria-pressed="true"],
+.pad.active, .pedal.active {
+  color: var(--sand);
+  border-color: rgba(233, 207, 159, .6);
+  background: rgba(233, 207, 159, .22);
+}
+
+/* Миникарта */
+.minimap {
+  right: var(--right);
+  bottom: var(--bottom);
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+}
+.mini-btn {
+  position: relative;
+  display: block;
+  width: var(--mini);
+  height: var(--mini);
+  overflow: hidden;
+  border-radius: 20px;
+  transition: border-color .18s ease;
+}
+#mini { display: block; width: 100%; height: 100%; }
+.mini-tag {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 5px 8px;
+  border-radius: 999px;
+  background: rgba(6, 18, 21, .74);
+  color: var(--sand);
+  font: 600 10.5px/1 var(--sans);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.mini-tag .icon { width: 15px; height: 15px; }
+.osm-link {
+  padding: 2px 4px;
+  border-radius: 6px;
+  color: var(--muted);
+  font: 500 11px/1.3 var(--sans);
+  text-decoration: none;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, .8);
+}
+.osm-link:hover { color: var(--sand); text-decoration: underline; }
+
+/* Сенсорные экраны в режиме улицы: HUD уходит наверх, низ отдан стрелкам */
+@media (hover: none) and (pointer: coarse) {
+  body[data-mode="walk"] .touch,
+  body[data-mode="drive"] .touch { display: flex; }
+
+  body[data-mode="walk"] .street,
+  body[data-mode="drive"] .street { top: var(--hud-top); bottom: auto; }
+
+  body[data-mode="walk"] .minimap,
+  body[data-mode="drive"] .minimap { --mini: 116px; top: var(--hud-top); bottom: auto; }
+
+  body[data-mode="walk"] .route-bar,
+  body[data-mode="drive"] .route-bar { top: auto; bottom: calc(var(--bottom) + 8px); max-width: calc(100vw - 2 * var(--gap) - 380px); }
+
+  .key-hint { display: none; }
+}
+
+/* ---------- Панели ---------- */
+
+.panel { position: fixed; z-index: 40; }
+
+.panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 22px 16px 24px;
+  border-bottom: 1px solid var(--line);
+}
+.panel-head .eyebrow { margin-bottom: 8px; }
+.panel-head h2 { margin: 0; color: var(--title); font: 400 30px/1.05 var(--serif); }
+.panel-head .round { flex: none; }
+
+.sheet {
+  top: var(--top);
+  right: var(--right);
+  bottom: var(--bottom);
+  display: flex;
+  flex-direction: column;
+  width: min(420px, calc(100vw - var(--left) - var(--right)));
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--glass-solid);
+  box-shadow: 0 30px 80px -30px rgba(0, 0, 0, .8), inset 0 1px 0 rgba(255, 255, 255, .05);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  backdrop-filter: blur(24px) saturate(1.2);
+  animation: sheet-in .28s cubic-bezier(.2, .8, .2, 1);
+}
+.panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 14px 18px 22px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(233, 207, 159, .25) transparent;
+}
+
+/* Список мест: кнопки .place-entry > small, span */
+#place-list { display: grid; gap: 4px; counter-reset: place; }
+.place-entry {
+  counter-increment: place;
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  grid-template-areas: "n t" "n s";
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 3px;
+  width: 100%;
+  padding: 12px 14px 12px 8px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  text-align: left;
+}
+.place-entry::before {
+  content: counter(place, decimal-leading-zero);
+  grid-area: n;
+  color: var(--sand-deep);
+  font: italic 400 22px/1 var(--serif);
+  text-align: center;
+}
+.place-entry small {
+  grid-area: t;
+  color: var(--muted);
+  font: 600 10.5px/1.2 var(--sans);
+  letter-spacing: .2em;
+  text-transform: uppercase;
+}
+.place-entry span { grid-area: s; color: var(--text); font: 400 19px/1.25 var(--serif); }
+@media (hover: hover) {
+  .place-entry:hover { background: rgba(233, 207, 159, .07); border-color: var(--line); }
+}
+.place-entry[aria-current]:not([aria-current="false"]),
+.place-entry[aria-pressed="true"],
+.place-entry.active {
+  background: rgba(133, 242, 198, .07);
+  border-color: rgba(133, 242, 198, .34);
+}
+.place-entry[aria-current]:not([aria-current="false"])::before,
+.place-entry[aria-pressed="true"]::before,
+.place-entry.active::before { color: var(--mint); }
+
+/* Настройки */
+.group { min-width: 0; margin: 0 0 20px; padding: 0; border: 0; }
+.group legend, .fold summary {
+  margin-bottom: 10px;
+  padding: 0;
+  color: var(--sand);
+  font: 600 11px/1.2 var(--sans);
+  letter-spacing: .24em;
+  text-transform: uppercase;
+}
+.choices { display: grid; gap: 8px; }
+.choices.three { grid-template-columns: repeat(3, 1fr); }
+.choices.two { grid-template-columns: repeat(2, 1fr); }
+.choice, .toggle {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .035);
+  text-align: left;
+}
+.choice {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: 4px;
+  min-height: 108px;
+  padding: 14px 12px 12px;
+}
+.choice .icon { width: 24px; height: 24px; margin-bottom: 6px; color: var(--muted); }
+.choice strong { color: var(--text); font: 400 17px/1.15 var(--serif); }
+.choice small { color: var(--muted); font-size: 11.5px; line-height: 1.3; }
+.choice[aria-pressed="true"] {
+  border-color: rgba(233, 207, 159, .55);
+  background: linear-gradient(180deg, rgba(233, 207, 159, .17), rgba(233, 207, 159, .05));
+  box-shadow: inset 0 0 0 1px rgba(233, 207, 159, .14);
+}
+.choice[aria-pressed="true"] .icon { color: var(--sand); }
+@media (hover: hover) {
+  .choice:hover, .toggle:hover { border-color: var(--line-strong); }
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 12px 16px;
+  font-weight: 600;
+}
+.toggle .icon { color: var(--sand); }
+.toggle[aria-pressed="true"] .off,
+.toggle:not([aria-pressed="true"]) .on { display: none; }
+.switch {
+  position: relative;
+  flex: none;
+  width: 42px;
+  height: 24px;
+  margin-left: auto;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .12);
+  transition: background-color .2s ease;
+}
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform .2s ease, background-color .2s ease;
+}
+.toggle[aria-pressed="true"] .switch { background: rgba(133, 242, 198, .34); }
+.toggle[aria-pressed="true"] .switch::after { transform: translateX(18px); background: var(--mint); }
+
+.fold { padding-top: 14px; border-top: 1px solid var(--line); }
+.fold summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  margin-bottom: 0;
+  list-style: none;
+  cursor: pointer;
+  border-radius: 8px;
+}
+.fold summary::-webkit-details-marker { display: none; }
+.fold summary .icon { width: 18px; height: 18px; }
+.fold summary::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  margin: 0 6px 3px auto;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  rotate: 45deg;
+  transition: rotate .2s ease, margin .2s ease;
+}
+.fold[open] summary { margin-bottom: 12px; }
+.fold[open] summary::after { rotate: -135deg; margin-bottom: -3px; }
+
+.keys {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px 14px;
+  margin: 0;
+  font-size: 13.5px;
+}
+.keys dt { color: var(--muted); white-space: nowrap; }
+.keys dd { margin: 0; color: var(--text); }
+
+#credits-body { -webkit-user-select: text; user-select: text; }
+.credits { margin: 0; padding: 0; list-style: none; }
+.credits li { display: grid; gap: 3px; padding: 10px 0; border-bottom: 1px solid rgba(233, 207, 159, .08); }
+.credits strong {
+  color: var(--muted);
+  font: 600 10.5px/1.2 var(--sans);
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+.credits span { font-size: 14px; line-height: 1.45; }
+
+/* Карта */
+.map-panel {
+  inset: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) min(360px, 34vw);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas: "head head" "stage side";
+  background: #0b2630;
+  animation: fade-in .22s ease;
+}
+.map-panel .panel-head {
+  grid-area: head;
+  align-items: center;
+  padding: calc(env(safe-area-inset-top, 0px) + 14px) var(--right) 14px var(--left);
+  background: #08191c;
+}
+.map-panel .panel-head h2 { font-size: 26px; }
+.map-stage { grid-area: stage; position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+#map-canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+#map-canvas:active { cursor: grabbing; }
+.map-zoom {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  display: grid;
+  overflow: hidden;
+  border-radius: 16px;
+  transform: translateY(-50%);
+}
+.map-zoom button { display: grid; place-items: center; width: 44px; height: 44px; color: var(--text); }
+.map-zoom button + button { border-top: 1px solid var(--line); }
+
+.map-side {
+  grid-area: side;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 20px var(--right) var(--bottom) 20px;
+  border-left: 1px solid var(--line);
+  background: #08191c;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(233, 207, 159, .25) transparent;
+}
+#map-name { margin: 0; color: var(--title); font: 400 28px/1.1 var(--serif); overflow-wrap: anywhere; }
+#map-desc { margin: 8px 0 16px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.map-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.map-actions .btn { height: 44px; padding: 0 12px; font-size: 14px; gap: 8px; }
+.map-actions .icon { width: 18px; height: 18px; }
+
+.legend summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  color: var(--sand);
+  font: 600 11px/1.2 var(--sans);
+  letter-spacing: .24em;
+  text-transform: uppercase;
+  list-style: none;
+  cursor: pointer;
+  border-radius: 8px;
+}
+.legend summary::-webkit-details-marker { display: none; }
+.legend summary .icon { width: 18px; height: 18px; }
+.legend ul {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px 12px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.legend li { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; }
+.legend i {
+  flex: none;
+  width: 20px;
+  height: 13px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 3px;
+  background: var(--c);
+}
+.legend i.line { height: 4px; border: 0; border-radius: 2px; box-shadow: 0 0 0 1.5px #16383b; }
+.legend i.dot { width: 12px; height: 12px; margin: 0 4px; border: 2px solid #152a2d; border-radius: 50%; box-shadow: 0 0 0 1px var(--c); }
+
+.fine { margin: auto 0 0; color: var(--dim); font-size: 12px; line-height: 1.5; }
+.fine a { color: var(--muted); }
+
+/* Загрузка и ошибка */
+.screen {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
+  background:
+    radial-gradient(120% 80% at 50% 115%, rgba(133, 242, 198, .09), transparent 60%),
+    radial-gradient(90% 70% at 50% -15%, rgba(233, 207, 159, .11), transparent 60%),
+    var(--ink);
+  text-align: center;
+}
+.screen-inner { display: grid; justify-items: center; gap: 10px; max-width: 440px; }
+.screen-mark { width: 72px; height: 72px; margin-bottom: 8px; color: var(--sand); animation: breathe 3.2s ease-in-out infinite; }
+.screen .eyebrow { margin: 0; }
+.screen-title { margin: 0; color: var(--title); font: 400 clamp(40px, 8vw, 64px)/1 var(--serif); }
+.screen p { margin: 0; color: var(--muted); }
+#load-label { min-height: 1.45em; margin: 8px 0 6px; font-size: 14px; }
+#fallback .btn { margin-top: 14px; }
+#fallback .screen-title { font-size: clamp(32px, 6vw, 48px); }
+
+#load-progress {
+  -webkit-appearance: none;
+  appearance: none;
+  width: min(280px, 70vw);
+  height: 3px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 2px;
+  background: rgba(241, 238, 230, .12);
+  color: var(--sand);
+}
+#load-progress::-webkit-progress-bar { background: rgba(241, 238, 230, .12); }
+#load-progress::-webkit-progress-value { background: linear-gradient(90deg, var(--sand), var(--mint)); transition: width .3s ease; }
+#load-progress::-moz-progress-bar { background: linear-gradient(90deg, var(--sand), var(--mint)); }
+
+@keyframes sheet-in { from { opacity: 0; transform: translateX(18px); } }
+@keyframes sheet-up { from { opacity: 0; transform: translateY(28px); } }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes breathe { 50% { opacity: .55; transform: scale(.96); } }
+
+/* ---------- Адаптив ---------- */
+
+@media (max-width: 1000px) {
+  .tool { width: 44px; padding: 0; justify-content: center; }
+  .tool span { display: none; }
+}
+
+@media (max-width: 720px) {
+  :root { --gap: 14px; --mini: 88px; --cw: 184px; --hud-top: calc(var(--top) + 100px); }
+
+  .topbar {
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "brand tools" "compass compass";
+    row-gap: 6px;
+  }
+  .brand { grid-area: brand; gap: 10px; }
+  .brand-mark { width: 38px; height: 38px; }
+  .brand-text strong { font-size: 19px; }
+  .brand-text span { display: none; }
+  .compass { grid-area: compass; }
+  .tools { grid-area: tools; gap: 6px; }
+
+  .minimap { top: var(--hud-top); bottom: auto; gap: 4px; }
+  .mini-btn { border-radius: 16px; }
+  .mini-tag { display: none; }
+  .osm-link { font-size: 10px; }
+
+  .route-bar {
+    top: var(--hud-top);
+    left: var(--left);
+    right: calc(var(--right) + var(--mini) + 10px);
+    transform: none;
+    flex-wrap: wrap;
+  }
+  body[data-mode="walk"] .route-bar,
+  body[data-mode="drive"] .route-bar { top: calc(var(--hud-top) + 140px); bottom: auto; max-width: none; }
+  #guided { max-width: 100%; padding: 9px 14px 9px 12px; font-size: 13px; }
+  #toast { top: calc(var(--top) + 54px); }
+
+  .hero { right: var(--right); width: auto; }
+  .hero .eyebrow { min-height: 40px; margin-bottom: 8px; padding-right: 136px; }
+  .hero .eyebrow::before { width: 22px; }
+  #place-name { font-size: clamp(36px, 11vw, 54px); }
+  #place-desc { margin: 10px 0 16px; font-size: 14.5px; }
+  .hero-actions { flex-wrap: nowrap; }
+  .hero-actions .btn { flex: 1; min-width: 0; padding: 0 14px; }
+  .stepper { position: absolute; top: 0; right: 0; margin: 0; gap: 4px; }
+  .stepper .round { width: 40px; height: 40px; }
+  .count { min-width: 48px; }
+
+  .street {
+    top: var(--hud-top);
+    bottom: auto;
+    right: calc(var(--right) + var(--mini) + 10px);
+    width: auto;
+    gap: 8px;
+    padding: 12px 14px;
+    border-radius: 18px;
+  }
+  #speed { font-size: 28px; }
+  #street-name { font-size: 18px; }
+  .segmented button { height: 36px; }
+  .segmented button span { display: none; }
+
+  body[data-mode="walk"] .minimap,
+  body[data-mode="drive"] .minimap { --mini: 88px; }
+
+  .sheet {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: min(86dvh, calc(100dvh - var(--top) - 24px));
+    border-width: 1px 0 0;
+    border-radius: 24px 24px 0 0;
+    animation-name: sheet-up;
+  }
+  .sheet::before {
+    content: "";
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    width: 40px;
+    height: 4px;
+    margin-left: -20px;
+    border-radius: 2px;
+    background: rgba(241, 238, 230, .2);
+  }
+  .sheet .panel-head { padding: 22px calc(env(safe-area-inset-right, 0px) + 16px) 14px calc(env(safe-area-inset-left, 0px) + 20px); }
+  .panel-head h2 { font-size: 26px; }
+  .sheet .panel-body {
+    padding: 12px calc(env(safe-area-inset-right, 0px) + 14px) calc(env(safe-area-inset-bottom, 0px) + 20px) calc(env(safe-area-inset-left, 0px) + 14px);
+  }
+  .choice { min-height: 100px; padding: 12px 10px 10px; }
+  .choice strong { font-size: 15.5px; }
+
+  .map-panel {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas: "head" "stage" "side";
+  }
+  .map-panel .panel-head h2 { font-size: 22px; }
+  .map-panel .panel-head .eyebrow { margin-bottom: 4px; }
+  .map-zoom { right: calc(env(safe-area-inset-right, 0px) + 10px); }
+  .map-side {
+    max-height: 46dvh;
+    gap: 12px;
+    padding: 14px var(--right) calc(env(safe-area-inset-bottom, 0px) + 14px) var(--left);
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+  .map-card .eyebrow { display: none; }
+  #map-name { font-size: 22px; }
+  #map-desc { margin: 4px 0 12px; font-size: 13.5px; }
+  .map-actions .btn { height: 42px; font-size: 13.5px; }
+  .legend ul { grid-template-columns: repeat(3, 1fr); gap: 7px 10px; }
+  .legend li { gap: 7px; font-size: 12px; }
+  .legend i { width: 16px; }
+}
+
+@media (max-width: 380px) {
+  .brand-text { display: none; }
+  .dpad { grid-template: repeat(3, 50px) / repeat(3, 50px); }
+  .pedal { width: 76px; height: 76px; }
+  .hero-actions .btn .icon { display: none; }
+}
+
+/* Низкие экраны: телефон горизонтально */
+@media (max-height: 520px) {
+  :root { --gap: 12px; --mini: 104px; --hud-top: calc(var(--top) + 56px); }
+  .brand-mark { width: 36px; height: 36px; }
+  .route-bar { top: calc(var(--top) + 58px); }
+  #toast { top: calc(var(--top) + 58px); }
+  .hero .eyebrow { margin-bottom: 8px; }
+  #place-name { font-size: clamp(28px, 9vh, 44px); }
+  #place-desc {
+    display: -webkit-box;
+    margin: 8px 0 12px;
+    overflow: hidden;
+    font-size: 14px;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .btn { height: 42px; }
+  .round { width: 40px; height: 40px; }
+  .street { gap: 6px; padding: 10px 14px; }
+  #speed { font-size: 28px; }
+  #street-name { font-size: 17px; }
+  .segmented button { height: 34px; }
+  .key-hint { display: none; }
+  .dpad { grid-template: repeat(3, 48px) / repeat(3, 48px); }
+  .pedal { width: 72px; height: 72px; }
+  body[data-mode="walk"] .minimap,
+  body[data-mode="drive"] .minimap { --mini: 92px; }
+  .mini-tag { display: none; }
+  .panel-head { padding: 14px 18px 10px 20px; }
+  .panel-head h2 { font-size: 24px; }
+  .choice { min-height: 0; }
+  .map-panel .panel-head { padding-top: calc(env(safe-area-inset-top, 0px) + 8px); padding-bottom: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .tool, .btn, .round, .chip-btn, .pad, .pedal, .choice, .toggle, .mini-btn, .place-entry, .segmented button {
+    border: 1px solid ButtonText;
+  }
+  .choice[aria-pressed="true"], .toggle[aria-pressed="true"] { outline: 2px solid Highlight; }
+}
+</style>
+</head>
+<body data-mode="aerial" data-panel="">
+
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <symbol id="mark" viewBox="0 0 48 48">
+    <circle cx="24" cy="24" r="21.5" fill="none" stroke="currentColor" stroke-width="1.4" opacity=".55"/>
+    <circle cx="24" cy="24" r="17" fill="none" stroke="currentColor" stroke-width=".8" stroke-dasharray="1 3.45" opacity=".7"/>
+    <path d="M24 5.5 27 21l-3 3-3-3Z" fill="currentColor"/>
+    <path d="M24 42.5 21 27l3-3 3 3Z" fill="currentColor" opacity=".45"/>
+    <path d="M42.5 24 27 27l-3-3 3-3ZM5.5 24 21 21l3 3-3 3Z" fill="currentColor" opacity=".7"/>
+    <path d="M11 33.5c2.2-1.6 4.4-1.6 6.5 0s4.3 1.6 6.5 0 4.3-1.6 6.5 0 4.3 1.6 6.5 0" fill="none" stroke="#85f2c6" stroke-width="1.6" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="i-map" viewBox="0 0 24 24"><path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4Z"/><path d="M9 4v14M15 6v14"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-10.5a6.5 6.5 0 0 1 13 0C18.5 15.4 12 21 12 21Z"/><circle cx="12" cy="10.5" r="2.3"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+  <symbol id="i-prev" viewBox="0 0 24 24"><path d="M14.5 6 8.5 12l6 6"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></symbol>
+  <symbol id="i-walk" viewBox="0 0 24 24"><circle cx="13.6" cy="4.6" r="1.9"/><path d="M12.6 8.3 11 14.2M7.8 11.6l4-3.3 3.2 3.4 2.4 1M11 14.2l-2.2 6.3M11 14.2l3.1 2.9.6 3.4"/></symbol>
+  <symbol id="i-car" viewBox="0 0 24 24"><path d="M3.5 16h17v-3.7l-2-5.1a1.6 1.6 0 0 0-1.5-1H7a1.6 1.6 0 0 0-1.5 1l-2 5.1V16ZM5.5 16v2.5M18.5 16v2.5M4 12.3h16"/><path d="M7.4 14.1h.2M16.4 14.1h.2"/></symbol>
+  <symbol id="i-orbit" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><ellipse cx="12" cy="12" rx="9.5" ry="4.2" transform="rotate(-18 12 12)"/><path d="M19.6 5.2h.1"/></symbol>
+  <symbol id="i-route" viewBox="0 0 24 24"><circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="6" r="2.2"/><path d="M8.2 18H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.8" stroke-dasharray="2.4 2.2"/></symbol>
+  <symbol id="i-route-off" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="m9.2 9.2 5.6 5.6M14.8 9.2l-5.6 5.6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5.5v13M5.5 12h13"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5.5 12h13"/></symbol>
+  <symbol id="i-fit" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><circle cx="12" cy="12" r="2"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-sound-off" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4Z"/><path d="m16 9.5 5 5M21 9.5l-5 5"/></symbol>
+  <symbol id="i-sound-on" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4Z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M6.5 14.5 12 9l5.5 5.5"/></symbol>
+  <symbol id="i-run" viewBox="0 0 24 24"><path d="M6 13.5 12 7.5l6 6M6 18.5l6-6 6 6"/></symbol>
+  <symbol id="i-brake" viewBox="0 0 24 24"><path d="M8.6 3.5h6.8l5.1 5.1v6.8l-5.1 5.1H8.6l-5.1-5.1V8.6Z"/><path d="M8 12h8"/></symbol>
+  <symbol id="i-gold" viewBox="0 0 24 24"><path d="M7 16a5 5 0 0 1 10 0M3 19.5h18M12 5.5V8M5.2 9.2l1.7 1.7M18.8 9.2l-1.7 1.7M3 16h1.5M19.5 16H21"/></symbol>
+  <symbol id="i-day" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></symbol>
+  <symbol id="i-blue" viewBox="0 0 24 24"><path d="M19 14.2A7.5 7.5 0 0 1 9.8 5a7.5 7.5 0 1 0 9.2 9.2Z"/><path d="M17 3.5v3M15.5 5h3"/></symbol>
+  <symbol id="i-film" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M7.5 5v14M16.5 5v14M3.5 9.7h4M3.5 14.3h4M16.5 9.7h4M16.5 14.3h4"/></symbol>
+  <symbol id="i-balance" viewBox="0 0 24 24"><path d="M12 4.5v15M8 19.5h8M5 7.5h14M5 7.5 2.7 13a2.4 2.4 0 0 0 4.6 0L5 7.5ZM19 7.5 16.7 13a2.4 2.4 0 0 0 4.6 0L19 7.5Z"/></symbol>
+  <symbol id="i-keys" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.1M9.3 10h.1M12.6 10h.1M15.9 10h.1M8 14h8"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5.5A2 2 0 0 1 6 4h13v14H6a2 2 0 0 0-2 2V5.5Z"/><path d="M4 20a2 2 0 0 1 2-2h13v2.5H6A2 2 0 0 1 4 20ZM8 8h7"/></symbol>
+  <symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-8 8M17 14v5H5V7h5"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 4 8.5 4.5L12 13 3.5 8.5Z"/><path d="m3.5 12.5 8.5 4.5 8.5-4.5M3.5 16.5 12 21l8.5-4.5"/></symbol>
+</svg>
+
+<canvas id="view" aria-label="Трёхмерная сцена Dubai Marina. Перетаскивайте, чтобы осмотреться."></canvas>
+<div class="scrim" aria-hidden="true"></div>
+
+<!-- Верх: знак, курс, навигация -->
+<header class="hud topbar">
+  <div class="brand">
+    <svg class="brand-mark" aria-hidden="true"><use href="#mark"/></svg>
+    <div class="brand-text">
+      <strong>Marina Atlas</strong>
+      <span>Dubai · 25.081° N 55.138° E</span>
+    </div>
+  </div>
+
+  <div class="compass" role="group" aria-label="Курс">
+    <div class="compass-window" aria-hidden="true">
+      <div class="compass-track">
+        <span style="--i:0" class="major">С</span><span style="--i:1">СВ</span><span style="--i:2" class="major">В</span><span style="--i:3">ЮВ</span><span style="--i:4" class="major">Ю</span><span style="--i:5">ЮЗ</span><span style="--i:6" class="major">З</span><span style="--i:7">СЗ</span>
+        <span style="--i:8" class="major">С</span><span style="--i:9">СВ</span><span style="--i:10" class="major">В</span><span style="--i:11">ЮВ</span><span style="--i:12" class="major">Ю</span><span style="--i:13">ЮЗ</span><span style="--i:14" class="major">З</span><span style="--i:15">СЗ</span>
+        <span style="--i:16" class="major">С</span><span style="--i:17">СВ</span><span style="--i:18" class="major">В</span><span style="--i:19">ЮВ</span><span style="--i:20" class="major">Ю</span><span style="--i:21">ЮЗ</span><span style="--i:22" class="major">З</span><span style="--i:23">СЗ</span>
+        <span style="--i:24" class="major">С</span>
+      </div>
+      <i class="compass-needle"></i>
+    </div>
+    <output id="bearing" aria-live="off">С · 0°</output>
+  </div>
+
+  <nav class="tools" aria-label="Разделы">
+    <button type="button" class="tool" data-action="map" aria-label="Карта">
+      <svg class="icon" aria-hidden="true"><use href="#i-map"/></svg><span>Карта</span>
+    </button>
+    <button type="button" class="tool" data-action="places" aria-label="Места">
+      <svg class="icon" aria-hidden="true"><use href="#i-pin"/></svg><span>Места</span>
+    </button>
+    <button type="button" class="tool" data-action="settings" aria-label="Настройки">
+      <svg class="icon" aria-hidden="true"><use href="#i-sliders"/></svg><span>Настройки</span>
+    </button>
+  </nav>
+</header>
+
+<!-- Маршрут и уведомления -->
+<div class="hud route-bar">
+  <p id="guided" hidden></p>
+  <button type="button" class="chip-btn" data-action="cancel-route" aria-label="Сбросить маршрут" hidden>
+    <svg class="icon" aria-hidden="true"><use href="#i-route-off"/></svg><span>Сбросить</span>
+  </button>
+</div>
+<p id="toast" role="status" aria-live="polite" aria-atomic="true"></p>
+
+<!-- Обзор: место -->
+<section id="hero" class="hud hero" aria-labelledby="place-name">
+  <p class="eyebrow"><span id="place-type">Район у воды</span></p>
+  <h1 id="place-name">Dubai Marina</h1>
+  <p id="place-desc">Рукотворный канал с набережной Marina Walk между JBR и Sheikh Zayed Road.</p>
+  <div class="hero-actions">
+    <button type="button" class="btn btn-primary" data-action="walk">
+      <svg class="icon" aria-hidden="true"><use href="#i-walk"/></svg><span>Пешком</span>
+    </button>
+    <button type="button" class="btn btn-glass" data-action="drive">
+      <svg class="icon" aria-hidden="true"><use href="#i-car"/></svg><span>За руль</span>
+    </button>
+    <div class="stepper" role="group" aria-label="Переход между местами">
+      <button type="button" class="round" data-action="previous" aria-label="Предыдущее место">
+        <svg class="icon" aria-hidden="true"><use href="#i-prev"/></svg>
+      </button>
+      <span id="place-count" class="count"></span>
+      <button type="button" class="round" data-action="next" aria-label="Следующее место">
+        <svg class="icon" aria-hidden="true"><use href="#i-next"/></svg>
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- Улица: пешком / за рулём -->
+<section id="street" class="hud street glass" aria-label="Режим на улице">
+  <div class="street-top">
+    <p class="street-mode">
+      <svg class="icon walk-only" aria-hidden="true"><use href="#i-walk"/></svg>
+      <svg class="icon drive-only" aria-hidden="true"><use href="#i-car"/></svg>
+      <span id="mode-name">Пешком</span>
+    </p>
+    <p class="speed"><output id="speed">0</output><small>км/ч</small></p>
+  </div>
+  <p id="street-name">Dubai Marina</p>
+  <div class="segmented" role="group" aria-label="Режим">
+    <button type="button" data-action="walk" aria-label="Пешком">
+      <svg class="icon" aria-hidden="true"><use href="#i-walk"/></svg><span>Пешком</span>
+    </button>
+    <button type="button" data-action="drive" aria-label="За руль">
+      <svg class="icon" aria-hidden="true"><use href="#i-car"/></svg><span>За руль</span>
+    </button>
+    <button type="button" data-action="aerial" aria-label="Обзор">
+      <svg class="icon" aria-hidden="true"><use href="#i-orbit"/></svg><span>Обзор</span>
+    </button>
+  </div>
+  <p class="key-hint"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> движение · <kbd>Shift</kbd> бег · <kbd>Пробел</kbd> тормоз</p>
+</section>
+
+<!-- Экранное управление (сенсорные экраны) -->
+<div class="hud touch" role="group" aria-label="Экранное управление">
+  <div class="dpad">
+    <button type="button" class="pad up" data-key="w" aria-label="Вперёд"><svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg></button>
+    <button type="button" class="pad left" data-key="a" aria-label="Влево"><svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg></button>
+    <button type="button" class="pad right" data-key="d" aria-label="Вправо"><svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg></button>
+    <button type="button" class="pad down" data-key="s" aria-label="Назад"><svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg></button>
+  </div>
+  <div class="pedals">
+    <button type="button" class="pedal walk-only" data-key="shift" aria-label="Бег"><svg class="icon" aria-hidden="true"><use href="#i-run"/></svg><span>Бег</span></button>
+    <button type="button" class="pedal drive-only" data-key="space" aria-label="Тормоз"><svg class="icon" aria-hidden="true"><use href="#i-brake"/></svg><span>Тормоз</span></button>
+  </div>
+</div>
+
+<!-- Миникарта -->
+<div class="hud minimap">
+  <button type="button" class="mini-btn" data-action="map" aria-label="Открыть карту">
+    <canvas id="mini" aria-hidden="true"></canvas>
+    <span class="mini-tag"><svg class="icon" aria-hidden="true"><use href="#i-map"/></svg>Карта</span>
+  </button>
+  <a class="osm-link" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>
+</div>
+
+<!-- Панель: карта -->
+<section id="map-panel" class="panel map-panel" aria-labelledby="map-title" hidden>
+  <header class="panel-head">
+    <div>
+      <p class="eyebrow">Карта · OpenStreetMap</p>
+      <h2 id="map-title">Dubai Marina</h2>
+    </div>
+    <button type="button" class="round" data-action="close" aria-label="Закрыть карту">
+      <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>
+    </button>
+  </header>
+
+  <div class="map-stage">
+    <canvas id="map-canvas" role="img" aria-label="Карта Dubai Marina. Перетаскивайте для сдвига, колесо или щипок — масштаб, нажатие выбирает точку."></canvas>
+    <div class="map-zoom" role="group" aria-label="Масштаб карты">
+      <button type="button" data-action="zoom-in" aria-label="Приблизить"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg></button>
+      <button type="button" data-action="zoom-out" aria-label="Отдалить"><svg class="icon" aria-hidden="true"><use href="#i-minus"/></svg></button>
+      <button type="button" data-action="fit" aria-label="Показать всю карту"><svg class="icon" aria-hidden="true"><use href="#i-fit"/></svg></button>
+    </div>
+  </div>
+
+  <aside class="map-side" aria-label="Выбранная точка и легенда">
+    <div class="map-card">
+      <p class="eyebrow">Выбранная точка</p>
+      <h3 id="map-name">Выберите точку</h3>
+      <p id="map-desc">Нажмите на карту или на название места.</p>
+      <div class="map-actions">
+        <button type="button" class="btn btn-primary" data-action="route">
+          <svg class="icon" aria-hidden="true"><use href="#i-route"/></svg><span>Маршрут</span>
+        </button>
+        <button type="button" class="btn btn-glass" data-action="preview">
+          <svg class="icon" aria-hidden="true"><use href="#i-eye"/></svg><span>Показать</span>
+        </button>
+        <button type="button" class="btn btn-glass" data-action="walk" aria-label="Пешком из этой точки">
+          <svg class="icon" aria-hidden="true"><use href="#i-walk"/></svg><span>Пешком</span>
+        </button>
+        <button type="button" class="btn btn-glass" data-action="drive" aria-label="За руль в этой точке">
+          <svg class="icon" aria-hidden="true"><use href="#i-car"/></svg><span>За руль</span>
+        </button>
+      </div>
+    </div>
+
+    <details class="legend" open>
+      <summary><svg class="icon" aria-hidden="true"><use href="#i-layers"/></svg>Легенда</summary>
+      <ul>
+        <li><i style="--c:#0b2630"></i>Вода</li>
+        <li><i style="--c:#223832"></i>Суша</li>
+        <li><i style="--c:#394a42"></i>Здания</li>
+        <li><i style="--c:#304a3c"></i>Парки</li>
+        <li><i style="--c:#514c39"></i>Песок и пляж</li>
+        <li><i style="--c:#33463e"></i>Пирсы</li>
+        <li><i class="line" style="--c:#b58c56"></i>Магистрали</li>
+        <li><i class="line" style="--c:#716d56"></i>Улицы</li>
+        <li><i class="line" style="--c:#61796f"></i>Тротуары</li>
+        <li><i class="line" style="--c:#85f2c6"></i>Маршрут</li>
+        <li><i class="dot" style="--c:#6db6bb"></i>Вы</li>
+        <li><i class="dot" style="--c:#edd3a2"></i>Места</li>
+        <li><i class="dot" style="--c:#f7c27b"></i>Выбрано</li>
+      </ul>
+    </details>
+
+    <p class="fine">Данные © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>, база по <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">ODbL&nbsp;1.0</a></p>
+  </aside>
+</section>
+
+<!-- Панель: места -->
+<section id="places-panel" class="panel sheet" aria-labelledby="places-title" hidden>
+  <header class="panel-head">
+    <div>
+      <p class="eyebrow">Навигация</p>
+      <h2 id="places-title">Места</h2>
+    </div>
+    <button type="button" class="round" data-action="close" aria-label="Закрыть список мест">
+      <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>
+    </button>
+  </header>
+  <nav class="panel-body" aria-label="Список мест">
+    <div id="place-list"></div>
+  </nav>
+</section>
+
+<!-- Панель: настройки -->
+<section id="settings-panel" class="panel sheet" aria-labelledby="settings-title" hidden>
+  <header class="panel-head">
+    <div>
+      <p class="eyebrow">Marina Atlas</p>
+      <h2 id="settings-title">Настройки</h2>
+    </div>
+    <button type="button" class="round" data-action="close" aria-label="Закрыть настройки">
+      <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>
+    </button>
+  </header>
+
+  <div class="panel-body">
+    <fieldset class="group">
+      <legend>Свет</legend>
+      <div class="choices three">
+        <button type="button" class="choice" data-light="gold" aria-pressed="true">
+          <svg class="icon" aria-hidden="true"><use href="#i-gold"/></svg><strong>Золотой час</strong><small>Низкое тёплое солнце</small>
+        </button>
+        <button type="button" class="choice" data-light="day" aria-pressed="false">
+          <svg class="icon" aria-hidden="true"><use href="#i-day"/></svg><strong>День</strong><small>Ясное небо</small>
+        </button>
+        <button type="button" class="choice" data-light="blue" aria-pressed="false">
+          <svg class="icon" aria-hidden="true"><use href="#i-blue"/></svg><strong>Синий час</strong><small>Сумерки и огни</small>
+        </button>
+      </div>
+    </fieldset>
+
+    <fieldset class="group">
+      <legend>Графика</legend>
+      <div class="choices two">
+        <button type="button" class="choice" data-quality="ultra" aria-pressed="true">
+          <svg class="icon" aria-hidden="true"><use href="#i-film"/></svg><strong>Кино</strong><small>Максимум деталей</small>
+        </button>
+        <button type="button" class="choice" data-quality="balanced" aria-pressed="false">
+          <svg class="icon" aria-hidden="true"><use href="#i-balance"/></svg><strong>Баланс</strong><small>Плавнее на слабых устройствах</small>
+        </button>
+      </div>
+    </fieldset>
+
+    <fieldset class="group">
+      <legend>Звук</legend>
+      <button type="button" class="toggle" data-action="audio" aria-pressed="false">
+        <svg class="icon off" aria-hidden="true"><use href="#i-sound-off"/></svg>
+        <svg class="icon on" aria-hidden="true"><use href="#i-sound-on"/></svg>
+        <span class="off">Звук выключен</span><span class="on">Звук включён</span>
+        <i class="switch" aria-hidden="true"></i>
+      </button>
+    </fieldset>
+
+    <details class="group fold">
+      <summary><svg class="icon" aria-hidden="true"><use href="#i-keys"/></svg>Управление</summary>
+      <dl class="keys">
+        <dt>Сцена</dt><dd>Перетаскивание мышью или пальцем — осмотр</dd>
+        <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>Движение пешком и за рулём</dd>
+        <dt><kbd>Shift</kbd></dt><dd>Бег</dd>
+        <dt><kbd>Пробел</kbd></dt><dd>Тормоз</dd>
+        <dt><kbd>M</kbd> / <kbd>V</kbd></dt><dd>Карта / смена пешего и автомобильного режима</dd>
+        <dt>Карта</dt><dd>Перетаскивание — сдвиг, колесо или щипок — масштаб, нажатие — выбор точки</dd>
+        <dt>Экран</dt><dd>На сенсорных экранах внизу появляются стрелки, бег и тормоз</dd>
+      </dl>
+    </details>
+
+    <details class="group fold" open>
+      <summary><svg class="icon" aria-hidden="true"><use href="#i-book"/></svg>Данные и авторы</summary>
+      <div id="credits-body">
+        <ul class="credits">
+          <li><strong>Геоданные</strong><span>© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>. Дальний план — <a href="https://openfreemap.org/" target="_blank" rel="noopener">OpenFreeMap</a> / <a href="https://openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a>. Производная база распространяется по <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">ODbL&nbsp;1.0</a>.</span></li>
+          <li><strong>Спутниковый снимок</strong><span>Содержит изменённые данные Copernicus Sentinel-2 (2025).</span></li>
+          <li><strong>Транспорт</strong><span>Скорости потока основаны на средних показателях Дубая за 2025 год. Очереди рассчитываются в сцене. <a href="https://www.tomtom.com/traffic-index/city/dubai/" target="_blank" rel="noopener">TomTom Traffic Index</a>.</span></li>
+          <li><strong>Архитектура</strong><span>Контуры и доступные высоты взяты из OSM. Пропуски высот оценены по этажности и типу здания. Облицовка, интерьеры витрин и уличная мебель реконструированы.</span></li>
+          <li><strong>Небо HDR</strong><span><a href="https://polyhaven.com/" target="_blank" rel="noopener">Poly Haven</a>, CC0.</span></li>
+          <li><strong>Материалы</strong><span><a href="https://ambientcg.com/" target="_blank" rel="noopener">ambientCG</a>, CC0.</span></li>
+          <li><strong>Ориентиры</strong><span><a href="https://www.som.com/projects/cayan-tower/" target="_blank" rel="noopener">Cayan Tower · SOM</a>, <a href="https://www.multiplex.global/projects/the-address-beach-resort/" target="_blank" rel="noopener">Address Beach Resort · Multiplex</a>, <a href="https://www.ihgplc.com/en/news-and-media/news-releases/2025/ciel-dubai-marina-vignette-collection-debuts-as-the-worlds-tallest-hotel" target="_blank" rel="noopener">Ciel · IHG</a>.</span></li>
+          <li><strong>3D-движок</strong><span><a href="https://threejs.org/" target="_blank" rel="noopener">Three.js</a>, <a href="https://github.com/mrdoob/three.js/blob/r160/LICENSE" target="_blank" rel="noopener">MIT</a>.</span></li>
+        </ul>
+        <button type="button" class="btn btn-glass wide" data-action="data">
+          <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg><span>Скачать геоданные ODbL</span>
+        </button>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- Загрузка и ошибка -->
+<div id="loading" class="screen">
+  <div class="screen-inner">
+    <svg class="screen-mark" aria-hidden="true"><use href="#mark"/></svg>
+    <p class="eyebrow">Marina Atlas</p>
+    <h2 class="screen-title">Dubai Marina</h2>
+    <p id="load-label" aria-live="polite">Загрузка сцены…</p>
+    <progress id="load-progress" max="1" value="0" aria-label="Прогресс загрузки"></progress>
+  </div>
+</div>
+
+<div id="fallback" class="screen" role="alert" hidden>
+  <div class="screen-inner">
+    <svg class="screen-mark" aria-hidden="true"><use href="#mark"/></svg>
+    <h2 class="screen-title">Сцена не запустилась</h2>
+    <p>Браузеру не удалось включить WebGL. Включите аппаратное ускорение или откройте страницу в свежей версии Chrome, Edge, Firefox или Safari.</p>
+    <a class="btn btn-primary" href="">Обновить страницу</a>
+  </div>
+</div>
+
+<script src="atlas.js" defer></script>
+</body>
+</html>
