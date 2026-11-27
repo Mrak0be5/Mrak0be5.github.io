@@ -1224,7 +1224,7 @@ function marinaMaterials(renderer) {
       const gx=x+f,gy=y+(style.bal?7:2),gw=w-f*2,gh=h-(style.bal?16:7);
       // Нормали откосов и штапиков усредняются mip-картами вместе с рисунком окна.
       rect(relief,'#cd80e5',gx-1,gy,2,gh);rect(relief,'#3380e5',gx+gw-1,gy,2,gh);
-      rect(relief,'#80cbe6',gx,gy-1,gw,2);rect(relief,'#8035e6',gx,gy+gh-1,gw,2);
+      rect(relief,'#8035e6',gx,gy-1,gw,2);rect(relief,'#80cbe6',gx,gy+gh-1,gw,2);
       const grad=base.createLinearGradient(x,y,x+w*.22,y+h);grad.addColorStop(0,style.lo);grad.addColorStop(1,style.hi);
       rect(base,grad,gx,gy,gw,gh);
       rect(base,'rgba(20,32,41,'+random()*.32+')',gx,gy,gw,gh);
@@ -1376,17 +1376,21 @@ function marinaMaterials(renderer) {
             #endif`);
         }
         if(!hasGlass)return;
-        shader.vertexShader='varying vec3 vRoomRay;\n'+shader.vertexShader.replace('#include <begin_vertex>',`#include <begin_vertex>
-          vec3 surfaceView=cameraPosition-(modelMatrix*vec4(position,1.)).xyz;
-          vec3 faceN=normalize(mat3(modelMatrix)*normal);
-          vec3 tangent=vec3(-faceN.z,0.,faceN.x);
-          vRoomRay=vec3(dot(tangent,surfaceView),surfaceView.y,abs(dot(surfaceView,faceN)));`);
-        shader.fragmentShader='varying vec3 vRoomRay;\n'+shader.fragmentShader.replace('#include <map_fragment>',`#include <map_fragment>
+        shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',`#include <map_fragment>
           vec2 bayUv=vMapUv*8.;
+          vec2 uvX=dFdx(bayUv),uvY=dFdy(bayUv);
+          vec3 pX=-dFdx(vViewPosition),pY=-dFdy(vViewPosition);
+          float orientation=sign(uvX.x*uvY.y-uvX.y*uvY.x);
           float pixelSpan=max(fwidth(bayUv.x),fwidth(bayUv.y));
           float resolved=1.-smoothstep(.045,.32,pixelSpan);
           float glazing=1.-smoothstep(.31,.55,texture2D(roughnessMap,vRoughnessMapUv).g);
           if(glazing*resolved>.01){
+            // Оси комнаты следуют развёртке независимо от обхода контура и ориентации стены.
+            vec3 uAxis=(pX*uvY.y-pY*uvX.y)*orientation;
+            vec3 vAxis=(pY*uvX.x-pX*uvY.x)*orientation;
+            uAxis/=max(length(uAxis),1e-9);vAxis/=max(length(vAxis),1e-9);
+            vec3 viewDir=normalize(vViewPosition);
+            vec3 vRoomRay=vec3(dot(uAxis,viewDir),dot(vAxis,viewDir),abs(dot(cross(uAxis,vAxis),viewDir)));
             vec2 pane=fract(bayUv);
             vec2 slope=clamp(-vRoomRay.xy/max(vRoomRay.z,.01),vec2(-12.),vec2(12.));
             vec2 boundary=mix(vec2(0.),vec2(1.),step(vec2(0.),slope));
@@ -3207,7 +3211,7 @@ function buildMarinaCity(scene,data,world,style,sites,catalog,covered) {
           // Небольшой отступ у угла разделяет секции и не даёт соседним торцам перекрываться.
           const inset=Math.min(reach*1.3/len,.09);
           const start=l+inset,end=r-inset;
-          for(let f=Math.max(1,Math.ceil((low-base)/pitch));f<count;f++){
+          for(let f=Math.max(1,Math.ceil((low-base)/pitch-.12));f<count;f++){
             const y=base+(f+.12)*pitch;
             if(y+lip>high)break;
             const mid=(start+end)*.5;
