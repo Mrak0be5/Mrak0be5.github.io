@@ -1248,6 +1248,9 @@ body[data-inspecting="true"] #hero,body[data-inspecting="true"] #street{display:
 #solar-form label {flex:1 1 185px;min-width:0;color:var(--muted);font-size:13px}
 #solar-local {display:block;width:100%;min-height:37px;margin-top:4px;padding:4px;color:var(--text);background:#10292d;color-scheme:dark;border:1px solid var(--line);border-radius:8px;font:inherit}
 #solar-status {flex:1 0 100%}
+
+#marina-tour { pointer-events: auto; margin-bottom: 9px; }
+#marina-tour-stop { pointer-events: auto; }
 </style>
 </head>
 <body data-mode="aerial" data-panel="">
@@ -1343,6 +1346,7 @@ body[data-inspecting="true"] #hero,body[data-inspecting="true"] #street{display:
 <!-- Маршрут и уведомления -->
 <div class="hud route-bar">
   <p id="guided" hidden></p>
+  <button type="button" id="marina-tour-stop" class="chip-btn" data-action="marina-tour-stop" hidden>Остановить показ</button>
   <button type="button" class="chip-btn" data-action="cancel-route" aria-label="Сбросить маршрут" hidden>
     <svg class="icon" aria-hidden="true"><use href="#i-route-off"/></svg><span>Сбросить</span>
   </button>
@@ -1354,6 +1358,7 @@ body[data-inspecting="true"] #hero,body[data-inspecting="true"] #street{display:
   <p class="eyebrow"><span id="place-type">Район у воды</span></p>
   <h1 id="place-name">Dubai Marina</h1>
   <p id="place-desc">Рукотворный канал с набережной Marina Walk между JBR и Sheikh Zayed Road.</p>
+  <button type="button" class="btn btn-glass" id="marina-tour" data-action="marina-tour">Маршрут с закатом</button>
   <div class="hero-actions">
     <button type="button" class="btn btn-primary" data-action="walk">
       <svg class="icon" aria-hidden="true"><use href="#i-walk"/></svg><span>Пешком</span>
@@ -1590,6 +1595,7 @@ body[data-inspecting="true"] #hero,body[data-inspecting="true"] #street{display:
       <form id="solar-form">
         <label>Солнце в Дубае · UTC+4<input id="solar-local" type="datetime-local" min="1900-01-01T00:00" max="2100-12-31T23:59" required></label>
         <button class="btn btn-glass" type="submit" aria-pressed="false">Установить время</button>
+        <button class="btn btn-glass" type="button" data-action="sunset" aria-pressed="false">Показать закат за 20 секунд</button>
         <small id="solar-status" role="status"></small>
       </form>
     </fieldset>
@@ -1673,6 +1679,6 @@ body[data-inspecting="true"] #hero,body[data-inspecting="true"] #street{display:
   </div>
 </div>
 
-<script src="atlas.js?v=b3260f1e6d7e" defer></script>
+<script src="atlas.js?v=6888561569e6" defer></script>
 </body>
 </html>

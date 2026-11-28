@@ -598,7 +598,9 @@ class Water extends Mesh {
 					'sunColor': { value: new Color( 0x7F7F7F ) },
 					'sunDirection': { value: new Vector3( 0.70707, 0.70707, 0 ) },
 					'eye': { value: new Vector3() },
-					'waterColor': { value: new Color( 0x555555 ) }
+					'waterColor': { value: new Color( 0x555555 ) },
+					'boatWake': { value: Array.from({length:9},()=>new Vector4()) },
+					'boatWakeActive': { value: 0 }
 				}
 			] ),
 
@@ -639,6 +641,8 @@ class Water extends Mesh {
 				uniform vec3 sunDirection;
 				uniform vec3 eye;
 				uniform vec3 waterColor;
+				uniform vec4 boatWake[9];
+				uniform float boatWakeActive;
 
 				varying vec4 mirrorCoord;
 				varying vec4 worldPosition;
@@ -676,6 +680,33 @@ class Water extends Mesh {
 					#include <logdepthbuf_fragment>
 					vec4 noise = getNoise( worldPosition.xz * size );
 					vec3 surfaceNormal = normalize( noise.xzy * vec3( 1.5, 1.0, 1.5 ) );
+          // След идёт по уже пройденным точкам, поэтому огибает поворот за кормой.
+          float foam = 0.;
+          vec2 wakeSlope = vec2(0.);
+          vec2 wakePoint = worldPosition.xz;
+          vec2 wakeNear = abs(wakePoint-boatWake[0].xy);
+          if(boatWakeActive>.5 && max(wakeNear.x,wakeNear.y)<70.){
+            for(int i=0;i<8;i++){
+              vec4 a=boatWake[i],b=boatWake[i+1];
+              vec2 axis=b.xy-a.xy,off=wakePoint-a.xy;
+              float along=dot(off,axis)/max(dot(axis,axis),.01);
+              if(along>=0. && along<1.){
+                vec2 normalSide=normalize(vec2(axis.y,-axis.x));
+                float lateral=dot(off,normalSide);
+                float age=mix(a.z,b.z,along);
+                float strength=mix(a.w,b.w,along)*(1.-smoothstep(1.1,6.88,age));
+                float width=.58+age*mix(.55,1.40,mix(a.w,b.w,along));
+                float edge=abs(lateral)-width;
+                float crest=exp(-edge*edge/(.16+.12*age));
+                float churn=exp(-abs(lateral)*2./(1.+age*.42))*(1.-smoothstep(.7,4.,age));
+                float grain=.8+.2*sin(dot(wakePoint,vec2(5.8,7.1))+time*17.);
+                foam=max(foam,strength*grain*(.44*crest+.32*churn));
+                wakeSlope+=normalSide*strength*.47*sin(edge*4.1)*exp(-abs(edge)*.62);
+              }
+            }
+          }
+          surfaceNormal=normalize(surfaceNormal+vec3(wakeSlope.x,0.,wakeSlope.y));
+
 
 					vec3 diffuseLight = vec3(0.0);
 					vec3 specularLight = vec3(0.0);
@@ -698,6 +729,7 @@ class Water extends Mesh {
           vec3 reflected = reflectionSample * vec3(0.84,0.98,1.0);
           vec3 outgoingLight = mix(bodyTint * (0.74 + 0.26*getShadowMask()), reflected, 0.23 + 0.56*pow(1.0-theta,2.4));
           outgoingLight += specularLight * 0.34;
+          outgoingLight = mix(outgoingLight,vec3(.30,.52,.57)*(0.46+length(sunColor)*.31),clamp(foam,0.,.77));
 					gl_FragColor = vec4( outgoingLight, alpha );
 
 					#include <tonemapping_fragment>
@@ -1177,6 +1209,17 @@ function marinaMaterials(renderer) {
   const emit=standard('#ddd5b5',{emissive:'#ffcb87',emissiveIntensity:.05});
   const quay=groundMaterial('concrete','#adaaa1',0), pier=groundMaterial('oak','#b29b83',0);
   const promenade=groundMaterial('travertine','#e8d0b1',0);
+  const silverenePaving=promenade.clone();
+  silverenePaving.onBeforeCompile=shader=>{
+    shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+      vec2 slab=vec2(vMapUv.x*4.65,-vMapUv.y*3.28);
+      slab.x+=.5*mod(floor(slab.y),2.);
+      vec2 footprint=max(fwidth(slab),vec2(.001));
+      vec2 gap=1.-smoothstep(vec2(.016),vec2(.016)+footprint,abs(fract(slab+.5)-.5));
+      float joint=max(gap.x,gap.y)*(1.-smoothstep(.12,.52,max(footprint.x,footprint.y)));
+      float tone=fract(sin(dot(floor(slab),vec2(17.29,32.979)))*1937.14);
+      diffuseColor.rgb*=.96+.084*tone-.22*joint;`);
+  };
   const roadPaint=standard('#e3dcca',{roughness:.83}), yellow=standard('#ddb347');
   const sat=new T.TextureLoader().load(assetUrl('sentinel.jpg'));sat.colorSpace=T.SRGBColorSpace;sat.anisotropy=anisotropy;
   const land=groundMaterial('concrete','#dad4c6',0);
@@ -1422,7 +1465,7 @@ function marinaMaterials(renderer) {
     cityWindows.forEach(f=>f.emissiveIntensity=level*1.85);
     emit.emissiveIntensity=.05+level*3.5;
   }
-  return {tile,asphalt,paving,promenade,park,sand,stone,metal,accent,glass,emit,quay,pier,roadPaint,yellow,land,far,roof,bands,
+  return {tile,asphalt,paving,promenade,silverenePaving,park,sand,stone,metal,accent,glass,emit,quay,pier,roadPaint,yellow,land,far,roof,bands,
     facade:i=>facades[(Math.abs(Math.floor(i))||0)%facades.length],facades,architecture,setNight,finishSurfaces};
 }
 
@@ -1554,62 +1597,154 @@ function marinaLight(renderer,scene,style) {
     water.material.uniforms.sunDirection.value.copy(sunDir);
     water.material.uniforms.sunColor.value.setHex(p.color).multiplyScalar(id==='blue'?.42:1);
     water.material.uniforms.waterColor.value.setHex(id==='blue'?0x123b52:id==='day'?0x178487:0x217b81);
-    solar=position;solarSky.visible=!!solar;
-    sun.castShadow=!solar||solar.altitude>0;
-    if(solar){
-      const direct=T.MathUtils.smoothstep(solar.altitude,0,8),ambient=T.MathUtils.smoothstep(solar.altitude,-14,9);
-      sunDir.set(solar.x,solar.y,solar.z);
-      sun.intensity=3.05*direct;hemi.intensity=.25+.59*ambient;night=1-ambient;
-      const {horizon,zenith,daylight}=solarSky.material.uniforms;
-      horizon.value.setHex(0x222d4b).lerp(new T.Color(0xc7dde2),ambient);
-      zenith.value.setHex(0x071026).lerp(new T.Color(0x4e8dc3),ambient);
-      daylight.value=direct;scene.background=null;scene.fog.color.copy(horizon.value);
-      water.material.uniforms.sunDirection.value.copy(sunDir);
-      water.material.uniforms.sunColor.value.setHex(0xffedce).multiplyScalar(direct);
-    }
-    style.setNight(night);prevX=1e9;lastReflection=-Infinity;return true;
+    solar=null;solarSky.visible=false;sun.castShadow=true;
+    if(position)applySolar(position);
+    else style.setNight(night);
+    prevX=1e9;lastReflection=-Infinity;return true;
   }
-  let probe=null,dorraProbe=null;
-  // Два локальных зонда. Для стекла Dorra Bay особенно важны отражения противоположного берега.
-  function capture(){
-    const resolution=quality==='ultra'?160:96;
-    const target=new T.WebGLCubeRenderTarget(resolution,{type:T.HalfFloatType});
-    const cam=new T.CubeCamera(.8,6800,target);
-    for(const face of cam.children)face.isMarinaProbe=true;
-    const globalMats=new Set([...style.facades,style.glass,style.metal,style.accent]);
-    const localMats=new Set(),hide=[];
+  const duskHorizon=new T.Color(0x384664),dayHorizon=new T.Color(0xd3b6a2);
+  const duskZenith=new T.Color(0x152338),dayZenith=new T.Color(0x4e8dc3);
+  const duskWater=new T.Color(0x12384f),dayWater=new T.Color(0x218184);
+  const solarWarmth=new T.Color(0xff9c62),solarDay=new T.Color(0xffeed6);
+  function applySolar(position){
+    solar=position;solarSky.visible=true;scene.background=null;
+    const direct=T.MathUtils.smoothstep(solar.altitude,0,11),ambient=T.MathUtils.smoothstep(solar.altitude,-13,9);
+    sunDir.set(solar.x,solar.y,solar.z).normalize();
+    sun.castShadow=solar.altitude>0;
+    sun.intensity=3.05*direct;
+    sun.color.copy(solarWarmth).lerp(solarDay,direct);
+    hemi.intensity=.25+.59*ambient;
+    hemi.color.setRGB(.55+.34*ambient,.68+.26*ambient,1);
+    hemi.groundColor.setRGB(.17+.31*ambient,.19+.23*ambient,.25+.12*ambient);
+    night=1-ambient;
+    const {horizon,zenith,daylight}=solarSky.material.uniforms;
+    horizon.value.copy(duskHorizon).lerp(dayHorizon,ambient);
+    zenith.value.copy(duskZenith).lerp(dayZenith,ambient);
+    daylight.value=direct;scene.fog.color.copy(horizon.value);
+    scene.fog.density=.00027-.00006*ambient;
+    renderer.toneMappingExposure=1.03-.10*ambient;
+    const waterUniforms=water.material.uniforms;
+    waterUniforms.sunDirection.value.copy(sunDir);
+    waterUniforms.sunColor.value.copy(sun.color).multiplyScalar(direct);
+    waterUniforms.waterColor.value.copy(duskWater).lerp(dayWater,ambient);
+    style.setNight(night);
+    reflectionTint.value.setRGB(.58+.42*ambient,.72+.28*ambient,1);
+    ambientScale=.045+.955*Math.pow(ambient,1.32);
+    syncReflections(.38+.62*ambient);
+  }
+  // Зонды привязаны к фасадам, а не к виду камеры. Соседние комплексы остаются в кадре.
+  const probes=new Map(Object.entries({
+    dorra:[-934,44,1118],'silverene-a':[-19,51,615],'silverene-b':[46,49,594],
+    'marina-gate':[886,83,-648],'jbr-north':[47,53,-132],
+    'jbr-center':[-375,67,387],'jbr-south':[-733,62,834]
+  }).map(([id,center])=>[id,{center,objects:[],materials:new Set(),map:null}]));
+  const global={center:[260,67,138],objects:[],materials:new Set(),map:null};
+  let tracked=false,revision=0,reflectionScale=1,ambientScale=1;
+  const ambientMaterials=new Map();
+  const reflectionTint={value:new T.Color(1,1,1)};
+  function trackMaterials(){
+    if(tracked)return;
+    tracked=true;
+    for(const m of [...style.facades,style.glass,style.metal,style.accent])global.materials.add(m);
     scene.traverse(o=>{
-      if(!o.isMesh||Array.isArray(o.material))return;
-      if(o.material.userData.cityReflection)globalMats.add(o.material);
-      if(o.name?.startsWith('dorra:') && !o.name.endsWith(':detail')){
-        hide.push([o,o.visible]);
-        if(/dorra:(glass|metal|rail|pool)/.test(o.name))localMats.add(o.material);
+      if(!o.isMesh)return;
+      for(const material of [].concat(o.material)){
+        if(material.isMeshStandardMaterial&&!ambientMaterials.has(material))
+          ambientMaterials.set(material,material.envMapIntensity);
       }
+      if(Array.isArray(o.material))return;
+      const local=probes.get(o.userData.probeGroup),m=o.material;
+      if(local){
+        local.objects.push(o);
+        if(m.map?.userData.marinaGlazing||m.metalness>=.42||/^dorra:(glass|rail|pool)/.test(o.name)){
+          if(local.materials.has(m))return;
+          local.materials.add(m);
+          const compile=m.onBeforeCompile,key=m.customProgramCacheKey();
+          m.customProgramCacheKey=()=>key+'-local-reflection';
+          m.onBeforeCompile=function(shader,renderer){
+            compile.call(this,shader,renderer);
+            shader.uniforms.marinaReflectionTint=reflectionTint;
+            shader.fragmentShader='uniform vec3 marinaReflectionTint;\n'+shader.fragmentShader.replace(
+              '#include <lights_fragment_end>',
+              '#include <lights_fragment_end>\nreflectedLight.indirectSpecular *= marinaReflectionTint;');
+          };
+        }
+      }else if(m.userData.cityReflection&&!m.userData.opaqueBand)global.materials.add(m);
     });
-    const visible=water.visible,shadow=renderer.shadowMap.autoUpdate;
-    water.visible=false;renderer.shadowMap.autoUpdate=false;
-    function bake(x,y,z,mats){
-      cam.position.set(x,y,z);cam.update(renderer,scene);const next=pmrem.fromCubemap(target.texture);
-      for(const mat of mats){mat.envMap=next.texture;mat.envMapIntensity=envScale*(mat===style.glass?1.2:1);mat.needsUpdate=true;}
-      return next;
+  }
+  function syncReflections(scale){
+    reflectionScale=scale;
+    for(const [m,baseline] of ambientMaterials)m.envMapIntensity=baseline*ambientScale;
+    for(const target of [global,...probes.values()]){
+      for(const m of target.materials)m.envMapIntensity=envScale*(m===style.glass?1.2:1)*(m.envMap?scale:ambientScale);
     }
+  }
+  function assign(target,map){
+    for(const m of target.materials){
+      const first=!m.envMap;
+      m.envMap=map.texture;
+      m.envMapIntensity=envScale*reflectionScale*(m===style.glass?1.2:1);
+      if(first)m.needsUpdate=true;
+    }
+  }
+  function bake(probe,resolution){
+    const type=renderer.extensions.has('EXT_color_buffer_float')?T.HalfFloatType:T.UnsignedByteType;
+    const target=new T.WebGLCubeRenderTarget(resolution,{type});
+    const cam=new T.CubeCamera(.8,probe===global?3400:quality==='ultra'?1900:1200,target);
+    for(const face of cam.children)face.isMarinaProbe=true;
+    const hidden=probe.objects.map(o=>[o,o.visible]);
+    const waterVisible=water.visible,shadowDirty=renderer.shadowMap.needsUpdate;
+    water.visible=false;renderer.shadowMap.needsUpdate=false;
     try{
-      const next=bake(260,67,138,globalMats);probe?.dispose();probe=next;
-      if(localMats.size){
-        for(const [m] of hide)m.visible=false;
-        const local=bake(-934,44,1118,localMats);dorraProbe?.dispose();dorraProbe=local;
-      }
+      for(const [object] of hidden)object.visible=false;
+      cam.position.set(...probe.center);cam.update(renderer,scene);
+      const next=pmrem.fromCubemap(target.texture);
+      assign(probe,next);
+      probe.map?.dispose();probe.map=next;probe.revision=revision;probe.resolution=resolution;
     }finally{
-      for(const [m,value] of hide)m.visible=value;
-      water.visible=visible;renderer.shadowMap.autoUpdate=shadow;target.dispose();
+      for(const [object,visible] of hidden)object.visible=visible;
+      water.visible=waterVisible;renderer.shadowMap.needsUpdate=shadowDirty;target.dispose();
     }
+  }
+  function capture(){
+    trackMaterials();revision++;
+    if(!solar){ambientScale=1;reflectionTint.value.setRGB(1,1,1);}
+    // До первого подхода фасад отражает небо, без общего куба с изображением самого здания.
+    bake(global,quality==='ultra'?128:64);
+    for(const probe of probes.values()){
+      if(probe.map){
+        for(const m of probe.materials){m.envMap=null;m.needsUpdate=true;}
+        probe.map.dispose();probe.map=null;
+      }
+    }
+    syncReflections(solar?reflectionScale:1);
+  }
+  let nextCapture=0;
+  const viewDirection=new T.Vector3();
+  function captureNear(camera,time){
+    if(time<nextCapture)return;
+    let closest=null,best=quality==='ultra'?790:450;
+    const position=camera.position;
+    camera.getWorldDirection(viewDirection);
+    for(const probe of probes.values()){
+      if(probe.revision===revision||!probe.materials.size)continue;
+      const dx=probe.center[0]-position.x,dy=probe.center[1]-position.y,dz=probe.center[2]-position.z;
+      const d=Math.hypot(dx,.6*dy,dz);
+      if(d>190&&dx*viewDirection.x+dy*viewDirection.y+dz*viewDirection.z<-.10*d)continue;
+      if(d<best){best=d;closest=probe;}
+    }
+    if(!closest)return;
+    nextCapture=time+(quality==='ultra'?.32:1.1);
+    bake(closest,quality==='ultra'?128:64);
   }
   const lightRight=new T.Vector3(),lightUp=new T.Vector3(),anchor=new T.Vector3();
-  let prevY=1e9;
+  let prevY=1e9,lastAz=0,lastAlt=0;
   function shadows(x,z,range,y){
     if(!sun.castShadow)return;
     const span=range>1400?1550:range>650?880:range>320?510:range>170?320:220;
-    if(Math.hypot(x-prevX,z-prevZ,y-prevY)<span*.016&&prevSpan===span)return;
+    if(Math.hypot(x-prevX,z-prevZ,y-prevY)<span*.016&&prevSpan===span&&
+      (!solar||Math.hypot(sunDir.x-lastAz,sunDir.y-lastAlt)<.021))return;
+    lastAz=sunDir.x;lastAlt=sunDir.y;
     prevX=x;prevZ=z;prevY=y;prevSpan=span;
     const grid=span*2/sun.shadow.mapSize.x;
     lightRight.crossVectors(sun.up,sunDir).normalize();lightUp.crossVectors(sunDir,lightRight);
@@ -1628,7 +1763,7 @@ function marinaLight(renderer,scene,style) {
     water.setReflectionSize?.(q==='ultra'?1024:512);
     prevX=1e9;
   }
-  return {water,set,shadows,capture,preset,get night(){return night;},get solar(){return solar;},get id(){return solar?'solar':active;}};
+  return {water,set,applySolar,shadows,capture,captureNear,preset,get probes(){return [...probes].map(([id,p])=>({id,materials:p.materials.size,objects:p.objects.length,baked:!!p.map,resolution:p.map?p.resolution:0}));},get night(){return night;},get solar(){return solar;},get id(){return solar?'solar':active;}};
 }
 
 function marinaPost(renderer) {
@@ -3090,6 +3225,7 @@ function createMarinaBuildingUI(catalog,onSelect,onPose,shortName=e=>e.name) {
 function buildMarinaCity(scene,data,world,style,sites,catalog,covered) {
   const T=THREE, batches=new Map(), v2=(p)=>new T.Vector2(p[0],p[1]);
   let owner=null;
+  let silvereneCurb=null;
   const closeDetails=[],ledgeTiles=new Map(),detailStats={slabEdges:0,buildings:0};
   class Batch {
     constructor(mat,cast){
@@ -3190,6 +3326,30 @@ function buildMarinaCity(scene,data,world,style,sites,catalog,covered) {
     }
   }
   for(const q of MARINA_TRANSIT.quays)flat(bin(style.promenade,'quay',false),q.p,q.holes,1.566,tiled(3));
+  // Бордюр идёт по сухой стороне береговой линии. Проёмы, причалы и сходы не перекрываем.
+  const curb=new Batch(style.stone,false);
+  for(const a of data.areas)if(a.k==='water'){
+    for(const ring of [a.p,...a.holes||[]])for(let i=1;i<ring.length;i++){
+      const [x,z]=ring[i-1],[X,Z]=ring[i],l=Math.hypot(X-x,Z-z),mx=(x+X)*.5,mz=(z+Z)*.5;
+      if(l<1||l>28||Math.hypot(mx-4,mz-603)>81||mz<582)continue;
+      const nx=(Z-z)/l,nz=(x-X)/l;
+      const side=world.isWater(mx+nx*.65,mz+nz*.65)?-1:1;
+      if(!world.isWater(mx-nx*side*.8,mz-nz*side*.8)||world.isWater(mx+nx*side*.8,mz+nz*side*.8))continue;
+      if(world.onPier(mx,mz)||world.onPier(mx-nx*side,mz-nz*side))continue;
+      const way=world.nearbyRoad(mx,mz,'foot',2.6,1.6,r=>r.k==='steps'||r.k==='path');
+      if(way&&Math.abs(Math.sin(way.yaw)*nx+Math.cos(way.yaw)*nz)>.35)continue;
+      const A=[x+nx*side*.13,1.604,z+nz*side*.13],B=[X+nx*side*.13,1.604,Z+nz*side*.13];
+      const C=[X+nx*side*.43,1.604,Z+nz*side*.43],D=[x+nx*side*.43,1.604,z+nz*side*.43];
+      const uv=tiled(.55),face=(p,q,r,t)=>curb.quad(p,q,r,t,uv(p[0],p[2]),uv(q[0],q[2]),uv(r[0],r[2]),uv(t[0],t[2]));
+      if(side<0)face(A,D,C,B);else face(A,B,C,D);
+      const low=p=>[p[0],1.48,p[2]];
+      if(side<0){face(B,low(B),low(A),A);face(D,low(D),low(C),C);}
+      else{face(A,low(A),low(B),B);face(C,low(C),low(D),D);}
+    }
+  }
+  silvereneCurb=curb.finish();
+  if(silvereneCurb){silvereneCurb.name='Бордюр набережной Silverene';silvereneCurb.visible=false;}
+
   const arch=style.architecture, pillars=[], frames=[],rails=[];
   function unit(list,x,y,z,w,h,d,angle=0){list.push([x,y,z,w,h,d,angle,owner]);}
   const colors=new Map();
@@ -3541,7 +3701,8 @@ function buildMarinaCity(scene,data,world,style,sites,catalog,covered) {
     const driving=world.paved(r),w=classWidth(r), hw=w/2, main=world.major(r);
     const [x,z]=r.p[0],section=Math.floor(x/1100)+','+Math.floor(z/1100);
     const walkProm=/marina (walk|promenade)/i.test(r.n);
-    const deck=bin(driving?style.asphalt:walkProm?style.promenade:style.paving,section,false);
+    const silverene=walkProm&&r.p.some(([px,pz])=>Math.hypot(px-10,pz-595)<75);
+    const deck=bin(driving?style.asphalt:silverene?style.silverenePaving:walkProm?style.promenade:style.paving,section,false);
     const paint=bin(style.roadPaint,section,false);
     ribbon(deck,r,-hw,hw,driving?.012:walkProm?.045:.036,driving?4.2:3.3);
     if(main && !/motorway|trunk|_link/.test(r.k) || r.k==='residential'){
@@ -3618,6 +3779,7 @@ function buildMarinaCity(scene,data,world,style,sites,catalog,covered) {
   const architecture=Object.fromEntries(Object.entries(used).map(([tag,ids])=>[tag,ids.size]));
   function updateDetails(camera,balanced){
     let changed=false;
+    if(silvereneCurb)silvereneCurb.visible=Math.hypot(camera.x-15,camera.y-2,camera.z-605)<(balanced?95:145);
     for(const mesh of closeDetails){
       const max=balanced?325:650;
       const range=mesh.boundingBox.distanceToPoint(camera);
@@ -3689,6 +3851,7 @@ window.buildMarinaDorra = function (group, site, ground, catalog) {
     dorraSurface(T, name, geometry, material, night, time, ground);
     const mesh = new T.Mesh(geometry, material);
     mesh.name = 'dorra:' + name;
+    mesh.userData.probeGroup='dorra';
     mesh.castShadow = !rail && name !== 'pool';
     mesh.receiveShadow = !rail;
     mesh.matrixAutoUpdate = false;
@@ -3698,6 +3861,10 @@ window.buildMarinaDorra = function (group, site, ground, catalog) {
   }
 
   const beacon = dorraDetails(T, surfaces, ground, catalog, entry);
+  const close = dorraJoints(T, surfaces, ground, catalog, entry);
+  group.userData.updateDorraDetails=(camera,balanced)=>{
+    for(const mesh of close)mesh.visible=mesh.boundingBox.distanceToPoint(camera)<(balanced?42:76)+(mesh.visible?9:0);
+  };
   group.userData.setDorraNight = value => {
     night.value = T.MathUtils.clamp(Number(value) || 0, 0, 1);
     beacon.emissiveIntensity = night.value * 2.6;
@@ -3867,14 +4034,14 @@ function dorraSurface(T, name, geometry, material, night, time, ground) {
     const surfaceUV = panels ? `vec3 tangent = abs(cross(dFdx(vDorraSurface),dFdy(vDorraSurface)));
       vec2 uvPanel = tangent.y > max(tangent.x,tangent.z) ? vDorraSurface.xz / 1.30
         : vec2(tangent.x > tangent.z ? vDorraSurface.z : vDorraSurface.x,vDorraSurface.y) / vec2(1.07,1.17);`
-      : 'vec2 uvPanel = vDorraSurface.xz / .72;';
+      : 'vec2 uvPanel = vec2(.998*vDorraSurface.x+.06*vDorraSurface.z,-.06*vDorraSurface.x+.998*vDorraSurface.z) / vec2(.61,.91);';
     shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
       ${surfaceUV}
       vec2 aa = max(fwidth(uvPanel),vec2(.001));
       vec2 edge = 1.-smoothstep(vec2(.017),vec2(.017) + aa,abs(fract(uvPanel + .5)-.5));
       float seam = max(edge.x,edge.y) * (1.-smoothstep(.15,.65,max(aa.x,aa.y)));
       float shade = fract(sin(dot(floor(uvPanel),vec2(12.9898,78.233)))*43758.5453);
-      diffuseColor.rgb *= .99 + .03*shade - ${panels ? '.14' : '.19'}*seam;`);
+      diffuseColor.rgb *= .99 + .03*shade - ${panels ? '.14' : '.24'}*seam;`);
     if (name === 'slab') {
       shader.fragmentShader = shader.fragmentShader.replace('#include <aomap_fragment>', `#include <aomap_fragment>
         vec2 balcony = dorraBalcony(vDorraSurface);
@@ -3884,6 +4051,66 @@ function dorraSurface(T, name, geometry, material, night, time, ground) {
         reflectedLight.directDiffuse *= 1.-.28*soffit;`);
     }
   };
+}
+
+function dorraJoints(T,surfaces,ground,catalog,entry){
+  const box=new T.BoxGeometry(1,1,1),matrix=new T.Matrix4(),pose=new T.Object3D();
+  const groups=new Map();
+  const frame=new T.MeshStandardMaterial({color:0xb3bdc0,roughness:.34,metalness:.54});
+  const sill=new T.MeshStandardMaterial({color:0xd5d0c3,roughness:.62});
+  const clamp=new T.MeshStandardMaterial({color:0x87949b,roughness:.28,metalness:.68});
+  function pieces(name,callback){
+    const mesh=surfaces.get(name),p=mesh.geometry.attributes.position,n=mesh.geometry.attributes.normal,panels=new Map();
+    for(let i=0;i<p.count;i+=3){
+      const nx=n.getX(i),nz=n.getZ(i);
+      if(Math.abs(n.getY(i))>.015)continue;
+      const xs=[p.getX(i),p.getX(i+1),p.getX(i+2)],zs=[p.getZ(i),p.getZ(i+1),p.getZ(i+2)];
+      const u=xs.map((x,j)=>x*nz-zs[j]*nx);
+      const lo=Math.min(...u),hi=Math.max(...u),low=Math.min(p.getY(i),p.getY(i+1),p.getY(i+2));
+      const high=Math.max(p.getY(i),p.getY(i+1),p.getY(i+2)),plane=xs[0]*nx+zs[0]*nz;
+      if(low<ground+13||hi-lo<(name==='rail'?.38:.48)||hi-lo>8||high-low<.58)continue;
+      const key=[nx,nz,plane,lo,hi,low,high].map(v=>Math.round(v*200)).join('/');
+      const prev=panels.get(key);
+      if(prev){prev.count++;continue;}
+      panels.set(key,{nx,nz,plane,lo,hi,low,high,count:1});
+    }
+    for(const panel of panels.values())if(panel.count===2)callback(mesh,panel);
+  }
+  function add(parent,m,part,u,y,w,h,d,offset){
+    const {nx,nz,plane}=part,base=plane+offset;
+    pose.position.set(u*nz+base*nx,y,base*nz-u*nx);
+    pose.rotation.y=Math.atan2(nx,nz);pose.scale.set(w,h,d);pose.updateMatrix();
+    const key=[parent.id,m.id,Math.floor(y/14)].join('/');
+    if(!groups.has(key))groups.set(key,{parent,m,matrices:[]});
+    groups.get(key).matrices.push(pose.matrix.toArray());
+  }
+  for(const name of ['glass','glass_band'])pieces(name,(mesh,p)=>{
+    const {lo,hi,low,high}=p,w=hi-lo,mid=(lo+hi)*.5,height=high-low;
+    if(height>3.4)return;
+    for(const u of [lo+.027,hi-.027])add(mesh,frame,p,u,(low+high)*.5,.040,height-.098,.085,.049);
+    add(mesh,sill,p,mid,low+.032,w-.018,.050,.154,.083);
+    add(mesh,frame,p,mid,high-.026,w-.018,.040,.084,.046);
+  });
+  pieces('rail',(mesh,p)=>{
+    const {lo,hi,low,high}=p,w=hi-lo;
+    if(high-low>1.3)return;
+    add(mesh,clamp,p,(hi+lo)*.5,high-.026,w-.015,.040,.052,.023);
+    const count=Math.max(1,Math.round(w/1.48));
+    for(let j=0;j<count;j++){
+      const u=lo+w*(j+.5)/count;
+      add(mesh,clamp,p,u,low+.11,.105,.13,.094,.047);
+    }
+  });
+  return [...groups.values()].map(({parent,m,matrices})=>{
+    const mesh=new T.InstancedMesh(box,m,matrices.length);
+    matrices.forEach((v,i)=>mesh.setMatrixAt(i,matrix.fromArray(v)));
+    mesh.name='dorra:стыки и крепления';mesh.computeBoundingBox();mesh.computeBoundingSphere();
+    mesh.visible=false;mesh.receiveShadow=true;parent.add(mesh);
+    if(entry)catalog.bind(mesh,[[0,matrices.length,entry]],true);
+    const raycast=mesh.raycast;
+    mesh.raycast=function(ray,hits){if(this.visible)raycast.call(this,ray,hits);};
+    return mesh;
+  });
 }
 
 function dorraDetails(T, surfaces, ground, catalog, entry) {
@@ -4103,8 +4330,8 @@ function buildMarinaSurvey(scene,data,style,catalog,survey) {
     const count=Math.max(1,entry.floorCount),step=Math.max(.15,hi-lo)/count;
     return {count,at:i=>lo+i*step,uv:y=>(y-lo)/step};
   }
-  function groupMaterial(name,lod,opaqueBand) {
-    const key=name+'/'+lod+(opaqueBand?'/ламели':'');
+  function groupMaterial(name,lod,opaqueBand,probe) {
+    const key=[name,lod,opaqueBand,probe].join('/');
     if(mats.has(key))return mats.get(key);
     let m;
     if(opaqueBand){
@@ -4129,7 +4356,10 @@ function buildMarinaSurvey(scene,data,style,catalog,survey) {
   for(const c of meta.chunks){
     const [oid,name,lod,origin,count,indexCount,pAt,nAt,cAt,uvAt,iAt]=c;
     const part=byOsm.get(oid),entry=part&&catalog.owner(part);if(!entry)continue;
-    const category=groupMaterial(name,lod,entry.surveyGroup==='marina_gate'&&name==='wall4');
+    const group=meta.parts[oid][1];
+    const probe=group==='marina_gate'?'marina-gate':group==='jbr_towers'
+      ?entry.z<220?'jbr-north':entry.z<710?'jbr-center':'jbr-south':null;
+    const category=groupMaterial(name,lod,group==='marina_gate'&&name==='wall4',probe);
     if(!lod&&name.startsWith('wall')){
       const packed=new Int16Array(buf,start+pAt,count*3);
       let low=Infinity,high=-Infinity;
@@ -4138,8 +4368,8 @@ function buildMarinaSurvey(scene,data,style,catalog,survey) {
       extent[0]=Math.min(extent[0],origin[1]+low/40+1.5);extent[1]=Math.max(extent[1],origin[1]+high/40+1.5);wallExtents.set(entry,extent);
     }
     const tile=lod?160:1250,x=lod?origin[0]:entry.x,z=lod?origin[2]:entry.z;
-    const key=[Math.floor(x/tile),Math.floor(z/tile),lod,name].join(':');
-    if(!batches.has(key))batches.set(key,{lod,material:category,chunks:[],count:0,indices:0});
+    const key=[Math.floor(x/tile),Math.floor(z/tile),category.id].join(':');
+    if(!batches.has(key))batches.set(key,{lod,probe,material:category,chunks:[],count:0,indices:0});
     const batch=batches.get(key);batch.chunks.push({oid,part,entry,origin,count,indexCount,pAt,nAt,cAt,uvAt,iAt});batch.count+=count;batch.indices+=indexCount;
   }
   const grids=new Map([...wallExtents].map(([e,[lo,hi]])=>[e,floorGrid(e,lo,hi)]));
@@ -4181,6 +4411,7 @@ function buildMarinaSurvey(scene,data,style,catalog,survey) {
     g.setAttribute('normal',new T.BufferAttribute(norm,3,true));g.setAttribute('color',new T.BufferAttribute(color,3,true));g.setAttribute('uv',new T.BufferAttribute(uv,2));
     g.setIndex(new T.BufferAttribute(index,1));g.computeBoundingSphere();
     const mesh=new T.Mesh(g,material);mesh.name=lod?'Детали фасадов':'Архитектурная модель';mesh.castShadow=mesh.receiveShadow=true;
+    mesh.userData.probeGroup=batch.probe;
     scene.add(mesh);catalog.bind(mesh,ranges);
     if(lod){
       g.computeBoundingBox();details.push({mesh,b:g.boundingBox});
@@ -4487,12 +4718,17 @@ window.buildMarinaLandmarks = function (scene, sites, style, catalog) {
   const F = v => fc[v] || (fc[v] = style.facade(v) || style.facade(0));
   const bins = new Map(), M = new T.Matrix4(), NM = new T.Matrix3(), pv = new T.Vector3(), nv = new T.Vector3();
   const starts = new Map();
-  let site, owner, windowOcclusion;
+  let site, owner, windowOcclusion, localMaterials;
 
   // ---------- общие буферы по материалам ----------
   function bin(m) {
-    let b = bins.get(m);
-    if (!b) bins.set(m, b = { p: [], n: [], u: [], ranges: [] });
+    let scoped=m;
+    if(localMaterials){
+      if(!localMaterials.has(m))localMaterials.set(m,m.clone());
+      scoped=localMaterials.get(m);
+    }
+    let b = bins.get(scoped);
+    if (!b) bins.set(scoped, b = { p: [], n: [], u: [], ranges: [], probe:localMaterials?site.id:null });
     if (owner && !starts.has(b)) starts.set(b, b.p.length / 9);
     return b;
   }
@@ -4759,12 +4995,16 @@ window.buildMarinaLandmarks = function (scene, sites, style, catalog) {
       return fix([[-hw,-hd],[hw,-hd],[hw,hd-.42],[seam,hd+.32],[-hw,hd-.36]]);
     }
     const low=ring(0),high=ring(1),glass=F(8);
+    group.userData.silverenePodiums.set(site.omit[0],low.map(([x,z])=>{
+      pv.set(x,0,z).applyMatrix4(M);
+      return [pv.x,pv.z];
+    }));
     // RMJM подтверждает G+2. Отметка верха стилобата оценена по наружному объёму.
     wall(ST,[[0,low],[base,low]],.75,{solid:true});
     wall(glass,[[base,low],[top,high]],1,{floorHeight:floor,windowBase:base});
     // Стеклянная корона имеет собственный скат, жилые окна заканчиваются под ним.
     const peak=high.map(([x,z])=>[x,z,h-(x+hw)*.43-(hd-z)*.018]);
-    const screen=glass.clone();
+    const screen=glass.clone();screen.emissiveMap=null;screen.emissive.setHex(0);
     wall(screen,[[top,high],[h,peak]],1);
     cap(ST,peak,p=>p[2]);
     for(let i=1;i<count;i++){
@@ -4960,12 +5200,13 @@ window.buildMarinaLandmarks = function (scene, sites, style, catalog) {
     ocean: [310, 42, 38], almas: [360, 48, 42], address: [301, 137, 30], ain: [250, 242, 60], pier7: [28, 36, 36],
     emirates: [296, 40, 38], damac: [335, 55, 33], grosvenor: [210, 130, 34] };
 
-  const group = new T.Group(); group.name = 'marina-landmarks';
+  const group = new T.Group(); group.name = 'marina-landmarks';group.userData.silverenePodiums=new Map();
   for (const s of sites) {
     if (s.id === 'dorra') { window.buildMarinaDorra(group, s, Y0, catalog); continue; }
     const f = MODELS[s.id], D = DEF[s.id];
     if (!f) { console.warn('buildMarinaLandmarks: нет модели для', s.id); continue; }
     site=s; owner=catalog?.owner(s);
+    localMaterials=s.id.startsWith('silverene-')?new Map():null;
     windowOcclusion=owner && (f===jewels || f===emaarTwin) ? harbourWindowOcclusion() : null;
     M.makeRotationY(s.angle || 0).setPosition(s.x, Y0, s.z); NM.getNormalMatrix(M);
     f(s.h || D[0], s.w || D[1], s.d || D[2]);
@@ -4979,7 +5220,9 @@ window.buildMarinaLandmarks = function (scene, sites, style, catalog) {
     for (const [b, first] of starts) if (b.p.length / 9 > first) b.ranges.push([first,b.p.length / 9,owner]);
     starts.clear();
   }
+  const litSilverene=[];
   for (const [m, b] of bins) {
+    if(b.probe&&m.emissiveMap)litSilverene.push(m);
     const g = new T.BufferGeometry();
     g.setAttribute('position', new T.Float32BufferAttribute(b.p, 3));
     g.setAttribute('normal', new T.Float32BufferAttribute(b.n, 3));
@@ -4988,8 +5231,10 @@ window.buildMarinaLandmarks = function (scene, sites, style, catalog) {
     const mesh = new T.Mesh(g, m);
     if (b.ranges.length) catalog.bind(mesh,b.ranges);
     mesh.castShadow = mesh.receiveShadow = m !== EM; mesh.matrixAutoUpdate = false; mesh.name = 'landmarks:' + (m.name || m.type);
+    mesh.userData.probeGroup=b.probe;
     group.add(mesh);
   }
+  group.userData.setSilvereneNight=value=>{for(const material of litSilverene)material.emissiveIntensity=value*1.85;};
   scene.add(group);
   return group;
 };
@@ -5548,7 +5793,7 @@ window.buildMarinaProps = function buildMarinaProps(scene, data, world) {
 ;
 'use strict';
 
-window.buildMarinaFrontage = function buildMarinaFrontage(scene, data, world, style) {
+window.buildMarinaFrontage = function buildMarinaFrontage(scene, data, world, style, podiums = new Map()) {
   const T = window.THREE, ground = 1.5;
   const group = new T.Group();
   group.name = 'Dubai Marina — уличные фасады';
@@ -5734,8 +5979,9 @@ window.buildMarinaFrontage = function buildMarinaFrontage(scene, data, world, st
   const umbrella = new T.CylinderGeometry(.035, .5, 1, 8);
   const sectors = new Map();
   const pose = new T.Object3D(), color = new T.Color();
+  let silverene=false;
   function sectorAt(x, z) {
-    const key = Math.floor(x / 280) + ',' + Math.floor(z / 280);
+    const key = silverene?'Silverene':Math.floor(x / 280) + ',' + Math.floor(z / 280);
     if (!sectors.has(key)) {
       const node = new T.Group();
       node.name = 'Фасады ' + key;
@@ -5826,6 +6072,8 @@ window.buildMarinaFrontage = function buildMarinaFrontage(scene, data, world, st
   }
   const accepted = [];
   for (const b of data.buildings) {
+    const podium=podiums.get(b.osm);
+    if(podium){accepted.push({b:{...b,p:podium,h:11},retail:true,hotel:false,priority:-1});continue;}
     if ((b.min || 0) > .15 || b.h < 5.4 || (replaced.has(b.osm) && b.osm !== pier)) continue;
     const [cx, cz] = boundCenter(b);
     const hotspot = promenades.some(({ p, r }) => Math.hypot(cx - p[0], cz - p[1]) < r);
@@ -5873,6 +6121,7 @@ window.buildMarinaFrontage = function buildMarinaFrontage(scene, data, world, st
             && (h.x - x) * nx + (h.z - z) * nz > halfRoad(r) + .5);
         const approach = road || drive;
         if (!approach || Math.abs((approach.y ?? ground) - ground) > .48) continue;
+        if(silverene&&nz>-.18)continue;
         const lengthToPath = Math.max(1.1, approach.dist - (drive ? halfRoad(drive.road) + .42 : .28));
         let reachable = true;
         for (let dist = .65; dist <= lengthToPath; dist += 1.25) {
@@ -5892,8 +6141,10 @@ window.buildMarinaFrontage = function buildMarinaFrontage(scene, data, world, st
   const doors = new Map();
   function facade(f, b, retail, hotel, featured) {
     const { x, y, z, nx, nz, at, span, lead } = f, hall = !retail || b.osm === mall;
-    if (!doors.has(b.osm)) doors.set(b.osm, []);
-    doors.get(b.osm).push({x:x+nx*(lead+.06),z:z+nz*(lead+.06),nx,nz});
+    if(!silverene){
+      if (!doors.has(b.osm)) doors.set(b.osm, []);
+      doors.get(b.osm).push({x:x+nx*(lead+.06),z:z+nz*(lead+.06),nx,nz});
+    }
     const palette = retail && b.osm !== mall ? '#55544a' : hotel ? '#4b4039' : '#404c50';
     const form = local(x, y, z, nx, nz);
     const tall = b.h > 8 && b.osm !== pier;
@@ -5907,6 +6158,21 @@ window.buildMarinaFrontage = function buildMarinaFrontage(scene, data, world, st
     const sign = featured && b.osm === mall ? 20 : featured && b.osm === pier ? 21
       : !hall ? 16 + serial % 3 : 19;
     const box = form.box;
+    if(silverene){
+      // Кассеты отделки опираются на существующую стену подиума. Низ витрин остаётся на уровне входа.
+      const width=span-.28, panes=Math.max(3,Math.round(width/1.42));
+      for(let i=0;i<panes;i++){
+        const bay=width/panes,u=-width*.5+(i+.5)*bay;
+        form.panel(u,.25,lead+.026,bay-.082,3.01,4+(serial+i)%4,12+(serial+i)%4);
+        box(frame,u,.235,lead+.061,bay-.09,.058,.168,'#aca597');
+        box(frame,u+bay*.5,1.76,lead+.073,.052,3.12,.156,'#4d595a');
+        counts.panes++;
+      }
+      box(frame,0,3.30,lead+.078,width+.15,.12,.18,'#677575');
+      box(lamp,0,3.223,lead+.114,width-.25,.027,.065);
+      counts.frontages++;counts.entries++;counts.lamps++;
+      return;
+    }
     function pane(start, end, bottom, top, variant) {
       form.panel((start + end) / 2, bottom, lead + .018, end - start, top - bottom, variant, variant + 8);
       counts.panes++;
@@ -6005,6 +6271,7 @@ window.buildMarinaFrontage = function buildMarinaFrontage(scene, data, world, st
 
   const districtBudget = new Map();
   for (const { b, retail, hotel } of accepted) {
+    silverene=podiums.has(b.osm);
     const cap = b.osm === mall ? 5 : b.osm === pier ? 2 : b.osm === 'w1047285318' ? 4 : retail ? 2 : 1;
     let built = 0;
     for (const f of candidates(b, retail, hotel)) {
@@ -6021,6 +6288,7 @@ window.buildMarinaFrontage = function buildMarinaFrontage(scene, data, world, st
     if (built) counts.buildings++;
   }
 
+  silverene=false;
   const occupied = [];
   function safeFurniture(x, z, margin) {
     return free(x, z) && clearCar(x, z, margin + .50) && clearPath(x, z, margin + .65);
@@ -6163,7 +6431,11 @@ window.buildMarinaFrontage = function buildMarinaFrontage(scene, data, world, st
     for (const pool of pools) pool.visible = level > .02;
   }
   setNight(0);
-  return { setNight, counts, doors };
+  const close=sectors.get('Silverene')?.node;
+  function updateCamera(camera,balanced){
+    if(close)close.visible=Math.hypot(camera.x-12,camera.y-5,camera.z-620)<(balanced?155:235);
+  }
+  return { setNight, counts, doors, updateCamera, get silverenePanes(){return sectors.get('Silverene')?.panels.p.length/18||0;} };
 };
 
 ;
@@ -7241,6 +7513,109 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
 };
 
 ;
+'use strict';
+
+function createMarinaBoat(scene, world, water) {
+  const T=THREE,boat=new T.Group();
+  boat.name='Катер на канале';
+  const points=[
+    [-51,548],[-33,499],[-29,443],[-30,393],[0,363],[65,359],[93,382],
+    [52,418],[15,465],[-2,499],[-15,529],[-22,559],[-36,574],[-52,566]
+  ];
+  const track=new T.CatmullRomCurve3(points.map(([x,z])=>new T.Vector3(x,0,z)),true);
+  track.arcLengthDivisions=720;
+  const length=track.getLength(),count=Math.ceil(length),sample=new T.Vector3(),direction=new T.Vector3();
+  const timings=[0],speeds=[];
+  const safe=(x,z)=>world.isWater(x,z)&&!world.onPier(x,z)&&!world.insideBuilding(x,z);
+  let enabled=true;
+  for(let i=0;i<count;i++){
+    track.getPointAt(i/count,sample);
+    let clearance=22;
+    for(let ring=3;ring<=21;ring+=3){
+      let clear=true;
+      for(let a=0;a<8;a++){
+        const angle=a*Math.PI*.25;
+        if(!safe(sample.x+ring*Math.cos(angle),sample.z+ring*Math.sin(angle))){clear=false;break;}
+      }
+      if(!clear){clearance=ring;break;}
+    }
+    if(!safe(sample.x,sample.z)||clearance<=6)enabled=false;
+    const speed=3.2+5*T.MathUtils.smoothstep(clearance,9,22)*T.MathUtils.smoothstep(545-sample.z,0,135);
+    speeds.push(speed);
+    timings.push(timings[i]+length/count/speed);
+  }
+  const duration=timings[count];
+  const white=new T.MeshStandardMaterial({color:0xf0ede2,roughness:.28,metalness:.12});
+  const glass=new T.MeshStandardMaterial({color:0x2c505e,roughness:.19,metalness:.52});
+  const deck=new T.MeshStandardMaterial({color:0xb69170,roughness:.74});
+  const bunks=new T.MeshStandardMaterial({color:0xdbd5c7,roughness:.8});
+  function profile(rows,mat){
+    const vertices=[];
+    for(const [z,y,w,h] of rows)vertices.push(-w,y,z,w,y,z,w*.59,y-h,z,-w*.59,y-h,z);
+    const indices=[0,1,2,0,2,3];
+    for(let i=4;i<vertices.length/3;i+=4)for(let j=0;j<4;j++){
+      const a=i-4+j,b=i-4+(j+1)%4,c=i+(j+1)%4,d=i+j;
+      indices.push(a,c,b,a,d,c);
+    }
+    const end=4*(rows.length-1);
+    indices.push(end,end+2,end+1,end,end+3,end+2);
+    const g=new T.BufferGeometry();
+    g.setAttribute('position',new T.Float32BufferAttribute(vertices,3));
+    g.setIndex(indices);
+    const solid=g.toNonIndexed();
+    solid.computeVertexNormals();
+    boat.add(new T.Mesh(solid,mat));
+    g.dispose();
+  }
+  profile([[-4.7,.56,1.50,.96],[-2.2,.79,1.85,1.19],[1.95,.96,1.7,1.26],[5.1,1.22,.025,1.05]],white);
+  const box=new T.BoxGeometry(1,1,1);
+  function fit(mat,x,y,z,w,h,l){
+    const m=new T.Mesh(box,mat);
+    m.position.set(x,y,z);m.scale.set(w,h,l);boat.add(m);
+  }
+  fit(deck,0,.79,-2.96,2.64,.05,2.65);
+  fit(bunks,0,1.07,-3.78,2.25,.43,.52);
+  profile([[-2.15,1.92,1.33,1.10],[.93,1.97,1.23,1.18],[2.17,1.41,.73,.48]],glass);
+  fit(white,0,2.01,-.72,2.75,.16,3.0);
+  fit(white,.42,2.50,-1.22,.052,.93,.052);
+  for(const side of [-1,1]){
+    fit(white,side*1.3,1.43,-1.48,.096,1.03,.12);
+    fit(white,side*1.41,1.16,1.30,.055,.055,2.4);
+  }
+  const lamp=new T.MeshStandardMaterial({color:0xffe1ba,emissive:0xffba71,emissiveIntensity:0});
+  fit(lamp,0,2.17,-.41,.27,.10,.2);
+  scene.add(boat);
+  boat.visible=enabled;
+  const foam=water.material.uniforms.boatWake.value;
+  const trailing=new T.Vector3();
+  function pose(time,out,dir){
+    const t=((time%duration)+duration)%duration;
+    let lo=0,hi=count;
+    while(hi-lo>1){
+      const mid=(lo+hi)>>1;
+      if(timings[mid]<=t)lo=mid;else hi=mid;
+    }
+    const u=(lo+(t-timings[lo])/(timings[lo+1]-timings[lo]))/count;
+    track.getPointAt(u,out);track.getTangentAt(u,dir);
+    return speeds[lo];
+  }
+  function update(time,night){
+    if(!enabled)return;
+    const speed=pose(time,sample,direction);
+    boat.position.set(sample.x,.11+.07*Math.sin(time*2.2),sample.z);
+    boat.rotation.set(.016*Math.sin(time*2.2),Math.atan2(direction.x,direction.z),.026*Math.cos(time*1.62),'YXZ');
+    lamp.emissiveIntensity=.08+3.2*night;
+    for(const [i,p] of foam.entries()){
+      const age=i*.86, strength=pose(time-age,trailing,direction);
+      p.set(trailing.x-direction.x*4.5,trailing.z-direction.z*4.5,age,
+        .40+.60*T.MathUtils.smoothstep(strength,3.2,8.2));
+    }
+    water.material.uniforms.boatWakeActive.value=speed>0?1:0;
+  }
+  return {boat,enabled,length,duration,pose,update,samples:count};
+}
+
+;
 (() => {
   const arterial = /^(motorway|trunk|primary|secondary|tertiary)(?:_link)?$/;
   const street = /^(residential|living_street|unclassified|service|road|track)$/;
@@ -8043,7 +8418,7 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
     const pickable=scene.children.slice(pickStart),picker=new T.Raycaster();
     stage('Яхты и набережные…',51);await yieldUI();
     const props=buildMarinaProps(scene,data,world);
-    const frontage=buildMarinaFrontage(scene,data,world,style);
+    const frontage=buildMarinaFrontage(scene,data,world,style,monuments.userData.silverenePodiums);
     if(monuments.userData.dorraDoor)frontage.doors.set('w913588360',[monuments.userData.dorraDoor]);
     const entries=createMarinaEntrances(data,world,frontage,MARINA_BUILDING_DETAIL);
     const marker=createMarinaDoor(scene,style,catalog,pickable);
@@ -8051,6 +8426,7 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
     stage('Уличное движение…',67);await yieldUI();
     const traffic=MarinaTraffic(data,world.roadY),fleet=createMarinaFleet(scene,traffic);
     fleet.playerCar.visible=false;
+    const passage=createMarinaBoat(scene,world,light.water);
     const postShadow=()=>{renderer.shadowMap.needsUpdate=true;};
     const mobile=window.matchMedia('(pointer:coarse)').matches;
     let quality=mobile?'balanced':'ultra',mode='aerial',panel='',selected=places[0],placeIndex=0,route=null,goal=null;
@@ -8061,6 +8437,7 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
     const drone={theta:0,phi:0,r:1,auto:false};
     let aerialTarget=null,chaseYaw=0,headTurn=0,chasePitch=.2,turnWheel=0,walkDistance=0;
     let mapChoice=selected,feedbackAt=0,windowView=null,pickHint=null;
+    let sunset=null,tour=null,boatOffset=0;
     const clamp=(v,lo,hi)=>Math.min(hi,Math.max(lo,v));
     const angle=v=>Math.atan2(Math.sin(v),Math.cos(v));
     const mixAngle=(a,b,t)=>a+angle(b-a)*t;
@@ -8072,7 +8449,7 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
     let cardEntry=null,hovered=null,labelsOn=true,directorySelection=false,studyView=false;
     const labels=createMarinaLabels(catalog,pins,camera,canvas);
     const controls=createExplorerControls({surface,view:canvas,camera,focus,drone,bounds:data.bounds,
-      active:()=>mode==='aerial'&&!panel,refresh:()=>cameraAerial(0),interrupt:()=>{aerialTarget=null;},
+      active:()=>mode==='aerial'&&!panel,refresh:()=>cameraAerial(0),interrupt:()=>{stopTour();aerialTarget=null;},
       labelAt:e=>labels.entryAtElement(e),pick:pickAt,hover:updateHover});
     function pinLayout(force=false){
       if(!panel)labels.update({mode,selected:cardEntry,hover:hovered,force});
@@ -8097,6 +8474,7 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
       catalog.highlight(studyView?null:cardEntry,studyView&&hovered===cardEntry?null:hovered);pinLayout(true);
     }
     function pickAt(x,y,entry){
+      stopTour();
       if(entry){inspect(entry,null);return;}
       const hit=intersectAt(x,y);
       if(hit.entry)inspect(hit.entry,hit.hit.point);else dismiss();
@@ -8251,6 +8629,7 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
     }
     function resetInput(){keys.clear();fingers.clear();touchLook=false;turnWheel=0;controls.stop();}
     function setPanel(value){
+      if(value)stopTour();
       resetInput();panel=value;body.dataset.panel=value;
       for(const n of ['map','settings','places'])by(n+'-panel').hidden=n!==value;
       if(value==='map'){
@@ -8483,11 +8862,98 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
       if(!position){solarStatus.textContent='Введите дату и время Дубая.';return;}
       setLight(position.altitude>0?'day':'blue',{...position,local:solarInput.value});
     });
+    const sunsetButton=document.querySelector('[data-action="sunset"]');
+    const localAt=utc=>new Date(utc+14400000).toISOString().slice(0,16);
+    function syncCityLight(){
+      reconstruction.setNight(light.night);monuments.userData.setDorraNight?.(light.night);
+      monuments.userData.setSilvereneNight(light.night);
+      props.setNight(light.night);fleet.setNight(light.night);tram.setNight(light.night);frontage.setNight(light.night);
+    }
+    function clearSunset(){
+      sunset=null;sunsetButton.setAttribute('aria-pressed','false');
+    }
+    function startSunset(){
+      if(lightChanging)return false;
+      const date=solarInput.value.slice(0,10)||localAt(Date.now()).slice(0,10);
+      const noon=Date.parse(date+'T12:00:00+04:00');
+      if(!Number.isFinite(noon))return false;
+      function eveningAt(altitude){
+        let lo=noon,hi=noon+11*3600000;
+        while(hi-lo>1000){
+          const mid=(hi+lo)*.5;
+          if(marinaSolarPosition(localAt(mid)).altitude>altitude)lo=mid;
+          else hi=mid;
+        }
+        return Math.ceil(hi/60000)*60000;
+      }
+      sunset={start:eveningAt(13),end:eveningAt(-9),progress:0,traffic:'day',shown:-1};
+      traffic.setTime('day');setPanel('');
+      sunsetButton.setAttribute('aria-pressed','true');
+      document.querySelectorAll('[data-light]').forEach(b=>b.setAttribute('aria-pressed','false'));
+      solarForm.querySelector('button[type="submit"]').setAttribute('aria-pressed','true');
+      updateSunset(0);
+      return true;
+    }
+    function updateSunset(dt){
+      const state=sunset;
+      state.progress=Math.min(20,state.progress+dt);
+      const utc=state.start+(state.end-state.start)*state.progress/20;
+      const local=localAt(utc),a=marinaSolarPosition(local),b=marinaSolarPosition(localAt(utc+60000)),f=(utc%60000)/60000;
+      const position={local};
+      for(const field of ['x','y','z','altitude'])position[field]=a[field]+(b[field]-a[field])*f;
+      position.bearing=(Math.atan2(position.x,-position.z)*180/Math.PI+360)%360;
+      light.applySolar(position);syncCityLight();
+      if(state.traffic==='day'&&position.altitude<-4){traffic.setTime('blue');state.traffic='blue';}
+      if(state.shown!==Math.floor(state.progress)||state.progress===20){
+        state.shown=Math.floor(state.progress);
+        solarInput.value=local;
+        solarStatus.textContent=local.replace('T',' ')+' · высота '+position.altitude.toFixed(1)+'° · '+state.shown+' / 20 с';
+      }
+      if(state.progress===20)clearSunset();
+    }
+    const tourButton=by('marina-tour-stop'),boatTarget=new T.Vector3(),boatDirection=new T.Vector3();
+    const promenade={id:'silverene-promenade',name:'Набережная Silverene',type:'Маршрут с закатом',x:12,z:600,
+      eye:[50,5.6,587],target:[-8,7.3,608]};
+    const terrace={id:'dorra-terrace-tour',name:'Терраса Dorra Bay',type:'Маршрут с закатом',x:-971,z:1058,
+      eye:[-990,71.9,1056],target:[-1100,72,1097]};
+    function stopTour(){
+      if(!tour)return;
+      if(tour.phase==='sunset')clearSunset();
+      tour=null;tourButton.hidden=true;aerialTarget=null;
+    }
+    function startTour(){
+      if(lightChanging)return;
+      stopTour();clearSunset();clearRoute();
+      if(!passage.enabled){note('Маршрут катера недоступен в этой модели.');return;}
+      aerial(promenade);boatOffset=12-elapsed;tour={phase:'promenade',age:0};
+      tourButton.hidden=false;note('Набережная Silverene');
+    }
+    function updateTour(dt){
+      tour.age+=dt;
+      const age=tour.age;
+      if(tour.phase==='promenade'&&age>=5){
+        tour={phase:'boat',age:0};
+        showPlace({id:'boat',name:'Проход катера',type:'Маршрут с закатом',x:-20,z:520});
+        note('Проход катера');
+      }
+      if(tour.phase==='boat'){
+        if(tour.age>=8){
+          aerial(terrace);tour={phase:'sunset',age:0};startSunset();note('Закат с террасы Dorra Bay');
+          return;
+        }
+        passage.pose(elapsed+boatOffset,boatTarget,boatDirection);
+        aerialPose({id:'boat',target:[boatTarget.x,1,boatTarget.z],
+          eye:[boatTarget.x-boatDirection.x*23+boatDirection.z*15,11,boatTarget.z-boatDirection.z*23-boatDirection.x*15]},true);
+      }else if(tour.phase==='sunset'&&!sunset){
+        stopTour();note('Маршрут завершён');
+      }
+    }
     let lightingRequest=0;
     async function setLight(id,solar=null){
+      stopTour();clearSunset();
       const request=++lightingRequest;
       lightChanging=true;try{if(await light.set(id,solar)){
-        reconstruction.setNight(light.night);monuments.userData.setDorraNight?.(light.night);props.setNight(light.night);fleet.setNight(light.night);tram.setNight(light.night);frontage.setNight(light.night);traffic.setTime(id);light.capture();postShadow();
+        syncCityLight();traffic.setTime(id);light.capture();postShadow();
         document.querySelectorAll('[data-light]').forEach(b=>b.setAttribute('aria-pressed',String(!solar&&b.dataset.light===id)));
         solarForm.querySelector('button').setAttribute('aria-pressed',String(!!solar));
         solarStatus.textContent=solar
@@ -8514,6 +8980,10 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
       renderer.setSize(w,h,false);camera.aspect=w/h;if(mode==='aerial')camera.fov=camera.aspect<.85?65:50;camera.updateProjectionMatrix();nav.draw();
     }
     function handleAction(id){
+      if(id==='marina-tour'){startTour();return;}
+      if(id==='marina-tour-stop'){stopTour();return;}
+      if(id==='sunset'){stopTour();if(sunset)clearSunset();else startSunset();return;}
+      if(tour)stopTour();
       if(id==='close'){setPanel('');return;}
       if(id==='clear-building'){dismiss();aerialTarget=null;return;}
       if(id==='selected-on-map'&&cardEntry){directorySelection=false;setPanel('map');return;}
@@ -8555,7 +9025,7 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
     });
     document.addEventListener('click',e=>{
       const b=e.target.closest('button,[data-action]');if(!b)return;
-      if(b.dataset.dorra){dorraView(b.dataset.dorra);return;}
+      if(b.dataset.dorra){stopTour();dorraView(b.dataset.dorra);return;}
       if(b.dataset.action)handleAction(b.dataset.action);else if(b.dataset.light)setLight(b.dataset.light);else if(b.dataset.quality)setQuality(b.dataset.quality);
     });
     const aliases={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',Space:'space',ShiftLeft:'shift',ShiftRight:'shift',KeyW:'w',KeyA:'a',KeyS:'s',KeyD:'d'};
@@ -8563,11 +9033,11 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
       if(e.ctrlKey||e.metaKey||e.altKey||e.target.isContentEditable||/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;
       const isButton=/BUTTON|A|SUMMARY/.test(e.target.tagName);
       if(isButton&&(e.code==='Space'||e.code==='Enter')&&panel)return;
-      if(e.code==='Escape'){if(panel)setPanel('');else if(cardEntry){dismiss();aerialTarget=null;}else if(mode!=='aerial')aerial(selected);return;}
+      if(e.code==='Escape'){if(tour){stopTour();return;}if(panel)setPanel('');else if(cardEntry){dismiss();aerialTarget=null;}else if(mode!=='aerial')aerial(selected);return;}
       if(e.repeat&&!aliases[e.code])return;
       if(e.code==='KeyM'){e.preventDefault();handleAction('map');return;}
       if(panel)return;
-      if(aliases[e.code]){keys.add(aliases[e.code]);e.preventDefault();}
+      if(aliases[e.code]){stopTour();keys.add(aliases[e.code]);e.preventDefault();}
       if(e.code==='KeyV')handleAction(mode==='drive'?'walk':'drive');
       if(e.code==='KeyH')handleAction('settings');
     });
@@ -8580,11 +9050,13 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
     });
     document.querySelectorAll('[data-navigate]').forEach(b=>b.addEventListener('click',()=>{
       if(mode!=='aerial'||panel)return;
+      stopTour();
       if(b.dataset.navigate==='home'){aerial(places[0],true);return;}
       controls.nudge(b.dataset.navigate);
     }));
     by('toggle-pins').addEventListener('click',()=>{labelsOn=!labelsOn;labels.setEnabled(labelsOn);by('toggle-pins').setAttribute('aria-pressed',String(labelsOn));pinLayout(true);});
     pins.addEventListener('click',e=>{
+      stopTour();
       const entry=labels.entryAtElement(e.target);
       if(entry&&!panel&&(e.detail===0||mode!=='aerial'))inspect(entry,null);
     });
@@ -8624,7 +9096,10 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
     canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();failView(new Error('Графический контекст потерян.'));});
     canvas.addEventListener('webglcontextrestored',()=>location.reload());
     function update(dt,force=false){
-      dt=clamp(dt||0,0,.1);elapsed+=dt;
+      const realDt=Math.max(0,dt||0);
+      dt=clamp(realDt,0,.1);elapsed+=dt;
+      if(sunset)updateSunset(realDt);
+      if(tour&&!panel)updateTour(realDt);
       if(!panel){
         const steps=Math.max(1,Math.ceil(dt/.025));
         for(let i=0;i<steps;i++)stepPlayer(dt/steps);
@@ -8634,12 +9109,16 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
       if(panel&&!force)return;
       if(city.updateDetails(camera.position,quality==='balanced'))postShadow();
       if(reconstruction.update(camera.position,quality==='balanced'))postShadow();
+      frontage.updateCamera(camera.position,quality==='balanced');
       props.updateCamera(camera.position,quality==='balanced');tram.update(elapsed);fleet.update(elapsed,camera.position);
       if(typeof monuments?.update==='function')monuments.update(elapsed);
       monuments.userData.updateDorra?.(elapsed);
+      monuments.userData.updateDorraDetails?.(camera.position,quality==='balanced');
+      passage.update(elapsed+boatOffset,light.night);
+      light.captureNear(camera,elapsed);
       light.water.material.uniforms.time.value=elapsed*.46;
       const shadowCenter=mode==='aerial'?focus:p;light.shadows(shadowCenter.x,shadowCenter.z,mode==='aerial'?drone.r:0,mode==='aerial'?focus.y:p.y);
-      if(heldFrame++%8===0)postShadow();
+      if(heldFrame++%8===0&&!sunset)postShadow();
       renderer.info.reset();post.draw(scene,camera);pinLayout();
       if(engine){engine.frequency.value=35+Math.abs(p.speed)*3.8;engineGain.gain.value=mode==='drive'?.065:0;}
       if(elapsed-lastUi>.19||lastUi<0||force){
@@ -8656,12 +9135,12 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
       }}
     }
     function frame(ms){
-      const dt=prevTime?Math.min((ms-prevTime)/1000,.1):.016;prevTime=ms;
+      const dt=prevTime?(ms-prevTime)/1000:.016;prevTime=ms;
       if(!document.hidden)update(dt);
       requestAnimationFrame(frame);
     }
     stage('Свет и отражения…',88);
-    await skyReady;setQuality(quality);reconstruction.setNight(light.night);monuments.userData.setDorraNight?.(light.night);props.setNight(light.night);fleet.setNight(light.night);tram.setNight(light.night);frontage.setNight(light.night);traffic.setTime('gold');
+    await skyReady;setQuality(quality);syncCityLight();traffic.setTime('gold');
     document.querySelector('[data-light="gold"]')?.setAttribute('aria-pressed','true');
     aerial(selected);
     const launchOptions=new URLSearchParams(location.search);
@@ -8678,6 +9157,6 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
     if(surveyData.unavailable)note('Подробная геометрия не загрузилась. Показаны резервные модели по контурам.');
     // Стенд вызывает тот же игровой цикл в своей фоновой вкладке, где Chrome приостанавливает rAF.
     window.MarinaAtlas={ready:true,update,camera,renderer,scene,world,catalog,labels,entries,traffic,places,nav,props,city,light,tram,frontage,
-      reconstruction,screenEntry:(x,y)=>intersectAt(x,y).entry?.id||null,get inspected(){return cardEntry;},get overview(){return {x:focus.x,y:focus.y,z:focus.z,...drone};},get windowView(){return windowView;},get mode(){return mode;},get player(){return {...p};},get selection(){return selected;},get route(){return route;},get quality(){return quality;},get busy(){return lightChanging;}};
+      reconstruction,passage,get tour(){return tour?.phase||null;},get sunset(){return sunset?.progress??null;},screenEntry:(x,y)=>intersectAt(x,y).entry?.id||null,get inspected(){return cardEntry;},get overview(){return {x:focus.x,y:focus.y,z:focus.z,...drone};},get windowView(){return windowView;},get mode(){return mode;},get player(){return {...p};},get selection(){return selected;},get route(){return route;},get quality(){return quality;},get busy(){return lightChanging;}};
   }catch(err){failView(err);}
 })();
