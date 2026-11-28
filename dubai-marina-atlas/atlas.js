@@ -899,8 +899,8 @@ const MARINA_SITES=[
   makeSite('damac',762,-708,335,57,34,132.3,'574137549'),
   makeSite('grosvenor',596,-490,210,33,31,138.7,'532586638'),
   makeSite('grosvenor',534,-568,210,33,31,49.3,'532586640'),
-  {...makeSite('silverene-a',-18.354,647.247,153,22.52,37.47,-128.06,'195258180'),name:'Silverene Tower A',documentedFloors:34},
-  {...makeSite('silverene-b',47.160,621.228,122,22.58,37.34,-168.20,'489522440'),name:'Silverene Tower B',documentedFloors:25},
+  {...makeSite('silverene-a',-18.354,647.247,153,22.52,37.47,-128.06,'195258180'),name:'Silverene Tower A',documentedFloors:34,podiumTop:11},
+  {...makeSite('silverene-b',47.160,621.228,122,22.58,37.34,-168.20,'489522440'),name:'Silverene Tower B',documentedFloors:25,podiumTop:11},
   makeSite('dorra',-956,1050,84,78,45,0,'913588360 195958214'),
   // Габариты и центры по ориентированным прямоугольникам OSM. У The Jewels локальная +Z смотрит на канал.
   // Для The Jewels сохранены 90 м по OSM. В каталоге CTBUH указаны 60 м.
@@ -1428,6 +1428,26 @@ function marinaMaterials(renderer) {
 
 ;
 'use strict';
+function marinaSolarPosition(local){
+  // Формулы NOAA для склонения и уравнения времени. Строка интерфейса всегда относится к UTC+4.
+  if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(local))return null;
+  const utc=Date.parse(local+':00+04:00');
+  if(!Number.isFinite(utc)||new Date(utc+14400000).toISOString().slice(0,16)!==local)return null;
+  const d=Math.PI/180,t=(utc/86400000+2440587.5-2451545)/36525;
+  const l=((280.46646+t*(36000.76983+t*.0003032))%360)*d;
+  const m=(357.52911+t*(35999.05029-.0001537*t))*d,e=.016708634-t*(.000042037+.0000001267*t);
+  const correction=(1.914602-t*(.004817+.000014*t))*Math.sin(m)+(.019993-.000101*t)*Math.sin(2*m)+.000289*Math.sin(3*m);
+  const omega=(125.04-1934.136*t)*d,lambda=l+(correction-.00569)*d-.00478*d*Math.sin(omega);
+  const ob=(23+(26+(21.448-t*(46.815+t*(.00059-t*.001813)))/60)/60+.00256*Math.cos(omega))*d;
+  const decl=Math.asin(Math.sin(ob)*Math.sin(lambda)),y=Math.tan(ob/2)**2;
+  const eq=4/d*(y*Math.sin(2*l)-2*e*Math.sin(m)+4*e*y*Math.sin(m)*Math.cos(2*l)-.5*y*y*Math.sin(4*l)-1.25*e*e*Math.sin(2*m));
+  const utcMinutes=((utc/60000)%1440+1440)%1440;
+  const hour=(((utcMinutes+eq+4*55.14)%1440+1440)%1440/4-180)*d,lat=25.08*d;
+  // Горизонтальная система атласа: x — восток, y — вверх, z — юг.
+  const x=-Math.cos(decl)*Math.sin(hour),z=Math.sin(lat)*Math.cos(decl)*Math.cos(hour)-Math.cos(lat)*Math.sin(decl);
+  const up=Math.sin(lat)*Math.sin(decl)+Math.cos(lat)*Math.cos(decl)*Math.cos(hour);
+  return {x,y:up,z,altitude:Math.asin(up)/d,bearing:(Math.atan2(x,-z)/d+360)%360};
+}
 function marinaLight(renderer,scene,style) {
   const T=THREE, pmrem=new T.PMREMGenerator(renderer), skies=new Map();
   const hemi=new T.HemisphereLight(0xfff0dc,0x887963,.8);
@@ -1443,7 +1463,27 @@ function marinaLight(renderer,scene,style) {
     blue:{color:0xa4bedf,sky:0xccddff,ground:0x626879,fog:0x586988,density:.00027,intensity:.26,fill:.31,exposure:1.02,bg:.36,env:.53,night:1,az:2.9,minAlt:.18}
   };
   const sunDir=new T.Vector3(-.86,.30,-.32).normalize();
-  let token=0,active='gold',night=.08,quality='ultra',prevX=1e9,prevZ=1e9,prevSpan=0,envScale=1;
+  const solarSky=new T.Mesh(new T.SphereGeometry(1,32,16),new T.ShaderMaterial({
+    side:T.BackSide,depthWrite:false,depthTest:false,
+    uniforms:{sunDir:{value:sunDir},horizon:{value:new T.Color()},zenith:{value:new T.Color()},daylight:{value:0}},
+    vertexShader:`varying vec3 ray;void main(){
+      ray=position;
+      vec4 clip=projectionMatrix*vec4(mat3(viewMatrix)*position,1.);
+      gl_Position=clip.xyww;
+    }`,
+    fragmentShader:`varying vec3 ray;uniform vec3 sunDir,horizon,zenith;uniform float daylight;
+    void main(){
+      vec3 v=normalize(ray);
+      vec3 sky=mix(horizon,zenith,pow(clamp(v.y,0.,1.),.55));
+      float disk=smoothstep(.999988,.999991,dot(v,sunDir))*step(0.,v.y);
+      gl_FragColor=vec4(sky+daylight*(vec3(10.,7.,4.)*disk+vec3(.52,.27,.1)*pow(max(0.,dot(v,sunDir)),18.)),1.);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+    }`
+  }));
+  solarSky.name='Расчётное небо';solarSky.renderOrder=-1000;solarSky.frustumCulled=false;solarSky.visible=false;
+  scene.add(solarSky);
+  let solar=null,token=0,active='gold',night=.08,quality='ultra',prevX=1e9,prevZ=1e9,prevSpan=0,envScale=1;
   // Периодическая карта нормалей складывает гребни нескольких направлений без швов.
   function ripples(){
     const n=256,bytes=new Uint8Array(n*n*4),tau=Math.PI*2;
@@ -1502,7 +1542,7 @@ function marinaLight(renderer,scene,style) {
     },undefined,reject));
     skies.set(id,job);return job;
   }
-  async function set(id){
+  async function set(id,position=null){
     const seq=++token,p=setting[id];
     const sky=await loadSky(id);if(seq!==token)return false;
     active=id;night=p.night;envScale=p.env;
@@ -1514,6 +1554,19 @@ function marinaLight(renderer,scene,style) {
     water.material.uniforms.sunDirection.value.copy(sunDir);
     water.material.uniforms.sunColor.value.setHex(p.color).multiplyScalar(id==='blue'?.42:1);
     water.material.uniforms.waterColor.value.setHex(id==='blue'?0x123b52:id==='day'?0x178487:0x217b81);
+    solar=position;solarSky.visible=!!solar;
+    sun.castShadow=!solar||solar.altitude>0;
+    if(solar){
+      const direct=T.MathUtils.smoothstep(solar.altitude,0,8),ambient=T.MathUtils.smoothstep(solar.altitude,-14,9);
+      sunDir.set(solar.x,solar.y,solar.z);
+      sun.intensity=3.05*direct;hemi.intensity=.25+.59*ambient;night=1-ambient;
+      const {horizon,zenith,daylight}=solarSky.material.uniforms;
+      horizon.value.setHex(0x222d4b).lerp(new T.Color(0xc7dde2),ambient);
+      zenith.value.setHex(0x071026).lerp(new T.Color(0x4e8dc3),ambient);
+      daylight.value=direct;scene.background=null;scene.fog.color.copy(horizon.value);
+      water.material.uniforms.sunDirection.value.copy(sunDir);
+      water.material.uniforms.sunColor.value.setHex(0xffedce).multiplyScalar(direct);
+    }
     style.setNight(night);prevX=1e9;lastReflection=-Infinity;return true;
   }
   let probe=null,dorraProbe=null;
@@ -1554,6 +1607,7 @@ function marinaLight(renderer,scene,style) {
   const lightRight=new T.Vector3(),lightUp=new T.Vector3(),anchor=new T.Vector3();
   let prevY=1e9;
   function shadows(x,z,range,y){
+    if(!sun.castShadow)return;
     const span=range>1400?1550:range>650?880:range>320?510:range>170?320:220;
     if(Math.hypot(x-prevX,z-prevZ,y-prevY)<span*.016&&prevSpan===span)return;
     prevX=x;prevZ=z;prevY=y;prevSpan=span;
@@ -1574,7 +1628,7 @@ function marinaLight(renderer,scene,style) {
     water.setReflectionSize?.(q==='ultra'?1024:512);
     prevX=1e9;
   }
-  return {water,set,shadows,capture,preset,get night(){return night;},get id(){return active;}};
+  return {water,set,shadows,capture,preset,get night(){return night;},get solar(){return solar;},get id(){return solar?'solar':active;}};
 }
 
 function marinaPost(renderer) {
@@ -2037,7 +2091,7 @@ window.createMarinaBuildings = function (data, world, sites, detail = {}) {
             }
             if (onlyTest) return true;
             bays.set(bay,{score,pose:{id:entry.id+':'+floor+':'+wall+':'+ring+':'+bay,x,y,z,yaw,bearing,floor,facade,wall,ring,segment,bay,
-              glassX:glass.x,glassZ:glass.z,partId:part?.id}});
+              glassX:glass.x,glassZ:glass.z,partId:part?.id,floorBase:low-1.5,floorHeight:height}});
           }
         });
         if (found) return true;
@@ -2052,7 +2106,14 @@ window.createMarinaBuildings = function (data, world, sites, detail = {}) {
 
 ;
 'use strict';
-// Сначала ищем размеченную дверь, затем вход модели, затем свободную сторону у пешеходного пути.
+function marinaEntranceLabel(arrival){
+  return arrival?.confirmed?'Ко входу':'Начать прогулку рядом';
+}
+
+// Связь по проектному контуру важнее эвристики вложенности.
+const marinaSharedPodia={
+  w700483113:['w1047285318'],w700483114:['w1047285318'],w700483116:['w1047285318']
+};
 function createMarinaEntrances(data,world,frontage,detail) {
   const cache=new Map(),ground=1.6;
   const podia=data.buildings.filter(b=>!(b.min>1.5)&&b.h>=3&&b.h<38&&b.bounds);
@@ -2131,14 +2192,22 @@ function createMarinaEntrances(data,world,frontage,detail) {
     const all=entry.parts?.length?entry.parts:[entry];
     const low=Math.min(...all.map(r=>r.min||0));
     const parts=all.filter(r=>(r.min||0)<low+3.5);
-    const edges=edgesOf(parts),mapped=[],modeled=[];
-    for(const osm of new Set(all.map(b=>b.osm).filter(Boolean))){
-      for(const [x,z] of detail.osm[osm]?.entrances||[]){
-        const e=edgeAt(edges,x,z);if(e&&Math.hypot(e.x-x,e.z-z)<12)mapped.push({...e,x,z});
-      }
-      modeled.push(...frontage.doors.get(osm)||[]);
-    }
-    function approach(d,source){
+    const edges=edgesOf(parts),ownIds=entry.osmIds||[];
+    const linked=new Set(ownIds.flatMap(id=>marinaSharedPodia[id]||[]));
+    const bases=podia.filter(b=>{
+      if(linked.has(b.osm))return true;
+      const [l,t,r,s]=b.bounds;
+      if(linked.size||entry.h<28||b.h>=entry.h*.68||ownIds.includes(b.osm)||entry.x<l||entry.x>r||entry.z<t||entry.z>s)return false;
+      // Берём только низкий объём, который накрывает контур башни и учитывает проёмы двора.
+      return parts.some(part=>{
+        const [x0,z0,x1,z1]=part.bounds;
+        return part.p.length>2&&(r-l)*(s-t)>(x1-x0)*(z1-z0)*1.2&&
+          part.p.filter(pt=>world.contains(b,...pt)).length/part.p.length>=.65;
+      });
+    }).sort((a,b)=>Number(linked.has(b.osm))-Number(linked.has(a.osm))||
+      (a.bounds[2]-a.bounds[0])*(a.bounds[3]-a.bounds[1])-(b.bounds[2]-b.bounds[0])*(b.bounds[3]-b.bounds[1]));
+    const groups=[{ids:ownIds,parts,edges},...bases.map(b=>({ids:[b.osm],parts:[b],edges:edgesOf([b]),baseOsm:b.osm}))];
+    function approach(d,source,baseOsm){
       const angles=[0,.54,-.54,1,-1];const yaw=Math.atan2(d.nx,d.nz);
       for(const distance of [2.35,3.7,1.25,5.6,8.4])for(const delta of angles){
         const nx=Math.sin(yaw+delta),nz=Math.cos(yaw+delta);
@@ -2148,16 +2217,23 @@ function createMarinaEntrances(data,world,frontage,detail) {
         const outward=[0,.75,-.75,1.4,-1.4,2.2,-2.2].map(a=>yaw+delta+a).find(a=>
           openGround(x+Math.sin(a)*1.1,z+Math.cos(a)*1.1)!=null&&
           openGround(x+Math.sin(a)*2.3,z+Math.cos(a)*2.3)!=null);
-        if(outward!==undefined)return {x,y,z,yaw:outward,source,door:d,distance:Math.hypot(x-d.x,z-d.z)};
+        if(outward!==undefined)return {x,y,z,yaw:outward,source,baseOsm,confirmed:source==='osm'||!!d.confirmed,door:d,distance:Math.hypot(x-d.x,z-d.z)};
       }
       return null;
     }
     let result=null;
-    for(const [candidates,source] of [[mapped,'osm'],[modeled,'model']]){
-      for(const d of candidates){result=approach(d,source);if(result)break;}
+    for(const source of ['osm','documented']){
+      for(const group of groups){
+        const {ids,edges,baseOsm}=group;
+        const candidates=source==='osm'?ids.flatMap(id=>(detail.osm[id]?.entrances||[]).flatMap(([x,z])=>{
+          const door=edgeAt(edges,x,z);return door&&Math.hypot(door.x-x,door.z-z)<3?[{...door,x,z}]:[];
+        })):ids.flatMap(id=>(frontage.doors.get(id)||[]).filter(d=>d.confirmed));
+        for(const d of candidates){result=approach(d,source==='documented'?'model':source,baseOsm);if(result)break;}
+        if(result)break;
+      }
       if(result)break;
     }
-    function facadeApproach(boundary,source){
+    function facadeApproach(boundary,source,baseOsm){
       const candidates=[];
       for(const e of boundary){
         if(e.length<.15)continue;
@@ -2170,34 +2246,18 @@ function createMarinaEntrances(data,world,frontage,detail) {
         }
       }
       candidates.sort((a,b)=>a.score-b.score);
-      for(const d of candidates){const point=approach(d,source);if(point)return point;}
+      for(const d of candidates){const point=approach(d,source,baseOsm);if(point)return point;}
       return null;
     }
     if(!result){
-      for(const door of pathDoors(parts,edges)){result=approach(door,'footpath');if(result)break;}
-    }
-    if(!result)result=facadeApproach(edges,'estimated');
-    if(!result && entry.h>15){
-      // Например, башни JBR выходят на улицу через общий невысокий подиум.
-      const xmin=Math.min(...parts.map(b=>b.bounds[0])),zmin=Math.min(...parts.map(b=>b.bounds[1]));
-      const xmax=Math.max(...parts.map(b=>b.bounds[2])),zmax=Math.max(...parts.map(b=>b.bounds[3]));
-      const targetArea=(xmax-xmin)*(zmax-zmin);
-      const bases=podia.filter(b=>{
-        const [l,t,r,s]=b.bounds;
-        if(b.h>=entry.h*.68||entry.osmIds.includes(b.osm)||(r-l)*(s-t)<targetArea*1.2||
-           entry.x<l||entry.x>r||entry.z<t||entry.z>s)return false;
-        return parts.some(part=>{
-          const samples=[0,.25,.5,.75].map(f=>part.p[Math.floor((part.p.length-1)*f)]);
-          return samples.filter(pt=>world.contains({p:b.p},...pt)).length>=3;
-        });
-      }).sort((a,b)=>(a.bounds[2]-a.bounds[0])*(a.bounds[3]-a.bounds[1])-(b.bounds[2]-b.bounds[0])*(b.bounds[3]-b.bounds[1]));
-      for(const b of bases.slice(0,3)){
-        const boundary=edgesOf([{...b,holes:[]}]);
-        const known=(detail.osm[b.osm]?.entrances||[]).map(([x,z])=>edgeAt(boundary,x,z)).filter(Boolean);
-        const actual=[...known,...frontage.doors.get(b.osm)||[],...pathDoors([b],boundary)];
-        for(const d of actual){result=approach(d,'podium');if(result)break;}
-        if(!result)result=facadeApproach(boundary,'podium');
-        if(result){result.baseOsm=b.osm;break;}
+      // Сначала исчерпываем подходы к связанному подиуму, затем пробуем контур башни.
+      for(const {ids,parts,edges,baseOsm} of [...groups.slice(1),groups[0]]){
+        for(const [candidates,source] of [[ids.flatMap(id=>frontage.doors.get(id)||[]),'model'],[pathDoors(parts,edges),'footpath']]){
+          for(const door of candidates){result=approach(door,source,baseOsm);if(result)break;}
+          if(result)break;
+        }
+        if(!result)result=facadeApproach(edges,baseOsm?'podium':'estimated',baseOsm);
+        if(result)break;
       }
     }
     if(!result){
@@ -2243,10 +2303,10 @@ function createMarinaDoor(scene,style,catalog,buildings){
   g.visible=false;scene.add(g);
   const ray=new T.Raycaster();ray.far=7;const pos=new T.Vector3(),dir=new T.Vector3();
   function place(entry,arrival){
-    g.visible=false;if(!arrival.door||arrival.source==='model'||arrival.source==='path'||arrival.source==='podium'||!entry.floorCount)return;
+    g.visible=false;if(!arrival.door||arrival.source!=='osm'||!entry.floorCount)return;
     const {x,z,nx,nz}=arrival.door;
     ray.set(pos.set(x+nx*3.2,arrival.y+1.1,z+nz*3.2),dir.set(-nx,0,-nz));
-    const h=firstVisibleMarinaHit(ray,buildings);if(!h||catalog.fromHit(h)!==entry)return;
+    const h=firstVisibleMarinaHit(ray,buildings);const owner=catalog.fromHit(h);if(!h||owner!==entry&&(!arrival.baseOsm||!owner?.osmIds.includes(arrival.baseOsm)))return;
     g.rotation.y=Math.atan2(nx,nz);g.position.set(h.point.x+nx*.08,arrival.y,h.point.z+nz*.08);g.visible=true;
   }
   return {place};
@@ -2888,7 +2948,7 @@ function createMarinaBuildingUI(catalog,onSelect,onPose,shortName=e=>e.name) {
   const names=catalog.entries.map(e=>({e,text:norm([e.name,shortName(e),e.id,...e.searchNames||[],...e.osmIds.flatMap(k=>MARINA_BUILDING_DETAIL.osm[k]?.aliases||[])].join(' '))}))
     .sort((a,b)=>Number(!!b.e.siteId)-Number(!!a.e.siteId)||Number(!!b.e.parts?.some(p=>p.n))-Number(!!a.e.parts?.some(p=>p.n))||a.e.name.localeCompare(b.e.name,'ru',{numeric:true}));
   let matches=names,limit=24,entry=null,floor=0,windows=[],index=0,projected=[];
-  const source=e=>({osm:'Этажность из OpenStreetMap',estimated:'Этажность оценена по высоте',reference:'Этажность по справочнику здания',overture:'Этажность из Overture Maps',landmark:'Этажность по данным о здании',none:'У сооружения нет обычных этажей'}[e?.levelSource]||'Этажность модели');
+  const source=e=>({osm:'Этажность из OpenStreetMap',profile:'Этажность наружной модели',estimated:'Этажность оценена по высоте',reference:'Этажность по справочнику здания',overture:'Этажность из Overture Maps',landmark:'Этажность по данным о здании',none:'У сооружения нет обычных этажей'}[e?.levelSource]||'Этажность модели');
   function fillDirectory(){
     results.replaceChildren();const fragment=document.createDocumentFragment();
     for(const {e} of matches.slice(0,limit)){
@@ -2916,7 +2976,7 @@ function createMarinaBuildingUI(catalog,onSelect,onPose,shortName=e=>e.name) {
     directory.open=false;
     const access={osm:'Вход отмечен в OSM',model:'Вход по модели',footpath:'Подход по дорожке OSM',estimated:'Расчётный вход',podium:'Подход у общего подиума',path:'Ближайший проход · '+Math.round(arrival?.distance||0)+' м до фасада'};
     by('building-source').textContent=[e.floorCount?source(e):e.note||'Обычных этажей нет',access[arrival?.source]||'Подход не найден'].join(' · ');
-    const door=by('building-actions').querySelector('[data-action="entrance"]');door.disabled=!arrival;door.querySelector('span').textContent=arrival?.source==='path'?'Пешком рядом':'Ко входу';
+    const door=by('building-actions').querySelector('[data-action="entrance"]');door.disabled=!arrival;door.querySelector('span').textContent=marinaEntranceLabel(arrival);
     const coverage=catalog.availability(e),related=by('related-buildings');
     by('building-actions').querySelector('[data-action="window"]').disabled=!coverage.levels.length;
     related.replaceChildren();related.hidden=true;
@@ -2959,13 +3019,27 @@ function createMarinaBuildingUI(catalog,onSelect,onPose,shortName=e=>e.name) {
     projected.forEach(([a,b],i)=>{const d=Math.hypot(x-a,z-b);if(d<best){k=i;best=d;}});
     if(best<28)display(k);
   });
-  function display(i){
+  function display(i,keepView=false){
     index=Math.max(0,Math.min(windows.length-1,Math.floor(i)||0));const q=windows[index];if(!q)return;
     indexInput.max=windows.length;indexInput.value=index+1;by('window-total').textContent='из '+windows.length;
     const cardinal=['С','СВ','В','ЮВ','Ю','ЮЗ','З','СЗ'][Math.round(q.bearing/45)%8];
-    by('window-bearing').textContent=cardinal+' · '+Math.round(q.bearing)+'° · '+Math.max(1,Math.round(q.y-1.5))+' м над землёй';
-    by('window-origin').textContent=source(entry)+' · окна по модели';
-    onPose({entry,floor,index,point:q});drawPlan();
+    by('window-bearing').textContent=cardinal+' · '+String(Math.round(q.bearing)%360).padStart(3,'0')+'° · точка ≈ '+metres(q.y-1.5)+' над землёй';
+    const type=q.levelType||(entry.siteId?.startsWith('silverene-')?'Башня над подиумом':'');
+    by('window-origin').textContent=[type,Number.isFinite(q.floorBase)?'Пол ≈ '+metres(q.floorBase)+' · шаг ≈ '+metres(q.floorHeight):'',source(entry)].filter(Boolean).join(' · ');
+    onPose({entry,floor,index,point:q},keepView);drawPlan();
+  }
+  const metreFormat=new Intl.NumberFormat('ru-RU',{maximumFractionDigits:1});
+  const metres=value=>metreFormat.format(value)+' м';
+  function loadFloor(e,f,opts,i,keepView){
+    entry=e;floor=f;windows=opts;
+    floorSelect.replaceChildren(...catalog.levels(e).map(n=>new Option(e.siteId==='dorra'?(n===1?'1 · наземный':n+' · ур. '+String(n-1).padStart(2,'0')):String(n),String(n))));
+    floorSelect.value=String(f);by('window-building').textContent=/^OSM\s/.test(e.name)?shortName(e):e.name;
+    display(i,keepView);
+  }
+  function restore(e,saved){
+    const opts=catalog.windows(e,saved.floor),i=opts.findIndex(q=>q.id===saved.point);
+    if(i<0)return false;
+    loadFloor(e,saved.floor,opts,i,true);return true;
   }
   function nearest(list,target){
     if(!target)return 0;
@@ -2994,10 +3068,7 @@ function createMarinaBuildingUI(catalog,onSelect,onPose,shortName=e=>e.name) {
       candidates=catalog.windows(e,f);if(candidates.length){chosen=f;break;}
     }
     if(chosen==null)return false;
-    entry=e;floor=chosen;windows=candidates;
-    floorSelect.replaceChildren(...floors.map(f=>new Option(e.siteId==='dorra'?(f===1?'1 · наземный':f+' · ур. '+String(f-1).padStart(2,'0')):String(f),String(f))));
-    floorSelect.value=String(floor);by('window-building').textContent=/^OSM\s/.test(e.name)?shortName(e):e.name;
-    display(nearest(windows,hint));return true;
+    loadFloor(e,chosen,candidates,nearest(candidates,hint));return true;
   }
   floorSelect.addEventListener('change',()=>{
     const next=Number(floorSelect.value),opts=catalog.windows(entry,next);
@@ -3011,7 +3082,7 @@ function createMarinaBuildingUI(catalog,onSelect,onPose,shortName=e=>e.name) {
   indexInput.addEventListener('keydown',e=>{if(e.key==='Enter'){display(Number(indexInput.value)-1);indexInput.blur();}});
   by('window-prev').addEventListener('click',()=>display((index+windows.length-1)%windows.length));
   by('window-next').addEventListener('click',()=>display((index+1)%windows.length));
-  return {open,mapSelection,drawPlan,isBuilding:e=>contains.has(e)};
+  return {open,restore,mapSelection,drawPlan,isBuilding:e=>contains.has(e)};
 }
 
 ;
@@ -3565,7 +3636,7 @@ function buildMarinaCity(scene,data,world,style,sites,catalog,covered) {
 window.buildMarinaDorra = function (group, site, ground, catalog) {
   const T = THREE, {origin, unit, meshes, solids, poses} = window.MARINA_DORRA_MODEL;
   const entry = catalog?.owner(site);
-  group.userData.dorraDoor={x:-967.223,z:1088.996,nx:-.00939,nz:.99996};
+  group.userData.dorraDoor={x:-967.223,z:1088.996,nx:-.00939,nz:.99996,confirmed:true};
   const palette = {
     white: ['#e1ded3', .64, 0],
     slab: ['#dbd9d1', .65, 0],
@@ -3637,6 +3708,9 @@ window.buildMarinaDorra = function (group, site, ground, catalog) {
     const windows = poses.map((list, i) => list.map(([glassX, localY, glassZ, yaw], j) => ({
       id: entry.id + ':' + (i + 1) + ':' + j,
       floor: i + 1,
+      floorBase: i === 0 ? 0 : 6 + (i - 1) * 3.5,
+      floorHeight: i === 0 ? 6 : 3.5,
+      levelType:i===0?'Наземный уровень и подиум':localY<12?'Уровень у подиума':null,
       glassX, glassZ, yaw, y: ground + localY,
       x: glassX + .4 * Math.sin(yaw),
       z: glassZ + .4 * Math.cos(yaw),
@@ -3995,32 +4069,48 @@ function buildMarinaSurvey(scene,data,style,catalog,survey) {
   const T=THREE,{meta,buf,start}=survey,byOsm=new Map(),sections=new Map(),mats=new Map(),batches=new Map(),details=[];
   const covered=new Set([...Object.keys(meta.parts),...Object.values(meta.replaceSiteParts||{}).flat()]),textures=[0,5,2,6,4,7,7];
   for(const b of data.buildings)if(covered.has(b.osm)&&!byOsm.has(b.osm))byOsm.set(b.osm,b);
-  const samples=Object.entries(meta.parts);
+  const samples=Object.entries(meta.parts),gateTowerLevels={w700483114:52,w700483116:66,w700483113:56};
   for(const [oid,[h,group]] of samples){
     const b=byOsm.get(oid),entry=b&&catalog.owner(b);if(!entry)continue;
     entry.surveyGroup=group;
+    const gateFloors=gateTowerLevels[oid];
+    if(gateFloors){entry.floorCount=gateFloors;entry.levelSource='profile';}
+    if(oid==='w1047285318'){entry.floorCount=7;entry.levelSource='reference';}
     if(!entry.surveyIds)entry.surveyIds=[];
     entry.surveyIds.push(oid);
     if(!entry.siteId)entry.h=Math.max(...entry.parts.map(p=>meta.parts[p.osm]?.[0]||p.h));
   }
-  function floorCoordinate(entry,y,lo,hi){
-    // План Address делит общую оболочку на два корпуса и верхний мост, начинающийся на уровне 63.
-    const count=Math.max(1,entry.floorCount),bridge=1.5+63*3.87;
-    if(entry.siteId==='address'&&count===77&&lo<bridge&&hi>bridge){
-      return y<bridge?62*(y-lo)/(bridge-lo):62+15*(y-bridge)/(hi-bridge);
+  function floorGrid(entry,lo,hi){
+    // Эти отметки взяты из наружной модели marina_gate.py. Сетка повторяет её плиты,
+    // и расходящиеся числа этажей застройщика остаются в карточке источников.
+    const gate=gateTowerLevels[entry.osm];
+    if(gate){
+      const base=7.5,step=(entry.h-8.5-6)/(gate-1);
+      return {count:gate,at:i=>i<1?1.5+6*i:base+(i-1)*step,
+        uv:y=>1+(y-base)/step,
+        level:i=>i===0?'Лобби':base+(i-1)*step<26.5?'Уровень подиума':null};
     }
-    return count*(y-lo)/Math.max(.15,hi-lo);
+    if(entry.osm==='w1047285318'){
+      // Inhabit подтверждает семь уровней; наружная геометрия даёт отметки низа и верха.
+      const lobby=7,step=(26.5-lobby)/6;
+      return {count:7,at:i=>i<1?1.5+5.5*i:lobby+(i-1)*step,
+        uv:y=>y<lobby?(y-1.5)/5.5:1+(y-lobby)/step,level:i=>i===0?'Наземный уровень подиума':'Уровень подиума'};
+    }
+    if(entry.siteId==='address'&&entry.floorCount===77){
+      return {count:77,at:i=>1.5+3.87*i,uv:y=>(y-1.5)/3.87,
+        level:i=>i<2?'Лобби':i>=63&&i<76?'Мост':i===76?'Павильон':null};
+    }
+    const count=Math.max(1,entry.floorCount),step=Math.max(.15,hi-lo)/count;
+    return {count,at:i=>lo+i*step,uv:y=>(y-lo)/step};
   }
-  function floorAltitude(entry,at,lo,hi,count){
-    const bridge=1.5+63*3.87;
-    if(entry.siteId==='address'&&count===77&&lo<bridge&&hi>bridge)return at<62?lo+(bridge-lo)*at/62:bridge+(hi-bridge)*(at-62)/15;
-    return lo+(hi-lo)*at/count;
-  }
-  function groupMaterial(name,lod) {
-    const key=name+'/'+lod;
+  function groupMaterial(name,lod,opaqueBand) {
+    const key=name+'/'+lod+(opaqueBand?'/ламели':'');
     if(mats.has(key))return mats.get(key);
     let m;
-    if(name.startsWith('wall')){
+    if(opaqueBand){
+      m=style.architecture.shutter.clone();m.side=T.DoubleSide;
+      m.userData.opaqueBand=true;
+    }else if(name.startsWith('wall')){
       const number=Number(name.slice(4));const index=textures[number]??5;
       m=style.facade(index).clone();m.userData.facade=index;
     }else{
@@ -4039,7 +4129,7 @@ function buildMarinaSurvey(scene,data,style,catalog,survey) {
   for(const c of meta.chunks){
     const [oid,name,lod,origin,count,indexCount,pAt,nAt,cAt,uvAt,iAt]=c;
     const part=byOsm.get(oid),entry=part&&catalog.owner(part);if(!entry)continue;
-    const category=groupMaterial(name,lod);
+    const category=groupMaterial(name,lod,entry.surveyGroup==='marina_gate'&&name==='wall4');
     if(!lod&&name.startsWith('wall')){
       const packed=new Int16Array(buf,start+pAt,count*3);
       let low=Infinity,high=-Infinity;
@@ -4052,18 +4142,19 @@ function buildMarinaSurvey(scene,data,style,catalog,survey) {
     if(!batches.has(key))batches.set(key,{lod,material:category,chunks:[],count:0,indices:0});
     const batch=batches.get(key);batch.chunks.push({oid,part,entry,origin,count,indexCount,pAt,nAt,cAt,uvAt,iAt});batch.count+=count;batch.indices+=indexCount;
   }
+  const grids=new Map([...wallExtents].map(([e,[lo,hi]])=>[e,floorGrid(e,lo,hi)]));
   const srgb=v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4;
   for(const batch of batches.values()){
     const {count,indices,material,lod}=batch;
     const pos=new Float32Array(count*3),norm=new Int8Array(count*3),color=new Uint8Array(count*3),uv=new Float32Array(count*2);
     const index=count>65535?new Uint32Array(indices):new Uint16Array(indices),ranges=[];
-    const isWall=material.userData.facade!=null;
+    const {opaqueBand}=material.userData,isWall=material.userData.facade!=null||opaqueBand;
     let v=0,f=0;
     for(const c of batch.chunks){
       const ps=new Int16Array(buf,start+c.pAt,c.count*3),ns=new Int8Array(buf,start+c.nAt,c.count*3),cs=new Uint8Array(buf,start+c.cAt,c.count*3);
       const tex=new Uint16Array(buf,start+c.uvAt,c.count*2),ind=c.count>65535?new Uint32Array(buf,start+c.iAt,c.indexCount):new Uint16Array(buf,start+c.iAt,c.indexCount);
       let lo=Infinity,hi=-Infinity;
-      const span=isWall&&wallExtents.get(c.entry),nominal=isWall&&1/(material.map.repeat.y*8);
+      const grid=isWall&&!opaqueBand&&grids.get(c.entry),swapUv=opaqueBand&&c.oid==='w1047285318',nominal=isWall&&1/(material.map.repeat.y*8);
 
       for(let i=0;i<c.count;i++){
         const j=3*i,k=3*(i+v);
@@ -4072,14 +4163,15 @@ function buildMarinaSurvey(scene,data,style,catalog,survey) {
           norm[k+axis]=ns[j+axis];const tint=cs[j+axis]/255;
           color[k+axis]=Math.round(255*(isWall?Math.min(1,.32+.81*tint):srgb(tint)));
         }
-        uv[(v+i)*2]=T.DataUtils.fromHalfFloat(tex[2*i]);uv[(v+i)*2+1]=span?nominal*floorCoordinate(c.entry,pos[k+1],span[0],span[1]):T.DataUtils.fromHalfFloat(tex[2*i+1]);
+        uv[(v+i)*2]=T.DataUtils.fromHalfFloat(tex[2*i+(swapUv?1:0)]);
+        uv[(v+i)*2+1]=grid?nominal*grid.uv(pos[k+1]):T.DataUtils.fromHalfFloat(tex[2*i+(swapUv?0:1)]);
         lo=Math.min(lo,pos[k+1]);hi=Math.max(hi,pos[k+1]);
       }
       for(let i=0;i<ind.length;i++)index[f+i]=ind[i]+v;
       ranges.push([f/3,(f+ind.length)/3,c.entry]);
       if(isWall&&!lod&&hi-lo>.45){
         const spacingU=1/(material.map.repeat.x*8),spacingV=1/(material.map.repeat.y*8);
-        const data={pos,norm,uv,index,from:f,to:f+ind.length,lo,hi,spacingU,spacingV,kind:material.userData.facade,part:c.part};
+        const data={pos,norm,uv,index,from:f,to:f+ind.length,lo,hi,spacingU,spacingV,kind:material.userData.facade,opaqueBand};
         if(!sections.has(c.entry))sections.set(c.entry,[]);
         sections.get(c.entry).push(data);
       }
@@ -4097,10 +4189,42 @@ function buildMarinaSurvey(scene,data,style,catalog,survey) {
       mesh.raycast=function(ray,hits){if(this.visible)T.Mesh.prototype.raycast.call(this,ray,hits);};
     }
   }
+  function cut(w,inds,ys,y){
+    const ends=[];
+    for(let k=0;k<3;k++){
+      const j=(k+1)%3;if((ys[k]>y)===(ys[j]>y))continue;
+      const t=(y-ys[k])/(ys[j]-ys[k]),A=inds[k],B=inds[j],mix=(a,b)=>a+(b-a)*t;
+      ends.push({x:mix(w.pos[3*A],w.pos[3*B]),z:mix(w.pos[3*A+2],w.pos[3*B+2]),u:mix(w.uv[2*A],w.uv[2*B])});
+    }
+    return ends;
+  }
+  const gateBase=[...sections.keys()].find(e=>e.osm==='w1047285318'),podiumSections=new Map();
+  function podiumAt(y){
+    if(!gateBase||y>26.5)return [];
+    if(podiumSections.has(y))return podiumSections.get(y);
+    const lines=[];
+    for(const w of sections.get(gateBase)){
+      if(y<w.lo||y>=w.hi)continue;
+      for(let i=w.from;i<w.to;i+=3){
+        const inds=[w.index[i],w.index[i+1],w.index[i+2]],ys=inds.map(j=>w.pos[3*j+1]);
+        const nx=inds.reduce((s,j)=>s+w.norm[3*j],0);
+        const [a,b]=cut(w,inds,ys,y);
+        if(a&&b&&nx)lines.push({a,b,nx});
+      }
+    }
+    podiumSections.set(y,lines);return lines;
+  }
+  function covers(lines,x,z){
+    let winding=0;
+    for(const {a,b,nx} of lines){
+      if((a.z>z)===(b.z>z))continue;
+      if(a.x+(b.x-a.x)*(z-a.z)/(b.z-a.z)>x)winding+=Math.sign(nx);
+    }
+    return winding>0;
+  }
   for(const [entry,walls] of sections){
-    const low=Math.min(...walls.map(w=>w.lo)),high=Math.max(...walls.map(w=>w.hi));
-    const count=Math.max(1,entry.floorCount||Math.round((high-low)/3.35)),first=(entry.minLevel||0)+1;
-    const heights=Array.from({length:count},(_,i)=>floorAltitude(entry,i+.53,low,high,count));
+    const grid=grids.get(entry),{count}=grid,first=(entry.minLevel||0)+1;
+    const heights=Array.from({length:count},(_,i)=>grid.at(i+.53));
     const byFloor=Array.from({length:count},()=>[]);
     // Разбиваем треугольники стен по этажам один раз. Полный набор окон строится только для выбранного этажа.
     for(const w of walls){
@@ -4109,18 +4233,12 @@ function buildMarinaSurvey(scene,data,style,catalog,survey) {
         const nx=inds.reduce((s,j)=>s+w.norm[3*j],0),nz=inds.reduce((s,j)=>s+w.norm[3*j+2],0),len=Math.hypot(nx,nz);
         if(len<120)continue;
         const min=Math.min(...ys),max=Math.max(...ys);
-        const f0=Math.max(0,Math.floor(floorCoordinate(entry,min,low,high)-.53)),f1=Math.min(count-1,Math.ceil(floorCoordinate(entry,max,low,high)-.53));
+        const f0=Math.max(0,Math.floor(grid.uv(min))-1),f1=Math.min(count-1,Math.ceil(grid.uv(max))+1);
         for(let f=f0;f<=f1;f++){
           const y=heights[f];if(y<min||y>=max)continue;
-          const ends=[];
-          for(let k=0;k<3;k++){
-            const j=(k+1)%3;if((ys[k]>y)===(ys[j]>y))continue;
-            const t=(y-ys[k])/(ys[j]-ys[k]),A=inds[k],B=inds[j],mix=(a,b)=>a+(b-a)*t;
-            ends.push({x:mix(w.pos[3*A],w.pos[3*B]),z:mix(w.pos[3*A+2],w.pos[3*B+2]),u:mix(w.uv[2*A],w.uv[2*B]),v:mix(w.uv[2*A+1],w.uv[2*B+1])});
-          }
-          if(ends.length!==2)continue;
-          const [a,b]=ends;if(Math.hypot(a.x-b.x,a.z-b.z)<.08)continue;
-          byFloor[f].push({a,b,nx:nx/len,nz:nz/len,w:w.spacingU,kind:w.kind});
+          const [a,b]=cut(w,inds,ys,y);if(!a||!b)continue;
+          if(Math.hypot(a.x-b.x,a.z-b.z)<.08)continue;
+          byFloor[f].push({a,b,nx:nx/len,nz:nz/len,w:w.spacingU,kind:w.kind,opaqueBand:w.opaqueBand});
         }
       }
     }
@@ -4129,17 +4247,12 @@ function buildMarinaSurvey(scene,data,style,catalog,survey) {
       const f=floor-first,lines=byFloor[f];if(!lines?.length)return only?false:[];
       if(!only&&cached.has(f))return cached.get(f);
       const out=[],seen=new Set(),height=heights[f];
-      // Фасады закрытых внутренних объёмов отбрасываются по знаку пересечений сечения лучом.
-      const inside=(x,z)=>{
-        let winding=0;for(const {a,b,nx} of lines){
-          if((a.z>z)===(b.z>z))continue;
-          if(a.x+(b.x-a.x)*(z-a.z)/(b.z-a.z)>x)winding+=Math.sign(nx);
-        }
-        return winding>0;
-      };
+      const podium=gateTowerLevels[entry.osm]?podiumAt(height):[];
+      const technical=gateTowerLevels[entry.osm]&&lines.some(s=>s.opaqueBand);
+      const levelType=grid.level?.(f)||(technical?'Пояс техуровней модели':null);
       for(let j=0;j<lines.length;j++){
         const s=lines[j],{a,b,nx,nz,w}=s,du=b.u-a.u,dist=Math.hypot(b.x-a.x,b.z-a.z);
-        if(dist<.3)continue;
+        if(dist<.3||s.opaqueBand)continue;
         const horizontal=Math.abs(du)>.5 && Math.abs(du)<dist*2.5;
         const u=horizontal?Math.min(a.u,b.u):0,end=horizontal?Math.max(a.u,b.u):dist;
         for(let k=Math.floor(u/w);k<=Math.floor(end/w);k++){
@@ -4147,10 +4260,19 @@ function buildMarinaSurvey(scene,data,style,catalog,survey) {
           if(mid<u-.05||mid>end+.05)continue;
           const t=Math.max(0,Math.min(1,horizontal?(mid-a.u)/du:mid/dist)),gx=a.x+(b.x-a.x)*t,gz=a.z+(b.z-a.z)*t;
           const x=gx+nx*.46,z=gz+nz*.46,stamp=Math.round(x*5)+','+Math.round(z*5);
-          if(seen.has(stamp)||inside(x,z))continue;
+          if(seen.has(stamp)||covers(lines,x,z)||covers(podium,x,z))continue;
+          // Узкий пояс ламелей может лежать между камерой и стеной и не давать замкнутого объёма.
+          if(technical&&lines.some(({a,b,opaqueBand})=>{
+            if(!opaqueBand)return false;
+            const dx=b.x-a.x,dz=b.z-a.z,den=nx*dz-nz*dx;
+            if(Math.abs(den)<1e-6)return false;
+            const t=((a.x-gx)*dz-(a.z-gz)*dx)/den,u=((a.x-gx)*nz-(a.z-gz)*nx)/den;
+            return t>.025&&t<.47&&u>=0&&u<=1;
+          }))continue;
           if(only)return true;
           seen.add(stamp);const yaw=Math.atan2(nx,nz);
           out.push({id:'survey:'+floor+':'+j+':'+k,floor,x,y:height,z,yaw,bearing:(180-yaw*180/Math.PI+360)%360,
+            floorBase:grid.at(f)-1.5,floorHeight:grid.at(f+1)-grid.at(f),levelType,
             facade:s.kind,wall:j,ring:0,segment:j,bay:k,glassX:gx,glassZ:gz});
         }
       }
@@ -4171,7 +4293,7 @@ function buildMarinaSurvey(scene,data,style,catalog,survey) {
       if(show!==mesh.visible){mesh.visible=show;changed=true;}
     }return changed;},
     setNight(v){for(const [key,m] of mats){
-      if(key.startsWith('wall'))m.emissiveIntensity=v*1.85;
+      if(key.startsWith('wall')&&!m.userData.opaqueBand)m.emissiveIntensity=v*1.85;
       else if(m.name==='crown')m.emissiveIntensity=.05+.47*v;
     }}};
 }
@@ -4329,10 +4451,15 @@ function architectureCard(entry){
     link('The Skyscraper Center · комплекс The Jewels','https://www.skyscrapercenter.com/complex/2478');}
   const developer=props.find(p=>p.developerFloors);
   if(developer){
-    footnote('В публикации застройщика для башни указано '+developer.developerFloors+' этажей. В модели использована эта этажность. Нумерация технических и парковочных уровней может отличаться.');
+    footnote('В публикации застройщика для башни указано '+developer.developerFloors+' этажей. Нумерация технических и парковочных уровней может отличаться.');
     link(developer.developerLabel,developer.developerURL);
   }
+  if(entry.surveyGroup==='marina_gate'&&entry.osm!=='w1047285318'){
+    footnote('Фасадная модель использует '+entry.floorCount+' яруса, включая нижние уровни. Общий семиэтажный подиум показан отдельно. Высоты лобби, плит и технических поясов рассчитаны по наружной модели.');
+  }
   if(entry.siteId?.startsWith('silverene-')){
+    footnote('RMJM указывает общий подиум G+2. Нумерация окон начинается с башни над подиумом. Граница подиума оценена по наружному виду.');
+    link('Silverene · архитекторы RMJM','https://rmjm.com/portfolio/silverene-dubai-marina-dubai-uae/');
     footnote('По фотографиям Palma Holding воспроизведены скошенная стеклянная корона, складка на зеркальном торце и длинные балконы. Глубина балконов и угол ската оценены по виду здания.');
   }
   if(paired[entry.siteId])link(...paired[entry.siteId]);
@@ -4625,21 +4752,23 @@ window.buildMarinaLandmarks = function (scene, sites, style, catalog) {
   // По фотографии Palma отражающий торец образован двумя стеклянными плоскостями;
   // на продольных сторонах идут непрерывные ленты открытых балконов.
   function silverene(h,w,d){
-    const count=site.documentedFloors,top=h-w*.47-.65,floor=top/count;
+    const count=site.documentedFloors,top=h-w*.47-.65,base=site.podiumTop,floor=(top-base)/count;
     const hw=w*.5-1.02,hd=d*.5;
     function ring(t){
       const seam=w*(-.32+.67*t);
       return fix([[-hw,-hd],[hw,-hd],[hw,hd-.42],[seam,hd+.32],[-hw,hd-.36]]);
     }
     const low=ring(0),high=ring(1),glass=F(8);
-    wall(glass,[[0,low],[top,high]],1,{floorHeight:floor});
+    // RMJM подтверждает G+2. Отметка верха стилобата оценена по наружному объёму.
+    wall(ST,[[0,low],[base,low]],.75,{solid:true});
+    wall(glass,[[base,low],[top,high]],1,{floorHeight:floor,windowBase:base});
     // Стеклянная корона имеет собственный скат, жилые окна заканчиваются под ним.
     const peak=high.map(([x,z])=>[x,z,h-(x+hw)*.43-(hd-z)*.018]);
     const screen=glass.clone();
     wall(screen,[[top,high],[h,peak]],1);
     cap(ST,peak,p=>p[2]);
     for(let i=1;i<count;i++){
-      const y=i*floor;
+      const y=base+i*floor;
       for(const side of [-1,1]){
         const strip=fix([[side*(hw-.04),-hd+1.15],[side*(hw+1.02),-hd+1.15],
                          [side*(hw+1.02),hd-1.35],[side*(hw-.04),hd-1.35]]);
@@ -7982,12 +8111,66 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
       if(directorySelection)inspect(entry,null);
       else {setChoice(entry);nav.reveal(entry);}
     },applyWindow,e=>labels.shortName(e));
-    function applyWindow(view){
+    const compareKey='marina-atlas:views-v1',savedViews=[null,null];
+    let activeView=-1;
+    try{
+      const saved=JSON.parse(localStorage.getItem(compareKey));
+      for(const i of [0,1])if(catalog.entries.some(e=>e.id===saved?.[i]?.building))savedViews[i]=saved[i];
+    }catch{}
+    const compareButtons=[...document.querySelectorAll('[data-compare]')],saveButtons=[...document.querySelectorAll('[data-save-view]')];
+    function refreshComparison(){
+      for(const [i,button] of compareButtons.entries()){
+        const slot=i===0?'A':'B',saved=savedViews[i],e=saved&&catalog.entries.find(e=>e.id===saved.building);
+        button.disabled=!e;button.setAttribute('aria-pressed',String(activeView===i));
+        button.textContent=e?slot+' · '+labels.shortName(e)+' · эт. '+saved.floor+' · окно '+(saved.index+1):slot+' · Пусто';
+        saveButtons[i].textContent=(e?'Заменить ':'Сохранить ')+slot;
+      }
+      by('swap-views').disabled=!savedViews.every(Boolean);
+    }
+    function storeComparison(message){
+      try{localStorage.setItem(compareKey,JSON.stringify(savedViews));}
+      catch{message+=' Точки доступны до закрытия страницы.';}
+      by('compare-status').textContent=message;refreshComparison();
+    }
+    for(const [i,button] of compareButtons.entries())button.addEventListener('click',()=>{
+      const saved=savedViews[i],e=saved&&catalog.entries.find(e=>e.id===saved.building);
+      if(!e)return;
+      const prior=activeView;activeView=i;
+      if(!buildingUI.restore(e,saved)){
+        activeView=prior;by('compare-status').textContent='Эта точка отсутствует в текущей модели. Её можно заменить.';return;
+      }
+      by('compare-status').textContent='Азимут, наклон и масштаб общие для A и B.';
+    });
+    for(const [i,button] of saveButtons.entries())button.addEventListener('click',()=>{
+      if(mode!=='window'||!windowView)return;
+      const {entry,floor,index,point}=windowView;
+      savedViews[i]={building:entry.id,floor,index,point:point.id};
+      activeView=i;storeComparison('Точка '+(i===0?'A':'B')+' сохранена.');
+    });
+    by('swap-views').addEventListener('click',()=>{
+      [savedViews[0],savedViews[1]]=[savedViews[1],savedViews[0]];
+      if(activeView>=0)activeView=1-activeView;
+      storeComparison('Точки A и B поменялись местами.');
+    });
+    refreshComparison();
+    function applyWindow(view,keepView=false){
       const switchMode=mode!=='window'||panel;
+      const {yaw,pitch}=p,fov=camera.fov;
+      if(!keepView)activeView=-1;
       if(switchMode){clearRoute();setPanel('');sceneMode('window');showPlace(view.entry);}
       windowView=view;
-      const q=view.point;Object.assign(p,{x:q.x,y:q.y,z:q.z,yaw:q.yaw,pitch:0,speed:0,radius:0});
+      const q=view.point;
+      Object.assign(p,{x:q.x,y:q.y,z:q.z,yaw:keepView?yaw:q.yaw,pitch:keepView?pitch:0,speed:0,radius:0});
+      if(keepView){camera.fov=fov;camera.updateProjectionMatrix();}
+      if(selected!==view.entry)showPlace(view.entry);
+      const arrival=entries.find(view.entry),door=by('window-hud').querySelector('[data-action="window-entrance"]');
+      door.disabled=!arrival;door.querySelector('span').textContent=marinaEntranceLabel(arrival);
+      refreshComparison();
       traffic.focus(p.x,p.z);lastUi=-1;cameraStreet(0,true);
+    }
+    function windowYaw(yaw){
+      const base=windowView.point.yaw;
+      return activeView>=0 ? angle(yaw) : base+clamp(angle(yaw-base),-1.48,1.48);
     }
     function toDoor(entry){
       if(!buildingUI.isBuilding(entry))return false;
@@ -7998,7 +8181,7 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
       marker.place(entry,arrival);
       traffic.focus(p.x,p.z);cameraStreet(0,true);lastUi=lastGPS=-1;by('street-name').textContent=entry.name;
       const labels={osm:'У входа, отмеченного в OpenStreetMap',model:'У входа 3D-модели',footpath:'У фасада, к которому подходит дорожка OSM',estimated:'У здания · расчётный вход',podium:'Пеший старт у общего подиума здания',path:'Пешеходный подход · до фасада '+Math.round(arrival.distance)+' м'};
-      note(labels[arrival.source]);return true;
+      note(arrival.confirmed?labels[arrival.source]:marinaEntranceLabel(arrival)+' · '+labels[arrival.source]);return true;
     }
     function inspect(entry,hint){
       if(!entry)return;
@@ -8031,7 +8214,7 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
         /^OSM\s/i.test(entry.name)?'Условное название':''].filter(Boolean).join(' · ');
       const b=by('explorer-card'),win=b.querySelector('[data-action="window"]'),entr=b.querySelector('[data-action="entrance"]');
       win.disabled=!catalog.levels(entry).length;
-      const arrival=entries.find(entry);entr.disabled=!arrival;entr.querySelector('span').textContent=arrival?.source==='path'?'Пешком рядом':'Ко входу';
+      const arrival=entries.find(entry);entr.disabled=!arrival;entr.querySelector('span').textContent=marinaEntranceLabel(arrival);
       architectureCard(entry);b.hidden=false;body.dataset.inspecting='true';catalog.highlight(studyView?null:cardEntry,studyView&&hovered===cardEntry?null:hovered);pinLayout(true);
     }
     function visibleAngle(entry,target,r,directions){
@@ -8213,7 +8396,7 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
     function stepPlayer(dt){
       if(mode==='window'){
         const turn=Number(input('left','a'))-Number(input('right','d'));
-        p.yaw=windowView.point.yaw+clamp(angle(p.yaw-windowView.point.yaw)+dt*turn*1.3,-1.48,1.48);
+        if(turn)p.yaw=windowYaw(p.yaw+dt*turn*1.3);
         p.pitch=clamp(p.pitch+dt*(Number(input('up','w'))-Number(input('down','s'))),-1.36,1.30);return;
       }
       if(mode==='aerial'){
@@ -8292,11 +8475,25 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
       light.preset(q);post.preset(q);resize();
       document.querySelectorAll('[data-quality]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.quality===q)));
     }
-    async function setLight(id){
-      lightChanging=true;try{if(await light.set(id)){
+    const solarForm=by('solar-form'),solarInput=by('solar-local'),solarStatus=by('solar-status');
+    solarInput.value=new Date(Date.now()+14400000).toISOString().slice(0,16);
+    solarForm.addEventListener('submit',e=>{
+      e.preventDefault();
+      const position=marinaSolarPosition(solarInput.value);
+      if(!position){solarStatus.textContent='Введите дату и время Дубая.';return;}
+      setLight(position.altitude>0?'day':'blue',{...position,local:solarInput.value});
+    });
+    let lightingRequest=0;
+    async function setLight(id,solar=null){
+      const request=++lightingRequest;
+      lightChanging=true;try{if(await light.set(id,solar)){
         reconstruction.setNight(light.night);monuments.userData.setDorraNight?.(light.night);props.setNight(light.night);fleet.setNight(light.night);tram.setNight(light.night);frontage.setNight(light.night);traffic.setTime(id);light.capture();postShadow();
-        document.querySelectorAll('[data-light]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.light===id)));
-      }}catch(err){console.error(err);note('Не удалось загрузить это освещение.');}finally{lightChanging=false;}
+        document.querySelectorAll('[data-light]').forEach(b=>b.setAttribute('aria-pressed',String(!solar&&b.dataset.light===id)));
+        solarForm.querySelector('button').setAttribute('aria-pressed',String(!!solar));
+        solarStatus.textContent=solar
+          ?solar.local.replace('T',' ')+' · азимут '+Math.round(solar.bearing)%360+'° · высота '+solar.altitude.toFixed(1).replace('.',',')+'°'+(solar.altitude<=0?' · солнце за горизонтом':'')
+          :'';
+      }}catch(err){console.error(err);note('Не удалось загрузить это освещение.');}finally{if(request===lightingRequest)lightChanging=false;}
     }
     let audio=null,volume=null,engine=null,engineGain=null;
     async function toggleAudio(){
@@ -8409,7 +8606,7 @@ vColor *= mix(vec3(1.0), aTint, aMat.w);
         oldPinch=pinch;return;
       }
       if(mode==='window'){
-        const base=windowView.point.yaw;p.yaw=base+clamp(angle(p.yaw-base)-dx*.0042,-1.48,1.48);
+        p.yaw=windowYaw(p.yaw-dx*.0042);
         p.pitch=clamp(p.pitch-dy*.0034,-1.36,1.30);
       }
       else if(mode==='walk'){p.yaw-=dx*.0042;p.pitch=clamp(p.pitch-dy*.0034,-1.28,1.38);}

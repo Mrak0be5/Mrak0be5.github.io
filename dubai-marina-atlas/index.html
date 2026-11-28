@@ -1237,6 +1237,17 @@ body[data-inspecting="true"] #hero,body[data-inspecting="true"] #street{display:
 #architecture-body svg{display:block;width:100%;height:auto;max-height:145px;background:#10272a;border-radius:8px}
 
 #dorra-views button[aria-pressed="true"]{color:#102b26;background:var(--mint);border-color:var(--mint)}
+
+#window-compare {border-top:1px solid var(--line);font-size:12px}
+#window-compare summary {padding:7px 0;color:var(--sand);cursor:pointer}
+.compare-row {display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;margin-bottom:5px}
+.compare-row button,#swap-views {min-height:34px;border:1px solid var(--line);border-radius:7px;padding:4px 7px;text-align:left;overflow-wrap:anywhere}
+.compare-row button[aria-pressed="true"] {border-color:var(--mint);color:var(--mint)}
+#compare-status,#solar-status {display:block;color:var(--muted);margin-top:5px}
+#solar-form {display:flex;flex-wrap:wrap;align-items:end;gap:8px;margin-top:12px}
+#solar-form label {flex:1 1 185px;min-width:0;color:var(--muted);font-size:13px}
+#solar-local {display:block;width:100%;min-height:37px;margin-top:4px;padding:4px;color:var(--text);background:#10292d;color-scheme:dark;border:1px solid var(--line);border-radius:8px;font:inherit}
+#solar-status {flex:1 0 100%}
 </style>
 </head>
 <body data-mode="aerial" data-panel="">
@@ -1401,7 +1412,14 @@ body[data-inspecting="true"] #hero,body[data-inspecting="true"] #street{display:
   <details id="window-plan-wrap"><summary>Выбрать окно на схеме</summary>
     <canvas id="window-plan" aria-label="Схема окон выбранного этажа, север сверху. Числовой выбор доступен выше."></canvas>
   </details>
-  <button type="button" class="btn btn-primary" data-action="window-entrance"><svg class="icon" aria-hidden="true"><use href="#i-walk"/></svg>Спуститься ко входу</button>
+  <details id="window-compare">
+    <summary>Сравнить точки A/B</summary>
+    <div class="compare-row"><button type="button" data-compare="0" disabled>A · Пусто</button><button type="button" data-save-view="0">Сохранить A</button></div>
+    <div class="compare-row"><button type="button" data-compare="1" disabled>B · Пусто</button><button type="button" data-save-view="1">Сохранить B</button></div>
+    <button id="swap-views" type="button" disabled>Поменять A и B местами</button>
+    <small id="compare-status" role="status"></small>
+  </details>
+  <button type="button" class="btn btn-primary" data-action="window-entrance"><svg class="icon" aria-hidden="true"><use href="#i-walk"/></svg><span>Начать прогулку рядом</span></button>
 </section>
 
 <div class="hud explorer-tools" role="group" aria-label="Управление 3D-картой">
@@ -1569,6 +1587,11 @@ body[data-inspecting="true"] #hero,body[data-inspecting="true"] #street{display:
           <svg class="icon" aria-hidden="true"><use href="#i-blue"/></svg><strong>Синий час</strong><small>Сумерки и огни</small>
         </button>
       </div>
+      <form id="solar-form">
+        <label>Солнце в Дубае · UTC+4<input id="solar-local" type="datetime-local" min="1900-01-01T00:00" max="2100-12-31T23:59" required></label>
+        <button class="btn btn-glass" type="submit" aria-pressed="false">Установить время</button>
+        <small id="solar-status" role="status"></small>
+      </form>
     </fieldset>
 
     <fieldset class="group">
@@ -1650,6 +1673,6 @@ body[data-inspecting="true"] #hero,body[data-inspecting="true"] #street{display:
   </div>
 </div>
 
-<script src="atlas.js?v=4106efc69a4b" defer></script>
+<script src="atlas.js?v=b3260f1e6d7e" defer></script>
 </body>
 </html>
